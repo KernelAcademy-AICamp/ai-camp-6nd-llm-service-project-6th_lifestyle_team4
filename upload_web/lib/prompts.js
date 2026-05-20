@@ -42,8 +42,8 @@ export const EXTRACT_PROMPT = `[01 ROLE]
   로맨스, 코미디, 스릴러/서스펜스, 드라마, 비극, 미스터리,
   판타지, 역사극/시대극, 가족극, 액션, 호러, 느와르, SF
 - quote: 작품 원문에서 한 글자도 바꾸지 않고 발췌. 200자 이내. 인물명 없이 대사만
-- script_excerpt: quote 앞뒤 2~5턴 포함, 인물명과 지문 그대로. 2000자 내외
-- excerpt_description: 객관적 장면 설명만, 감상 배제. 500자 이내
+- script_excerpt: quote 앞뒤 2~5턴 포함, 인물명과 지문 그대로. 최소 1500자 이상
+- excerpt_description: 객관적 장면 설명만, 감상 배제. 500자 이내, 한국어로
 - keywords: 정확히 3개. 명사 또는 명사구. 문장·형용사 단독 금지
 - temperature: 1(차가움/단절) ~ 3(중립) ~ 5(따뜻함/포용)
 - intensity: 1(잔잔함/고요) ~ 3(보통) ~ 5(격렬함/폭발적)
