@@ -4,11 +4,16 @@
 // ============================================================================
 
 // ---------------------------------------------------------------------------
-//  EXTRACT_PROMPT
-//  대본 전문(텍스트)을 받아 work + cards JSON을 생성.
-//  - 본문에서 `{{SCRIPT_TEXT}}`를 자동으로 PDF 추출 텍스트로 치환합니다.
+//  EXTRACT_PROMPTS — 카테고리별 추출 프롬프트
+//  - 'screen' : 영화 / 드라마
+//  - 'stage'  : 연극 / 뮤지컬   ← 현재는 placeholder, 추후 채워 넣을 것
+//  - 본문에서 `{{SCRIPT_TEXT}}`를 PDF 추출 텍스트로 치환합니다.
+//
+//  api/extract.js → lib/anthropic.js runExtract(text, category) 흐름으로
+//  카테고리에 맞는 프롬프트가 자동 선택됩니다.
 // ---------------------------------------------------------------------------
-export const EXTRACT_PROMPT = `[01 ROLE]
+
+const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
 당신은 드라마투르그이자 명장면 콘텐츠 큐레이터입니다.
 영화·드라마·연극·뮤지컬 대본을 깊이 읽어내며, 작품의 핵심을 짚어내는
 분석력과 관객에게 오래 남을 장면을 골라내는 감각을 동시에 갖추고 있습니다.
@@ -88,6 +93,24 @@ export const EXTRACT_PROMPT = `[01 ROLE]
 {{SCRIPT_TEXT}}
 </input>
 `;
+
+// ---- 연극 / 뮤지컬 프롬프트 (TODO) -----------------------------------------
+// 이 자리에 연극/뮤지컬 전용 프롬프트를 채워 넣으세요.
+// EXTRACT_PROMPT_SCREEN 과 동일하게 `{{SCRIPT_TEXT}}` 자리에 PDF 텍스트가 치환됩니다.
+// 응답 JSON 형식은 동일해야 합니다 (work + cards).
+const EXTRACT_PROMPT_STAGE = `
+TODO: 연극 / 뮤지컬 추출 프롬프트를 여기에 작성하세요.
+
+대본 전문:
+"""
+{{SCRIPT_TEXT}}
+"""
+`;
+
+export const EXTRACT_PROMPTS = {
+  screen: EXTRACT_PROMPT_SCREEN, // 영화 / 드라마
+  stage: EXTRACT_PROMPT_STAGE,   // 연극 / 뮤지컬
+};
 
 // ---------------------------------------------------------------------------
 //  TRANSLATE_PROMPT

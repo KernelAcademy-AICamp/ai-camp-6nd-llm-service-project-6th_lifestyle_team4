@@ -76,7 +76,23 @@
   <div class="p-8 flex flex-col gap-6 max-w-7xl mx-auto">
 
     <!-- Upload -->
-    <section>
+    <section class="flex flex-col gap-3">
+      <!-- Category Selector -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-semibold text-on-surface-variant">작품 유형:</span>
+        <div id="category-toggle" class="inline-flex bg-surface-container-low rounded-lg p-1 border border-outline-variant">
+          <button type="button" data-category="screen"
+                  class="cat-btn px-4 py-1.5 rounded-md text-sm font-semibold transition-colors">
+            영화 / 드라마
+          </button>
+          <button type="button" data-category="stage"
+                  class="cat-btn px-4 py-1.5 rounded-md text-sm font-semibold transition-colors">
+            연극 / 뮤지컬
+          </button>
+        </div>
+        <span id="category-hint" class="text-xs text-on-surface-variant"></span>
+      </div>
+
       <label id="dropzone" for="pdf-input"
              class="bg-surface-container-lowest border-2 border-dashed border-primary/30 rounded-xl p-10 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-all duration-300 cursor-pointer shadow-sm block">
         <div class="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mb-4">

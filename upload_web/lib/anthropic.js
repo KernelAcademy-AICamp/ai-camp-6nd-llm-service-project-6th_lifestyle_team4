@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { EXTRACT_PROMPT, TRANSLATE_PROMPT } from './prompts.js';
+import { EXTRACT_PROMPTS, TRANSLATE_PROMPT } from './prompts.js';
 
 // SDK 기본 재시도(2회)에 더해 우리도 직접 백오프 재시도를 한 번 더 감쌉니다.
 // 529(overloaded) / 429(rate limit) / 5xx 는 일시적인 경우가 많아 재시도가 효과적.
@@ -68,8 +68,9 @@ function parseJson(text) {
   }
 }
 
-export async function runExtract(scriptText) {
-  const prompt = EXTRACT_PROMPT.replace('{{SCRIPT_TEXT}}', scriptText);
+export async function runExtract(scriptText, category = 'screen') {
+  const tpl = EXTRACT_PROMPTS[category] || EXTRACT_PROMPTS.screen;
+  const prompt = tpl.replace('{{SCRIPT_TEXT}}', scriptText);
   return callClaude(prompt, { maxTokens: 16000 });
 }
 

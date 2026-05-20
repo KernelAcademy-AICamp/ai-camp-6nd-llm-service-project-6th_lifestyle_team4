@@ -10,11 +10,16 @@ export const config = {
   api: { bodyParser: false },
 };
 
-function readPdfFromRequest(req) {
+function readMultipart(req) {
   return new Promise((resolve, reject) => {
     const bb = Busboy({ headers: req.headers, limits: { files: 1, fileSize: 25 * 1024 * 1024 } });
     let pdfBuffer = null;
     let tooLarge = false;
+    const fields = {};
+
+    bb.on('field', (name, val) => {
+      fields[name] = val;
+    });
 
     bb.on('file', (_name, stream, info) => {
       const chunks = [];
@@ -32,12 +37,14 @@ function readPdfFromRequest(req) {
     bb.on('finish', () => {
       if (tooLarge) return reject(new Error('PDF exceeds 25MB limit'));
       if (!pdfBuffer) return reject(new Error('No PDF file in request'));
-      resolve(pdfBuffer);
+      resolve({ pdf: pdfBuffer, fields });
     });
 
     req.pipe(bb);
   });
 }
+
+const ALLOWED_CATEGORIES = new Set(['screen', 'stage']);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -46,14 +53,17 @@ export default async function handler(req, res) {
   try {
     await requireAdmin(req);
 
-    const pdfBuffer = await readPdfFromRequest(req);
+    const { pdf: pdfBuffer, fields } = await readMultipart(req);
+    const rawCategory = (fields.category || '').trim();
+    const category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'screen';
+
     const parsed = await pdfParse(pdfBuffer);
     const scriptText = (parsed.text || '').trim();
     if (!scriptText) {
       return res.status(400).json({ error: 'Empty PDF or text could not be extracted' });
     }
 
-    const result = await runExtract(scriptText);
+    const result = await runExtract(scriptText, category);
     // works.full_script_text는 NOT NULL이므로 저장 단계에서 다시 필요.
     // 응답에 함께 실어 클라이언트 state에 보관 → /api/save 호출 시 다시 전송.
     return res.status(200).json({ ...result, full_script_text: scriptText });

@@ -24,6 +24,7 @@ async function apiFetch(url, options = {}) {
 const state = {
   work: null,
   fullScriptText: '',   // works.full_script_text 컬럼이 NOT NULL이라 저장 시 함께 전송
+  category: 'screen',   // 'screen' = 영화/드라마, 'stage' = 연극/뮤지컬
   // each card: { ...llmCard, selected, translated?: { quote_translated, ... }, showingTranslation }
   cards: [],
 };
@@ -32,10 +33,12 @@ const state = {
 // DOM refs
 // ---------------------------------------------------------------------------
 const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 const dropzone = $('#dropzone');
 const pdfInput = $('#pdf-input');
 const dropzoneTitle = $('#dropzone-title');
 const dropzoneSub = $('#dropzone-sub');
+const categoryHint = $('#category-hint');
 const summary = $('#summary');
 const cardGrid = $('#card-grid');
 const emptyMsg = $('#empty-msg');
@@ -63,6 +66,32 @@ logoutBtn.addEventListener('click', async () => {
   await sb.auth.signOut();
   location.href = '/';
 });
+
+// ---------------------------------------------------------------------------
+// Category toggle (영화/드라마 ↔ 연극/뮤지컬)
+// ---------------------------------------------------------------------------
+function paintCategory() {
+  $$('#category-toggle .cat-btn').forEach((btn) => {
+    const active = btn.dataset.category === state.category;
+    btn.classList.toggle('bg-primary', active);
+    btn.classList.toggle('text-on-primary', active);
+    btn.classList.toggle('shadow-sm', active);
+    btn.classList.toggle('text-on-surface-variant', !active);
+  });
+  if (categoryHint) {
+    categoryHint.textContent =
+      state.category === 'screen'
+        ? '영화·드라마 추출 프롬프트로 분석됩니다.'
+        : '연극·뮤지컬 추출 프롬프트로 분석됩니다.';
+  }
+}
+$$('#category-toggle .cat-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.category = btn.dataset.category;
+    paintCategory();
+  });
+});
+paintCategory();
 
 // ---------------------------------------------------------------------------
 // Upload flow
@@ -99,6 +128,7 @@ async function handlePdf(file) {
     const token = await getAccessToken();
     const fd = new FormData();
     fd.append('pdf', file);
+    fd.append('category', state.category);
     const json = await apiFetch('/api/extract', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
