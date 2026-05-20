@@ -120,13 +120,19 @@ Vercel 프로젝트 설정에서 동일한 환경변수 4개를 등록하세요.
 
 ## 데이터 저장 정책
 
-저장 시점에 카드의 `quote` / `script_excerpt` / `excerpt_description`은 **현재 화면에 보이는 텍스트**를 기준으로 저장됩니다.
+저장 시점에 카드의 `quote` / `script_excerpt` 는 **현재 화면에 보이는 텍스트**(원문 또는 번역본)를 기준으로 저장됩니다.
 
 - 번역하지 않았다면 → LLM이 추출한 원문 그대로 저장
 - 번역 후 "번역본 보기" 상태에서 저장 → 한국어 번역본이 저장
 - 번역 후 "원문 보기"로 토글한 채 저장 → 원문이 저장
 
+`excerpt_description` 은 번역 프롬프트 규칙상 번역되지 않으므로 항상 원본(추출 시점의 한국어 설명)이 저장됩니다.
+
 DB에 별도 번역 컬럼이 없는 스키마이므로, 사용자가 본 그대로 일관되게 저장하는 방식입니다.
+
+### 번역 흐름
+
+`/api/translate` 는 카드 한 장씩 호출되지만, LLM에 보낼 때는 `{work, cards:[card]}` 봉투에 감싸서 전송합니다. 이는 `TRANSLATE_PROMPT` 가 batch 입력을 기대하도록 설계되었기 때문입니다. 응답의 `cards[0].quote` / `cards[0].script_excerpt` 만 사용합니다.
 
 장르(`work.genres`)는 `genres` 테이블 upsert 후 `work_genres`에 링크됩니다. 같은 이름의 장르는 재사용됩니다.
 

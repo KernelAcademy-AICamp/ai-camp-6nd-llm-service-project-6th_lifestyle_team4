@@ -190,9 +190,8 @@ function buildCardNode(card, idx) {
   const useTranslation = card.showingTranslation && card.translated;
   const quote = useTranslation ? card.translated.quote_translated : card.quote;
   const excerpt = useTranslation ? card.translated.script_excerpt_translated : card.script_excerpt;
-  const desc = useTranslation
-    ? card.translated.excerpt_description_translated
-    : card.excerpt_description;
+  // 상황 설명(excerpt_description)은 번역하지 않음 — 항상 원본 표시.
+  const desc = card.excerpt_description;
 
   node.querySelector('.card-tag').textContent =
     (card.keywords && card.keywords[0]) || `Card #${idx + 1}`;

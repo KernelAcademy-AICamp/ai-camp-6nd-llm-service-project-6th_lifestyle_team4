@@ -33,15 +33,15 @@ function clampInt(value, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-// 카드의 quote / script_excerpt / excerpt_description은
-// "현재 보고 있는 텍스트"(원문 또는 번역본)로 저장합니다.
+// 카드의 quote / script_excerpt 는 "현재 보고 있는 텍스트"(원문 또는 번역본)로 저장.
+// excerpt_description 은 번역하지 않으므로 항상 원본 저장.
 function pickDisplayedFields(card) {
   const t = card.translated;
   const useTranslation = card.showingTranslation && t;
   return {
     quote: String(useTranslation ? t.quote_translated : card.quote),
     script_excerpt: String(useTranslation ? t.script_excerpt_translated : card.script_excerpt),
-    excerpt_description: useTranslation ? (t.excerpt_description_translated ?? null) : (card.excerpt_description ?? null),
+    excerpt_description: card.excerpt_description ?? null,
   };
 }
 
