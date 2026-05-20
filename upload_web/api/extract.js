@@ -3,7 +3,7 @@ import Busboy from 'busboy';
 // 서버리스에서는 내부 모듈을 직접 import 합니다.
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
-import { requireUser, AuthError } from '../lib/auth.js';
+import { requireAdmin, AuthError } from '../lib/auth.js';
 import { runExtract } from '../lib/anthropic.js';
 
 export const config = {
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
   try {
-    await requireUser(req);
+    await requireAdmin(req);
 
     const pdfBuffer = await readPdfFromRequest(req);
     const parsed = await pdfParse(pdfBuffer);
@@ -54,10 +54,12 @@ export default async function handler(req, res) {
     }
 
     const result = await runExtract(scriptText);
-    return res.status(200).json(result);
+    // works.full_script_text는 NOT NULL이므로 저장 단계에서 다시 필요.
+    // 응답에 함께 실어 클라이언트 state에 보관 → /api/save 호출 시 다시 전송.
+    return res.status(200).json({ ...result, full_script_text: scriptText });
   } catch (err) {
     if (err instanceof AuthError) {
-      return res.status(401).json({ error: err.message });
+      return res.status(err.status || 401).json({ error: err.message });
     }
     console.error('[extract] error:', err);
     return res.status(500).json({ error: err.message || 'Internal error' });

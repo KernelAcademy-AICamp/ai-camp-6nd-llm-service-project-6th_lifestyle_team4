@@ -1,48 +1,45 @@
--- Script & Quote Intelligence — initial schema
--- Run with: supabase db push   (or paste into Supabase SQL editor)
+-- ============================================================================
+--  REFERENCE ONLY — 실제 스키마는 이미 Supabase 프로젝트에 배포되어 있습니다.
+--  이 파일은 upload_web이 어떤 컬럼을 기대하는지 보여주는 참고 자료입니다.
+--
+--  새 프로젝트에서 처음부터 세팅하려면 이 파일을 직접 실행하지 말고
+--  먼저 work_format enum과 users 테이블 등 외부 의존성을 만들어야 합니다.
+-- ============================================================================
 
-create table if not exists works (
-  id           bigserial primary key,
-  title        text not null,
-  format       text not null check (format in ('movie','drama','play','musical')),
-  author       text,
-  release_year smallint,
-  genres       text[] not null default '{}',
-  created_at   timestamptz not null default now()
+-- 사용자 정의 enum (이미 존재한다고 가정)
+-- CREATE TYPE work_format AS ENUM ('movie', 'drama', 'play', 'musical');
+
+CREATE TABLE IF NOT EXISTS public.works (
+  work_id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  title             varchar NOT NULL,
+  format            work_format NOT NULL,
+  author            varchar,
+  release_year      integer,
+  full_script_text  text NOT NULL,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now()
 );
 
-create table if not exists cards (
-  id                              bigserial primary key,
-  work_id                         bigint not null references works(id) on delete cascade,
-  quote                           text not null,
-  script_excerpt                  text not null,
-  excerpt_description             text,
-  keywords                        text[] not null default '{}',
-  temperature                     smallint not null check (temperature between 1 and 5),
-  intensity                       smallint not null check (intensity between 1 and 5),
-
-  -- Translated fields (filled only when source is not Korean and user clicks 번역하기)
-  quote_translated                text,
-  script_excerpt_translated       text,
-  excerpt_description_translated  text,
-  source_language                 text,
-
-  created_at                      timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS public.cards (
+  card_id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  work_id              bigint NOT NULL REFERENCES public.works(work_id),
+  quote                text NOT NULL,
+  script_excerpt       text NOT NULL,
+  excerpt_description  varchar,
+  keywords             jsonb NOT NULL,
+  temperature          smallint NOT NULL CHECK (temperature BETWEEN 1 AND 5),
+  intensity            smallint NOT NULL CHECK (intensity BETWEEN 1 AND 5),
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now()
 );
 
-create index if not exists cards_work_id_idx on cards (work_id);
+CREATE TABLE IF NOT EXISTS public.genres (
+  genre_id  integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name      varchar NOT NULL
+);
 
--- RLS: authenticated users (admins) can read/write everything
-alter table works enable row level security;
-alter table cards enable row level security;
-
-drop policy if exists works_authed on works;
-drop policy if exists cards_authed on cards;
-
-create policy works_authed on works
-  for all to authenticated
-  using (true) with check (true);
-
-create policy cards_authed on cards
-  for all to authenticated
-  using (true) with check (true);
+CREATE TABLE IF NOT EXISTS public.work_genres (
+  work_id   bigint  NOT NULL REFERENCES public.works(work_id),
+  genre_id  integer NOT NULL REFERENCES public.genres(genre_id),
+  PRIMARY KEY (work_id, genre_id)
+);

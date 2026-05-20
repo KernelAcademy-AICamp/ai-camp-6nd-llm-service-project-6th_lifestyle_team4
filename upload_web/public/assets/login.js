@@ -1,7 +1,8 @@
 import { getSupabase } from './supabase-client.js';
+import { idToEmail } from './auth-utils.js';
 
 const form = document.getElementById('login-form');
-const emailInput = document.getElementById('email');
+const idInput = document.getElementById('userid');
 const passwordInput = document.getElementById('password');
 const errorBox = document.getElementById('login-error');
 const submitBtn = document.getElementById('login-submit');
@@ -15,7 +16,7 @@ function clearError() {
   errorBox.classList.add('hidden');
 }
 
-// If already authenticated, skip the login screen.
+// 이미 세션이 있으면 바로 대시보드로.
 (async () => {
   try {
     const sb = await getSupabase();
@@ -29,19 +30,26 @@ function clearError() {
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   clearError();
+
+  const userid = idInput.value.trim();
+  if (!userid) {
+    showError('아이디를 입력하세요.');
+    return;
+  }
+
   submitBtn.disabled = true;
   submitBtn.textContent = 'Signing in...';
 
   try {
     const sb = await getSupabase();
     const { error } = await sb.auth.signInWithPassword({
-      email: emailInput.value.trim(),
+      email: idToEmail(userid),
       password: passwordInput.value,
     });
     if (error) throw error;
     location.href = '/dashboard.html';
   } catch (err) {
-    showError(err.message || 'Login failed');
+    showError(err.message || '로그인 실패');
     submitBtn.disabled = false;
     submitBtn.textContent = 'Sign In';
   }

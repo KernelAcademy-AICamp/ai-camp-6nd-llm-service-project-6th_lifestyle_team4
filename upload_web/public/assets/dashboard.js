@@ -1,10 +1,12 @@
 import { getSupabase, getAccessToken, requireSessionOrRedirect } from './supabase-client.js';
+import { emailToDisplayId } from './auth-utils.js';
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 const state = {
   work: null,
+  fullScriptText: '',   // works.full_script_text 컬럼이 NOT NULL이라 저장 시 함께 전송
   // each card: { ...llmCard, selected, translated?: { quote_translated, ... }, showingTranslation }
   cards: [],
 };
@@ -36,7 +38,7 @@ const cardTemplate = $('#card-template');
   if (!token) return;
   const sb = await getSupabase();
   const { data } = await sb.auth.getUser();
-  userEmailEl.textContent = data?.user?.email || '';
+  userEmailEl.textContent = emailToDisplayId(data?.user?.email);
 })();
 
 logoutBtn.addEventListener('click', async () => {
@@ -114,6 +116,7 @@ function resetDropzone() {
 // ---------------------------------------------------------------------------
 function applyExtraction(payload) {
   state.work = payload?.work || null;
+  state.fullScriptText = payload?.full_script_text || '';
   state.cards = Array.isArray(payload?.cards)
     ? payload.cards.map((c) => ({ ...c, selected: false, translated: null, showingTranslation: false }))
     : [];
@@ -323,6 +326,7 @@ saveBtn.addEventListener('click', async () => {
 
   try {
     const token = await getAccessToken();
+    // 서버는 card.showingTranslation/translated를 보고 어느 텍스트를 저장할지 결정.
     const cardsPayload = selected.map((c) => ({
       quote: c.quote,
       script_excerpt: c.script_excerpt,
@@ -330,14 +334,8 @@ saveBtn.addEventListener('click', async () => {
       keywords: c.keywords,
       temperature: c.temperature,
       intensity: c.intensity,
-      ...(c.translated
-        ? {
-            quote_translated: c.translated.quote_translated,
-            script_excerpt_translated: c.translated.script_excerpt_translated,
-            excerpt_description_translated: c.translated.excerpt_description_translated,
-            source_language: c.translated.source_language,
-          }
-        : {}),
+      translated: c.translated || null,
+      showingTranslation: !!c.showingTranslation,
     }));
 
     const res = await fetch('/api/save', {
@@ -346,7 +344,11 @@ saveBtn.addEventListener('click', async () => {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ work: state.work, cards: cardsPayload }),
+      body: JSON.stringify({
+        work: state.work,
+        full_script_text: state.fullScriptText,
+        cards: cardsPayload,
+      }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'Save failed');

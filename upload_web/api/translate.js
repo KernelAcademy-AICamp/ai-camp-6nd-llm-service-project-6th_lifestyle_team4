@@ -1,4 +1,4 @@
-import { requireUser, AuthError } from '../lib/auth.js';
+import { requireAdmin, AuthError } from '../lib/auth.js';
 import { runTranslate } from '../lib/anthropic.js';
 
 async function readJsonBody(req) {
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
   try {
-    await requireUser(req);
+    await requireAdmin(req);
 
     const body = await readJsonBody(req);
     const card = body?.card;
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     return res.status(200).json(result);
   } catch (err) {
     if (err instanceof AuthError) {
-      return res.status(401).json({ error: err.message });
+      return res.status(err.status || 401).json({ error: err.message });
     }
     console.error('[translate] error:', err);
     return res.status(500).json({ error: err.message || 'Internal error' });
