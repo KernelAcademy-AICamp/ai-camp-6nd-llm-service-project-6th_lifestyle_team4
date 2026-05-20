@@ -1,6 +1,23 @@
 import { getSupabase, getAccessToken, requireSessionOrRedirect } from './supabase-client.js';
 import { emailToDisplayId } from './auth-utils.js';
 
+// Vercel이 함수 크래시 시 plain-text 페이지("A server error...")를 돌려보내는데
+// 그대로 res.json()을 부르면 SyntaxError가 나서 진짜 에러가 가려집니다.
+// 본문을 먼저 text로 받아서 JSON 파싱을 시도하고, 실패하면 raw text를 보여줍니다.
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  const raw = await res.text();
+  let json = null;
+  if (raw) {
+    try { json = JSON.parse(raw); } catch { /* not JSON */ }
+  }
+  if (!res.ok) {
+    const detail = json?.error || raw.slice(0, 300) || res.statusText;
+    throw new Error(`HTTP ${res.status} · ${detail}`);
+  }
+  return json;
+}
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -82,13 +99,11 @@ async function handlePdf(file) {
     const token = await getAccessToken();
     const fd = new FormData();
     fd.append('pdf', file);
-    const res = await fetch('/api/extract', {
+    const json = await apiFetch('/api/extract', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Extract failed');
     applyExtraction(json);
     toast('추출 완료', 'success');
   } catch (err) {
@@ -286,7 +301,7 @@ async function onTranslateClick(idx) {
   try {
     toast('번역 중...', 'info');
     const token = await getAccessToken();
-    const res = await fetch('/api/translate', {
+    const json = await apiFetch('/api/translate', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -300,8 +315,6 @@ async function onTranslateClick(idx) {
         },
       }),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Translate failed');
     state.cards[idx].translated = json;
     state.cards[idx].showingTranslation = true;
     render();
@@ -337,7 +350,7 @@ saveBtn.addEventListener('click', async () => {
       showingTranslation: !!c.showingTranslation,
     }));
 
-    const res = await fetch('/api/save', {
+    const json = await apiFetch('/api/save', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -349,8 +362,6 @@ saveBtn.addEventListener('click', async () => {
         cards: cardsPayload,
       }),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Save failed');
     toast(`저장 완료 (work_id=${json.work_id}, ${json.inserted_count}장)`, 'success');
 
     // Reset selection so user can re-curate or upload a new file

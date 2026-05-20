@@ -29,6 +29,11 @@ export default async function handler(req, res) {
       return res.status(err.status || 401).json({ error: err.message });
     }
     console.error('[translate] error:', err);
+    if (err?.status === 529 || err?.status === 429) {
+      return res.status(503).json({
+        error: 'Anthropic API가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.',
+      });
+    }
     return res.status(500).json({ error: err.message || 'Internal error' });
   }
 }

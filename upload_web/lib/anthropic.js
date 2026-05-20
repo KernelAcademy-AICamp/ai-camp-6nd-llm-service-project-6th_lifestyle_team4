@@ -1,25 +1,49 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { EXTRACT_PROMPT, TRANSLATE_PROMPT } from './prompts.js';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// SDK 기본 재시도(2회)에 더해 우리도 직접 백오프 재시도를 한 번 더 감쌉니다.
+// 529(overloaded) / 429(rate limit) / 5xx 는 일시적인 경우가 많아 재시도가 효과적.
+const client = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  maxRetries: 4,
+});
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
 const SYSTEM_JSON_ONLY =
   'You must respond with a single JSON object only. ' +
   'No prose, no markdown fences, no explanations — JSON only.';
 
+function isRetryable(err) {
+  const s = err?.status;
+  return s === 408 || s === 409 || s === 429 || s === 529 || (s >= 500 && s < 600);
+}
+
 async function callClaude(prompt, { maxTokens = 8192 } = {}) {
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    system: SYSTEM_JSON_ONLY,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  const text = res.content
-    .filter((b) => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
-  return parseJson(text);
+  const MAX_OUTER_ATTEMPTS = 3;
+  let lastErr;
+  for (let attempt = 0; attempt < MAX_OUTER_ATTEMPTS; attempt++) {
+    try {
+      const res = await client.messages.create({
+        model: MODEL,
+        max_tokens: maxTokens,
+        system: SYSTEM_JSON_ONLY,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const text = res.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join('');
+      return parseJson(text);
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err) || attempt === MAX_OUTER_ATTEMPTS - 1) break;
+      // 2s, 4s, 8s 백오프 + jitter
+      const delayMs = 2000 * Math.pow(2, attempt) + Math.floor(Math.random() * 500);
+      console.warn(`[anthropic] retryable ${err.status} on attempt ${attempt + 1}; waiting ${delayMs}ms`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
 }
 
 function parseJson(text) {
