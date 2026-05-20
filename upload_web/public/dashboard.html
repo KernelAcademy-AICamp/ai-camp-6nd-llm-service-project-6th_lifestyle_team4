@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html class="light" lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta content="width=device-width, initial-scale=1.0" name="viewport" />
+<title>Script &amp; Quote Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+KR:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<style>
+  body { font-family: 'Inter', 'Noto Sans KR', sans-serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #c7c4d8; border-radius: 10px; }
+  .card-selected { box-shadow: 0 0 0 2px #3525cd inset; }
+</style>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          'surface-variant': '#d8e3fb', 'inverse-surface': '#263143', 'outline': '#777587',
+          'surface': '#f9f9ff', 'primary-fixed-dim': '#c3c0ff', 'error': '#ba1a1a',
+          'background': '#f9f9ff', 'surface-container-high': '#dee8ff', 'inverse-primary': '#c3c0ff',
+          'on-surface-variant': '#464555', 'surface-container-low': '#f0f3ff',
+          'outline-variant': '#c7c4d8', 'on-primary': '#ffffff', 'surface-container-lowest': '#ffffff',
+          'surface-container': '#e7eeff', 'on-error-container': '#93000a',
+          'on-primary-container': '#dad7ff', 'surface-bright': '#f9f9ff',
+          'secondary': '#006591', 'primary-container': '#4f46e5', 'tertiary': '#684000',
+          'primary': '#3525cd', 'primary-fixed': '#e2dfff',
+          'on-background': '#111c2d', 'on-surface': '#111c2d',
+          'error-container': '#ffdad6', 'secondary-container': '#39b8fd',
+          'inverse-on-surface': '#ecf1ff',
+        },
+        borderRadius: { DEFAULT: '0.25rem', lg: '0.5rem', xl: '0.75rem', full: '9999px' },
+      },
+    },
+  };
+</script>
+</head>
+<body class="bg-surface text-on-background min-h-screen">
+
+<aside class="fixed left-0 top-0 h-full w-[280px] bg-surface border-r border-outline-variant flex flex-col p-4 gap-2 z-50">
+  <div class="mb-8 px-2">
+    <h1 class="text-xl font-bold text-primary tracking-tight">Script &amp; Quote Intelligence</h1>
+    <p class="text-sm text-on-surface-variant mt-1">스크립트 및 견적 관리</p>
+  </div>
+  <nav class="flex flex-col gap-1 flex-1">
+    <a class="flex items-center gap-3 px-4 py-3 bg-secondary-container/20 text-primary rounded-lg font-bold" href="#">
+      <span class="material-symbols-outlined">dashboard</span>
+      <span class="text-sm">대시보드</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors opacity-50 cursor-not-allowed" href="#" aria-disabled="true">
+      <span class="material-symbols-outlined">history</span>
+      <span class="text-sm">히스토리 (Coming soon)</span>
+    </a>
+  </nav>
+  <div class="border-t border-outline-variant pt-4 flex flex-col gap-1">
+    <button id="logout-btn" class="flex items-center gap-3 px-4 py-2 text-error hover:bg-surface-container-low rounded-lg transition-colors text-left">
+      <span class="material-symbols-outlined">logout</span>
+      <span class="text-sm font-medium">로그아웃</span>
+    </button>
+  </div>
+</aside>
+
+<header class="fixed top-0 left-[280px] w-[calc(100%-280px)] h-16 bg-surface-container-lowest border-b border-outline-variant flex justify-between items-center px-8 z-40">
+  <h2 class="text-xl font-extrabold text-primary">Script &amp; Quote Intelligence</h2>
+  <div class="flex items-center gap-3">
+    <span id="user-email" class="text-sm text-on-surface-variant"></span>
+  </div>
+</header>
+
+<main class="ml-[280px] pt-16 min-h-screen pb-32">
+  <div class="p-8 flex flex-col gap-6 max-w-7xl mx-auto">
+
+    <!-- Upload -->
+    <section>
+      <label id="dropzone" for="pdf-input"
+             class="bg-surface-container-lowest border-2 border-dashed border-primary/30 rounded-xl p-10 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-all duration-300 cursor-pointer shadow-sm block">
+        <div class="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mb-4">
+          <span class="material-symbols-outlined text-primary text-3xl">upload_file</span>
+        </div>
+        <h3 id="dropzone-title" class="text-xl font-semibold mb-2">Drop your PDF here</h3>
+        <p id="dropzone-sub" class="text-base text-on-surface-variant">스크립트 파일을 여기에 드래그하거나 클릭하여 업로드하세요 (PDF)</p>
+        <input id="pdf-input" type="file" accept="application/pdf" class="hidden" />
+      </label>
+    </section>
+
+    <!-- Result Summary (hidden until extracted) -->
+    <section id="summary" class="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant shadow-sm hidden flex-wrap items-center justify-between gap-6">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded-md uppercase tracking-wider">Analysis Complete</span>
+        </div>
+        <h2 id="work-title" class="text-3xl font-bold text-on-surface mb-1"></h2>
+        <div class="flex items-center gap-4 text-on-surface-variant text-sm flex-wrap">
+          <span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">movie</span> <span id="work-format"></span></span>
+          <span id="work-author-wrap" class="hidden items-center gap-1"><span class="material-symbols-outlined text-sm">person</span> <span id="work-author"></span></span>
+          <span id="work-year-wrap" class="hidden items-center gap-1"><span class="material-symbols-outlined text-sm">calendar_today</span> <span id="work-year"></span></span>
+          <span id="work-genres" class="flex items-center gap-1"></span>
+        </div>
+      </div>
+      <div class="flex gap-4">
+        <div class="text-center px-4">
+          <p class="text-xs text-on-surface-variant mb-1">Found Quotes</p>
+          <p id="found-count" class="text-2xl font-semibold text-primary">0</p>
+        </div>
+        <div class="w-px h-10 bg-outline-variant self-center"></div>
+        <div class="text-center px-4">
+          <p class="text-xs text-on-surface-variant mb-1">Selected</p>
+          <p id="selected-count" class="text-2xl font-semibold text-secondary">0</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cards grid -->
+    <section id="card-grid" class="grid grid-cols-1 xl:grid-cols-2 gap-6"></section>
+
+    <!-- Empty state (after upload returns nothing) -->
+    <p id="empty-msg" class="hidden text-center text-on-surface-variant py-12">추출된 카드가 없습니다.</p>
+  </div>
+</main>
+
+<!-- Bottom Save Bar -->
+<div id="save-bar" class="fixed bottom-0 left-[280px] right-0 bg-surface-container-lowest border-t border-outline-variant px-8 py-4 flex items-center justify-between gap-4 z-40 hidden">
+  <div class="text-sm text-on-surface-variant">
+    <span id="save-bar-text">선택된 카드 <span id="save-bar-count" class="font-bold text-primary">0</span>장</span>
+  </div>
+  <button id="save-btn"
+          class="bg-primary text-on-primary px-6 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">
+    <span class="material-symbols-outlined text-sm">cloud_upload</span>
+    선택된 카드 Supabase에 저장하기
+  </button>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-24 right-8 hidden px-4 py-3 bg-inverse-surface text-inverse-on-surface rounded-lg shadow-xl z-50 text-sm"></div>
+
+<!-- Card template -->
+<template id="card-template">
+  <div class="card bg-surface-container-lowest border border-outline-variant rounded-xl p-6 flex flex-col gap-4 transition-all shadow-sm relative overflow-hidden">
+    <div class="translated-badge absolute top-0 right-0 px-3 py-1 bg-primary text-on-primary text-[10px] font-bold rounded-bl-lg hidden">TRANSLATED</div>
+
+    <div class="flex justify-between items-start">
+      <span class="card-tag text-xs font-medium text-primary bg-primary/5 px-2 py-1 rounded"></span>
+    </div>
+
+    <p class="card-quote text-xl font-semibold leading-relaxed text-on-surface"></p>
+
+    <div class="mono bg-surface-container-low rounded-lg p-4 text-[13px] text-on-surface-variant leading-relaxed border border-outline-variant/30 card-excerpt whitespace-pre-wrap"></div>
+
+    <div class="flex flex-col gap-2">
+      <p class="text-sm font-semibold text-on-surface-variant">상황 설명</p>
+      <p class="card-description text-sm text-on-surface"></p>
+    </div>
+
+    <div class="card-keywords flex flex-wrap gap-2"></div>
+
+    <div class="grid grid-cols-2 gap-4 py-2">
+      <div class="flex flex-col gap-1">
+        <div class="flex justify-between text-xs">
+          <span>Temperature</span>
+          <span class="card-temp-num text-primary font-bold"></span>
+        </div>
+        <div class="card-temp-bar flex gap-1"></div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <div class="flex justify-between text-xs">
+          <span>Intensity</span>
+          <span class="card-intensity-num text-secondary font-bold"></span>
+        </div>
+        <div class="card-intensity-bar flex gap-1"></div>
+      </div>
+    </div>
+
+    <div class="flex gap-2 mt-auto pt-4 border-t border-outline-variant/30">
+      <button class="translate-btn flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-outline text-sm font-semibold hover:bg-surface-container-low transition-colors">
+        <span class="material-symbols-outlined text-sm">translate</span>
+        <span class="translate-label">번역하기</span>
+      </button>
+      <button class="select-btn flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-outline text-sm font-semibold hover:bg-surface-container-low transition-colors">
+        <span class="material-symbols-outlined text-sm select-icon">check_box_outline_blank</span>
+        <span class="select-label">이 카드 선택</span>
+      </button>
+    </div>
+  </div>
+</template>
+
+<script type="module" src="/assets/dashboard.js"></script>
+</body>
+</html>

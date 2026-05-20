@@ -1,0 +1,85 @@
+<!-- 관리자 로그인 - Script & Quote Intelligence -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta content="width=device-width, initial-scale=1.0" name="viewport" />
+<title>Admin Login | Script &amp; Quote Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          'primary-container': '#4f46e5',
+          'surface': '#f9f9ff',
+          'surface-container-lowest': '#ffffff',
+          'on-surface': '#111c2d',
+          'on-surface-variant': '#464555',
+          'outline-variant': '#c7c4d8',
+          'error': '#ba1a1a',
+          'error-container': '#ffdad6',
+          'on-error-container': '#93000a',
+        },
+        borderRadius: { DEFAULT: '0.25rem', lg: '0.5rem', xl: '0.75rem', full: '9999px' },
+      },
+    },
+  };
+</script>
+<style>
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  body { font-family: 'Inter', sans-serif; background-color: #f9f9ff; }
+</style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col items-center justify-center">
+
+<header class="mb-8 flex flex-col items-center gap-2">
+  <span class="material-symbols-outlined text-primary-container" style="font-size: 48px;">description</span>
+  <h1 class="text-2xl font-bold text-on-surface">Script &amp; Quote Intelligence</h1>
+  <p class="text-xs text-on-surface-variant tracking-widest uppercase">Administrative Portal</p>
+</header>
+
+<main class="w-full max-w-[400px] px-4">
+  <div class="bg-surface-container-lowest border border-outline-variant p-8 md:p-10 rounded-xl shadow-[0_4px_12px_rgba(30,41,59,0.05)]">
+    <h2 class="text-xl font-semibold text-on-surface mb-6 text-center">Login</h2>
+
+    <form id="login-form" class="space-y-6" novalidate>
+      <div class="space-y-2">
+        <label class="block text-xs font-medium text-on-surface-variant" for="email">Email</label>
+        <input id="email" type="email" required autocomplete="email"
+               placeholder="admin@system.com"
+               class="w-full px-4 py-2.5 rounded-lg border border-outline-variant bg-surface focus:outline-none focus:ring-2 focus:ring-primary-container/20 focus:border-primary-container transition-all text-base" />
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-medium text-on-surface-variant" for="password">Password</label>
+        <input id="password" type="password" required autocomplete="current-password"
+               placeholder="••••••••"
+               class="w-full px-4 py-2.5 rounded-lg border border-outline-variant bg-surface focus:outline-none focus:ring-2 focus:ring-primary-container/20 focus:border-primary-container transition-all text-base" />
+      </div>
+
+      <div id="login-error" class="hidden text-sm bg-error-container text-on-error-container px-3 py-2 rounded-lg"></div>
+
+      <button id="login-submit" type="submit"
+              class="w-full bg-primary-container text-white py-3 rounded-lg text-sm font-semibold hover:bg-opacity-90 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">
+        Sign In
+      </button>
+    </form>
+
+    <div class="mt-6 pt-6 border-t border-outline-variant text-center">
+      <span class="text-on-surface-variant text-xs">
+        계정은 관리자에게 문의하세요.
+      </span>
+    </div>
+  </div>
+</main>
+
+<footer class="mt-12 text-center">
+  <p class="text-sm text-on-surface-variant/60">© 2024 Script &amp; Quote Intelligence. Secure Admin Access.</p>
+</footer>
+
+<script type="module" src="/assets/login.js"></script>
+</body>
+</html>

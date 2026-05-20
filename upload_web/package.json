@@ -1,0 +1,20 @@
+{
+  "name": "upload-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Script & Quote Intelligence — admin web for PDF script ingestion",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel deploy"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@supabase/supabase-js": "^2.45.4",
+    "busboy": "^1.6.0",
+    "pdf-parse": "^1.1.1"
+  }
+}
