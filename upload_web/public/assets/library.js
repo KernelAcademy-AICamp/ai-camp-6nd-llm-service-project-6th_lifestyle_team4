@@ -267,18 +267,37 @@ function shadeColor(hex, percent) {
 // ---------------------------------------------------------------------------
 // Pullout card modal — spine 클릭 시 책 "꺼내 보기"
 // ---------------------------------------------------------------------------
+let currentPulloutCardId = null;
+
 function openPulloutCard(card) {
-  pulloutBody.innerHTML = '';
-  // 기존 view node 재사용 — 편집/삭제/미리보기 모두 가능
-  pulloutBody.appendChild(buildViewNode(card));
+  currentPulloutCardId = card.card_id;
+  refreshPullout();
   pulloutModal.classList.remove('hidden');
   pulloutModal.classList.add('flex');
+}
+
+// state.editing 또는 state.rows 변경 시 호출 — 모달 내용 동기화
+function refreshPullout() {
+  if (currentPulloutCardId == null) return;
+  const card = state.rows.find((c) => c.card_id === currentPulloutCardId);
+  if (!card) {
+    // 카드가 삭제됐으면 모달 닫기
+    closePulloutCard();
+    return;
+  }
+  pulloutBody.innerHTML = '';
+  if (state.editing === card.card_id) {
+    pulloutBody.appendChild(buildEditNode(card));
+  } else {
+    pulloutBody.appendChild(buildViewNode(card));
+  }
 }
 
 function closePulloutCard() {
   pulloutModal.classList.add('hidden');
   pulloutModal.classList.remove('flex');
   pulloutBody.innerHTML = '';
+  currentPulloutCardId = null;
 }
 
 pulloutClose.addEventListener('click', closePulloutCard);
@@ -378,6 +397,7 @@ function buildViewNode(card) {
   node.querySelector('.lib-edit-btn').addEventListener('click', () => {
     state.editing = card.card_id;
     renderLibrary();
+    refreshPullout();
   });
   node.querySelector('.lib-delete-btn').addEventListener('click', () => onDelete(card));
 
@@ -420,6 +440,7 @@ function buildEditNode(card) {
       Object.assign(card, updates);
       state.editing = null;
       renderLibrary();
+      refreshPullout();
       toast('DB 카드 수정 저장됨', 'success');
     } catch (err) {
       console.error('[library] update failed:', err);
@@ -430,6 +451,7 @@ function buildEditNode(card) {
   node.querySelector('.lib-cancel-edit-btn').addEventListener('click', () => {
     state.editing = null;
     renderLibrary();
+    refreshPullout();
   });
 
   return node;
@@ -444,6 +466,7 @@ async function onDelete(card) {
     if (error) throw error;
     state.rows = state.rows.filter((c) => c.card_id !== card.card_id);
     renderLibrary();
+    refreshPullout();
     toast('카드 삭제됨', 'success');
   } catch (err) {
     console.error('[library] delete failed:', err);
@@ -510,6 +533,7 @@ async function onBulkDelete() {
     state.rows = state.rows.filter((c) => !targetIds.includes(c.card_id));
     targetIds.forEach((id) => state.selectedIds.delete(id));
     renderLibrary();
+    refreshPullout();
     toast(`${targetIds.length}장 삭제 완료`, 'success');
   } catch (err) {
     console.error('[library] bulk delete failed:', err);
