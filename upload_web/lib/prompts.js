@@ -326,14 +326,18 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 </input>
 `;
 
-// 희곡은 일단 동일 프롬프트 재사용 (libretto/희곡 모두 화자-대사 보존 중심 동일)
-const EXTRACT_PROMPT_PLAYSCRIPT = EXTRACT_PROMPT_OPERA;
+// 희곡 전용 프롬프트 — TODO: 추후 별도 프롬프트로 교체.
+// 그 전까지는 기존(SCREEN) 프롬프트를 임시로 사용해 UI가 깨지지 않게 함.
+const EXTRACT_PROMPT_PLAYSCRIPT = EXTRACT_PROMPT_SCREEN;
 
 export const EXTRACT_PROMPTS = {
-  screen: EXTRACT_PROMPT_SCREEN,         // 영화 / 드라마
-  stage: EXTRACT_PROMPT_STAGE,           // 연극 / 뮤지컬
-  opera: EXTRACT_PROMPT_OPERA,           // 오페라
-  playscript: EXTRACT_PROMPT_PLAYSCRIPT, // 희곡
+  // 영화 / 드라마 / 연극 / 뮤지컬 — 기존 SCREEN 프롬프트 공용
+  screen: EXTRACT_PROMPT_SCREEN,
+  stage: EXTRACT_PROMPT_SCREEN,
+  // 오페라 — 전용 프롬프트
+  opera: EXTRACT_PROMPT_OPERA,
+  // 희곡 — 추후 별도 프롬프트 적용 예정 (현재는 SCREEN 임시 사용)
+  playscript: EXTRACT_PROMPT_PLAYSCRIPT,
 };
 
 // ---------------------------------------------------------------------------
