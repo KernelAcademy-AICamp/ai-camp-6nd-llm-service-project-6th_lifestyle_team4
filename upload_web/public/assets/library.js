@@ -8,8 +8,14 @@ const $ = (sel) => document.querySelector(sel);
 const userEmailEl = $('#user-email');
 const logoutBtn = $('#logout-btn');
 const libraryGrid = $('#library-grid');
+const libraryShelf = $('#library-shelf');
 const libraryStatus = $('#library-status');
 const libraryEmpty = $('#library-empty');
+const viewShelfBtn = $('#view-shelf-btn');
+const viewGridBtn = $('#view-grid-btn');
+const pulloutModal = $('#pullout-modal');
+const pulloutClose = $('#pullout-close');
+const pulloutBody = $('#pullout-body');
 const libraryWorkFilter = $('#library-work-filter');
 const librarySearchInput = $('#library-search');
 const libraryRefreshBtn = $('#library-refresh');
@@ -30,6 +36,7 @@ const state = {
   searchText: '',
   editing: null,      // editing card_id
   selectedIds: new Set(), // 선택된 card_id Set
+  viewMode: 'shelf',  // 'shelf' (책꽂이) | 'grid' (격자)
 };
 
 // ---------------------------------------------------------------------------
@@ -119,29 +126,201 @@ function filteredRows() {
 // ---------------------------------------------------------------------------
 function renderLibrary() {
   libraryGrid.innerHTML = '';
+  libraryShelf.innerHTML = '';
   const rows = filteredRows();
 
-  // 선택 툴바 표시 여부
   if (rows.length === 0) {
     libraryEmpty.classList.remove('hidden');
     librarySelectionBar.classList.add('hidden');
     librarySelectionBar.classList.remove('flex');
+    libraryGrid.classList.add('hidden');
+    libraryShelf.classList.add('hidden');
     return;
   }
   libraryEmpty.classList.add('hidden');
   librarySelectionBar.classList.remove('hidden');
   librarySelectionBar.classList.add('flex');
 
-  rows.forEach((card) => {
-    if (state.editing === card.card_id) {
-      libraryGrid.appendChild(buildEditNode(card));
-    } else {
-      libraryGrid.appendChild(buildViewNode(card));
-    }
-  });
+  if (state.viewMode === 'grid') {
+    libraryGrid.classList.remove('hidden');
+    libraryShelf.classList.add('hidden');
+    rows.forEach((card) => {
+      if (state.editing === card.card_id) {
+        libraryGrid.appendChild(buildEditNode(card));
+      } else {
+        libraryGrid.appendChild(buildViewNode(card));
+      }
+    });
+  } else {
+    // 책꽂이 모드
+    libraryGrid.classList.add('hidden');
+    libraryShelf.classList.remove('hidden');
+    renderShelf(rows);
+  }
 
   updateSelectionUi();
 }
+
+// ---------------------------------------------------------------------------
+// Bookshelf rendering — 작품별로 그룹화
+// ---------------------------------------------------------------------------
+function renderShelf(rows) {
+  // 작품 ID로 그룹화 (작품 정보 + 카드 목록)
+  const byWork = new Map();
+  rows.forEach((card) => {
+    const wid = card.work_id;
+    if (!byWork.has(wid)) {
+      byWork.set(wid, { work: card.works || { work_id: wid, title: `Work #${wid}` }, cards: [] });
+    }
+    byWork.get(wid).cards.push(card);
+  });
+
+  // 작품 제목 순으로 정렬
+  const sortedWorks = [...byWork.values()].sort((a, b) =>
+    String(a.work.title || '').localeCompare(String(b.work.title || ''))
+  );
+
+  sortedWorks.forEach(({ work, cards }) => {
+    libraryShelf.appendChild(buildShelfSection(work, cards));
+  });
+}
+
+function buildShelfSection(work, cards) {
+  const wrap = document.createElement('div');
+  wrap.className = 'flex flex-col gap-2';
+
+  // 작품 헤더 라벨
+  const header = document.createElement('div');
+  header.className = 'flex items-baseline gap-3 px-2';
+  const formatLabel = work.format ? `· ${work.format}` : '';
+  const yearLabel = work.release_year ? `· ${work.release_year}` : '';
+  const authorLabel = work.author ? `· ${work.author}` : '';
+  header.innerHTML = `
+    <h3 class="text-lg font-bold text-on-surface">${escapeHtml(work.title || '제목 없음')}</h3>
+    <span class="text-xs text-on-surface-variant">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}`.trim())}</span>
+  `;
+  wrap.appendChild(header);
+
+  // 책꽂이 행
+  const bookshelf = document.createElement('div');
+  bookshelf.className = 'bookshelf';
+  const shelfRow = document.createElement('div');
+  shelfRow.className = 'shelf-row';
+  // 작품별 베이스 색상 (같은 작품 = 같은 색 톤)
+  const baseColor = colorForWork(work.work_id);
+  cards.forEach((card, idx) => {
+    shelfRow.appendChild(buildSpine(card, baseColor, idx));
+  });
+  bookshelf.appendChild(shelfRow);
+  wrap.appendChild(bookshelf);
+
+  return wrap;
+}
+
+function buildSpine(card, baseColor, idx) {
+  const spine = document.createElement('div');
+  spine.className = 'spine';
+  // 같은 작품 안에서 카드별 색조 약간 변화 (밝기 차이로 구분감)
+  const shaded = shadeColor(baseColor, (idx % 5) * 6 - 12);
+  spine.style.background = `linear-gradient(180deg, ${shaded} 0%, ${shadeColor(shaded, -8)} 100%)`;
+
+  // 명대사 첫 단어 또는 키워드 첫 번째를 spine title로
+  const titleSrc = (card.keywords && card.keywords[0]) || cleanForDisplay(card.quote || '').slice(0, 14);
+
+  spine.innerHTML = `
+    <span class="spine-id">#${card.card_id}</span>
+    <span class="spine-title">${escapeHtml(titleSrc)}</span>
+    <span class="spine-format">${escapeHtml((card.works?.format || '').toUpperCase())}</span>
+  `;
+
+  spine.addEventListener('click', () => openPulloutCard(card));
+  return spine;
+}
+
+// 작품 ID 기반 베이스 색상 (HSL 회전)
+function colorForWork(workId) {
+  const id = Number(workId) || 0;
+  const hue = (id * 67) % 360; // 각 작품마다 다른 hue
+  return hslToHex(hue, 55, 38); // 중간 채도·중간 명도
+}
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toHex = (x) => Math.round(255 * x).toString(16).padStart(2, '0');
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+}
+
+function shadeColor(hex, percent) {
+  const num = parseInt(hex.slice(1), 16);
+  let r = (num >> 16) + Math.round(2.55 * percent);
+  let g = ((num >> 8) & 0xff) + Math.round(2.55 * percent);
+  let b = (num & 0xff) + Math.round(2.55 * percent);
+  r = Math.max(0, Math.min(255, r));
+  g = Math.max(0, Math.min(255, g));
+  b = Math.max(0, Math.min(255, b));
+  return `#${[r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+}
+
+// ---------------------------------------------------------------------------
+// Pullout card modal — spine 클릭 시 책 "꺼내 보기"
+// ---------------------------------------------------------------------------
+let currentPulloutCardId = null;
+
+function openPulloutCard(card) {
+  currentPulloutCardId = card.card_id;
+  refreshPullout();
+  pulloutModal.classList.remove('hidden');
+  pulloutModal.classList.add('flex');
+}
+
+// state.editing 또는 state.rows 변경 시 호출 — 모달 내용 동기화
+function refreshPullout() {
+  if (currentPulloutCardId == null) return;
+  const card = state.rows.find((c) => c.card_id === currentPulloutCardId);
+  if (!card) {
+    // 카드가 삭제됐으면 모달 닫기
+    closePulloutCard();
+    return;
+  }
+  pulloutBody.innerHTML = '';
+  if (state.editing === card.card_id) {
+    pulloutBody.appendChild(buildEditNode(card));
+  } else {
+    pulloutBody.appendChild(buildViewNode(card));
+  }
+}
+
+function closePulloutCard() {
+  pulloutModal.classList.add('hidden');
+  pulloutModal.classList.remove('flex');
+  pulloutBody.innerHTML = '';
+  currentPulloutCardId = null;
+}
+
+pulloutClose.addEventListener('click', closePulloutCard);
+pulloutModal.addEventListener('click', (e) => {
+  if (e.target === pulloutModal) closePulloutCard();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !pulloutModal.classList.contains('hidden')) {
+    closePulloutCard();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// View mode toggle
+// ---------------------------------------------------------------------------
+function setViewMode(mode) {
+  state.viewMode = mode;
+  viewShelfBtn.classList.toggle('active', mode === 'shelf');
+  viewGridBtn.classList.toggle('active', mode === 'grid');
+  renderLibrary();
+}
+viewShelfBtn.addEventListener('click', () => setViewMode('shelf'));
+viewGridBtn.addEventListener('click', () => setViewMode('grid'));
 
 // 선택 상태 UI 갱신 (선택 개수, 전체 선택 체크박스, 일괄 삭제 버튼)
 function updateSelectionUi() {
@@ -218,6 +397,7 @@ function buildViewNode(card) {
   node.querySelector('.lib-edit-btn').addEventListener('click', () => {
     state.editing = card.card_id;
     renderLibrary();
+    refreshPullout();
   });
   node.querySelector('.lib-delete-btn').addEventListener('click', () => onDelete(card));
 
@@ -260,6 +440,7 @@ function buildEditNode(card) {
       Object.assign(card, updates);
       state.editing = null;
       renderLibrary();
+      refreshPullout();
       toast('DB 카드 수정 저장됨', 'success');
     } catch (err) {
       console.error('[library] update failed:', err);
@@ -270,6 +451,7 @@ function buildEditNode(card) {
   node.querySelector('.lib-cancel-edit-btn').addEventListener('click', () => {
     state.editing = null;
     renderLibrary();
+    refreshPullout();
   });
 
   return node;
@@ -284,6 +466,7 @@ async function onDelete(card) {
     if (error) throw error;
     state.rows = state.rows.filter((c) => c.card_id !== card.card_id);
     renderLibrary();
+    refreshPullout();
     toast('카드 삭제됨', 'success');
   } catch (err) {
     console.error('[library] delete failed:', err);
@@ -350,6 +533,7 @@ async function onBulkDelete() {
     state.rows = state.rows.filter((c) => !targetIds.includes(c.card_id));
     targetIds.forEach((id) => state.selectedIds.delete(id));
     renderLibrary();
+    refreshPullout();
     toast(`${targetIds.length}장 삭제 완료`, 'success');
   } catch (err) {
     console.error('[library] bulk delete failed:', err);

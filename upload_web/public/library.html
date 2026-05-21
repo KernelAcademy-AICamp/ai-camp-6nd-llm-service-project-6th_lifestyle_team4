@@ -14,6 +14,134 @@
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
   .custom-scrollbar::-webkit-scrollbar-thumb { background: #c7c4d8; border-radius: 10px; }
 
+  /* ===== Bookshelf view ===== */
+  .bookshelf {
+    background: linear-gradient(180deg, #8b6f47 0%, #6b4f2a 50%, #5a4022 100%);
+    padding: 24px 16px 12px;
+    border-radius: 12px;
+    box-shadow: inset 0 4px 12px rgba(0,0,0,0.25);
+  }
+  .shelf-row {
+    display: flex; gap: 3px;
+    padding: 0 4px 14px;
+    margin-bottom: 12px;
+    border-bottom: 10px solid #3a2810;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    align-items: flex-end;
+    min-height: 200px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .shelf-row:last-child { margin-bottom: 0; }
+  .shelf-row::-webkit-scrollbar { height: 8px; }
+  .shelf-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+  .spine {
+    flex-shrink: 0;
+    width: 42px;
+    height: 200px;
+    border-radius: 3px 3px 1px 1px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    padding: 10px 4px;
+    box-shadow:
+      inset 2px 0 4px rgba(0,0,0,0.2),
+      inset -2px 0 4px rgba(255,255,255,0.05),
+      2px 0 4px rgba(0,0,0,0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, margin 0.2s ease;
+    position: relative;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .spine:hover {
+    transform: translateY(-16px);
+    box-shadow:
+      inset 2px 0 4px rgba(0,0,0,0.2),
+      inset -2px 0 4px rgba(255,255,255,0.05),
+      4px 4px 16px rgba(0,0,0,0.4);
+    margin: 0 4px;
+    z-index: 2;
+  }
+  .spine-id {
+    font-size: 9px;
+    font-weight: 600;
+    opacity: 0.7;
+    letter-spacing: 0.5px;
+  }
+  .spine-title {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-weight: 700;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-height: 160px;
+    letter-spacing: 0.5px;
+  }
+  .spine-format {
+    font-size: 8px;
+    font-weight: 600;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ===== Pulled-out card modal ===== */
+  .pullout-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 90; align-items: center; justify-content: center; padding: 24px;
+  }
+  .pullout-card {
+    background: #fff;
+    border-radius: 8px;
+    max-width: 720px;
+    width: 100%;
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+    animation: pullout-slide 0.3s ease;
+    position: relative;
+  }
+  #pullout-body {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #pullout-body::-webkit-scrollbar { width: 8px; }
+  #pullout-body::-webkit-scrollbar-thumb { background: #c7c4d8; border-radius: 4px; }
+  #pullout-close {
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  @keyframes pullout-slide {
+    0% { transform: translateY(20px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  /* View mode toggle */
+  .view-toggle-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 12px;
+    font-size: 13px; font-weight: 600;
+    border: 2px solid #c7c4d8;
+    border-radius: 8px;
+    background: white;
+    color: #464555;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .view-toggle-btn.active {
+    border-color: #3525cd;
+    background: #3525cd;
+    color: white;
+  }
+
   /* === Mobile preview phones === */
   .phone-frame { position: relative; flex-shrink: 0; }
   .phone-ios {
@@ -250,6 +378,16 @@
           <p class="text-sm text-on-surface-variant mt-1">DB에 저장된 모든 카드. 항상 조회 가능. 클릭으로 편집·삭제.</p>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex gap-1 p-1 bg-surface-container-low rounded-lg">
+            <button type="button" id="view-shelf-btn" class="view-toggle-btn active" title="책꽂이 보기">
+              <span class="material-symbols-outlined text-base">menu_book</span>
+              책꽂이
+            </button>
+            <button type="button" id="view-grid-btn" class="view-toggle-btn" title="그리드 보기">
+              <span class="material-symbols-outlined text-base">grid_view</span>
+              그리드
+            </button>
+          </div>
           <select id="library-work-filter" class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
             <option value="">모든 작품</option>
           </select>
@@ -280,13 +418,27 @@
         </div>
       </div>
 
-      <div id="library-grid" class="grid grid-cols-1 xl:grid-cols-2 gap-6"></div>
+      <div id="library-grid" class="grid grid-cols-1 xl:grid-cols-2 gap-6 hidden"></div>
+
+      <div id="library-shelf" class="flex flex-col gap-4"></div>
 
       <p id="library-empty" class="hidden text-center text-on-surface-variant py-12">저장된 카드가 없습니다.</p>
     </section>
 
   </div>
 </main>
+
+<!-- 책 꺼내 보기 모달 (책꽂이 spine 클릭 시) -->
+<div id="pullout-modal" class="pullout-modal hidden">
+  <div class="pullout-card relative">
+    <button type="button" id="pullout-close"
+            class="absolute top-3 right-3 p-2 rounded-full hover:bg-surface-container-low transition-colors z-10"
+            title="책꽂이로 돌아가기">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+    <div id="pullout-body" class="p-6"></div>
+  </div>
+</div>
 
 <!-- Toast -->
 <div id="toast" class="fixed bottom-8 right-8 hidden px-4 py-3 bg-inverse-surface text-inverse-on-surface rounded-lg shadow-xl z-50 text-sm"></div>
