@@ -157,6 +157,7 @@ function buildViewNode(card) {
   const created = card.created_at ? new Date(card.created_at).toLocaleString('ko-KR') : '';
   node.querySelector('.lib-meta').textContent = `card_id: ${card.card_id}${created ? ' · 생성: ' + created : ''}`;
 
+  node.querySelector('.lib-preview-btn').addEventListener('click', () => showMobilePreview(card));
   node.querySelector('.lib-edit-btn').addEventListener('click', () => {
     state.editing = card.card_id;
     renderLibrary();
@@ -259,6 +260,79 @@ librarySearchInput.addEventListener('input', () => {
 });
 
 libraryRefreshBtn.addEventListener('click', () => loadLibrary());
+
+// ---------------------------------------------------------------------------
+// Mobile preview modal (iOS + Android)
+// ---------------------------------------------------------------------------
+const previewModal = $('#preview-modal');
+const previewModalClose = $('#preview-modal-close');
+const previewIosScreen = $('#preview-ios-screen');
+const previewAndroidScreen = $('#preview-android-screen');
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function showMobilePreview(card) {
+  const html = renderAppCardHtml(card);
+  previewIosScreen.innerHTML = html;
+  previewAndroidScreen.innerHTML = html;
+  previewModal.classList.remove('hidden');
+  previewModal.classList.add('flex');
+}
+
+function closeMobilePreview() {
+  previewModal.classList.add('hidden');
+  previewModal.classList.remove('flex');
+}
+
+function renderAppCardHtml(card) {
+  const work = card.works || {};
+  const workLine = [work.title || `Work #${card.work_id}`, work.author, work.release_year]
+    .filter(Boolean).join(' · ');
+
+  const keywords = (card.keywords || [])
+    .map((k) => `<span>#${escapeHtml(k)}</span>`).join('');
+
+  const temp = Math.max(0, Math.min(5, Number(card.temperature) || 0));
+  const intensity = Math.max(0, Math.min(5, Number(card.intensity) || 0));
+  const tempBars = Array.from({ length: 5 }, (_, i) =>
+    `<div class="${i < temp ? 'on-temp' : ''}"></div>`
+  ).join('');
+  const intBars = Array.from({ length: 5 }, (_, i) =>
+    `<div class="${i < intensity ? 'on-int' : ''}"></div>`
+  ).join('');
+
+  return `
+    <div class="app-card">
+      <p class="app-work-title">${escapeHtml(workLine)}</p>
+      <p class="app-quote">${escapeHtml(card.quote || '')}</p>
+      ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(card.excerpt_description)}</p>` : ''}
+      <div class="app-excerpt">${escapeHtml(card.script_excerpt || '')}</div>
+      ${keywords ? `<div class="app-keywords">${keywords}</div>` : ''}
+      <div class="app-meters">
+        <div class="app-meter">
+          <div class="flex justify-between"><span>Temperature</span><span>${temp}/5</span></div>
+          <div class="app-meter-bar">${tempBars}</div>
+        </div>
+        <div class="app-meter">
+          <div class="flex justify-between"><span>Intensity</span><span>${intensity}/5</span></div>
+          <div class="app-meter-bar">${intBars}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+previewModalClose.addEventListener('click', closeMobilePreview);
+previewModal.addEventListener('click', (e) => {
+  if (e.target === previewModal) closeMobilePreview();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !previewModal.classList.contains('hidden')) {
+    closeMobilePreview();
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Toast
