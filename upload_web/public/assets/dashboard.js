@@ -50,6 +50,8 @@ const userEmailEl = $('#user-email');
 const logoutBtn = $('#logout-btn');
 const cardTemplate = $('#card-template');
 const cardEditTemplate = $('#card-edit-template');
+const selectAllBtn = $('#select-all-btn');
+const selectAllLabel = $('#select-all-label');
 
 // ---------------------------------------------------------------------------
 // Init: auth gate
@@ -406,6 +408,29 @@ function renderSaveBar() {
     saveBar.classList.add('flex');
   }
   saveBtn.disabled = count === 0;
+
+  // 전체 선택 버튼 라벨 갱신 — 전체 선택 상태면 '전체 해제', 아니면 '전체 선택'
+  if (selectAllBtn && selectAllLabel) {
+    const total = state.cards.length;
+    if (total === 0) {
+      selectAllBtn.classList.add('hidden');
+    } else {
+      selectAllBtn.classList.remove('hidden');
+      selectAllLabel.textContent = (count === total) ? '전체 해제' : '전체 선택';
+    }
+  }
+}
+
+// 전체 선택 토글
+if (selectAllBtn) {
+  selectAllBtn.addEventListener('click', () => {
+    if (!state.cards.length) return;
+    const total = state.cards.length;
+    const selectedCount = state.cards.filter((c) => c.selected).length;
+    const shouldSelectAll = selectedCount !== total;
+    state.cards.forEach((c) => { c.selected = shouldSelectAll; });
+    render();
+  });
 }
 
 // ---------------------------------------------------------------------------

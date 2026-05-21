@@ -15,6 +15,10 @@ const librarySearchInput = $('#library-search');
 const libraryRefreshBtn = $('#library-refresh');
 const libraryCardTemplate = $('#library-card-template');
 const libraryEditTemplate = $('#library-edit-template');
+const librarySelectionBar = $('#library-selection-bar');
+const librarySelectAll = $('#library-select-all');
+const librarySelectedCount = $('#library-selected-count');
+const libraryBulkDeleteBtn = $('#library-bulk-delete-btn');
 const toastEl = $('#toast');
 
 // ---------------------------------------------------------------------------
@@ -25,6 +29,7 @@ const state = {
   workFilter: '',
   searchText: '',
   editing: null,      // editing card_id
+  selectedIds: new Set(), // 선택된 card_id Set
 };
 
 // ---------------------------------------------------------------------------
@@ -116,11 +121,16 @@ function renderLibrary() {
   libraryGrid.innerHTML = '';
   const rows = filteredRows();
 
+  // 선택 툴바 표시 여부
   if (rows.length === 0) {
     libraryEmpty.classList.remove('hidden');
+    librarySelectionBar.classList.add('hidden');
+    librarySelectionBar.classList.remove('flex');
     return;
   }
   libraryEmpty.classList.add('hidden');
+  librarySelectionBar.classList.remove('hidden');
+  librarySelectionBar.classList.add('flex');
 
   rows.forEach((card) => {
     if (state.editing === card.card_id) {
@@ -129,6 +139,31 @@ function renderLibrary() {
       libraryGrid.appendChild(buildViewNode(card));
     }
   });
+
+  updateSelectionUi();
+}
+
+// 선택 상태 UI 갱신 (선택 개수, 전체 선택 체크박스, 일괄 삭제 버튼)
+function updateSelectionUi() {
+  const rows = filteredRows();
+  const visibleIds = new Set(rows.map((c) => c.card_id));
+  const selectedVisible = [...state.selectedIds].filter((id) => visibleIds.has(id));
+  const count = selectedVisible.length;
+
+  librarySelectedCount.textContent = count;
+  libraryBulkDeleteBtn.disabled = count === 0;
+
+  // 전체 선택 체크박스 상태
+  if (rows.length > 0 && count === rows.length) {
+    librarySelectAll.checked = true;
+    librarySelectAll.indeterminate = false;
+  } else if (count === 0) {
+    librarySelectAll.checked = false;
+    librarySelectAll.indeterminate = false;
+  } else {
+    librarySelectAll.checked = false;
+    librarySelectAll.indeterminate = true;
+  }
 }
 
 function buildViewNode(card) {
@@ -165,6 +200,19 @@ function buildViewNode(card) {
 
   const created = card.created_at ? new Date(card.created_at).toLocaleString('ko-KR') : '';
   node.querySelector('.lib-meta').textContent = `card_id: ${card.card_id}${created ? ' · 생성: ' + created : ''}`;
+
+  // 선택 체크박스 — 현재 state.selectedIds 와 동기화
+  const checkbox = node.querySelector('.lib-select-checkbox');
+  if (checkbox) {
+    checkbox.checked = state.selectedIds.has(card.card_id);
+    checkbox.addEventListener('change', (e) => {
+      if (e.target.checked) state.selectedIds.add(card.card_id);
+      else state.selectedIds.delete(card.card_id);
+      updateSelectionUi();
+    });
+    // 체크박스 클릭 시 카드 전체 클릭 이벤트와 분리
+    checkbox.addEventListener('click', (e) => e.stopPropagation());
+  }
 
   node.querySelector('.lib-preview-btn').addEventListener('click', () => showMobilePreview(card));
   node.querySelector('.lib-edit-btn').addEventListener('click', () => {
@@ -272,6 +320,42 @@ librarySearchInput.addEventListener('input', () => {
 });
 
 libraryRefreshBtn.addEventListener('click', () => loadLibrary());
+
+// 전체 선택 체크박스 — 현재 필터된 카드들의 선택 상태를 토글
+librarySelectAll.addEventListener('change', (e) => {
+  const rows = filteredRows();
+  if (e.target.checked) {
+    rows.forEach((c) => state.selectedIds.add(c.card_id));
+  } else {
+    rows.forEach((c) => state.selectedIds.delete(c.card_id));
+  }
+  renderLibrary();
+});
+
+// 일괄 삭제
+libraryBulkDeleteBtn.addEventListener('click', () => onBulkDelete());
+
+async function onBulkDelete() {
+  const rows = filteredRows();
+  const visibleIds = new Set(rows.map((c) => c.card_id));
+  const targetIds = [...state.selectedIds].filter((id) => visibleIds.has(id));
+  if (targetIds.length === 0) return;
+  if (!confirm(`선택한 ${targetIds.length}장의 카드를 DB에서 영구 삭제할까요?\n\n복구할 수 없습니다.`)) return;
+
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('cards').delete().in('card_id', targetIds);
+    if (error) throw error;
+    // 로컬 캐시에서 제거
+    state.rows = state.rows.filter((c) => !targetIds.includes(c.card_id));
+    targetIds.forEach((id) => state.selectedIds.delete(id));
+    renderLibrary();
+    toast(`${targetIds.length}장 삭제 완료`, 'success');
+  } catch (err) {
+    console.error('[library] bulk delete failed:', err);
+    toast(`일괄 삭제 실패: ${err.message || err}`, 'error');
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Mobile preview modal (iOS + Android)
