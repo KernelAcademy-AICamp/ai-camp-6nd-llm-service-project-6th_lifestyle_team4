@@ -74,10 +74,15 @@ logoutBtn.addEventListener('click', async () => {
 function paintCategory() {
   $$('#category-toggle .cat-btn').forEach((btn) => {
     const active = btn.dataset.category === state.category;
+    // Active: 진한 primary 배경 + 글자 색 변경 + 굵은 보더
     btn.classList.toggle('bg-primary', active);
     btn.classList.toggle('text-on-primary', active);
-    btn.classList.toggle('shadow-sm', active);
-    btn.classList.toggle('text-on-surface-variant', !active);
+    btn.classList.toggle('border-primary', active);
+    btn.classList.toggle('shadow-md', active);
+    // Inactive: 기본 흰 배경 + 회색 보더
+    btn.classList.toggle('bg-surface-container-lowest', !active);
+    btn.classList.toggle('text-on-surface', !active);
+    btn.classList.toggle('border-outline-variant', !active);
   });
   if (categoryHint) {
     const hints = {
