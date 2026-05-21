@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper_white">#FFFFFFFF</color>
+    <color name="ink_black">#FF1A1A1A</color>
+    <color name="signature_orange">#FFFF5126</color>
+    <color name="border_subtle">#FFE2E2E4</color>
+    <color name="surface_muted">#FFF5F5F5</color>
+</resources>
