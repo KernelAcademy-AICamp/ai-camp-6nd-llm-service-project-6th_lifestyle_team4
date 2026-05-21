@@ -127,7 +127,7 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 {
   "work": {
     "title": "작품 제목",
-    "format": "movie | drama | play | musical 중 하나",
+    "format": "movie | drama | play | musical | opera 중 하나",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
     "genres": ["장르1", "장르2"]
@@ -175,8 +175,9 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 ## 필드별 규칙
 
 ### \`work.format\`
-"movie" | "drama" | "play" | "musical" 중 정확히 하나.
-- 오페라/뮤지컬 → "musical"
+"movie" | "drama" | "play" | "musical" | "opera" 중 정확히 하나.
+- **오페라 → "opera"** (반드시. 절대 "musical"이 아님)
+- 뮤지컬 → "musical"
 - 희곡/연극 → "play"
 - 영화 → "movie"
 - TV 드라마 → "drama"
@@ -299,7 +300,7 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 {
   "work": {
     "title": "리골레토",
-    "format": "musical",
+    "format": "opera",
     "author": "주세페 베르디 / 프란체스코 마리아 피아베",
     "release_year": 1851,
     "genres": ["비극", "드라마"]
