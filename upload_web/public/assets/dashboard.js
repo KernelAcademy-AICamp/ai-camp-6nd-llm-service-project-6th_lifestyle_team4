@@ -86,10 +86,9 @@ function paintCategory() {
   });
   if (categoryHint) {
     const hints = {
-      screen: '기존 프롬프트로 분석됩니다 (영화·드라마·연극·뮤지컬 공용).',
-      stage: '기존 프롬프트로 분석됩니다 (영화·드라마·연극·뮤지컬 공용).',
-      opera: '오페라/희곡 전용 프롬프트로 분석됩니다 (libretto 화자 표기 보존).',
-      playscript: '오페라/희곡 전용 프롬프트로 분석됩니다 (오페라와 동일 규칙).',
+      screen: '기본 프롬프트로 분석됩니다 (영화·드라마용).',
+      opera: '오페라·뮤지컬 전용 프롬프트로 분석됩니다 (libretto 화자 표기 보존).',
+      play: '희곡·연극 전용 프롬프트로 분석됩니다 (speaker_label·상황 단서 포함).',
     };
     categoryHint.textContent = hints[state.category] || '';
   }
