@@ -11,7 +11,7 @@ import SwiftUI
 struct CurtaincallApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            CardFeedView()
         }
     }
 }
