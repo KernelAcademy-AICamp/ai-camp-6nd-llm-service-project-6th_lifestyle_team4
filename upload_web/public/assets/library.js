@@ -16,6 +16,11 @@ const viewGridBtn = $('#view-grid-btn');
 const pulloutModal = $('#pullout-modal');
 const pulloutClose = $('#pullout-close');
 const pulloutBody = $('#pullout-body');
+const confirmModal = $('#confirm-modal');
+const confirmTitle = $('#confirm-title');
+const confirmMessage = $('#confirm-message');
+const confirmCancelBtn = $('#confirm-cancel');
+const confirmDeleteBtn = $('#confirm-delete');
 const libraryWorkFilter = $('#library-work-filter');
 const librarySearchInput = $('#library-search');
 const libraryRefreshBtn = $('#library-refresh');
@@ -189,16 +194,29 @@ function buildShelfSection(work, cards) {
   const wrap = document.createElement('div');
   wrap.className = 'flex flex-col gap-2';
 
-  // 작품 헤더 라벨
+  // 작품 헤더 라벨 + 작품 삭제 버튼
   const header = document.createElement('div');
-  header.className = 'flex items-baseline gap-3 px-2';
+  header.className = 'flex items-center gap-3 px-2';
   const formatLabel = work.format ? `· ${work.format}` : '';
   const yearLabel = work.release_year ? `· ${work.release_year}` : '';
   const authorLabel = work.author ? `· ${work.author}` : '';
   header.innerHTML = `
     <h3 class="text-lg font-bold text-on-surface">${escapeHtml(work.title || '제목 없음')}</h3>
-    <span class="text-xs text-on-surface-variant">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}`.trim())}</span>
+    <span class="text-xs text-on-surface-variant flex-1">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}`.trim())}</span>
+    <button type="button" class="shelf-delete-work-btn p-1.5 rounded hover:bg-error/10 text-error transition-colors flex items-center gap-1 text-sm font-semibold" title="작품 전체 삭제">
+      <span class="material-symbols-outlined text-base">delete_sweep</span>
+      작품 삭제
+    </button>
   `;
+  // 작품 삭제 버튼 — 확인 모달 띄움
+  header.querySelector('.shelf-delete-work-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    showConfirmModal({
+      title: '정말 삭제하시겠습니까?',
+      message: `"${work.title || `Work #${work.work_id}`}" 작품과 카드 ${cards.length}장이 모두 영구 삭제됩니다.\n\n복구할 수 없습니다.`,
+      onConfirm: () => deleteWork(work, cards),
+    });
+  });
   wrap.appendChild(header);
 
   // 책꽂이 행
@@ -309,6 +327,71 @@ document.addEventListener('keydown', (e) => {
     closePulloutCard();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Confirm modal — 위험한 작업 전 사용자 확인 ('놔두기' / '삭제')
+// ---------------------------------------------------------------------------
+let confirmPendingFn = null;
+
+function showConfirmModal({ title, message, onConfirm }) {
+  confirmTitle.textContent = title || '정말 삭제하시겠습니까?';
+  confirmMessage.textContent = message || '';
+  confirmPendingFn = onConfirm;
+  confirmModal.classList.remove('hidden');
+  confirmModal.classList.add('flex');
+}
+
+function closeConfirmModal() {
+  confirmModal.classList.add('hidden');
+  confirmModal.classList.remove('flex');
+  confirmPendingFn = null;
+}
+
+confirmCancelBtn.addEventListener('click', closeConfirmModal);
+confirmModal.addEventListener('click', (e) => {
+  if (e.target === confirmModal) closeConfirmModal();
+});
+confirmDeleteBtn.addEventListener('click', async () => {
+  const fn = confirmPendingFn;
+  closeConfirmModal();
+  if (fn) await fn();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !confirmModal.classList.contains('hidden')) {
+    closeConfirmModal();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 작품 통째로 삭제 (book_genres → cards → works 순서, FK 위반 방지)
+// ---------------------------------------------------------------------------
+async function deleteWork(work, cards) {
+  try {
+    const sb = await getSupabase();
+    // 1) work_genres 정리
+    const { error: wgErr } = await sb.from('work_genres').delete().eq('work_id', work.work_id);
+    if (wgErr) throw wgErr;
+    // 2) cards 정리
+    const { error: cErr } = await sb.from('cards').delete().eq('work_id', work.work_id);
+    if (cErr) throw cErr;
+    // 3) works 본체 삭제
+    const { error: wErr } = await sb.from('works').delete().eq('work_id', work.work_id);
+    if (wErr) throw wErr;
+
+    // 로컬 캐시에서 제거
+    const removedCardIds = new Set(cards.map((c) => c.card_id));
+    state.rows = state.rows.filter((c) => c.work_id !== work.work_id);
+    removedCardIds.forEach((id) => state.selectedIds.delete(id));
+
+    refreshWorkFilterOptions();
+    renderLibrary();
+    refreshPullout();
+    toast(`'${work.title || `Work #${work.work_id}`}' 작품 삭제 완료 (카드 ${cards.length}장 포함)`, 'success');
+  } catch (err) {
+    console.error('[library] delete work failed:', err);
+    toast(`작품 삭제 실패: ${err.message || err}`, 'error');
+  }
+}
 
 // ---------------------------------------------------------------------------
 // View mode toggle

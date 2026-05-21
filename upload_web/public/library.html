@@ -124,6 +124,28 @@
     100% { transform: translateY(0); opacity: 1; }
   }
 
+  /* Confirm modal */
+  .confirm-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+    z-index: 200; align-items: center; justify-content: center; padding: 24px;
+  }
+  .confirm-card {
+    background: #fff;
+    border-radius: 14px;
+    max-width: 440px;
+    width: 100%;
+    padding: 24px 24px 20px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+    animation: confirm-pop 0.18s ease;
+  }
+  @keyframes confirm-pop {
+    0% { transform: scale(0.92); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .confirm-message {
+    white-space: pre-line;
+  }
+
   /* View mode toggle */
   .view-toggle-btn {
     display: flex; align-items: center; gap: 4px;
@@ -427,6 +449,25 @@
 
   </div>
 </main>
+
+<!-- 공통 확인 모달 (작품 삭제 등 위험 작업) -->
+<div id="confirm-modal" class="confirm-modal hidden">
+  <div class="confirm-card">
+    <h3 id="confirm-title" class="text-xl font-bold text-on-surface mb-2">정말 삭제하시겠습니까?</h3>
+    <p id="confirm-message" class="confirm-message text-sm text-on-surface-variant mb-6 leading-relaxed"></p>
+    <div class="flex gap-2 justify-end">
+      <button type="button" id="confirm-cancel"
+              class="px-5 py-2.5 rounded-lg border-2 border-outline-variant font-semibold text-on-surface hover:bg-surface-container-low transition-colors">
+        놔두기
+      </button>
+      <button type="button" id="confirm-delete"
+              class="px-5 py-2.5 rounded-lg bg-error text-white font-semibold hover:opacity-90 transition-opacity flex items-center gap-1">
+        <span class="material-symbols-outlined text-base">delete</span>
+        삭제
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- 책 꺼내 보기 모달 (책꽂이 spine 클릭 시) -->
 <div id="pullout-modal" class="pullout-modal hidden">
