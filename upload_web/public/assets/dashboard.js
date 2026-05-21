@@ -60,6 +60,8 @@ const cardEditTemplate = $('#card-edit-template');
   const sb = await getSupabase();
   const { data } = await sb.auth.getUser();
   userEmailEl.textContent = emailToDisplayId(data?.user?.email);
+  // 페이지 로드 직후 저장된 카드 자동 불러오기
+  loadLibrary().catch((err) => console.error('[library] load failed:', err));
 })();
 
 logoutBtn.addEventListener('click', async () => {
@@ -466,6 +468,9 @@ saveBtn.addEventListener('click', async () => {
     // Reset selection so user can re-curate or upload a new file
     state.cards.forEach((c) => (c.selected = false));
     render();
+
+    // 라이브러리(저장된 카드 조회) 새로고침
+    loadLibrary().catch((err) => console.warn('[library] post-save refresh:', err));
   } catch (err) {
     console.error(err);
     toast(err.message || '저장 실패', 'error');
@@ -474,6 +479,225 @@ saveBtn.addEventListener('click', async () => {
     saveBtn.innerHTML = orig;
   }
 });
+
+// ---------------------------------------------------------------------------
+// Library (DB-backed) — 저장된 카드 조회 / 편집 / 삭제
+// ---------------------------------------------------------------------------
+const library = {
+  rows: [],           // raw rows from supabase: cards joined with works
+  workFilter: '',     // selected work_id (string) or '' for 모든 작품
+  searchText: '',
+  editing: null,      // card_id currently in edit mode (only one at a time)
+};
+
+const libraryGrid = $('#library-grid');
+const libraryStatus = $('#library-status');
+const libraryEmpty = $('#library-empty');
+const libraryWorkFilter = $('#library-work-filter');
+const librarySearchInput = $('#library-search');
+const libraryRefreshBtn = $('#library-refresh');
+const libraryCardTemplate = $('#library-card-template');
+const libraryEditTemplate = $('#library-edit-template');
+
+async function loadLibrary() {
+  libraryStatus.textContent = '불러오는 중…';
+  libraryStatus.classList.remove('text-error');
+
+  try {
+    const sb = await getSupabase();
+    // works 와 join 해서 카드별 작품 정보까지 한 번에 가져옴
+    const { data, error } = await sb
+      .from('cards')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, created_at, works(work_id, title, format, author, release_year)')
+      .order('card_id', { ascending: false })
+      .limit(500);
+    if (error) throw error;
+
+    library.rows = Array.isArray(data) ? data : [];
+    refreshWorkFilterOptions();
+    renderLibrary();
+    libraryStatus.textContent = `총 ${library.rows.length}장 로드됨.`;
+  } catch (err) {
+    console.error('[library] load error:', err);
+    libraryStatus.textContent = `불러오기 실패: ${err.message || err}`;
+    libraryStatus.classList.add('text-error');
+  }
+}
+
+function refreshWorkFilterOptions() {
+  // 현재 가지고 있는 카드들에서 등장한 작품 추출 (중복 제거)
+  const seen = new Map();
+  library.rows.forEach((c) => {
+    const w = c.works;
+    if (w && !seen.has(w.work_id)) seen.set(w.work_id, w.title || `Work #${w.work_id}`);
+  });
+
+  const current = libraryWorkFilter.value;
+  libraryWorkFilter.innerHTML = '<option value="">모든 작품</option>';
+  [...seen.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]))).forEach(([id, title]) => {
+    const opt = document.createElement('option');
+    opt.value = String(id);
+    opt.textContent = title;
+    libraryWorkFilter.appendChild(opt);
+  });
+  // 이전 선택 유지
+  if (current && [...seen.keys()].some((k) => String(k) === current)) {
+    libraryWorkFilter.value = current;
+  } else {
+    libraryWorkFilter.value = '';
+    library.workFilter = '';
+  }
+}
+
+function filteredRows() {
+  const q = library.searchText.trim().toLowerCase();
+  return library.rows.filter((c) => {
+    if (library.workFilter && String(c.work_id) !== library.workFilter) return false;
+    if (q) {
+      const hay = `${c.quote || ''} ${c.excerpt_description || ''} ${(c.keywords || []).join(' ')}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderLibrary() {
+  libraryGrid.innerHTML = '';
+  const rows = filteredRows();
+
+  if (rows.length === 0) {
+    libraryEmpty.classList.remove('hidden');
+    return;
+  }
+  libraryEmpty.classList.add('hidden');
+
+  rows.forEach((card) => {
+    if (library.editing === card.card_id) {
+      libraryGrid.appendChild(buildLibraryEditNode(card));
+    } else {
+      libraryGrid.appendChild(buildLibraryViewNode(card));
+    }
+  });
+}
+
+function buildLibraryViewNode(card) {
+  const node = libraryCardTemplate.content.firstElementChild.cloneNode(true);
+  const work = card.works || {};
+
+  const workLine = [work.title || `Work #${card.work_id}`, work.format, work.release_year, work.author]
+    .filter(Boolean).join(' · ');
+  node.querySelector('.lib-work-title').textContent = workLine;
+  node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
+  node.querySelector('.lib-quote').textContent = card.quote ? `"${card.quote}"` : '';
+  node.querySelector('.lib-excerpt').textContent = card.script_excerpt || '';
+  node.querySelector('.lib-description').textContent = card.excerpt_description || '';
+
+  const kwEl = node.querySelector('.lib-keywords');
+  (card.keywords || []).forEach((k) => {
+    const chip = document.createElement('span');
+    chip.className = 'px-2 py-1 bg-surface-container rounded-full text-xs text-on-surface-variant';
+    chip.textContent = `#${k}`;
+    kwEl.appendChild(chip);
+  });
+
+  fillMeter(node.querySelector('.lib-temp-bar'), node.querySelector('.lib-temp-num'), card.temperature, 'bg-primary');
+  fillMeter(node.querySelector('.lib-intensity-bar'), node.querySelector('.lib-intensity-num'), card.intensity, 'bg-secondary');
+
+  const created = card.created_at ? new Date(card.created_at).toLocaleString('ko-KR') : '';
+  node.querySelector('.lib-meta').textContent = `card_id: ${card.card_id}${created ? ' · 생성: ' + created : ''}`;
+
+  node.querySelector('.lib-edit-btn').addEventListener('click', () => {
+    library.editing = card.card_id;
+    renderLibrary();
+  });
+  node.querySelector('.lib-delete-btn').addEventListener('click', () => onLibraryDelete(card));
+
+  return node;
+}
+
+function buildLibraryEditNode(card) {
+  const node = libraryEditTemplate.content.firstElementChild.cloneNode(true);
+
+  const quoteEl = node.querySelector('.lib-edit-quote');
+  const excerptEl = node.querySelector('.lib-edit-excerpt');
+  const descEl = node.querySelector('.lib-edit-description');
+  const kwEl = node.querySelector('.lib-edit-keywords');
+  const tempEl = node.querySelector('.lib-edit-temperature');
+  const intensityEl = node.querySelector('.lib-edit-intensity');
+
+  quoteEl.value = card.quote || '';
+  excerptEl.value = card.script_excerpt || '';
+  descEl.value = card.excerpt_description || '';
+  kwEl.value = (card.keywords || []).join(', ');
+  tempEl.value = card.temperature ?? 3;
+  intensityEl.value = card.intensity ?? 3;
+
+  node.querySelector('.lib-save-edit-btn').addEventListener('click', async () => {
+    const updates = {
+      quote: quoteEl.value.trim(),
+      script_excerpt: excerptEl.value.trim(),
+      excerpt_description: descEl.value.trim() || null,
+      keywords: kwEl.value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 3),
+      temperature: Math.max(1, Math.min(5, Number(tempEl.value) || 3)),
+      intensity: Math.max(1, Math.min(5, Number(intensityEl.value) || 3)),
+    };
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from('cards').update(updates).eq('card_id', card.card_id);
+      if (error) throw error;
+      // 로컬 캐시도 업데이트
+      Object.assign(card, updates);
+      library.editing = null;
+      renderLibrary();
+      toast('DB 카드 수정 저장됨', 'success');
+    } catch (err) {
+      console.error('[library] update failed:', err);
+      toast(`수정 실패: ${err.message || err}`, 'error');
+    }
+  });
+
+  node.querySelector('.lib-cancel-edit-btn').addEventListener('click', () => {
+    library.editing = null;
+    renderLibrary();
+  });
+
+  return node;
+}
+
+async function onLibraryDelete(card) {
+  const preview = (card.quote || '').slice(0, 30) || `카드 ${card.card_id}`;
+  if (!confirm(`"${preview}${(card.quote || '').length > 30 ? '…' : ''}" 카드를 DB에서 영구 삭제할까요?\n\n복구할 수 없습니다.`)) return;
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('cards').delete().eq('card_id', card.card_id);
+    if (error) throw error;
+    // 로컬 캐시에서 제거
+    library.rows = library.rows.filter((c) => c.card_id !== card.card_id);
+    renderLibrary();
+    toast('카드 삭제됨', 'success');
+  } catch (err) {
+    console.error('[library] delete failed:', err);
+    toast(`삭제 실패: ${err.message || err}`, 'error');
+  }
+}
+
+// Filter & search handlers
+libraryWorkFilter.addEventListener('change', () => {
+  library.workFilter = libraryWorkFilter.value;
+  renderLibrary();
+});
+let searchDebounce = null;
+librarySearchInput.addEventListener('input', () => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    library.searchText = librarySearchInput.value;
+    renderLibrary();
+  }, 200);
+});
+libraryRefreshBtn.addEventListener('click', () => loadLibrary());
+
+// 추출 후 저장 직후, 라이브러리도 자동 새로고침 (다음 save 호출에서 자동 refresh 위해 헬퍼 노출)
+window.__refreshLibrary = () => loadLibrary().catch((err) => console.warn('[library] refresh:', err));
 
 // ---------------------------------------------------------------------------
 // Toast
