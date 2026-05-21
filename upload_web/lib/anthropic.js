@@ -19,7 +19,9 @@ function isRetryable(err) {
 }
 
 async function callClaude(prompt, { maxTokens = 8192 } = {}) {
-  const MAX_OUTER_ATTEMPTS = 3;
+  // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper는 1회 추가 시도까지만 (총 ≤2회).
+  // 외부 재시도 횟수가 많으면 Vercel 함수 timeout(300s)을 잡아먹어 전체 실패.
+  const MAX_OUTER_ATTEMPTS = 2;
   let lastErr;
   for (let attempt = 0; attempt < MAX_OUTER_ATTEMPTS; attempt++) {
     try {
@@ -37,8 +39,8 @@ async function callClaude(prompt, { maxTokens = 8192 } = {}) {
     } catch (err) {
       lastErr = err;
       if (!isRetryable(err) || attempt === MAX_OUTER_ATTEMPTS - 1) break;
-      // 2s, 4s, 8s 백오프 + jitter
-      const delayMs = 2000 * Math.pow(2, attempt) + Math.floor(Math.random() * 500);
+      // 3s 백오프 + jitter (SDK가 이미 자체 백오프 했음)
+      const delayMs = 3000 + Math.floor(Math.random() * 500);
       console.warn(`[anthropic] retryable ${err.status} on attempt ${attempt + 1}; waiting ${delayMs}ms`);
       await new Promise((r) => setTimeout(r, delayMs));
     }

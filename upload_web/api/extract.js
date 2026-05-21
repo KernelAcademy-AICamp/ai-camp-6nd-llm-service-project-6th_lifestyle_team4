@@ -77,6 +77,11 @@ export default async function handler(req, res) {
         error: 'Anthropic API가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.',
       });
     }
+    if (err?.code === 'ETIMEDOUT' || /timeout/i.test(err?.message || '')) {
+      return res.status(504).json({
+        error: 'LLM 응답 대기 시간이 너무 깁니다. PDF가 너무 길거나 모델이 느려진 상태일 수 있습니다. 잠시 후 다시 시도해주세요.',
+      });
+    }
     return res.status(500).json({ error: err.message || 'Internal error' });
   }
 }
