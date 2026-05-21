@@ -274,17 +274,52 @@ function escapeHtml(s) {
 }
 
 // DB에 콜론·em-dash가 남아 있는 옛 카드도 화면에선 정리해 보여줌
+// 결과 포맷:
+//   화자A
+//   대사A
+//   대사A 연속
+//   (빈 줄)
+//   화자B
+//   대사B
 function cleanForDisplay(s) {
-  return String(s ?? '')
-    // em-dash 변형 일괄 제거 (regular hyphen은 유지)
-    .replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ')
-    // 한 줄 머리의 "이름:" 형태 → 콜론 떼고 줄바꿈으로
-    //   · 이름에 공백 1~2개까지 허용 ("돈 호세", "사제 1" 등)
-    //   · 콜론·괄호·줄바꿈은 이름에 포함 안 됨
-    //   · 전체 길이 1~14자
-    .replace(/^([^:：()\n]{1,14})[:：][ \t]*/gm, '$1\n')
-    // 연속 공백 정리 (줄바꿈은 살림)
+  let text = String(s ?? '');
+
+  // 1) em-dash 변형 일괄 제거 (regular hyphen은 유지)
+  text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
+
+  // 2) 줄 머리의 "이름:" 패턴에서 이름 후보 수집 (공백 포함 1~14자)
+  const speakers = new Set();
+  const colonRegex = /^([^:：()\n]{1,14})[:：][ \t]*/gm;
+  let m;
+  while ((m = colonRegex.exec(text)) !== null) {
+    const name = m[1].trim();
+    if (name) speakers.add(name);
+  }
+
+  // 3) "이름:" → "이름\n" (콜론 제거, 다음 줄에 대사 오도록)
+  text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
+
+  // 4) 라인별로 다시 조립 — 화자 이름 줄 앞에 빈 줄 추가 (첫 화자는 제외)
+  const lines = text.split('\n');
+  const out = [];
+  let firstSpeakerSeen = false;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line && speakers.has(line)) {
+      if (firstSpeakerSeen && out.length > 0 && out[out.length - 1] !== '') {
+        out.push(''); // 화자 블록 사이 빈 줄
+      }
+      out.push(line);
+      firstSpeakerSeen = true;
+    } else {
+      out.push(raw);
+    }
+  }
+
+  // 5) 연속 공백·과다 빈 줄 정리
+  return out.join('\n')
     .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
