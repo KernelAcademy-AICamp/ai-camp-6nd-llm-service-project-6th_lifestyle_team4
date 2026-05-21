@@ -16,6 +16,15 @@ extension Color {
     }
 }
 
+extension ShapeStyle where Self == Color {
+    static var paperWhite: Color { .paperWhite }
+    static var inkBlack: Color { .inkBlack }
+    static var onSurfaceVariant: Color { .onSurfaceVariant }
+    static var signatureOrange: Color { .signatureOrange }
+    static var borderSubtle: Color { .borderSubtle }
+    static var surfaceMuted: Color { .surfaceMuted }
+}
+
 struct Hairline: View {
     var color: Color = .borderSubtle
     var body: some View {
