@@ -56,7 +56,7 @@ async function loadLibrary() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, created_at, works(work_id, title, format, author, release_year)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year)')
       .order('card_id', { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -154,6 +154,15 @@ function buildViewNode(card) {
   fillMeter(node.querySelector('.lib-temp-bar'), node.querySelector('.lib-temp-num'), card.temperature, 'bg-primary');
   fillMeter(node.querySelector('.lib-intensity-bar'), node.querySelector('.lib-intensity-num'), card.intensity, 'bg-secondary');
 
+  // significance — 있으면 표시
+  const sigWrap = node.querySelector('.lib-significance-wrap');
+  const sigEl = node.querySelector('.lib-significance');
+  if (sigWrap && sigEl && card.significance && String(card.significance).trim()) {
+    sigEl.textContent = cleanForDisplay(card.significance);
+    sigWrap.classList.remove('hidden');
+    sigWrap.classList.add('flex');
+  }
+
   const created = card.created_at ? new Date(card.created_at).toLocaleString('ko-KR') : '';
   node.querySelector('.lib-meta').textContent = `card_id: ${card.card_id}${created ? ' · 생성: ' + created : ''}`;
 
@@ -174,6 +183,7 @@ function buildEditNode(card) {
   const excerptEl = node.querySelector('.lib-edit-excerpt');
   const descEl = node.querySelector('.lib-edit-description');
   const kwEl = node.querySelector('.lib-edit-keywords');
+  const sigEl = node.querySelector('.lib-edit-significance');
   const tempEl = node.querySelector('.lib-edit-temperature');
   const intensityEl = node.querySelector('.lib-edit-intensity');
 
@@ -181,6 +191,7 @@ function buildEditNode(card) {
   excerptEl.value = card.script_excerpt || '';
   descEl.value = card.excerpt_description || '';
   kwEl.value = (card.keywords || []).join(', ');
+  if (sigEl) sigEl.value = card.significance || '';
   tempEl.value = card.temperature ?? 3;
   intensityEl.value = card.intensity ?? 3;
 
@@ -190,6 +201,7 @@ function buildEditNode(card) {
       script_excerpt: excerptEl.value.trim(),
       excerpt_description: descEl.value.trim() || null,
       keywords: kwEl.value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 3),
+      significance: (sigEl && sigEl.value.trim()) || null,
       temperature: Math.max(1, Math.min(5, Number(tempEl.value) || 3)),
       intensity: Math.max(1, Math.min(5, Number(intensityEl.value) || 3)),
     };
@@ -327,8 +339,44 @@ function showMobilePreview(card) {
   const html = renderAppCardHtml(card);
   previewIosScreen.innerHTML = html;
   previewAndroidScreen.innerHTML = html;
+  bindDeckToggle(previewIosScreen);
+  bindDeckToggle(previewAndroidScreen);
   previewModal.classList.remove('hidden');
   previewModal.classList.add('flex');
+}
+
+function bindDeckToggle(screen) {
+  const deck = screen.querySelector('.app-deck');
+  if (!deck) return;
+  // 클릭으로 front ↔ back 토글
+  deck.addEventListener('click', (e) => {
+    // 본문 스크롤이나 백 버튼 등 특정 영역은 토글 제외
+    if (e.target.closest('.app-back-btn')) {
+      deck.dataset.state = 'front';
+      screen.scrollTop = 0;
+      return;
+    }
+    const newState = deck.dataset.state === 'back' ? 'front' : 'back';
+    deck.dataset.state = newState;
+    screen.scrollTop = 0;
+  });
+  // 첫 화면(quote) 자동 사이즈 조절
+  const bigQuote = deck.querySelector('.app-quote-big');
+  if (bigQuote) autoFitBigQuote(bigQuote);
+}
+
+function autoFitBigQuote(el) {
+  if (!el) return;
+  const len = el.textContent.length;
+  let size = 22, lh = 1.55;
+  if (len > 24) { size = 20; lh = 1.5; }
+  if (len > 40) { size = 18; lh = 1.45; }
+  if (len > 60) { size = 16; lh = 1.45; }
+  if (len > 85) { size = 14.5; lh = 1.4; }
+  if (len > 120) { size = 13; lh = 1.4; }
+  if (len > 160) { size = 12; lh = 1.4; }
+  el.style.fontSize = size + 'px';
+  el.style.lineHeight = lh;
 }
 
 function closeMobilePreview() {
@@ -353,22 +401,33 @@ function renderAppCardHtml(card) {
     `<div class="${i < intensity ? 'on-int' : ''}"></div>`
   ).join('');
 
+  const cleanQuote = cleanForDisplay(card.quote || '');
+  const significance = card.significance && String(card.significance).trim();
+
   return `
-    <div class="app-card">
-      <p class="app-work-title">${escapeHtml(workLine)}</p>
-      <p class="app-quote">${escapeHtml(cleanForDisplay(card.quote || ''))}</p>
-      ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(cleanForDisplay(card.excerpt_description))}</p>` : ''}
-      <div class="app-excerpt">${escapeHtml(cleanForDisplay(card.script_excerpt || ''))}</div>
-      ${keywords ? `<div class="app-keywords">${keywords}</div>` : ''}
-      <div class="app-meters">
-        <div class="app-meter">
-          <div class="flex justify-between"><span>Temperature</span><span>${temp}/5</span></div>
-          <div class="app-meter-bar">${tempBars}</div>
+    <div class="app-deck" data-state="front">
+      <div class="app-front">
+        <p class="app-quote-big">${escapeHtml(cleanQuote)}</p>
+        <p class="app-tap-hint">탭하여 자세히 보기</p>
+      </div>
+      <div class="app-back">
+        <button type="button" class="app-back-btn">← 명대사로 돌아가기</button>
+        <p class="app-work-title">${escapeHtml(workLine)}</p>
+        <p class="app-quote">${escapeHtml(cleanQuote)}</p>
+        ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(cleanForDisplay(card.excerpt_description))}</p>` : ''}
+        <div class="app-excerpt">${escapeHtml(cleanForDisplay(card.script_excerpt || ''))}</div>
+        ${keywords ? `<div class="app-keywords">${keywords}</div>` : ''}
+        <div class="app-meters">
+          <div class="app-meter">
+            <div class="flex justify-between"><span>Temperature</span><span>${temp}/5</span></div>
+            <div class="app-meter-bar">${tempBars}</div>
+          </div>
+          <div class="app-meter">
+            <div class="flex justify-between"><span>Intensity</span><span>${intensity}/5</span></div>
+            <div class="app-meter-bar">${intBars}</div>
+          </div>
         </div>
-        <div class="app-meter">
-          <div class="flex justify-between"><span>Intensity</span><span>${intensity}/5</span></div>
-          <div class="app-meter-bar">${intBars}</div>
-        </div>
+        ${significance ? `<div class="app-significance"><span class="app-significance-label">의의</span>${escapeHtml(significance)}</div>` : ''}
       </div>
     </div>
   `;

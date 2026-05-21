@@ -470,6 +470,7 @@ saveBtn.addEventListener('click', async () => {
       keywords: c.keywords,
       temperature: c.temperature,
       intensity: c.intensity,
+      significance: c.significance || null,
       translated: c.translated || null,
       showingTranslation: !!c.showingTranslation,
     }));

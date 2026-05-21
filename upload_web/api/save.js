@@ -60,6 +60,8 @@ function normalizeCard(card, workId) {
     keywords: Array.isArray(card.keywords) ? card.keywords.map(String) : [],
     temperature: clampInt(card.temperature, 1, 5),
     intensity: clampInt(card.intensity, 1, 5),
+    // 의의(significance) — DB의 cards.significance 컬럼에 저장 (텍스트, NULL 허용)
+    significance: card.significance ? String(card.significance) : null,
   };
 }
 
