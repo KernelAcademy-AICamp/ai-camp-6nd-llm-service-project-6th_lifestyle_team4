@@ -48,26 +48,112 @@ async function callClaude(prompt, { maxTokens = 8192 } = {}) {
   throw lastErr;
 }
 
-function parseJson(text) {
-  const trimmed = text.trim();
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    // Fenced or padded with prose — strip a leading ```json ... ``` fence first
-    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (fenced) {
-      try {
-        return JSON.parse(fenced[1]);
-      } catch {}
+// 문자열 안에 raw 줄바꿈/탭/제어문자가 있으면 JSON 파싱이 깨짐.
+// 안전하게 \n \r \t \uXXXX 로 이스케이프.
+function escapeRawCtrlInStrings(json) {
+  let out = '';
+  let inString = false;
+  let esc = false;
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i];
+    if (esc) { out += ch; esc = false; continue; }
+    if (ch === '\\') { out += ch; esc = true; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    if (inString) {
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') { out += '\\r'; continue; }
+      if (ch === '\t') { out += '\\t'; continue; }
+      const code = ch.charCodeAt(0);
+      if (code < 0x20) { out += '\\u' + code.toString(16).padStart(4, '0'); continue; }
     }
-    // Last resort: grab the first {...} block
-    const first = trimmed.indexOf('{');
-    const last = trimmed.lastIndexOf('}');
-    if (first !== -1 && last > first) {
-      return JSON.parse(trimmed.slice(first, last + 1));
-    }
-    throw new Error('LLM did not return valid JSON');
+    out += ch;
   }
+  return out;
+}
+
+function removeTrailingCommas(json) {
+  return json.replace(/,(\s*[}\]])/g, '$1');
+}
+
+// cards 배열이 중간에 잘렸을 때 마지막 완성 카드까지만 살려서 복구.
+function repairTruncatedCards(s) {
+  const cardsIdx = s.indexOf('"cards"');
+  if (cardsIdx === -1) return null;
+  const arrStart = s.indexOf('[', cardsIdx);
+  if (arrStart === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let esc = false;
+  let lastEnd = -1;
+  for (let i = arrStart + 1; i < s.length; i++) {
+    const ch = s[i];
+    if (esc) { esc = false; continue; }
+    if (ch === '\\') { esc = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) lastEnd = i;
+      else if (depth < 0) break;
+    }
+  }
+  if (lastEnd === -1) return null;
+  return s.slice(0, lastEnd + 1) + ']}';
+}
+
+function tryParse(s, label) {
+  try { return JSON.parse(s); }
+  catch (e) {
+    console.warn(`[parseJson] ${label} 실패:`, e.message);
+    return null;
+  }
+}
+
+function parseJson(text) {
+  if (!text) throw new Error('LLM did not return valid JSON (empty response)');
+  let s = String(text).trim();
+
+  // 1) 코드 펜스 제거
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+
+  // 2) 첫 '{' 부터 마지막 '}' 까지로 한 번 좁히기
+  const firstBrace = s.indexOf('{');
+  if (firstBrace === -1) throw new Error('LLM did not return valid JSON (no `{` found)');
+  s = s.slice(firstBrace);
+  const lastBrace = s.lastIndexOf('}');
+  const candidate = lastBrace !== -1 ? s.slice(0, lastBrace + 1) : s;
+
+  // 3) 원본 시도
+  let out = tryParse(candidate, '원본 파싱');
+  if (out) return out;
+
+  // 4) 문자열 안의 미escape 컨트롤 문자 이스케이프 후 재시도
+  const fixed1 = escapeRawCtrlInStrings(candidate);
+  out = tryParse(fixed1, '컨트롤 문자 escape 후');
+  if (out) return out;
+
+  // 5) 트레일링 콤마 제거 후 재시도
+  const fixed2 = removeTrailingCommas(fixed1);
+  out = tryParse(fixed2, '트레일링 콤마 제거 후');
+  if (out) return out;
+
+  // 6) cards 배열을 마지막 완성 카드까지 잘라 복구 시도
+  const truncRepaired =
+    repairTruncatedCards(fixed2) ||
+    repairTruncatedCards(fixed1) ||
+    repairTruncatedCards(s);
+  if (truncRepaired) {
+    out = tryParse(escapeRawCtrlInStrings(truncRepaired), 'cards 잘림 복구');
+    if (out) {
+      out.__recovered = true;
+      return out;
+    }
+  }
+
+  console.error('[parseJson] 모든 복구 시도 실패. raw text 일부:', text.slice(0, 500));
+  throw new Error('LLM did not return valid JSON (all repair attempts failed)');
 }
 
 export async function runExtract(scriptText, category = 'screen') {
