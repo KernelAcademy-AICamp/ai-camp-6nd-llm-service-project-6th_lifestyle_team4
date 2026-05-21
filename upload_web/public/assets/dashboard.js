@@ -258,6 +258,23 @@ function buildCardViewNode(card, idx) {
   node.querySelector('.card-excerpt').textContent = excerpt || '';
   node.querySelector('.card-description').textContent = desc || '';
 
+  // significance — 있으면 표시, 없으면 안내 문구
+  const sigWrap = node.querySelector('.card-significance-wrap');
+  const sigEl = node.querySelector('.card-significance');
+  if (sigWrap && sigEl) {
+    if (card.significance && String(card.significance).trim()) {
+      sigEl.textContent = card.significance;
+      sigWrap.classList.remove('hidden');
+      sigWrap.classList.add('flex');
+    } else {
+      // LLM이 누락한 경우 시각적으로 알림
+      sigEl.textContent = '(LLM이 의의 필드를 생성하지 않았습니다)';
+      sigEl.classList.add('text-error');
+      sigWrap.classList.remove('hidden');
+      sigWrap.classList.add('flex');
+    }
+  }
+
   const kwEl = node.querySelector('.card-keywords');
   (card.keywords || []).forEach((k) => {
     const chip = document.createElement('span');

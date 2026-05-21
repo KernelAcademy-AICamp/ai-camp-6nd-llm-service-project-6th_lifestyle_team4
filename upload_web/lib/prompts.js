@@ -318,7 +318,9 @@ quote 또는 script_excerpt에 한국어 욕설·비속어·강한 모욕 표현
 - **true 판정**: 시발/씨발/씨팔/존나/존니/개새끼/개자식/좆/병신/지랄/꺼져/엿/닥쳐(욕설로 쓰일 때) 및 그 변형/축약형 등 명백한 욕설
 - **false 판정**: "젠장", "빌어먹을", "제기랄", "맙소사" 같은 가벼운 감탄사는 욕설로 보지 않음
 
-### \`significance\`
+### \`significance\` 🔴 필수 필드 — 절대 누락 금지
+
+**모든 카드는 반드시 \`significance\` 필드를 포함해야 합니다.** 길이가 짧더라도 빈 문자열·null로 두지 말 것.
 
 **이 장면이 말하고자 하는 의의 한 가지만** 짧게. 80~200자.
 
@@ -349,6 +351,9 @@ quote 또는 script_excerpt에 한국어 욕설·비속어·강한 모욕 표현
 ### \`cards\` 배열
 - 개수: 3~10개
 - 품질 우선, 무리해서 채우지 말 것
+- **각 카드는 반드시 다음 9개 필드를 모두 포함해야 함**:
+  quote, script_excerpt, excerpt_description, keywords, temperature, intensity, has_profanity, significance
+- significance 누락 절대 금지. 짧게라도 반드시 채울 것.
 
 ---
 
