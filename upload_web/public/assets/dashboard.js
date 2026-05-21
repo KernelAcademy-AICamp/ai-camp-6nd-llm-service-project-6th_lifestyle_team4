@@ -49,6 +49,7 @@ const toastEl = $('#toast');
 const userEmailEl = $('#user-email');
 const logoutBtn = $('#logout-btn');
 const cardTemplate = $('#card-template');
+const cardEditTemplate = $('#card-edit-template');
 
 // ---------------------------------------------------------------------------
 // Init: auth gate
@@ -163,7 +164,7 @@ function applyExtraction(payload) {
   state.work = payload?.work || null;
   state.fullScriptText = payload?.full_script_text || '';
   state.cards = Array.isArray(payload?.cards)
-    ? payload.cards.map((c) => ({ ...c, selected: false, translated: null, showingTranslation: false }))
+    ? payload.cards.map((c) => ({ ...c, selected: false, translated: null, showingTranslation: false, editing: false }))
     : [];
   render();
 }
@@ -230,6 +231,11 @@ function renderCards() {
 }
 
 function buildCardNode(card, idx) {
+  if (card.editing) return buildCardEditNode(card, idx);
+  return buildCardViewNode(card, idx);
+}
+
+function buildCardViewNode(card, idx) {
   const node = cardTemplate.content.firstElementChild.cloneNode(true);
 
   const useTranslation = card.showingTranslation && card.translated;
@@ -288,7 +294,70 @@ function buildCardNode(card, idx) {
     render();
   });
 
+  // Edit/Delete buttons (top right)
+  node.querySelector('.edit-btn').addEventListener('click', () => onEditClick(idx));
+  node.querySelector('.delete-btn').addEventListener('click', () => onDeleteClick(idx));
+
   return node;
+}
+
+function buildCardEditNode(card, idx) {
+  const node = cardEditTemplate.content.firstElementChild.cloneNode(true);
+
+  const quoteEl = node.querySelector('.edit-quote');
+  const excerptEl = node.querySelector('.edit-excerpt');
+  const descEl = node.querySelector('.edit-description');
+  const kwEl = node.querySelector('.edit-keywords');
+  const tempEl = node.querySelector('.edit-temperature');
+  const intensityEl = node.querySelector('.edit-intensity');
+
+  quoteEl.value = card.quote || '';
+  excerptEl.value = card.script_excerpt || '';
+  descEl.value = card.excerpt_description || '';
+  kwEl.value = (card.keywords || []).join(', ');
+  tempEl.value = card.temperature ?? 3;
+  intensityEl.value = card.intensity ?? 3;
+
+  node.querySelector('.save-edit-btn').addEventListener('click', () => {
+    const updates = {
+      quote: quoteEl.value.trim(),
+      script_excerpt: excerptEl.value.trim(),
+      excerpt_description: descEl.value.trim(),
+      keywords: kwEl.value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 3),
+      temperature: Math.max(1, Math.min(5, Number(tempEl.value) || 3)),
+      intensity: Math.max(1, Math.min(5, Number(intensityEl.value) || 3)),
+      editing: false,
+      // 텍스트가 바뀌었으니 기존 번역은 무효화
+      translated: null,
+      showingTranslation: false,
+    };
+    Object.assign(state.cards[idx], updates);
+    render();
+    toast('카드 수정 저장됨', 'success');
+  });
+
+  node.querySelector('.cancel-edit-btn').addEventListener('click', () => {
+    state.cards[idx].editing = false;
+    render();
+  });
+
+  return node;
+}
+
+function onEditClick(idx) {
+  // 다른 카드가 편집 중이면 자동 취소(불완전 편집 폐기)
+  state.cards.forEach((c, i) => { if (i !== idx) c.editing = false; });
+  state.cards[idx].editing = true;
+  render();
+}
+
+function onDeleteClick(idx) {
+  const card = state.cards[idx];
+  const preview = (card.quote || '').slice(0, 30) || `카드 ${idx + 1}`;
+  if (!confirm(`"${preview}${(card.quote || '').length > 30 ? '…' : ''}" 카드를 삭제할까요?`)) return;
+  state.cards.splice(idx, 1);
+  render();
+  toast('카드 삭제됨', 'success');
 }
 
 function fillMeter(barEl, numEl, value, colorCls) {
