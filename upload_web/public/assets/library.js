@@ -139,9 +139,9 @@ function buildViewNode(card) {
     .filter(Boolean).join(' · ');
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
-  node.querySelector('.lib-quote').textContent = card.quote ? `"${card.quote}"` : '';
-  node.querySelector('.lib-excerpt').textContent = card.script_excerpt || '';
-  node.querySelector('.lib-description').textContent = card.excerpt_description || '';
+  node.querySelector('.lib-quote').textContent = card.quote ? `"${cleanForDisplay(card.quote)}"` : '';
+  node.querySelector('.lib-excerpt').textContent = cleanForDisplay(card.script_excerpt || '');
+  node.querySelector('.lib-description').textContent = cleanForDisplay(card.excerpt_description || '');
 
   const kwEl = node.querySelector('.lib-keywords');
   (card.keywords || []).forEach((k) => {
@@ -273,6 +273,18 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+// DB에 콜론·em-dash가 남아 있는 옛 카드도 화면에선 정리해 보여줌
+function cleanForDisplay(s) {
+  return String(s ?? '')
+    // em-dash 변형 일괄 제거 (regular hyphen은 유지)
+    .replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ')
+    // 한 줄 머리의 "이름:" 형태에서 콜론만 떼어내 줄바꿈으로 (예: "공작: 안녕" → "공작\n안녕")
+    .replace(/^([^\s:：()\n]{1,14})\s*[:：]\s*/gm, '$1\n')
+    // 연속 공백 정리 (단 줄바꿈은 살림)
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
 function showMobilePreview(card) {
   const html = renderAppCardHtml(card);
   previewIosScreen.innerHTML = html;
@@ -306,9 +318,9 @@ function renderAppCardHtml(card) {
   return `
     <div class="app-card">
       <p class="app-work-title">${escapeHtml(workLine)}</p>
-      <p class="app-quote">${escapeHtml(card.quote || '')}</p>
-      ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(card.excerpt_description)}</p>` : ''}
-      <div class="app-excerpt">${escapeHtml(card.script_excerpt || '')}</div>
+      <p class="app-quote">${escapeHtml(cleanForDisplay(card.quote || ''))}</p>
+      ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(cleanForDisplay(card.excerpt_description))}</p>` : ''}
+      <div class="app-excerpt">${escapeHtml(cleanForDisplay(card.script_excerpt || ''))}</div>
       ${keywords ? `<div class="app-keywords">${keywords}</div>` : ''}
       <div class="app-meters">
         <div class="app-meter">
