@@ -94,15 +94,30 @@
   .pullout-modal {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6);
     z-index: 90; align-items: center; justify-content: center; padding: 24px;
-    overflow-y: auto;
   }
   .pullout-card {
     background: #fff;
     border-radius: 8px;
     max-width: 720px;
     width: 100%;
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     box-shadow: 0 24px 64px rgba(0,0,0,0.4);
     animation: pullout-slide 0.3s ease;
+    position: relative;
+  }
+  #pullout-body {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #pullout-body::-webkit-scrollbar { width: 8px; }
+  #pullout-body::-webkit-scrollbar-thumb { background: #c7c4d8; border-radius: 4px; }
+  #pullout-close {
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   }
   @keyframes pullout-slide {
     0% { transform: translateY(20px); opacity: 0; }
