@@ -44,7 +44,7 @@ function readMultipart(req) {
   });
 }
 
-const ALLOWED_CATEGORIES = new Set(['screen', 'stage']);
+const ALLOWED_CATEGORIES = new Set(['screen', 'stage', 'opera', 'playscript']);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

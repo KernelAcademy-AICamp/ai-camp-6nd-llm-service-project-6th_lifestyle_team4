@@ -80,10 +80,13 @@ function paintCategory() {
     btn.classList.toggle('text-on-surface-variant', !active);
   });
   if (categoryHint) {
-    categoryHint.textContent =
-      state.category === 'screen'
-        ? '영화·드라마 추출 프롬프트로 분석됩니다.'
-        : '연극·뮤지컬 추출 프롬프트로 분석됩니다.';
+    const hints = {
+      screen: '영화·드라마 추출 프롬프트로 분석됩니다.',
+      stage: '연극·뮤지컬 추출 프롬프트로 분석됩니다.',
+      opera: '오페라 추출 프롬프트로 분석됩니다 (libretto 화자 표기 보존).',
+      playscript: '희곡 추출 프롬프트로 분석됩니다 (오페라와 동일 규칙).',
+    };
+    categoryHint.textContent = hints[state.category] || '';
   }
 }
 $$('#category-toggle .cat-btn').forEach((btn) => {
