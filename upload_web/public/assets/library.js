@@ -40,8 +40,11 @@ const state = {
   workFilter: '',
   searchText: '',
   editing: null,      // editing card_id
-  selectedIds: new Set(), // 선택된 card_id Set
+  selectedIds: new Set(), // 그리드 전체 선택용 card_id Set
   viewMode: 'shelf',  // 'shelf' (책꽂이) | 'grid' (격자)
+  // 책꽂이 카드 골라 삭제 모드
+  deleteModeWorkId: null,         // 현재 삭제 모드인 work_id (한 번에 하나만)
+  spineSelectedIds: new Set(),    // 삭제 모드에서 선택한 card_id 들
 };
 
 // ---------------------------------------------------------------------------
@@ -143,12 +146,13 @@ function renderLibrary() {
     return;
   }
   libraryEmpty.classList.add('hidden');
-  librarySelectionBar.classList.remove('hidden');
-  librarySelectionBar.classList.add('flex');
 
   if (state.viewMode === 'grid') {
+    // 그리드 모드: 전체선택 툴바 표시
     libraryGrid.classList.remove('hidden');
     libraryShelf.classList.add('hidden');
+    librarySelectionBar.classList.remove('hidden');
+    librarySelectionBar.classList.add('flex');
     rows.forEach((card) => {
       if (state.editing === card.card_id) {
         libraryGrid.appendChild(buildEditNode(card));
@@ -156,14 +160,15 @@ function renderLibrary() {
         libraryGrid.appendChild(buildViewNode(card));
       }
     });
+    updateSelectionUi();
   } else {
-    // 책꽂이 모드
+    // 책꽂이 모드: 전체선택 툴바 숨김 (작품별 카드 삭제 모드가 그 자리를 대신)
     libraryGrid.classList.add('hidden');
     libraryShelf.classList.remove('hidden');
+    librarySelectionBar.classList.add('hidden');
+    librarySelectionBar.classList.remove('flex');
     renderShelf(rows);
   }
-
-  updateSelectionUi();
 }
 
 // ---------------------------------------------------------------------------
@@ -194,40 +199,82 @@ function buildShelfSection(work, cards) {
   const wrap = document.createElement('div');
   wrap.className = 'flex flex-col gap-2';
 
-  // 작품 헤더 라벨 + 작품 삭제 버튼
+  const isDeleteMode = state.deleteModeWorkId === work.work_id;
+
+  // 헤더: 일반 모드 / 카드 삭제 모드에 따라 다른 컨트롤
   const header = document.createElement('div');
   header.className = 'flex items-center gap-3 px-2';
-  const formatLabel = work.format ? `· ${work.format}` : '';
-  const yearLabel = work.release_year ? `· ${work.release_year}` : '';
-  const authorLabel = work.author ? `· ${work.author}` : '';
-  header.innerHTML = `
-    <h3 class="text-lg font-bold text-on-surface">${escapeHtml(work.title || '제목 없음')}</h3>
-    <span class="text-xs text-on-surface-variant flex-1">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}`.trim())}</span>
-    <button type="button" class="shelf-delete-work-btn p-1.5 rounded hover:bg-error/10 text-error transition-colors flex items-center gap-1 text-sm font-semibold" title="작품 전체 삭제">
-      <span class="material-symbols-outlined text-base">delete_sweep</span>
-      작품 삭제
-    </button>
-  `;
-  // 작품 삭제 버튼 — 확인 모달 띄움
-  header.querySelector('.shelf-delete-work-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    showConfirmModal({
-      title: '정말 삭제하시겠습니까?',
-      message: `"${work.title || `Work #${work.work_id}`}" 작품과 카드 ${cards.length}장이 모두 영구 삭제됩니다.\n\n복구할 수 없습니다.`,
-      onConfirm: () => deleteWork(work, cards),
+
+  if (isDeleteMode) {
+    const selectedCount = cards.filter((c) => state.spineSelectedIds.has(c.card_id)).length;
+    header.innerHTML = `
+      <h3 class="text-lg font-bold text-error">${escapeHtml(work.title || '제목 없음')} <span class="text-sm font-medium">— 삭제할 책을 선택하세요</span></h3>
+      <span class="text-sm font-semibold text-error flex-1"><span class="font-bold">${selectedCount}</span>장 선택됨</span>
+      <button type="button" class="shelf-cancel-delete-btn px-3 py-1.5 rounded-lg border-2 border-outline-variant font-semibold text-sm hover:bg-surface-container-low transition-colors">
+        놔두기
+      </button>
+      <button type="button" class="shelf-confirm-delete-btn px-3 py-1.5 rounded-lg bg-error text-white font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" ${selectedCount === 0 ? 'disabled' : ''}>
+        <span class="material-symbols-outlined text-base">delete</span>
+        삭제
+      </button>
+    `;
+    header.querySelector('.shelf-cancel-delete-btn').addEventListener('click', () => {
+      state.deleteModeWorkId = null;
+      state.spineSelectedIds.clear();
+      renderLibrary();
     });
-  });
+    header.querySelector('.shelf-confirm-delete-btn').addEventListener('click', () => {
+      const targetIds = cards
+        .filter((c) => state.spineSelectedIds.has(c.card_id))
+        .map((c) => c.card_id);
+      if (targetIds.length === 0) return;
+      showConfirmModal({
+        title: '정말 삭제하시겠습니까?',
+        message: `선택한 카드 ${targetIds.length}장이 영구 삭제됩니다.\n\n복구할 수 없습니다.`,
+        onConfirm: () => bulkDeleteCards(targetIds),
+      });
+    });
+  } else {
+    const formatLabel = work.format ? `· ${work.format}` : '';
+    const yearLabel = work.release_year ? `· ${work.release_year}` : '';
+    const authorLabel = work.author ? `· ${work.author}` : '';
+    header.innerHTML = `
+      <h3 class="text-lg font-bold text-on-surface">${escapeHtml(work.title || '제목 없음')}</h3>
+      <span class="text-xs text-on-surface-variant flex-1">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}`.trim())}</span>
+      <button type="button" class="shelf-start-delete-btn p-1.5 rounded hover:bg-primary/10 text-primary transition-colors flex items-center gap-1 text-sm font-semibold" title="카드 골라 삭제">
+        <span class="material-symbols-outlined text-base">checklist</span>
+        카드 골라 삭제
+      </button>
+      <button type="button" class="shelf-delete-work-btn p-1.5 rounded hover:bg-error/10 text-error transition-colors flex items-center gap-1 text-sm font-semibold" title="작품 전체 삭제">
+        <span class="material-symbols-outlined text-base">delete_sweep</span>
+        작품 삭제
+      </button>
+    `;
+    header.querySelector('.shelf-start-delete-btn').addEventListener('click', () => {
+      state.deleteModeWorkId = work.work_id;
+      state.spineSelectedIds.clear();
+      renderLibrary();
+    });
+    header.querySelector('.shelf-delete-work-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      showConfirmModal({
+        title: '정말 삭제하시겠습니까?',
+        message: `"${work.title || `Work #${work.work_id}`}" 작품과 카드 ${cards.length}장이 모두 영구 삭제됩니다.\n\n복구할 수 없습니다.`,
+        onConfirm: () => deleteWork(work, cards),
+      });
+    });
+  }
   wrap.appendChild(header);
 
   // 책꽂이 행
   const bookshelf = document.createElement('div');
   bookshelf.className = 'bookshelf';
+  if (isDeleteMode) bookshelf.classList.add('bookshelf-delete-mode');
   const shelfRow = document.createElement('div');
   shelfRow.className = 'shelf-row';
-  // 작품별 베이스 색상 (같은 작품 = 같은 색 톤)
   const baseColor = colorForWork(work.work_id);
   cards.forEach((card, idx) => {
-    shelfRow.appendChild(buildSpine(card, baseColor, idx));
+    shelfRow.appendChild(buildSpine(card, baseColor, idx, isDeleteMode));
   });
   bookshelf.appendChild(shelfRow);
   wrap.appendChild(bookshelf);
@@ -235,9 +282,12 @@ function buildShelfSection(work, cards) {
   return wrap;
 }
 
-function buildSpine(card, baseColor, idx) {
+function buildSpine(card, baseColor, idx, isDeleteMode = false) {
   const spine = document.createElement('div');
   spine.className = 'spine';
+  const isSelected = isDeleteMode && state.spineSelectedIds.has(card.card_id);
+  if (isSelected) spine.classList.add('spine-selected');
+
   // 같은 작품 안에서 카드별 색조 약간 변화 (밝기 차이로 구분감)
   const shaded = shadeColor(baseColor, (idx % 5) * 6 - 12);
   spine.style.background = `linear-gradient(180deg, ${shaded} 0%, ${shadeColor(shaded, -8)} 100%)`;
@@ -246,12 +296,24 @@ function buildSpine(card, baseColor, idx) {
   const titleSrc = (card.keywords && card.keywords[0]) || cleanForDisplay(card.quote || '').slice(0, 14);
 
   spine.innerHTML = `
+    ${isSelected ? '<span class="spine-check material-symbols-outlined">check_circle</span>' : ''}
     <span class="spine-id">#${card.card_id}</span>
     <span class="spine-title">${escapeHtml(titleSrc)}</span>
     <span class="spine-format">${escapeHtml((card.works?.format || '').toUpperCase())}</span>
   `;
 
-  spine.addEventListener('click', () => openPulloutCard(card));
+  if (isDeleteMode) {
+    spine.addEventListener('click', () => {
+      if (state.spineSelectedIds.has(card.card_id)) {
+        state.spineSelectedIds.delete(card.card_id);
+      } else {
+        state.spineSelectedIds.add(card.card_id);
+      }
+      renderLibrary();
+    });
+  } else {
+    spine.addEventListener('click', () => openPulloutCard(card));
+  }
   return spine;
 }
 
@@ -361,6 +423,37 @@ document.addEventListener('keydown', (e) => {
     closeConfirmModal();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 책꽂이 카드 골라 삭제 — 선택한 card_id 들을 한 번에 DELETE
+// ---------------------------------------------------------------------------
+async function bulkDeleteCards(targetIds) {
+  if (!targetIds || targetIds.length === 0) return;
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('cards').delete().in('card_id', targetIds);
+    if (error) throw error;
+
+    // 로컬 캐시 정리
+    const idSet = new Set(targetIds);
+    state.rows = state.rows.filter((c) => !idSet.has(c.card_id));
+    targetIds.forEach((id) => {
+      state.spineSelectedIds.delete(id);
+      state.selectedIds.delete(id);
+    });
+    // 삭제 모드 종료
+    state.deleteModeWorkId = null;
+    state.spineSelectedIds.clear();
+
+    refreshWorkFilterOptions();
+    renderLibrary();
+    refreshPullout();
+    toast(`${targetIds.length}장 삭제 완료`, 'success');
+  } catch (err) {
+    console.error('[library] bulk delete cards failed:', err);
+    toast(`삭제 실패: ${err.message || err}`, 'error');
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 작품 통째로 삭제 (book_genres → cards → works 순서, FK 위반 방지)

@@ -65,6 +65,32 @@
     margin: 0 4px;
     z-index: 2;
   }
+  .spine.spine-selected {
+    transform: translateY(-16px);
+    outline: 3px solid #ba1a1a;
+    outline-offset: -3px;
+    box-shadow:
+      inset 2px 0 4px rgba(0,0,0,0.2),
+      4px 4px 16px rgba(186,26,26,0.5);
+    margin: 0 4px;
+    z-index: 3;
+  }
+  .spine-check {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border-radius: 50%;
+    color: #ba1a1a;
+    font-size: 20px !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+  .bookshelf.bookshelf-delete-mode {
+    outline: 2px solid #ba1a1a;
+    outline-offset: 4px;
+    border-radius: 12px;
+  }
   .spine-id {
     font-size: 9px;
     font-weight: 600;
