@@ -41,7 +41,7 @@ final class SupabaseClient {
             resolvingAgainstBaseURL: false
         )!
         components.queryItems = [
-            URLQueryItem(name: "select", value: "*,work:works(title,format,author,release_year)"),
+            URLQueryItem(name: "select", value: "*,work:works(title,format,author,release_year,work_genres(genres(name)))"),
             URLQueryItem(name: "order", value: "card_id.desc"),
             URLQueryItem(name: "limit", value: String(limit)),
         ]
