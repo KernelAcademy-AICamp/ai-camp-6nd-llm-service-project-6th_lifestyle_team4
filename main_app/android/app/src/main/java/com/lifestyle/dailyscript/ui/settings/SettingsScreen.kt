@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,16 +25,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.BuildConfig
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
-import com.lifestyle.dailyscript.ui.theme.BorderSubtle
-import com.lifestyle.dailyscript.ui.theme.InkBlack
-import com.lifestyle.dailyscript.ui.theme.OnSurfaceVariant
-import com.lifestyle.dailyscript.ui.theme.PaperWhite
+import com.lifestyle.dailyscript.ui.theme.Espresso
+import com.lifestyle.dailyscript.ui.theme.Latte
+import com.lifestyle.dailyscript.ui.theme.Paper
+import com.lifestyle.dailyscript.ui.theme.Walnut
 
 @Composable
 fun SettingsScreen(
@@ -47,19 +48,20 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Paper)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 20.dp),
     ) {
-        Box(modifier = Modifier.height(32.dp))
-        Text(text = displayName, style = MaterialTheme.typography.displayLarge, color = InkBlack)
-        Box(modifier = Modifier.height(8.dp))
+        Box(modifier = Modifier.height(40.dp))
+        Text(text = displayName, style = MaterialTheme.typography.displayMedium, color = Espresso)
+        Box(modifier = Modifier.height(10.dp))
         Text(
             text = stringResource(R.string.profile_bio),
-            style = MaterialTheme.typography.bodyMedium,
-            color = OnSurfaceVariant,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Walnut,
         )
         Box(modifier = Modifier.height(32.dp))
-        SectionDivider()
+        Hairline()
 
         Box(modifier = Modifier.height(40.dp))
         SectionLabel(text = stringResource(R.string.general_preferences))
@@ -67,7 +69,7 @@ fun SettingsScreen(
             title = stringResource(R.string.push_notifications),
             subtitle = stringResource(R.string.push_notifications_desc),
             trailing = {
-                SharpToggle(checked = pushEnabled, onChange = vm::setPushEnabled)
+                EditorialToggle(checked = pushEnabled, onChange = vm::setPushEnabled)
             },
         )
         SettingRow(
@@ -98,9 +100,9 @@ fun SettingsScreen(
 private fun SectionLabel(text: String) {
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
-        color = OnSurfaceVariant,
-        modifier = Modifier.padding(bottom = 16.dp),
+        style = MaterialTheme.typography.labelSmall,
+        color = Walnut,
+        modifier = Modifier.padding(bottom = 12.dp),
     )
 }
 
@@ -114,48 +116,48 @@ private fun SettingRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp),
+            .padding(vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = InkBlack)
+            Text(text = title, style = MaterialTheme.typography.titleLarge, color = Espresso)
             subtitle?.let {
-                Box(modifier = Modifier.height(2.dp))
-                Text(text = it, style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+                Box(modifier = Modifier.height(4.dp))
+                Text(text = it, style = MaterialTheme.typography.bodySmall, color = Walnut)
             }
         }
         when {
             trailing != null -> trailing()
             trailingText != null -> Text(
                 text = trailingText.uppercase(),
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.18.em),
-                color = OnSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                color = Walnut,
             )
         }
     }
-    SectionDivider()
+    Hairline()
 }
 
 @Composable
-private fun SectionDivider() {
+private fun Hairline() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(1.dp)
-            .background(BorderSubtle),
+            .height(0.5.dp)
+            .background(Latte),
     )
 }
 
+/** Pill toggle — espresso track when on, latte when off. Round knob, no shadow. */
 @Composable
-private fun SharpToggle(checked: Boolean, onChange: (Boolean) -> Unit) {
-    val trackColor = if (checked) InkBlack else PaperWhite
-    val knobColor = PaperWhite
+private fun EditorialToggle(checked: Boolean, onChange: (Boolean) -> Unit) {
+    val trackShape = RoundedCornerShape(50)
+    val trackColor = if (checked) Espresso else Latte
     Box(
         modifier = Modifier
             .size(width = 44.dp, height = 24.dp)
-            .border(1.dp, InkBlack)
-            .background(trackColor)
+            .background(trackColor, trackShape)
             .clickable { onChange(!checked) },
         contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
@@ -163,8 +165,8 @@ private fun SharpToggle(checked: Boolean, onChange: (Boolean) -> Unit) {
             modifier = Modifier
                 .padding(2.dp)
                 .size(20.dp)
-                .background(knobColor)
-                .border(1.dp, InkBlack),
+                .background(Paper, CircleShape)
+                .border(0.5.dp, if (checked) Espresso else Walnut, CircleShape),
         )
     }
 }

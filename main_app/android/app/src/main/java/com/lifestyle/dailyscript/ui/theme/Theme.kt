@@ -10,23 +10,36 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val EditorialLightColors = lightColorScheme(
-    primary = InkBlack,
-    onPrimary = PaperWhite,
-    primaryContainer = InkBlack,
-    onPrimaryContainer = PaperWhite,
-    secondary = SignatureOrange,
-    onSecondary = PaperWhite,
-    tertiary = InkBlack,
-    onTertiary = PaperWhite,
-    background = PaperWhite,
-    onBackground = InkBlack,
-    surface = PaperWhite,
-    onSurface = InkBlack,
-    surfaceVariant = SurfaceMuted,
-    onSurfaceVariant = OnSurfaceVariant,
-    outline = BorderSubtle,
-    outlineVariant = OutlineVariant,
+private val LongBlackLight = lightColorScheme(
+    primary = Espresso,
+    onPrimary = Paper,
+    primaryContainer = Roast,
+    onPrimaryContainer = Paper,
+
+    secondary = Cta,           // 1차 전환 (코랄)
+    onSecondary = Paper,
+    secondaryContainer = Latte,
+    onSecondaryContainer = Espresso,
+
+    tertiary = Highlight,      // 시그널 (D-day, 별점, LIVE)
+    onTertiary = Espresso,
+    tertiaryContainer = Latte,
+    onTertiaryContainer = Espresso,
+
+    background = Paper,
+    onBackground = Espresso,
+    surface = Paper,
+    onSurface = Espresso,
+
+    surfaceVariant = Latte,
+    onSurfaceVariant = Walnut,
+
+    outline = Latte,
+    outlineVariant = Sand,
+
+    inverseSurface = Espresso,
+    inverseOnSurface = Paper,
+    inversePrimary = Sand,
 )
 
 @Composable
@@ -34,8 +47,8 @@ fun DailyScriptTheme(
     @Suppress("UNUSED_PARAMETER") darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    // Light-only for MVP — designs are paper-white based.
-    val colorScheme = EditorialLightColors
+    // Light-only MVP — design system is paper-on-cream.
+    val colorScheme = LongBlackLight
 
     val view = LocalView.current
     if (!view.isInEditMode) {

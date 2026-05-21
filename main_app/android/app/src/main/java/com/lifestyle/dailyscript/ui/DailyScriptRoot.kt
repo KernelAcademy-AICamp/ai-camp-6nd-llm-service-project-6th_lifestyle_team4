@@ -30,9 +30,9 @@ import com.lifestyle.dailyscript.ui.detail.DetailScreen
 import com.lifestyle.dailyscript.ui.home.HomeScreen
 import com.lifestyle.dailyscript.ui.nav.Routes
 import com.lifestyle.dailyscript.ui.settings.SettingsScreen
-import com.lifestyle.dailyscript.ui.theme.OnSurfaceVariant
-import com.lifestyle.dailyscript.ui.theme.PaperWhite
-import com.lifestyle.dailyscript.ui.theme.SignatureOrange
+import com.lifestyle.dailyscript.ui.theme.Cta
+import com.lifestyle.dailyscript.ui.theme.Paper
+import com.lifestyle.dailyscript.ui.theme.Walnut
 
 @Composable
 fun DailyScriptRoot() {
@@ -42,7 +42,7 @@ fun DailyScriptRoot() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(PaperWhite)
+            .background(Paper)
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
@@ -125,7 +125,7 @@ private fun CenteredMessage(text: String, error: Boolean = false) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (error) SignatureOrange else OnSurfaceVariant,
+            color = if (error) Cta else Walnut,
             modifier = Modifier.padding(24.dp),
         )
     }

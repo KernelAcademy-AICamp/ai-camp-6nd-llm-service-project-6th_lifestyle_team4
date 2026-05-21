@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
@@ -29,23 +30,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.ChipTag
 import com.lifestyle.dailyscript.ui.components.SharpButton
-import com.lifestyle.dailyscript.ui.theme.BorderSubtle
-import com.lifestyle.dailyscript.ui.theme.EditorialSerif
-import com.lifestyle.dailyscript.ui.theme.InkBlack
-import com.lifestyle.dailyscript.ui.theme.OnSurfaceVariant
-import com.lifestyle.dailyscript.ui.theme.OutlineVariant
-import com.lifestyle.dailyscript.ui.theme.SignatureOrange
+import com.lifestyle.dailyscript.ui.theme.Cta
+import com.lifestyle.dailyscript.ui.theme.Espresso
+import com.lifestyle.dailyscript.ui.theme.Latte
+import com.lifestyle.dailyscript.ui.theme.Paper
+import com.lifestyle.dailyscript.ui.theme.Sand
+import com.lifestyle.dailyscript.ui.theme.Walnut
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -63,14 +61,15 @@ fun HomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Paper)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 20.dp),
     ) {
-        Box(modifier = Modifier.height(24.dp))
+        Box(modifier = Modifier.height(32.dp))
         Text(
-            text = todayString(),
-            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
-            color = OnSurfaceVariant,
+            text = todayString().uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = Walnut,
         )
         Box(modifier = Modifier.height(8.dp))
         Row(
@@ -80,20 +79,20 @@ fun HomeScreen(
         ) {
             Text(
                 text = stringResource(R.string.today_script),
-                style = MaterialTheme.typography.displayLarge,
-                color = InkBlack,
+                style = MaterialTheme.typography.displayMedium,
+                color = Espresso,
             )
             Icon(
                 imageVector = Icons.Outlined.Refresh,
                 contentDescription = "Refresh",
-                tint = InkBlack,
+                tint = Walnut,
                 modifier = Modifier
                     .size(40.dp)
                     .clickable(enabled = !state.loading) { vm.refresh(userId) }
                     .padding(8.dp),
             )
         }
-        Box(modifier = Modifier.height(16.dp))
+        Box(modifier = Modifier.height(20.dp))
 
         TodayCard(
             card = state.todayCard,
@@ -105,28 +104,28 @@ fun HomeScreen(
 
         state.error?.let {
             Box(modifier = Modifier.height(8.dp))
-            Text(text = it, color = SignatureOrange, style = MaterialTheme.typography.bodySmall)
+            Text(text = it, color = Cta, style = MaterialTheme.typography.bodySmall)
         }
 
-        Box(modifier = Modifier.height(48.dp))
+        Box(modifier = Modifier.height(56.dp))
         SectionDivider()
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 32.dp, bottom = 16.dp),
+                .padding(top = 32.dp, bottom = 12.dp),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
                 text = stringResource(R.string.past_records),
                 style = MaterialTheme.typography.headlineMedium,
-                color = InkBlack,
+                color = Espresso,
             )
             Text(
                 text = stringResource(R.string.view_archive),
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
-                color = OnSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                color = Walnut,
                 modifier = Modifier.padding(bottom = 4.dp),
             )
         }
@@ -135,7 +134,7 @@ fun HomeScreen(
             Text(
                 text = stringResource(R.string.empty_bookmarks),
                 style = MaterialTheme.typography.bodyMedium,
-                color = OnSurfaceVariant,
+                color = Walnut,
                 modifier = Modifier.padding(vertical = 16.dp),
             )
         } else {
@@ -145,7 +144,7 @@ fun HomeScreen(
                 })
             }
         }
-        Box(modifier = Modifier.height(24.dp))
+        Box(modifier = Modifier.height(40.dp))
     }
 }
 
@@ -157,13 +156,14 @@ private fun TodayCard(
     onBookmarkToggle: () -> Unit,
     onOpen: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(8.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(width = 1.dp, color = BorderSubtle)
-            .background(Color.White)
+            .background(Paper, shape)
+            .border(width = 0.5.dp, color = Latte, shape = shape)
             .clickable(enabled = card != null, onClick = onOpen)
-            .padding(24.dp),
+            .padding(20.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -180,20 +180,17 @@ private fun TodayCard(
             Icon(
                 imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
                 contentDescription = stringResource(R.string.bookmark),
-                tint = if (bookmarked) SignatureOrange else OnSurfaceVariant,
+                tint = if (bookmarked) Cta else Walnut,
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(24.dp)
                     .clickable(enabled = card != null, onClick = onBookmarkToggle),
             )
         }
-        Box(modifier = Modifier.height(32.dp))
+        Box(modifier = Modifier.height(28.dp))
         Text(
             text = card?.quote?.let { "“$it”" } ?: if (loading) stringResource(R.string.loading) else "—",
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontFamily = EditorialSerif,
-                fontStyle = FontStyle.Italic,
-            ),
-            color = InkBlack,
+            style = MaterialTheme.typography.headlineMedium,
+            color = Espresso,
         )
         Box(modifier = Modifier.height(24.dp))
         SectionDivider()
@@ -203,11 +200,11 @@ private fun TodayCard(
                 Text(
                     text = "#$kw",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = OnSurfaceVariant,
+                    color = Walnut,
                 )
             }
         }
-        Box(modifier = Modifier.height(24.dp))
+        Box(modifier = Modifier.height(20.dp))
         SharpButton(
             label = stringResource(R.string.read_full_script),
             onClick = onOpen,
@@ -224,7 +221,7 @@ private fun BookmarkRowItem(bookmark: BookmarkRow, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = card != null, onClick = onClick)
-            .padding(vertical = 24.dp),
+            .padding(vertical = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -235,21 +232,21 @@ private fun BookmarkRowItem(bookmark: BookmarkRow, onClick: () -> Unit) {
             if (meta.isNotBlank()) {
                 Text(
                     text = meta.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.18.em),
-                    color = OnSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Walnut,
                 )
                 Box(modifier = Modifier.height(6.dp))
             }
             Text(
                 text = card?.works?.title ?: "—",
                 style = MaterialTheme.typography.titleLarge,
-                color = InkBlack,
+                color = Espresso,
             )
             Box(modifier = Modifier.height(4.dp))
             Text(
                 text = card?.quote.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium,
-                color = OnSurfaceVariant,
+                color = Walnut,
                 maxLines = 1,
             )
         }
@@ -257,8 +254,8 @@ private fun BookmarkRowItem(bookmark: BookmarkRow, onClick: () -> Unit) {
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
             contentDescription = null,
-            tint = OutlineVariant,
-            modifier = Modifier.size(18.dp),
+            tint = Sand,
+            modifier = Modifier.size(16.dp),
         )
     }
     SectionDivider()
@@ -269,8 +266,8 @@ private fun SectionDivider() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(1.dp)
-            .background(BorderSubtle),
+            .height(0.5.dp)
+            .background(Latte),
     )
 }
 
@@ -283,7 +280,6 @@ private fun todayString(): String {
 private fun formatBookmarkDate(iso: String?): String? {
     if (iso.isNullOrBlank()) return null
     return runCatching {
-        // Just take the YYYY-MM-DD prefix and reformat as M.D
         val datePart = iso.substring(0, 10)
         val d = LocalDate.parse(datePart)
         "${d.monthValue}. ${d.dayOfMonth}"

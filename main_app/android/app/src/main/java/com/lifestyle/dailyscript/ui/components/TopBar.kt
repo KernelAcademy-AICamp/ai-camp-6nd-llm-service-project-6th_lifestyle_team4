@@ -24,15 +24,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.lifestyle.dailyscript.R
-import com.lifestyle.dailyscript.ui.theme.BorderSubtle
+import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
-import com.lifestyle.dailyscript.ui.theme.InkBlack
-import com.lifestyle.dailyscript.ui.theme.PaperWhite
-import com.lifestyle.dailyscript.ui.theme.SignatureOrange
+import com.lifestyle.dailyscript.ui.theme.Espresso
+import com.lifestyle.dailyscript.ui.theme.Latte
+import com.lifestyle.dailyscript.ui.theme.Paper
+import com.lifestyle.dailyscript.ui.theme.Walnut
 
 private val TopBarHeight = 64.dp
 
@@ -41,15 +41,21 @@ private fun TopBarContainer(content: @Composable () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(PaperWhite)
-            .border(width = 1.dp, color = BorderSubtle)
+            .background(Paper)
             .height(TopBarHeight)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         content()
     }
+    // 0.5dp hairline divider under the bar
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(0.5.dp)
+            .background(Latte)
+    )
 }
 
 @Composable
@@ -59,26 +65,23 @@ fun HomeTopBar(onMyPageClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Outlined.MenuBook,
                 contentDescription = null,
-                tint = InkBlack,
-                modifier = Modifier.size(22.dp),
+                tint = Espresso,
+                modifier = Modifier.size(20.dp),
             )
             Text(
                 text = stringResource(R.string.app_brand),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontFamily = EditorialSerif,
-                    fontWeight = FontWeight.Medium,
-                ),
-                color = InkBlack,
-                modifier = Modifier.padding(start = 8.dp),
+                style = MaterialTheme.typography.headlineMedium,
+                color = Espresso,
+                modifier = Modifier.padding(start = 10.dp),
             )
         }
         Text(
             text = stringResource(R.string.my_page),
-            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.18.em),
-            color = InkBlack,
+            style = MaterialTheme.typography.labelSmall,
+            color = Walnut,
             modifier = Modifier
                 .clickable(onClick = onMyPageClick)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 6.dp, vertical = 4.dp),
         )
     }
 }
@@ -94,7 +97,7 @@ fun DetailTopBar(
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
             contentDescription = stringResource(R.string.back),
-            tint = InkBlack,
+            tint = Espresso,
             modifier = Modifier
                 .size(40.dp)
                 .clickable(onClick = onBack)
@@ -104,21 +107,20 @@ fun DetailTopBar(
             Text(
                 text = stringResource(R.string.app_brand).uppercase(),
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Walnut,
             )
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontFamily = EditorialSerif,
-                    fontWeight = FontWeight.Medium,
                 ),
-                color = InkBlack,
+                color = Espresso,
             )
         }
         Icon(
             imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
             contentDescription = stringResource(R.string.bookmark),
-            tint = if (bookmarked) SignatureOrange else InkBlack,
+            tint = if (bookmarked) Cta else Walnut,
             modifier = Modifier
                 .size(40.dp)
                 .clickable(onClick = onToggleBookmark)
@@ -132,23 +134,20 @@ fun SettingsTopBar(initials: String) {
     TopBarContainer {
         Text(
             text = stringResource(R.string.app_brand),
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontFamily = EditorialSerif,
-                fontWeight = FontWeight.Medium,
-            ),
-            color = InkBlack,
+            style = MaterialTheme.typography.headlineMedium,
+            color = Espresso,
         )
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .border(1.dp, InkBlack)
+                .border(0.5.dp, Walnut)
                 .background(Color.Transparent),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = initials.uppercase(),
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.1.em),
-                color = InkBlack,
+                style = MaterialTheme.typography.labelSmall,
+                color = Espresso,
             )
         }
     }

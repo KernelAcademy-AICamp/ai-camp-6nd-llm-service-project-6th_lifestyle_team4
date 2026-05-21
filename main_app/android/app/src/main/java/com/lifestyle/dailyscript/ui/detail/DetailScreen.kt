@@ -29,11 +29,12 @@ import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.DetailTopBar
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
-import com.lifestyle.dailyscript.ui.theme.BorderSubtle
-import com.lifestyle.dailyscript.ui.theme.InkBlack
-import com.lifestyle.dailyscript.ui.theme.OnSurfaceVariant
+import com.lifestyle.dailyscript.ui.theme.Cta
+import com.lifestyle.dailyscript.ui.theme.Espresso
+import com.lifestyle.dailyscript.ui.theme.Latte
+import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.ScreenplayMono
-import com.lifestyle.dailyscript.ui.theme.SignatureOrange
+import com.lifestyle.dailyscript.ui.theme.Walnut
 
 @Composable
 fun DetailScreen(
@@ -46,7 +47,11 @@ fun DetailScreen(
 
     LaunchedEffect(cardId, userId) { vm.load(cardId, userId) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Paper),
+    ) {
         DetailTopBar(
             title = state.card?.works?.title.orEmpty(),
             bookmarked = state.bookmarked,
@@ -58,27 +63,27 @@ fun DetailScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 32.dp),
+                .padding(horizontal = 20.dp, vertical = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             val card = state.card
             if (state.loading && card == null) {
-                Text(text = stringResource(R.string.loading), color = OnSurfaceVariant)
+                Text(text = stringResource(R.string.loading), color = Walnut)
             } else if (card == null) {
                 Text(
                     text = state.error ?: "Card not found.",
-                    color = SignatureOrange,
+                    color = Cta,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
                 MetadataChipsRow(card)
-                Box(modifier = Modifier.height(32.dp))
+                Box(modifier = Modifier.height(28.dp))
 
                 if (!card.excerptDescription.isNullOrBlank()) {
                     Text(
                         text = card.excerptDescription,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = OnSurfaceVariant,
+                        color = Walnut,
                         textAlign = TextAlign.Center,
                     )
                     Box(modifier = Modifier.height(24.dp))
@@ -90,38 +95,28 @@ fun DetailScreen(
                         fontFamily = ScreenplayMono,
                         letterSpacing = 0.02.em,
                     ),
-                    color = InkBlack,
+                    color = Espresso,
                 )
 
                 if (shouldShowSignificance(card)) {
                     Box(modifier = Modifier.height(32.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(BorderSubtle),
-                    )
+                    Hairline()
                     Box(modifier = Modifier.height(24.dp))
                     Text(
                         text = stringResource(R.string.significance_label).uppercase(),
-                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
-                        color = OnSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Walnut,
                     )
                     Box(modifier = Modifier.height(12.dp))
                     Text(
                         text = card.significance.orEmpty(),
                         style = MaterialTheme.typography.bodyLarge,
-                        color = InkBlack,
+                        color = Espresso,
                     )
                 }
 
                 Box(modifier = Modifier.height(48.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(BorderSubtle),
-                )
+                Hairline()
                 Box(modifier = Modifier.height(32.dp))
 
                 SharpButton(
@@ -136,13 +131,23 @@ fun DetailScreen(
                 Box(modifier = Modifier.height(16.dp))
                 Text(
                     text = "${stringResource(R.string.edition_note)} #${"%04d".format(card.cardId)}",
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.1.em),
-                    color = OnSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Walnut,
                 )
                 Box(modifier = Modifier.height(24.dp))
             }
         }
     }
+}
+
+@Composable
+private fun Hairline() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(0.5.dp)
+            .background(Latte),
+    )
 }
 
 private val SignificanceFormats = setOf("opera", "play")
@@ -166,8 +171,8 @@ private fun MetadataChipsRow(card: CardDto) {
         items.forEach { value ->
             Text(
                 text = value,
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.18.em),
-                color = OnSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                color = Walnut,
             )
         }
     }

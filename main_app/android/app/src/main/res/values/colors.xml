@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="paper_white">#FFFFFFFF</color>
-    <color name="ink_black">#FF1A1A1A</color>
-    <color name="signature_orange">#FFFF5126</color>
-    <color name="border_subtle">#FFE2E2E4</color>
-    <color name="surface_muted">#FFF5F5F5</color>
+    <!-- LongBlack mood -->
+    <color name="paper">#FFFAF8F2</color>
+    <color name="espresso">#FF0E0C0A</color>
+    <color name="walnut">#FF6B5D4F</color>
+    <color name="latte">#FFE8E1D3</color>
+    <color name="cta">#FFD85A30</color>
+    <color name="highlight">#FFF4C20D</color>
+
+    <!-- Legacy aliases used by themes.xml -->
+    <color name="paper_white">#FFFAF8F2</color>
+    <color name="ink_black">#FF0E0C0A</color>
+    <color name="signature_orange">#FFD85A30</color>
+    <color name="border_subtle">#FFE8E1D3</color>
+    <color name="surface_muted">#FFE8E1D3</color>
 </resources>
