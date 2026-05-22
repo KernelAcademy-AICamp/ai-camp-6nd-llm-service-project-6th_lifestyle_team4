@@ -82,11 +82,11 @@ struct CurtaincallWidgetEntryView: View {
                 .lineSpacing(4)
                 .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+            Spacer(minLength: 12)
             if let title = entry.card?.workTitle, !title.isEmpty {
                 Text(title.uppercased())
-                    .font(.custom("Pretendard-Medium", size: 10))
-                    .tracking(10 * 0.2)
+                    .font(.custom("Pretendard-Medium", size: 13))
+                    .tracking(13 * 0.2)
                     .foregroundStyle(metaColor)
             }
         }
