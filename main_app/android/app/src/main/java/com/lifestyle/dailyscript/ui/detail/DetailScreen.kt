@@ -55,6 +55,7 @@ fun DetailScreen(
         DetailTopBar(
             title = state.card?.works?.title.orEmpty(),
             bookmarked = state.bookmarked,
+            bookmarkEnabled = state.card != null && !state.bookmarkActionInFlight,
             onBack = onBack,
             onToggleBookmark = { vm.toggleBookmark(userId) },
         )
@@ -126,7 +127,18 @@ fun DetailScreen(
                         stringResource(R.string.collect_artifact),
                     onClick = { vm.toggleBookmark(userId) },
                     variant = SharpButtonVariant.Outline,
+                    enabled = !state.bookmarkActionInFlight,
                 )
+
+                state.error?.let { error ->
+                    Box(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = error,
+                        color = Cta,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                    )
+                }
 
                 Box(modifier = Modifier.height(16.dp))
                 Text(

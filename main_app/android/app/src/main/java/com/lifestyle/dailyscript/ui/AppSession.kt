@@ -19,20 +19,32 @@ class AppSessionViewModel : ViewModel() {
     init { bootstrap() }
 
     fun bootstrap() {
-        _state.value = SessionState.Loading
         viewModelScope.launch {
-            _state.value = runCatching { authRepo.bootstrap() }
-                .map(SessionState::Ready)
-                .getOrElse { SessionState.Error(it.message ?: "Sign-in failed") }
+            bootstrapIntoState()
         }
     }
 
     fun signOutAndReauth() {
         viewModelScope.launch {
-            runCatching { authRepo.signOut() }
-            bootstrap()
+            _state.value = SessionState.Loading
+            val signOutResult = runCatching { authRepo.signOut() }
+            if (signOutResult.isFailure) {
+                _state.value = SessionState.Error(signOutResult.exceptionOrNull().messageOr("Sign-out failed"))
+                return@launch
+            }
+            bootstrapIntoState()
         }
     }
+
+    private suspend fun bootstrapIntoState() {
+        _state.value = SessionState.Loading
+        _state.value = runCatching { authRepo.bootstrap() }
+            .map(SessionState::Ready)
+            .getOrElse { SessionState.Error(it.messageOr("Sign-in failed")) }
+    }
+
+    private fun Throwable?.messageOr(fallback: String): String =
+        this?.message?.takeIf { it.isNotBlank() } ?: fallback
 }
 
 sealed interface SessionState {

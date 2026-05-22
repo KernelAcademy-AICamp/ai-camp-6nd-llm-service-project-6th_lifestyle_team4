@@ -97,6 +97,7 @@ fun HomeScreen(
         TodayCard(
             card = state.todayCard,
             bookmarked = state.todayBookmarked,
+            bookmarkActionInFlight = state.bookmarkActionInFlight,
             loading = state.loading,
             onBookmarkToggle = { vm.toggleTodayBookmark(userId) },
             onOpen = { state.todayCard?.let { onOpenCard(it.cardId) } },
@@ -152,6 +153,7 @@ fun HomeScreen(
 private fun TodayCard(
     card: CardDto?,
     bookmarked: Boolean,
+    bookmarkActionInFlight: Boolean,
     loading: Boolean,
     onBookmarkToggle: () -> Unit,
     onOpen: () -> Unit,
@@ -183,7 +185,10 @@ private fun TodayCard(
                 tint = if (bookmarked) Cta else Walnut,
                 modifier = Modifier
                     .size(24.dp)
-                    .clickable(enabled = card != null, onClick = onBookmarkToggle),
+                    .clickable(
+                        enabled = card != null && !bookmarkActionInFlight,
+                        onClick = onBookmarkToggle,
+                    ),
             )
         }
         Box(modifier = Modifier.height(28.dp))

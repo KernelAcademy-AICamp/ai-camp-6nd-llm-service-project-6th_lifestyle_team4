@@ -90,6 +90,7 @@ fun HomeTopBar(onMyPageClick: () -> Unit) {
 fun DetailTopBar(
     title: String,
     bookmarked: Boolean,
+    bookmarkEnabled: Boolean = true,
     onBack: () -> Unit,
     onToggleBookmark: () -> Unit,
 ) {
@@ -123,7 +124,7 @@ fun DetailTopBar(
             tint = if (bookmarked) Cta else Walnut,
             modifier = Modifier
                 .size(40.dp)
-                .clickable(onClick = onToggleBookmark)
+                .clickable(enabled = bookmarkEnabled, onClick = onToggleBookmark)
                 .padding(8.dp),
         )
     }
