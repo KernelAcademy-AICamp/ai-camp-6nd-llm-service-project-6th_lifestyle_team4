@@ -3,5 +3,15 @@
     "api/extract.js": { "maxDuration": 300 },
     "api/translate.js": { "maxDuration": 60 },
     "api/save.js": { "maxDuration": 30 }
-  }
+  },
+  "headers": [
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    }
+  ]
 }

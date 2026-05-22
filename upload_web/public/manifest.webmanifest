@@ -1,10 +1,10 @@
 {
-  "name": "Script & Quote Intelligence",
-  "short_name": "S&Q",
-  "description": "영화/연극/오페라 명대사 추출·관리·퀴즈 앱",
+  "name": "Daily Script — 오늘의 명대사",
+  "short_name": "Daily Script",
+  "description": "매일 한 장의 명대사 카드와 둘러보기·북마크",
   "lang": "ko",
   "dir": "ltr",
-  "start_url": "/dashboard.html",
+  "start_url": "/m/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
@@ -32,22 +32,22 @@
   ],
   "shortcuts": [
     {
-      "name": "조회",
-      "short_name": "조회",
-      "url": "/library.html",
-      "description": "저장된 카드 책꽂이"
+      "name": "오늘의 명대사",
+      "short_name": "오늘",
+      "url": "/m/#home",
+      "description": "오늘의 카드 보기"
     },
     {
-      "name": "명대사 맞추기",
-      "short_name": "퀴즈",
-      "url": "/quiz.html",
-      "description": "퀴즈 게임 시작"
+      "name": "카드 둘러보기",
+      "short_name": "둘러보기",
+      "url": "/m/#cards",
+      "description": "모든 카드 둘러보기"
     },
     {
-      "name": "대시보드",
-      "short_name": "대시보드",
-      "url": "/dashboard.html",
-      "description": "PDF 업로드 및 추출"
+      "name": "내 북마크",
+      "short_name": "북마크",
+      "url": "/m/#bookmarks",
+      "description": "북마크한 카드 보기"
     }
   ]
 }
