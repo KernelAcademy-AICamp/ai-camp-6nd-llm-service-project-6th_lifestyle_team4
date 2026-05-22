@@ -457,24 +457,30 @@ async function bulkDeleteCards(targetIds) {
   if (!targetIds || targetIds.length === 0) return;
   try {
     const sb = await getSupabase();
-    const { error } = await sb.from('cards').delete().in('card_id', targetIds);
+    const { data, error } = await sb.from('cards').delete().in('card_id', targetIds).select();
     if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error('DB에서 삭제되지 않음 — admin 권한 확인 필요.');
+    }
+    if (data.length < targetIds.length) {
+      console.warn(`[library] 일부만 삭제됨: 요청 ${targetIds.length}장, 실제 ${data.length}장`);
+    }
 
-    // 로컬 캐시 정리
-    const idSet = new Set(targetIds);
-    state.rows = state.rows.filter((c) => !idSet.has(c.card_id));
-    targetIds.forEach((id) => {
+    // 로컬 캐시 정리 — 실제 삭제된 ID만 반영
+    const actuallyDeletedIds = new Set(data.map((r) => r.card_id));
+    state.rows = state.rows.filter((c) => !actuallyDeletedIds.has(c.card_id));
+    actuallyDeletedIds.forEach((id) => {
       state.spineSelectedIds.delete(id);
       state.selectedIds.delete(id);
     });
     // 삭제 모드 종료
-    state.deleteModeWorkId = null;
+    state.deleteModeGroupKey = null;
     state.spineSelectedIds.clear();
 
     refreshWorkFilterOptions();
     renderLibrary();
     refreshPullout();
-    toast(`${targetIds.length}장 삭제 완료`, 'success');
+    toast(`${data.length}장 삭제 완료`, 'success');
   } catch (err) {
     console.error('[library] bulk delete cards failed:', err);
     toast(`삭제 실패: ${err.message || err}`, 'error');
@@ -490,15 +496,21 @@ async function deleteWorkGroup(group) {
   const cards = group.cards;
   try {
     const sb = await getSupabase();
-    // 1) work_genres
+    // 1) work_genres (없을 수도 있어 행수 검증은 생략, 에러만 확인)
     const { error: wgErr } = await sb.from('work_genres').delete().in('work_id', workIds);
     if (wgErr) throw wgErr;
-    // 2) cards
-    const { error: cErr } = await sb.from('cards').delete().in('work_id', workIds);
+    // 2) cards — 실제 삭제 행수 확인 (RLS 차단 감지)
+    const { data: deletedCards, error: cErr } = await sb.from('cards').delete().in('work_id', workIds).select('card_id');
     if (cErr) throw cErr;
-    // 3) works
-    const { error: wErr } = await sb.from('works').delete().in('work_id', workIds);
+    if (cards.length > 0 && (!deletedCards || deletedCards.length === 0)) {
+      throw new Error('DB에서 삭제되지 않음 — admin 권한 확인 필요.');
+    }
+    // 3) works — 실제 삭제 행수 확인
+    const { data: deletedWorks, error: wErr } = await sb.from('works').delete().in('work_id', workIds).select('work_id');
     if (wErr) throw wErr;
+    if (!deletedWorks || deletedWorks.length === 0) {
+      throw new Error('works 삭제 실패 — admin 권한 확인 필요.');
+    }
 
     // 로컬 캐시 정리
     const workIdSet = new Set(workIds);
@@ -645,8 +657,11 @@ function buildEditNode(card) {
     };
     try {
       const sb = await getSupabase();
-      const { error } = await sb.from('cards').update(updates).eq('card_id', card.card_id);
+      const { data, error } = await sb.from('cards').update(updates).eq('card_id', card.card_id).select();
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('DB에 저장되지 않음 — admin 권한이 없거나 카드가 이미 삭제됐을 수 있습니다.');
+      }
       Object.assign(card, updates);
       state.editing = null;
       renderLibrary();
@@ -672,8 +687,12 @@ async function onDelete(card) {
   if (!confirm(`"${preview}${(card.quote || '').length > 30 ? '…' : ''}" 카드를 DB에서 영구 삭제할까요?\n\n복구할 수 없습니다.`)) return;
   try {
     const sb = await getSupabase();
-    const { error } = await sb.from('cards').delete().eq('card_id', card.card_id);
+    // .select() 를 붙여 실제 삭제된 행 반환 — RLS 가 차단하면 빈 배열
+    const { data, error } = await sb.from('cards').delete().eq('card_id', card.card_id).select();
     if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error('DB에서 삭제되지 않음 — admin 권한이 없거나 이미 삭제된 카드일 수 있습니다.');
+    }
     state.rows = state.rows.filter((c) => c.card_id !== card.card_id);
     renderLibrary();
     refreshPullout();
@@ -737,14 +756,21 @@ async function onBulkDelete() {
 
   try {
     const sb = await getSupabase();
-    const { error } = await sb.from('cards').delete().in('card_id', targetIds);
+    const { data, error } = await sb.from('cards').delete().in('card_id', targetIds).select();
     if (error) throw error;
-    // 로컬 캐시에서 제거
-    state.rows = state.rows.filter((c) => !targetIds.includes(c.card_id));
-    targetIds.forEach((id) => state.selectedIds.delete(id));
+    if (!data || data.length === 0) {
+      throw new Error('DB에서 삭제되지 않음 — admin 권한 확인 필요.');
+    }
+    if (data.length < targetIds.length) {
+      console.warn(`[library] 일부만 삭제됨: 요청 ${targetIds.length}장, 실제 ${data.length}장`);
+    }
+    // 로컬 캐시 정리
+    const actuallyDeletedIds = new Set(data.map((r) => r.card_id));
+    state.rows = state.rows.filter((c) => !actuallyDeletedIds.has(c.card_id));
+    actuallyDeletedIds.forEach((id) => state.selectedIds.delete(id));
     renderLibrary();
     refreshPullout();
-    toast(`${targetIds.length}장 삭제 완료`, 'success');
+    toast(`${data.length}장 삭제 완료`, 'success');
   } catch (err) {
     console.error('[library] bulk delete failed:', err);
     toast(`일괄 삭제 실패: ${err.message || err}`, 'error');
