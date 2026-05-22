@@ -5,28 +5,35 @@ struct ArchiveView: View {
     @State private var hasLoaded = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                topBar
-                titleBlock
-                Hairline()
-                if cards.isEmpty {
-                    Text("아직 기록이 없어요")
-                        .font(.metaSans(12))
-                        .foregroundStyle(.walnut)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 48)
-                } else {
-                    ForEach(Array(cards.enumerated()), id: \.element.id) { idx, card in
-                        NavigationLink(value: card) {
-                            ArchiveRow(card: card, daysAgo: idx + 1)
+        VStack(spacing: 0) {
+            archiveTopBar
+            Hairline()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Spacer().frame(height: 40)
+                    Text("지난 기록")
+                        .font(.displaySerif(32))
+                        .foregroundStyle(.espresso)
+                    Spacer().frame(height: 32)
+                    Hairline()
+                    if cards.isEmpty {
+                        Text("아직 북마크한 카드가 없습니다.")
+                            .font(.bodySans(14))
+                            .foregroundStyle(.walnut)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 48)
+                    } else {
+                        ForEach(Array(cards.enumerated()), id: \.element.id) { idx, card in
+                            NavigationLink(value: card) {
+                                ArchiveRow(card: card, daysAgo: idx + 1)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                        Hairline()
                     }
+                    Spacer().frame(height: 40)
                 }
+                .padding(.horizontal, 20)
             }
-            .padding(.bottom, 24)
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
@@ -34,25 +41,21 @@ struct ArchiveView: View {
         .task { await load() }
     }
 
-    private var topBar: some View {
-        HStack(alignment: .firstTextBaseline) {
+    private var archiveTopBar: some View {
+        HStack(alignment: .center) {
             Text("Daily Script")
-                .font(.headlineSerif(24))
+                .font(.headlineSerif(22))
                 .foregroundStyle(.espresso)
             Spacer()
-            Text("기록 \(cards.count)개").labelCaps()
+            ZStack {
+                Rectangle().stroke(Color.walnut, lineWidth: 0.5)
+                Text("박").labelCaps(color: .espresso)
+            }
+            .frame(width: 36, height: 36)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 32)
-    }
-
-    private var titleBlock: some View {
-        Text("지난 기록")
-            .font(.displaySerif(34))
-            .foregroundStyle(.espresso)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 24)
+        .frame(height: 64)
+        .background(Color.paper)
     }
 
     private func load() async {

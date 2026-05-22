@@ -39,7 +39,7 @@ struct LabelCaps: ViewModifier {
         content
             .font(.custom(FontName.sansMedium, size: size))
             .textCase(.uppercase)
-            .tracking(size * 0.18)
+            .tracking(size * 0.2)
             .foregroundStyle(color)
     }
 }

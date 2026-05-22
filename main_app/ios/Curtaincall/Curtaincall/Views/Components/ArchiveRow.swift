@@ -5,46 +5,48 @@ struct ArchiveRow: View {
     let daysAgo: Int
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(dateText).labelCaps()
-                Text(card.work.title)
-                    .font(.titleSerif(16))
-                    .foregroundStyle(.espresso)
-                if let tagline = card.excerptDescription, !tagline.isEmpty {
-                    Text(tagline)
-                        .font(.bodySans(13))
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 0) {
+                    let meta = metaLine
+                    if !meta.isEmpty {
+                        Text(meta).labelCaps()
+                        Spacer().frame(height: 6)
+                    }
+                    Text(card.work.title)
+                        .font(.titleSerif(16))
+                        .foregroundStyle(.espresso)
+                    Spacer().frame(height: 4)
+                    Text(card.quote)
+                        .font(.bodySans(14))
                         .foregroundStyle(.walnut)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .bookLeading(size: 13)
+                        .lineLimit(1)
                 }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(.sand)
             }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .light))
-                .foregroundStyle(.walnut)
-                .padding(.top, 4)
+            .padding(.vertical, 20)
+            .contentShape(Rectangle())
+            Hairline()
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 20)
-        .contentShape(Rectangle())
     }
 
-    private var dateText: String {
+    private var metaLine: String {
         let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now) ?? .now
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "yyyy.MM.dd"
-        return f.string(from: date)
+        let comps = Calendar.current.dateComponents([.month, .day], from: date)
+        let datePart = "\(comps.month ?? 0). \(comps.day ?? 0)"
+        let format = card.work.format.rawValue
+        return "\(datePart)  —  \(format)"
     }
 }
 
 #Preview {
     VStack(spacing: 0) {
         ArchiveRow(card: .sample, daysAgo: 1)
-        Hairline()
         ArchiveRow(card: .sample, daysAgo: 2)
     }
+    .padding(.horizontal, 20)
     .background(Color.paper)
 }

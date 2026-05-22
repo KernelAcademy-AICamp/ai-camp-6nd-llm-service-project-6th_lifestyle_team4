@@ -5,9 +5,17 @@ enum Tab: Hashable, CaseIterable {
 
     var title: String {
         switch self {
-        case .home: return "홈"
-        case .archive: return "보관함"
-        case .settings: return "설정"
+        case .home: return "Home"
+        case .archive: return "Archive"
+        case .settings: return "Settings"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .home: return "house"
+        case .archive: return "clock.arrow.circlepath"
+        case .settings: return "gearshape"
         }
     }
 }

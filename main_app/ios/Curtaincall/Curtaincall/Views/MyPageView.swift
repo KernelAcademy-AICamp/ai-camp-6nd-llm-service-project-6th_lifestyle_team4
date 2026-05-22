@@ -1,213 +1,129 @@
 import SwiftUI
 
 struct MyPageView: View {
-    @State private var pushNotificationsOn = true
+    @State private var pushEnabled = true
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                topBar
-                userBlock
-                membershipStatusCard
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
-                Hairline()
-                libraryRow
-                Hairline()
-                sectionHeader("일반 설정")
-                pushNotificationsRow
-                Hairline()
-                themeSettingsRow
-                Hairline()
-                sectionHeader("약관 및 정보")
-                termsRow
-                Hairline()
-                versionRow
-                Hairline()
-                signOutButton
+        VStack(spacing: 0) {
+            settingsTopBar
+            Hairline()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Spacer().frame(height: 40)
+                    Text("박지윤")
+                        .font(.displaySerif(32))
+                        .foregroundStyle(.espresso)
+                    Spacer().frame(height: 10)
+                    Text("매일 한 장의 명대사로 하루를 시작합니다.")
+                        .font(.bodySans(16))
+                        .foregroundStyle(.walnut)
+                        .bookLeading(size: 16)
+                    Spacer().frame(height: 32)
+                    Hairline()
+
+                    Spacer().frame(height: 40)
+                    sectionLabel("GENERAL PREFERENCES")
+                    settingRow(
+                        title: "Push Notifications",
+                        subtitle: "Daily digest and breaking insights",
+                        trailing: { editorialToggle }
+                    )
+                    settingRow(
+                        title: "Theme Settings",
+                        subtitle: "System default (Light)"
+                    )
+
+                    Spacer().frame(height: 40)
+                    sectionLabel("LEGAL & ABOUT")
+                    settingRow(title: "Terms of Service")
+                    settingRow(
+                        title: "Version Info",
+                        trailingText: "v2.4.0"
+                    )
+
+                    Spacer().frame(height: 40)
+                    Button(action: {}) {
+                        Text("Sign Out").editorialButton(style: .outlined)
+                    }
+                    .buttonStyle(.plain)
+                    Spacer().frame(height: 40)
+                }
+                .padding(.horizontal, 20)
             }
-            .padding(.bottom, 32)
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
     }
 
-    private var topBar: some View {
+    private var settingsTopBar: some View {
         HStack(alignment: .center) {
             Text("Daily Script")
-                .font(.headlineSerif(24))
+                .font(.headlineSerif(22))
                 .foregroundStyle(.espresso)
             Spacer()
             ZStack {
-                Color.espresso
-                Text("박")
-                    .font(.titleSerif(15))
-                    .foregroundStyle(.paper)
+                Rectangle().stroke(Color.walnut, lineWidth: 0.5)
+                Text("박").labelCaps(color: .espresso)
             }
             .frame(width: 36, height: 36)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 32)
+        .frame(height: 64)
+        .background(Color.paper)
     }
 
-    private var userBlock: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("박지윤")
-                .font(.displaySerif(34))
-                .foregroundStyle(.espresso)
-            Text("현대 각본의 큐레이터. 지문이 가진 조용한 힘을 믿어요.")
-                .font(.bodySans(14))
-                .foregroundStyle(.walnut)
-                .bookLeading(size: 14)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 24)
-    }
-
-    private var membershipStatusCard: some View {
-        NavigationLink {
-            MembershipView()
-        } label: {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("무제한 노트")
-                        .labelCaps(color: .highlight)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .light))
-                        .foregroundStyle(.sand)
-                }
-                Text("다음 결제일 5월 27일")
-                    .font(.titleSerif(18))
-                    .foregroundStyle(.paper)
-                Text("9,900원 / 월 · 자동 결제")
-                    .font(.metaSans(12))
-                    .foregroundStyle(.sand)
-            }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12).fill(Color.espresso)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var libraryRow: some View {
-        NavigationLink {
-            LibraryView()
-        } label: {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("내 라이브러리")
-                        .font(.bodySans(15))
-                        .foregroundStyle(.espresso)
-                    Text("저장한 노트 모아 보기")
-                        .font(.metaSans(12))
-                        .foregroundStyle(.walnut)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .light))
-                    .foregroundStyle(.walnut)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
             .labelCaps()
-            .padding(.horizontal, 20)
-            .padding(.top, 32)
-            .padding(.bottom, 16)
+            .padding(.bottom, 12)
     }
 
-    private var pushNotificationsRow: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("푸시 알림")
-                    .font(.bodySans(15))
-                    .foregroundStyle(.espresso)
-                Text("매일 아침 8시, 한 편의 각본을 받아보세요")
-                    .font(.metaSans(12))
-                    .foregroundStyle(.walnut)
-            }
-            Spacer()
-            Toggle("", isOn: $pushNotificationsOn)
-                .labelsHidden()
-                .tint(.espresso)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-    }
-
-    private var themeSettingsRow: some View {
-        Button(action: {}) {
-            HStack(alignment: .center, spacing: 16) {
+    @ViewBuilder
+    private func settingRow(
+        title: String,
+        subtitle: String? = nil,
+        trailingText: String? = nil,
+        @ViewBuilder trailing: () -> some View = { EmptyView() }
+    ) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("테마 설정")
-                        .font(.bodySans(15))
+                    Text(title)
+                        .font(.titleSerif(16))
                         .foregroundStyle(.espresso)
-                    Text("시스템 기본값 (라이트)")
-                        .font(.metaSans(12))
-                        .foregroundStyle(.walnut)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.bodySans(12))
+                            .foregroundStyle(.walnut)
+                    }
                 }
                 Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .light))
-                    .foregroundStyle(.walnut)
+                if let trailingText {
+                    Text(trailingText.uppercased()).labelCaps()
+                } else {
+                    trailing()
+                }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .contentShape(Rectangle())
+            .padding(.vertical, 18)
+            Hairline()
         }
-        .buttonStyle(.plain)
     }
 
-    private var termsRow: some View {
-        Button(action: {}) {
-            HStack(alignment: .center, spacing: 16) {
-                Text("이용약관")
-                    .font(.bodySans(15))
-                    .foregroundStyle(.espresso)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .light))
-                    .foregroundStyle(.walnut)
+    private var editorialToggle: some View {
+        Button {
+            pushEnabled.toggle()
+        } label: {
+            ZStack(alignment: pushEnabled ? .trailing : .leading) {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(pushEnabled ? Color.espresso : Color.latte)
+                Circle()
+                    .fill(Color.paper)
+                    .frame(width: 18, height: 18)
+                    .padding(3)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .contentShape(Rectangle())
+            .frame(width: 44, height: 24)
         }
         .buttonStyle(.plain)
-    }
-
-    private var versionRow: some View {
-        HStack(alignment: .center, spacing: 16) {
-            Text("버전 정보")
-                .font(.bodySans(15))
-                .foregroundStyle(.espresso)
-            Spacer()
-            Text("v2.4.0 (안정 버전)")
-                .font(.metaSans(12))
-                .foregroundStyle(.walnut)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-    }
-
-    private var signOutButton: some View {
-        Button(action: {}) {
-            Text("로그아웃").editorialButton(style: .outlined)
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 20)
-        .padding(.top, 32)
     }
 }
 

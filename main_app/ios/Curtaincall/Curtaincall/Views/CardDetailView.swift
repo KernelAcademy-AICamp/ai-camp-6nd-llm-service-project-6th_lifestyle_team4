@@ -1,210 +1,123 @@
 import SwiftUI
 
-private struct ScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
-private struct ContentHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
 struct CardDetailView: View {
     let card: Card
     @Environment(\.dismiss) private var dismiss
-    @State private var isBookmarked = false
-    @State private var scrollOffset: CGFloat = 0
-    @State private var contentHeight: CGFloat = 1
-    @State private var viewportHeight: CGFloat = 1
+    @State private var bookmarked = false
 
-    private var progress: CGFloat {
-        let scrollable = max(contentHeight - viewportHeight, 1)
-        return min(max(scrollOffset / scrollable, 0), 1)
+    private var showSignificance: Bool {
+        let f = card.work.format.rawValue.lowercased()
+        return !(card.significance ?? "").isEmpty && (f == "opera" || f == "play")
     }
 
     var body: some View {
-        GeometryReader { outer in
-            ZStack(alignment: .top) {
-                Color.paper.ignoresSafeArea()
-                scrollContent
-                topBar
-                    .background(Color.paper.opacity(0.95))
-                HStack { Spacer(); progressIndicator }
-                    .padding(.trailing, 6)
-                    .padding(.top, 80)
-                VStack { Spacer(); bottomCTA }
+        VStack(spacing: 0) {
+            detailTopBar
+            Hairline()
+            ScrollView {
+                VStack(alignment: .center, spacing: 0) {
+                    Spacer().frame(height: 40)
+                    metadataChipsRow
+                    Spacer().frame(height: 28)
+
+                    if let desc = card.excerptDescription, !desc.isEmpty {
+                        Text(desc)
+                            .font(.bodySans(16))
+                            .foregroundStyle(.walnut)
+                            .multilineTextAlignment(.center)
+                            .bookLeading(size: 16)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer().frame(height: 24)
+                    }
+
+                    Text(card.scriptExcerpt)
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundStyle(.espresso)
+                        .tracking(0.28)
+                        .lineSpacing(8)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if showSignificance, let sig = card.significance {
+                        Spacer().frame(height: 32)
+                        Hairline()
+                        Spacer().frame(height: 24)
+                        Text("작품의 의의").labelCaps()
+                        Spacer().frame(height: 12)
+                        Text(sig)
+                            .font(.bodySans(16))
+                            .foregroundStyle(.espresso)
+                            .bookLeading(size: 16)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    Spacer().frame(height: 48)
+                    Hairline()
+                    Spacer().frame(height: 32)
+
+                    Button { bookmarked.toggle() } label: {
+                        Text(bookmarked ? "Collected" : "Collect Script Artifact")
+                            .editorialButton(style: .outlined)
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer().frame(height: 16)
+                    Text("Limited Edition Digital Manuscript #\(String(format: "%04d", card.cardId))")
+                        .labelCaps()
+                    Spacer().frame(height: 24)
+                }
+                .padding(.horizontal, 20)
             }
-            .onAppear { viewportHeight = outer.size.height }
-            .onChange(of: outer.size.height) { _, h in viewportHeight = h }
         }
+        .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
     }
 
-    private var scrollContent: some View {
-        ScrollView {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: ScrollOffsetKey.self,
-                    value: -proxy.frame(in: .named("scroll")).minY
-                )
-            }
-            .frame(height: 0)
-
-            VStack(alignment: .leading, spacing: 0) {
-                heroBlock
-                contentBlock
-            }
-            .background(
-                GeometryReader { proxy in
-                    Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
-                }
-            )
-        }
-        .coordinateSpace(name: "scroll")
-        .onPreferenceChange(ScrollOffsetKey.self) { scrollOffset = $0 }
-        .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
-    }
-
-    private var heroBlock: some View {
-        ZStack(alignment: .bottomLeading) {
-            heroImage
-                .frame(maxWidth: .infinity)
-                .frame(height: 320)
-                .clipped()
-            LinearGradient(
-                colors: [Color.black.opacity(0), Color.black.opacity(0.55)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: 200)
-            .frame(maxWidth: .infinity, alignment: .bottom)
-
-            VStack(alignment: .leading, spacing: 8) {
-                if let category = card.category, !category.isEmpty {
-                    CategoryBadge(code: category)
-                }
-                Text(card.work.title)
-                    .font(.displaySerif(32))
-                    .foregroundStyle(.paper)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let author = card.work.author {
-                    Text(author)
-                        .font(.metaSans(12))
-                        .foregroundStyle(.paper.opacity(0.85))
-                }
-            }
-            .padding(20)
-        }
-    }
-
-    @ViewBuilder
-    private var heroImage: some View {
-        if let url = card.imageUrl, let parsed = URL(string: url) {
-            AsyncImage(url: parsed) { phase in
-                switch phase {
-                case .success(let img): img.resizable().aspectRatio(contentMode: .fill)
-                default: heroPlaceholder
-                }
-            }
-        } else {
-            heroPlaceholder
-        }
-    }
-
-    private var heroPlaceholder: some View {
-        ZStack {
-            Color.roast
-            Text(String(card.work.title.prefix(1)))
-                .font(.displaySerif(120))
-                .foregroundStyle(Color.sand.opacity(0.7))
-        }
-    }
-
-    private var contentBlock: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            metadataStrip
-            Text(card.scriptExcerpt)
-                .font(.bodySans(15))
-                .foregroundStyle(.espresso)
-                .bookLeading(size: 15)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let rating = card.rating {
-                StarRating(value: rating, count: card.ratingCount)
-            }
-            Text("한정판 디지털 매뉴스크립트 #\(String(format: "%04d", card.cardId))")
-                .labelCaps()
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, 8)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 28)
-        .padding(.bottom, 140)
-    }
-
-    private var metadataStrip: some View {
-        HStack(spacing: 18) {
-            Text("장면 \(card.cardId)").labelCaps()
-            Text(card.work.format.displayName).labelCaps()
-            if let year = card.work.releaseYear {
-                Text(String(year)).labelCaps()
-            }
-            Spacer()
-        }
-    }
-
-    private var topBar: some View {
+    private var detailTopBar: some View {
         HStack(alignment: .center) {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 18, weight: .regular))
                     .foregroundStyle(.espresso)
-                    .frame(width: 32, height: 32, alignment: .leading)
+                    .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
+
             Spacer()
-            Text("DAILY SCRIPT").labelCaps(color: .espresso)
-            Spacer()
-            Button { isBookmarked.toggle() } label: {
-                Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                    .font(.system(size: 18, weight: .regular))
+            VStack(spacing: 2) {
+                Text("DAILY SCRIPT").labelCaps()
+                Text(card.work.title)
+                    .font(.headlineSerif(20))
                     .foregroundStyle(.espresso)
-                    .frame(width: 32, height: 32, alignment: .trailing)
+                    .lineLimit(1)
+            }
+            Spacer()
+
+            Button { bookmarked.toggle() } label: {
+                Image(systemName: bookmarked ? "bookmark.fill" : "bookmark")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(bookmarked ? Color.cta : .walnut)
+                    .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .top)
-        .frame(height: 56, alignment: .center)
-    }
-
-    private var progressIndicator: some View {
-        GeometryReader { geo in
-            let trackHeight = geo.size.height
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color.espresso)
-                    .frame(width: 2, height: trackHeight * progress)
-                Spacer(minLength: 0)
-            }
-            .frame(width: 2, height: trackHeight)
-            .background(Color.latte.frame(width: 2))
-        }
-        .frame(width: 2, height: 180)
-    }
-
-    private var bottomCTA: some View {
-        VStack(spacing: 0) {
-            Hairline()
-            Button(action: {}) {
-                Text("라이브러리에 저장").editorialButton(style: .filled)
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-        }
+        .frame(height: 64)
         .background(Color.paper)
+    }
+
+    private var metadataChipsRow: some View {
+        HStack(spacing: 12) {
+            let items: [String] = [
+                card.work.format.rawValue.uppercased(),
+                card.work.author?.uppercased() ?? "",
+                card.work.releaseYear.map(String.init) ?? "",
+            ].filter { !$0.isEmpty }
+            ForEach(items, id: \.self) { v in
+                Text(v).labelCaps()
+            }
+        }
     }
 }
 

@@ -16,19 +16,18 @@ private struct EditorialButtonModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(.titleSerif(16))
-            .foregroundStyle(style == .filled ? Color.paper : Color.espresso)
+            .labelCaps(color: style == .filled ? .paper : .espresso)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 20)
+            .frame(height: 52)
+            .padding(.horizontal, 24)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(style == .filled ? Color.espresso : Color.paper)
+                    .fill(style == .filled ? Color.espresso : Color.clear)
             )
             .overlay {
                 if style == .outlined {
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.walnut, lineWidth: 0.5)
+                        .stroke(Color.walnut, lineWidth: 1)
                 }
             }
     }
@@ -36,8 +35,8 @@ private struct EditorialButtonModifier: ViewModifier {
 
 #Preview {
     VStack(spacing: 16) {
-        Text("전체 대본 읽기").editorialButton(style: .filled)
-        Text("대본 수집하기").editorialButton(style: .outlined)
+        Text("Read Full Script").editorialButton(style: .filled)
+        Text("Collect Script Artifact").editorialButton(style: .outlined)
     }
     .padding(24)
     .background(Color.paper)
