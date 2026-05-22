@@ -27,7 +27,8 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
     "format": "movie | drama | play | musical 중 하나",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
-    "genres": ["장르1", "장르2"]
+    "genres": ["장르1", "장르2"],
+    "characters": ["등장인물1", "등장인물2"]
   },
   "cards": [
     {
@@ -36,7 +37,8 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
       "excerpt_description": "이 장면이 어떤 상황인지에 대한 1-2줄 설명",
       "keywords": ["키워드1", "키워드2", "키워드3"],
       "temperature": 1~5 사이 정수,
-      "intensity": 1~5 사이 정수
+      "intensity": 1~5 사이 정수,
+      "significance": "이 명대사·장면이 작품 전체에서 갖는 의의"
     }
   ]
 }
@@ -46,12 +48,14 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
 - genres: 아래 13개 중 1~3개 선택
   로맨스, 코미디, 스릴러/서스펜스, 드라마, 비극, 미스터리,
   판타지, 역사극/시대극, 가족극, 액션, 호러, 느와르, SF
+- characters: 작품의 등장인물(대사를 말하는 인물) 이름 목록. 한국어 이름만(역할 설명·괄호 제외). 화자로 등장하는 인물을 빠짐없이.
 - quote: 작품 원문에서 한 글자도 바꾸지 않고 발췌. 200자 이내.
 - script_excerpt: quote 앞뒤 2~5턴 포함, 인물명과 지문 그대로. 최소 1500자 이상
 - excerpt_description: 객관적 장면 설명만, 감상 배제. 500자 이내, 한국어로
 - keywords: 정확히 3개. 명사 또는 명사구. 문장·형용사 단독 금지
 - temperature: 1(차가움/단절) ~ 3(중립) ~ 5(따뜻함/포용)
 - intensity: 1(잔잔함/고요) ~ 3(보통) ~ 5(격렬함/폭발적)
+- significance: 이 명대사·장면이 작품 전체에서 갖는 의의. 80~200자. 가르치려 들지 말고 이 장면이 무엇을 말하는지 한두 문장으로 응축. 카드마다 다른 각도로(반복 금지). 모든 카드에 반드시 포함.
 - cards : 품질 우선, 무리해서 채우지 말 것
 - language : 언어는 한국어로 할  것
 
@@ -104,7 +108,8 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
     "format": "movie",
     "author": "류승완",
     "release_year": 2015,
-    "genres": ["액션", "드라마"]
+    "genres": ["액션", "드라마"],
+    "characters": ["서도철", "조태오"]
   },
   "cards": [
     {
@@ -113,7 +118,8 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
       "excerpt_description": "재벌 3세 조태오가 운전기사의 항의에 황당해하며 권력의 비대칭을 드러내는 장면.",
       "keywords": ["분노", "권력", "조롱"],
       "temperature": 1,
-      "intensity": 4
+      "intensity": 4,
+      "significance": "권력에 익숙한 자가 처음으로 거부당했을 때 분노가 아니라 황당함으로 반응한다는 점에서, 그 오만이 더 선명히 드러난다."
     }
   ]
 }
@@ -168,7 +174,8 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
     "format": "movie | drama | play | musical | opera 중 하나",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
-    "genres": ["장르1", "장르2"]
+    "genres": ["장르1", "장르2"],
+    "characters": ["등장인물1", "등장인물2"]
   },
   "cards": [
     {
@@ -237,6 +244,12 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 다음 13개 중 1~3개 선택:
 - 로맨스, 코미디, 스릴러/서스펜스, 드라마, 비극, 미스터리
 - 판타지, 역사극/시대극, 가족극, 액션, 호러, 느와르, SF
+
+### \`work.characters\`
+작품의 등장인물 이름 목록. 화자로 등장하는 인물을 빠짐없이.
+- 대본의 등장인물 페이지(등장인물/나오는 사람들)가 있으면 그것을 우선 사용.
+- 한국어 이름만. 역할 설명·괄호 주석 제외 (예: "공작 - 만토바" → "공작").
+- 합창/군중 같은 집단명도 화자로 나오면 포함.
 
 ### \`quote\`
 - 작품 원문에서 **한 글자도 바꾸지 않고** 발췌
@@ -420,7 +433,8 @@ quote 또는 script_excerpt에 한국어 욕설·비속어·강한 모욕 표현
     "format": "opera",
     "author": "주세페 베르디 / 프란체스코 마리아 피아베",
     "release_year": 1851,
-    "genres": ["비극", "드라마"]
+    "genres": ["비극", "드라마"],
+    "characters": ["리골레토", "질다", "공작", "보르사"]
   },
   "cards": [
     {
@@ -465,7 +479,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
     "format": "play",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
-    "genres": ["장르1", "장르2"]
+    "genres": ["장르1", "장르2"],
+    "characters": ["등장인물1", "등장인물2"]
   },
   "cards": [
     {
@@ -475,7 +490,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
       "excerpt_description": "이 장면이 어떤 상황인지에 대한 1-2줄 설명",
       "keywords": ["키워드1", "키워드2", "키워드3"],
       "temperature": 1~5 사이 정수,
-      "intensity": 1~5 사이 정수
+      "intensity": 1~5 사이 정수,
+      "significance": "이 명대사·장면이 작품 전체에서 갖는 의의"
     }
   ]
 }
@@ -489,6 +505,11 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
   · 아래 13개 중 1~3개 선택
     로맨스, 코미디, 스릴러/서스펜스, 드라마, 비극, 미스터리, 판타지,
     역사극/시대극, 가족극, 액션, 호러, 느와르, SF
+
+- characters
+  · 작품의 등장인물(대사를 말하는 인물) 이름 목록. 화자로 등장하는 인물을 빠짐없이.
+  · 한국어 이름만. 역할 설명·괄호 주석 제외 (예: "에밀리 (소녀)" → "에밀리").
+  · 대본에 등장인물 페이지가 있으면 그것을 우선 사용.
 
 - speaker_label
   · 화자명 + 괄호 안에 짧은 상황 단서 (괄호 안 3~15자)
@@ -574,6 +595,12 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
 - intensity
   · 1(잔잔함/고요) ~ 3(보통) ~ 5(격렬함/폭발적)
 
+- significance
+  · 이 명대사·장면이 작품 전체에서 갖는 의의. 80~200자.
+  · 가르치려 들지 말 것("관객은 ~를 느낀다" 금지). 이 장면이 무엇을 말하는지 한두 문장으로 응축.
+  · 카드마다 다른 각도·표현으로 (반복 금지).
+  · 모든 카드에 반드시 포함.
+
 - cards
   · 품질 우선
   · 5막 작품 기준 15~30장 권장
@@ -648,7 +675,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
     "format": "play",
     "author": "손튼 와일더",
     "release_year": 1938,
-    "genres": ["드라마", "가족극"]
+    "genres": ["드라마", "가족극"],
+    "characters": ["무대감독", "에밀리", "조지"]
   },
   "cards": [
     {
@@ -658,7 +686,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
       "excerpt_description": "3막에서 출산 중 죽은 에밀리가 무대감독의 허락으로 12살 생일을 다시 살아본 뒤, 산 자들의 무심함을 견디지 못하고 묘지로 돌아가며 묻는 장면.",
       "keywords": ["삶의 자각", "죽음", "일상의 무게"],
       "temperature": 3,
-      "intensity": 2
+      "intensity": 2,
+      "significance": "살아있는 동안에는 삶의 매 순간을 결코 알아채지 못한다는, 산 자에게 가장 잔인한 진실을 죽은 자의 눈으로 되비춘다."
     }
   ]
 }
@@ -674,7 +703,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
     "format": "play",
     "author": "윌리엄 셰익스피어",
     "release_year": null,
-    "genres": ["비극"]
+    "genres": ["비극"],
+    "characters": ["햄릿", "클로디어스", "거트루드", "오필리아"]
   },
   "cards": [
     {
@@ -684,7 +714,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
       "excerpt_description": "3막 3장. 햄릿을 영국으로 보내기로 결정한 직후 무릎 꿇고 회개를 시도하던 클로디어스가, 살인의 대가를 놓을 수 없어 기도가 형식뿐임을 자인하며 일어서는 장면.",
       "keywords": ["기도", "위선", "양심"],
       "temperature": 2,
-      "intensity": 2
+      "intensity": 2,
+      "significance": "용서를 구하는 말과 그 죄의 열매를 놓지 못하는 욕망이 한 몸에 있을 때, 회개는 입술에서 멈추고 끝내 하늘에 닿지 못한다."
     }
   ]
 }
@@ -700,7 +731,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
     "format": "play",
     "author": "안톤 체호프",
     "release_year": 1896,
-    "genres": ["드라마", "비극"]
+    "genres": ["드라마", "비극"],
+    "characters": ["트리고린", "니나", "트레플레프", "아르카지나"]
   },
   "cards": [
     {
@@ -710,7 +742,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
       "excerpt_description": "2막. 성공한 작가 트리고린이 작가를 꿈꾸는 니나에게 글쓰기의 영광이 아니라 강박을 고백하는 장면.",
       "keywords": ["글쓰기", "강박", "직업"],
       "temperature": 2,
-      "intensity": 3
+      "intensity": 3,
+      "significance": "예술이 영광이 아니라 멈출 수 없는 강박임을 성공한 자의 입으로 고백하게 함으로써, 창작에 덧씌운 낭만을 벗겨낸다."
     }
   ]
 }
@@ -838,4 +871,30 @@ Rules:
 <input>
 {{INPUT_JSON}}
 </input>
+`;
+
+// ---------------------------------------------------------------------------
+//  CHARACTERS_PROMPT
+//  대본 전문에서 등장인물 이름 목록만 추출. (기존 작품 백필 / 새 작품 보조용)
+//  - 본문에서 `{{SCRIPT_TEXT}}` 자리에 대본 텍스트가 치환됩니다.
+//  - 응답은 {"characters": ["이름", ...]} 형식의 JSON 한 덩어리.
+// ---------------------------------------------------------------------------
+export const CHARACTERS_PROMPT = `당신은 대본에서 등장인물 이름만 정확히 추출하는 도우미입니다.
+아래 대본을 읽고, 등장인물(대사를 말하는 인물·화자) 이름을 JSON으로만 출력하세요.
+
+규칙:
+- 대본에 등장인물 목록(등장인물 / 나오는 사람들 / CHARACTERS) 페이지가 있으면 그것을 우선 사용.
+- 없으면 대사를 말하는 화자 이름을 모두 수집.
+- 이름만 출력. 역할 설명·괄호 주석 제거 (예: "카르멘 - 집시 여인" → "카르멘").
+- 한국어로. 영문 이름은 통용되는 한글 표기로 (예: "Carmen" → "카르멘").
+- 합창단·군중 같은 집단명도 화자로 등장하면 포함.
+- 중복 없이. 다른 설명·마크다운 없이 JSON 한 덩어리만 출력.
+
+출력 형식:
+{"characters": ["이름1", "이름2", "이름3"]}
+
+대본:
+"""
+{{SCRIPT_TEXT}}
+"""
 `;

@@ -93,7 +93,7 @@ async function loadLibrary() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year, characters)')
       .order('card_id', { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -586,8 +586,8 @@ function buildViewNode(card) {
     .filter(Boolean).join(' · ');
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
-  node.querySelector('.lib-quote').textContent = card.quote ? `"${cleanForDisplay(card.quote)}"` : '';
-  node.querySelector('.lib-excerpt').innerHTML = boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''));
+  node.querySelector('.lib-quote').textContent = card.quote ? `"${breakQuoteByBreath(cleanForDisplay(card.quote))}"` : '';
+  node.querySelector('.lib-excerpt').innerHTML = boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters);
   node.querySelector('.lib-description').textContent = cleanForDisplay(card.excerpt_description || '');
 
   const kwEl = node.querySelector('.lib-keywords');
@@ -904,26 +904,34 @@ function cleanForDisplay(s) {
     .trim();
 }
 
-// cleanForDisplay로 정리된 발췌문에서 '화자 이름 줄'만 <strong>으로 감싼다.
-// 정리 후 텍스트는 "이름 / 대사 / (빈 줄) / 이름 / 대사..." 구조이므로,
-// 블록의 첫 줄이면서 짧고 종결부호가 없는 줄을 화자로 본다. (지문(괄호)·일반 대사는 제외)
+// 발췌문에서 '등장인물 이름 줄'만 <strong>으로 감싼다.
+// characterNames = 그 작품의 등장인물 이름 목록(works.characters).
+//  - 목록이 있으면: 그 이름과 정확히 일치하는 줄만 볼드 (가사·대사 오탐 없음).
+//  - 목록이 없으면(아직 백필 안 됨/null): 볼드하지 않음 (오탐 방지).
 // innerHTML에 넣기 때문에 모든 줄을 HTML 이스케이프한다.
-function boldSpeakerLines(cleanedText) {
-  const lines = String(cleanedText ?? '').split('\n');
-  return lines.map((line, i) => {
+function boldSpeakerLines(cleanedText, characterNames) {
+  const text = String(cleanedText ?? '');
+  const names = Array.isArray(characterNames) ? characterNames : [];
+  if (names.length === 0) return escapeHtml(text);
+
+  const nameSet = new Set(names.map((n) => String(n).trim()).filter(Boolean));
+  return text.split('\n').map((line) => {
     const safe = escapeHtml(line);
     const t = line.trim();
-    const prevBlank = i === 0 || lines[i - 1].trim() === '';
-    const nextHasText = (lines[i + 1] || '').trim() !== '';
-    const looksLikeSpeaker =
-      t &&
-      prevBlank &&            // 블록의 첫 줄
-      nextHasText &&          // 바로 아래에 대사가 있음
-      !t.startsWith('(') &&   // 지문이 아님
-      t.length <= 15 &&       // 이름은 짧다
-      !/[.?!…,]$/.test(t);    // 종결부호로 끝나지 않음
-    return looksLikeSpeaker ? `<strong>${safe}</strong>` : safe;
+    // 괄호 지문 단서가 붙은 경우 이름 부분만 떼서 비교 ("카르멘 (살짝)" → "카르멘")
+    const namePart = t.split('(')[0].trim();
+    const isSpeaker = !!t && (nameSet.has(t) || nameSet.has(namePart));
+    return isSpeaker ? `<strong>${safe}</strong>` : safe;
   }).join('\n');
+}
+
+// 명대사(quote)를 호흡 단위(쉼표·마침표·물음표·느낌표) 뒤에서 줄바꿈해 가독성을 높인다.
+// 화면 표시용 — 저장된 데이터는 바뀌지 않음. (.lib-quote 는 whitespace-pre-wrap 필요)
+function breakQuoteByBreath(text) {
+  return String(text ?? '')
+    .replace(/([,，.。?!？！…])[ \t]+/g, '$1\n')
+    .replace(/\n+$/g, '')
+    .trim();
 }
 
 function showMobilePreview(card) {
@@ -1006,7 +1014,7 @@ function renderAppCardHtml(card) {
         <p class="app-work-title">${escapeHtml(workLine)}</p>
         <p class="app-quote">${escapeHtml(cleanQuote)}</p>
         ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(cleanForDisplay(card.excerpt_description))}</p>` : ''}
-        <div class="app-excerpt">${boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''))}</div>
+        <div class="app-excerpt">${boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters)}</div>
         ${keywords ? `<div class="app-keywords">${keywords}</div>` : ''}
         <div class="app-meters">
           <div class="app-meter">
