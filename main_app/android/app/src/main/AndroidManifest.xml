@@ -24,6 +24,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Home-screen widget — Daily Script -->
+        <receiver
+            android:name=".widget.DailyScriptWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/daily_script_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>

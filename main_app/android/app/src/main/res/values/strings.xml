@@ -32,4 +32,7 @@
     <string name="archive_volume_count">소장 %1$d권</string>
     <string name="archive_card_count">명대사 %1$d편</string>
     <string name="loading">Loading…</string>
+    <string name="widget_label">Daily Script</string>
+    <string name="widget_description">매일의 한 줄을 홈 화면에서</string>
+    <string name="widget_loading">오늘의 한 줄을 불러오는 중…</string>
 </resources>
