@@ -114,7 +114,7 @@ async function loadAllCards() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('cards')
-    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year)')
+    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year, characters)')
     .order('card_id', { ascending: false })
     .limit(500);
   if (error) throw error;
@@ -126,7 +126,7 @@ async function loadBookmarks() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('user_bookmarks')
-    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, works(work_id, title, format, author, release_year))')
+    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false });
   if (error) {
@@ -181,7 +181,7 @@ async function toggleBookmark(cardId, btnElement) {
     const { data, error } = await sb
       .from('user_bookmarks')
       .insert({ user_id: state.userId, card_id: cardId })
-      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, works(work_id, title, format, author, release_year))')
+      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
       .single();
     if (error) {
       state.bookmarkedIds.delete(cardId);
@@ -379,9 +379,7 @@ function openCardModal(card) {
 
     <div class="divider mb-6"></div>
 
-    <blockquote class="serif italic text-[20px] leading-[1.55] text-espresso mb-7">
-      "${escapeHtml(cleanQuote(card.quote))}"
-    </blockquote>
+    <blockquote class="serif italic text-[20px] leading-[1.55] text-espresso mb-7 whitespace-pre-wrap">"${escapeHtml(breakQuoteByBreath(cleanQuote(card.quote)))}"</blockquote>
 
     ${card.excerpt_description ? `
       <section class="mb-7">
@@ -393,7 +391,14 @@ function openCardModal(card) {
     ${card.script_excerpt ? `
       <section class="mb-7">
         <p class="label-eyebrow mb-2">Script Excerpt</p>
-        <pre class="text-[13px] font-mono whitespace-pre-wrap text-roast leading-relaxed py-3" style="border-top:0.5px solid #C9B89A;border-bottom:0.5px solid #C9B89A;">${escapeHtml(card.script_excerpt)}</pre>
+        <pre class="text-[13px] font-mono whitespace-pre-wrap text-roast leading-relaxed py-3" style="border-top:0.5px solid #C9B89A;border-bottom:0.5px solid #C9B89A;">${boldSpeakerLines(cleanForDisplay(card.script_excerpt), w.characters)}</pre>
+      </section>
+    ` : ''}
+
+    ${card.significance ? `
+      <section class="mb-7">
+        <p class="label-eyebrow mb-2">Significance</p>
+        <p class="text-[14px] text-roast leading-relaxed whitespace-pre-wrap">${escapeHtml(card.significance)}</p>
       </section>
     ` : ''}
 
@@ -467,6 +472,57 @@ function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 발췌문 표시 정리 (콜론/em-dash 정규화, 화자 줄 앞 빈 줄) — 관리자 웹 library.js와 동일
+function cleanForDisplay(s) {
+  let text = String(s ?? '');
+  text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
+  const speakers = new Set();
+  const colonRegex = /^([^:：()\n]{1,14})[:：][ \t]*/gm;
+  let m;
+  while ((m = colonRegex.exec(text)) !== null) {
+    const name = m[1].trim();
+    if (name) speakers.add(name);
+  }
+  text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
+  const lines = text.split('\n');
+  const out = [];
+  let firstSpeaker = false;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line && speakers.has(line)) {
+      if (firstSpeaker && out.length > 0 && out[out.length - 1] !== '') out.push('');
+      out.push(line);
+      firstSpeaker = true;
+    } else {
+      out.push(raw);
+    }
+  }
+  return out.join('\n').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// 작품 등장인물 목록(works.characters)에 있는 이름과 일치하는 줄만 <strong>으로. 목록 없으면 볼드 안 함.
+function boldSpeakerLines(cleanedText, characterNames) {
+  const text = String(cleanedText ?? '');
+  const names = Array.isArray(characterNames) ? characterNames : [];
+  if (names.length === 0) return escapeHtml(text);
+  const nameSet = new Set(names.map((n) => String(n).trim()).filter(Boolean));
+  return text.split('\n').map((line) => {
+    const safe = escapeHtml(line);
+    const t = line.trim();
+    const namePart = t.split('(')[0].trim();
+    const isSpeaker = !!t && (nameSet.has(t) || nameSet.has(namePart));
+    return isSpeaker ? `<strong>${safe}</strong>` : safe;
+  }).join('\n');
+}
+
+// 명대사를 호흡 단위(쉼표·마침표 등) 뒤에서 줄바꿈 (표시용)
+function breakQuoteByBreath(text) {
+  return String(text ?? '')
+    .replace(/([,，.。?!？！…])[ \t]+/g, '$1\n')
+    .replace(/\n+$/g, '')
+    .trim();
 }
 
 let toastTimer = null;
