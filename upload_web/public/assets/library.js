@@ -743,14 +743,32 @@ function cleanForDisplay(s) {
   // 1) em-dash 변형 일괄 제거 (regular hyphen은 유지)
   text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
 
-  // 2) 줄 머리의 "이름:" 패턴에서 이름 후보 수집 (공백 포함 1~14자)
+  // 2) 화자 이름 후보 수집
   const speakers = new Set();
+
+  // (a) 콜론 형식: "이름:" 패턴 (공백 포함 1~14자)
   const colonRegex = /^([^:：()\n]{1,14})[:：][ \t]*/gm;
   let m;
   while ((m = colonRegex.exec(text)) !== null) {
     const name = m[1].trim();
     if (name) speakers.add(name);
   }
+
+  // (b) 콜론 없는 줄: 짧고 글자만으로 된 줄이 2번 이상 등장하면 화자로 간주
+  //     (이미 시스템 프롬프트로 화자\n대사 형식으로 저장된 카드 대응)
+  const lineCounts = {};
+  const allLines = text.split(/\r?\n/);
+  for (const raw of allLines) {
+    const line = raw.trim();
+    if (!line || line.length > 14) continue;
+    // 1~14자, 한글/영문/숫자/공백만, 끝글자는 알파벳/한글 (구두점 없음)
+    if (/^[가-힣A-Za-z][가-힣A-Za-z0-9\s]{0,12}[가-힣A-Za-z0-9]$|^[가-힣A-Za-z]$/.test(line)) {
+      lineCounts[line] = (lineCounts[line] || 0) + 1;
+    }
+  }
+  Object.entries(lineCounts).forEach(([word, count]) => {
+    if (count >= 2) speakers.add(word);
+  });
 
   // 3) "이름:" → "이름\n" (콜론 제거, 다음 줄에 대사 오도록)
   text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
@@ -762,7 +780,7 @@ function cleanForDisplay(s) {
   for (const raw of lines) {
     const line = raw.trim();
     if (line && speakers.has(line)) {
-      if (firstSpeakerSeen && out.length > 0 && out[out.length - 1] !== '') {
+      if (firstSpeakerSeen && out.length > 0 && out[out.length - 1].trim() !== '') {
         out.push(''); // 화자 블록 사이 빈 줄
       }
       out.push(line);
