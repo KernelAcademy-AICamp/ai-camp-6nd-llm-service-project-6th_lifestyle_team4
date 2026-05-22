@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#FAF8F2"/>
+  <rect x="48" y="48" width="416" height="416" fill="#0E0C0A"/>
+  <g fill="#FAF8F2" font-family="Georgia, 'EB Garamond', 'Noto Serif KR', serif" text-anchor="middle">
+    <text x="256" y="200" font-size="56" font-weight="700" letter-spacing="2">Daily</text>
+    <text x="256" y="280" font-size="56" font-weight="700" letter-spacing="2">Script</text>
+    <line x1="180" y1="320" x2="332" y2="320" stroke="#D85A30" stroke-width="3"/>
+    <text x="256" y="385" font-size="32" font-weight="500" font-style="italic" fill="#C9B89A">오늘의 명대사</text>
+  </g>
+</svg>

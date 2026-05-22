@@ -5,171 +5,276 @@
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
 <title>Daily Script — 오늘의 명대사</title>
 <link rel="manifest" href="/manifest.webmanifest" />
-<meta name="theme-color" content="#3525cd" />
+<meta name="theme-color" content="#0e0c0a" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Daily Script" />
-<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-<link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+<link rel="apple-touch-icon" href="/m/icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/m/icons/icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg" />
 <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif+KR:wght@400;500;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Noto+Serif+KR:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <script>
   tailwind.config = {
     theme: {
       extend: {
         colors: {
-          'paper': '#ffffff',
-          'ink': '#1a1a1a',
-          'accent': '#3525cd',
-          'accent-soft': '#eeebff',
-          'border-soft': '#e6e4ee',
-          'muted': '#646272',
-          'card-bg': '#fafaff',
-          'love': '#e11d48',
+          // Long Black palette
+          'espresso': '#0E0C0A',
+          'roast':    '#2C2620',
+          'walnut':   '#6B5D4F',
+          'paper':    '#FAF8F2',
+          'latte':    '#E8E1D3',
+          'sand':     '#C9B89A',
+          'highlight':'#F4C20D',
+          'cta':      '#D85A30',
         },
         fontFamily: {
-          'sans': ['Inter', 'system-ui', 'sans-serif'],
-          'serif': ['Noto Serif KR', 'serif'],
+          'serif': ['EB Garamond', 'Noto Serif KR', 'Georgia', 'serif'],
+          'sans':  ['Hanken Grotesk', 'system-ui', 'sans-serif'],
+          'mono':  ['ui-monospace', 'SF Mono', 'monospace'],
+        },
+        borderRadius: {
+          DEFAULT: '0',  // sharp & architectural
+          'sm': '0',
+          'md': '0',
+          'lg': '0',
         },
       },
     },
   };
 </script>
 <style>
-  body { font-family: 'Inter', 'Noto Serif KR', sans-serif; }
-  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
-  .icon-filled { font-variation-settings: 'FILL' 1, 'wght' 500; }
-  .quote-hero {
-    font-family: 'Noto Serif KR', serif;
-    font-size: 28px;
+  body {
+    font-family: 'Hanken Grotesk', 'Noto Serif KR', system-ui, sans-serif;
+    background: #FAF8F2;
+    color: #0E0C0A;
+    -webkit-font-smoothing: antialiased;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    vertical-align: middle;
+  }
+  .icon-filled { font-variation-settings: 'FILL' 1, 'wght' 400; }
+  .serif { font-family: 'EB Garamond', 'Noto Serif KR', serif; }
+  .display-text {
+    font-family: 'EB Garamond', 'Noto Serif KR', serif;
     font-weight: 500;
-    line-height: 1.55;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+  .quote-hero {
+    font-family: 'EB Garamond', 'Noto Serif KR', serif;
+    font-style: italic;
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.45;
     word-break: keep-all;
     text-wrap: balance;
+    color: #0E0C0A;
   }
-  @media (max-width: 380px) { .quote-hero { font-size: 24px; } }
-  .nav-btn { transition: color 0.15s; color: #646272; }
-  .nav-btn.active { color: #3525cd; }
+  @media (max-width: 380px) { .quote-hero { font-size: 22px; } }
+  .label-eyebrow {
+    font-family: 'Hanken Grotesk', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 10px;
+    font-weight: 700;
+    color: #6B5D4F;
+  }
+  .chip {
+    display: inline-flex; align-items: center;
+    padding: 4px 10px;
+    border: 0.5px solid #6B5D4F;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #2C2620;
+    background: transparent;
+  }
+  .chip-filled {
+    background: #0E0C0A; color: #FAF8F2; border-color: #0E0C0A;
+  }
+  .divider {
+    height: 0.5px; background: #C9B89A; opacity: 0.8;
+  }
+  .card-frame {
+    background: #FAF8F2;
+    border: 0.5px solid #E8E1D3;
+    transition: border-color 0.2s;
+  }
+  .card-frame:active { border-color: #C9B89A; }
+  .nav-btn { color: #6B5D4F; transition: color 0.15s; }
+  .nav-btn.active { color: #0E0C0A; }
   .nav-btn.active .material-symbols-outlined { font-variation-settings: 'FILL' 1, 'wght' 500; }
-  .card-row {
-    background: white;
-    border: 1px solid #e6e4ee;
-    border-radius: 16px;
-    padding: 16px;
-    transition: transform 0.15s, box-shadow 0.15s;
-  }
-  .card-row:active { transform: scale(0.98); }
+  .nav-btn.active .nav-label { font-weight: 700; color: #0E0C0A; }
   .bookmark-btn { transition: transform 0.15s; }
   .bookmark-btn:active { transform: scale(0.85); }
   .modal-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    position: fixed; inset: 0; background: rgba(14, 12, 10, 0.65);
     display: flex; align-items: flex-end; justify-content: center;
     z-index: 100; opacity: 0; transition: opacity 0.2s;
   }
   .modal-backdrop.open { opacity: 1; }
   .modal-sheet {
-    background: white; width: 100%; max-width: 600px;
-    border-radius: 24px 24px 0 0;
-    max-height: 90vh; overflow-y: auto;
-    transform: translateY(100%); transition: transform 0.25s ease-out;
+    background: #FAF8F2; width: 100%; max-width: 600px;
+    max-height: 92vh; overflow-y: auto;
+    transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border-top: 2px solid #0E0C0A;
   }
   .modal-backdrop.open .modal-sheet { transform: translateY(0); }
   @keyframes spin { to { transform: rotate(360deg); } }
   .spinner {
     width: 28px; height: 28px;
-    border: 3px solid #e6e4ee; border-top-color: #3525cd;
+    border: 2px solid #E8E1D3; border-top-color: #0E0C0A;
     border-radius: 50%; animation: spin 0.7s linear infinite;
   }
+  .cta-btn {
+    background: #0E0C0A; color: #FAF8F2;
+    font-family: 'Hanken Grotesk', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 14px 20px;
+    border: none;
+    cursor: pointer;
+  }
+  .cta-btn-ghost {
+    background: transparent; color: #0E0C0A;
+    border: 0.5px solid #0E0C0A;
+    font-family: 'Hanken Grotesk', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 14px 20px;
+    cursor: pointer;
+  }
+  /* line-clamp utilities */
+  .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
 </head>
-<body class="bg-paper text-ink min-h-screen pb-20">
+<body class="bg-paper text-espresso min-h-screen pb-24">
 
-<header class="sticky top-0 z-40 bg-paper/95 backdrop-blur border-b border-border-soft">
-  <div class="max-w-screen-md mx-auto px-4 py-3 flex items-center justify-between">
-    <div>
-      <h1 id="page-title" class="text-lg font-extrabold tracking-tight">오늘의 명대사</h1>
-      <p id="page-sub" class="text-xs text-muted mt-0.5"></p>
+<!-- ===== Top Bar ===== -->
+<header class="sticky top-0 z-40 bg-paper/95 backdrop-blur">
+  <div class="max-w-screen-md mx-auto px-5 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="display-text text-[22px] tracking-tight">Daily Script</span>
     </div>
-    <button data-install-app data-install-always class="hidden items-center gap-1 px-3 py-1.5 rounded-full border border-accent text-accent text-xs font-semibold">
-      <span class="material-symbols-outlined" style="font-size:16px;">install_mobile</span>
-      설치
+    <button data-install-app data-install-always class="hidden items-center gap-1 px-3 py-1.5 border border-espresso text-espresso text-[10px] font-bold uppercase tracking-widest">
+      <span class="material-symbols-outlined" style="font-size:14px;">install_mobile</span>
+      Install
     </button>
   </div>
+  <div class="divider"></div>
 </header>
 
-<main class="max-w-screen-md mx-auto px-4 pt-6">
+<main class="max-w-screen-md mx-auto px-5">
 
   <!-- ===== Home view ===== -->
-  <section id="view-home">
-    <div id="home-loading" class="flex flex-col items-center justify-center py-20">
+  <section id="view-home" class="pt-8">
+    <div id="home-loading" class="flex flex-col items-center justify-center py-24">
       <div class="spinner"></div>
-      <p class="text-sm text-muted mt-4">오늘의 카드를 불러오는 중…</p>
+      <p class="text-xs text-walnut mt-5 uppercase tracking-widest">Loading</p>
     </div>
 
-    <article id="home-card" class="hidden bg-card-bg border border-border-soft rounded-3xl p-7 shadow-sm">
-      <div class="flex items-center justify-between mb-4">
-        <span class="text-xs font-semibold text-muted uppercase tracking-wider">Today</span>
-        <button id="home-bookmark" class="bookmark-btn p-2 -m-2" aria-label="북마크">
-          <span class="material-symbols-outlined text-2xl text-muted">bookmark</span>
+    <article id="home-card" class="hidden">
+      <div class="flex items-center justify-between mb-5">
+        <p class="label-eyebrow" id="home-date">— · — · ——</p>
+        <button id="home-shuffle" class="bookmark-btn p-1 -m-1" aria-label="셔플">
+          <span class="material-symbols-outlined text-walnut" style="font-size:20px;">refresh</span>
         </button>
       </div>
-      <p id="home-quote" class="quote-hero"></p>
-      <div id="home-work" class="mt-6 text-sm text-muted flex flex-wrap items-center gap-x-2"></div>
-      <button id="home-detail-btn"
-              class="mt-6 w-full bg-ink text-paper py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-1">
-        자세히 보기
-        <span class="material-symbols-outlined" style="font-size:18px;">arrow_forward</span>
-      </button>
+
+      <h1 class="display-text text-[44px] mb-8 leading-[1.05]">오늘의<br/>명대사</h1>
+
+      <div class="card-frame p-6">
+        <div class="flex items-start justify-between mb-6 gap-3">
+          <div id="home-chips" class="flex flex-wrap gap-2"></div>
+          <button id="home-bookmark" class="bookmark-btn p-1 -m-1 shrink-0" aria-label="북마크">
+            <span class="material-symbols-outlined text-walnut" style="font-size:22px;">bookmark</span>
+          </button>
+        </div>
+
+        <p id="home-quote" class="quote-hero mb-7"></p>
+
+        <div class="divider mb-5"></div>
+
+        <div id="home-work" class="text-xs text-walnut mb-6 leading-relaxed"></div>
+
+        <button id="home-detail-btn" class="cta-btn w-full flex items-center justify-center gap-2">
+          Read Full Script
+          <span class="material-symbols-outlined" style="font-size:14px;">arrow_forward</span>
+        </button>
+      </div>
     </article>
 
-    <button id="home-shuffle" class="mt-4 w-full bg-white border border-border-soft py-3 rounded-xl text-sm font-semibold text-muted flex items-center justify-center gap-1 hidden">
-      <span class="material-symbols-outlined" style="font-size:18px;">shuffle</span>
-      다른 카드 보기
-    </button>
-
-    <div id="home-empty" class="hidden text-center py-16">
-      <p class="text-sm text-muted">아직 카드가 없습니다.</p>
+    <div id="home-empty" class="hidden text-center py-24">
+      <p class="label-eyebrow mb-3">No Cards Yet</p>
+      <p class="serif italic text-walnut">아직 카드가 없습니다.</p>
     </div>
+
+    <!-- 지난 기록 -->
+    <section id="home-recent-section" class="hidden mt-16">
+      <div class="divider mb-8"></div>
+      <div class="flex items-end justify-between mb-6">
+        <h2 class="display-text text-[28px]">지난 기록</h2>
+        <button id="goto-bookmarks" class="label-eyebrow hover:text-espresso">View Archive →</button>
+      </div>
+      <div id="home-recent-list" class="flex flex-col"></div>
+    </section>
   </section>
 
   <!-- ===== Cards view ===== -->
-  <section id="view-cards" class="hidden">
-    <div class="mb-3">
-      <input id="cards-search" type="search" placeholder="작품·인용 검색…"
-             class="w-full px-4 py-2.5 rounded-xl border border-border-soft text-sm focus:outline-none focus:border-accent" />
+  <section id="view-cards" class="hidden pt-8">
+    <p class="label-eyebrow mb-2">Collection</p>
+    <h1 class="display-text text-[40px] mb-8 leading-[1.05]">카드<br/>둘러보기</h1>
+
+    <div class="mb-6">
+      <input id="cards-search" type="search" placeholder="작품·인용·작가 검색"
+             class="w-full px-0 py-3 bg-transparent border-0 border-b border-walnut text-base focus:outline-none focus:border-espresso placeholder:text-walnut" />
     </div>
-    <div id="cards-status" class="text-xs text-muted mb-2"></div>
-    <div id="cards-list" class="flex flex-col gap-3"></div>
+    <p id="cards-status" class="label-eyebrow mb-6"></p>
+    <div id="cards-list" class="flex flex-col"></div>
   </section>
 
   <!-- ===== Bookmarks view ===== -->
-  <section id="view-bookmarks" class="hidden">
-    <div id="bookmarks-status" class="text-xs text-muted mb-3"></div>
-    <div id="bookmarks-list" class="flex flex-col gap-3"></div>
-    <div id="bookmarks-empty" class="hidden text-center py-16">
-      <span class="material-symbols-outlined text-5xl text-border-soft">bookmark_border</span>
-      <p class="text-sm text-muted mt-3">아직 담은 카드가 없어요</p>
-      <p class="text-xs text-muted mt-1">카드 우상단의 북마크 아이콘으로 담아보세요.</p>
+  <section id="view-bookmarks" class="hidden pt-8">
+    <p class="label-eyebrow mb-2">My Archive</p>
+    <h1 class="display-text text-[40px] mb-8 leading-[1.05]">수집한<br/>대본</h1>
+
+    <p id="bookmarks-status" class="label-eyebrow mb-6"></p>
+    <div id="bookmarks-list" class="flex flex-col"></div>
+
+    <div id="bookmarks-empty" class="hidden text-center py-20">
+      <span class="material-symbols-outlined text-latte" style="font-size:64px;">bookmark</span>
+      <p class="label-eyebrow mt-4 mb-2">Empty Archive</p>
+      <p class="serif italic text-walnut">아직 담은 카드가 없어요.</p>
+      <p class="text-xs text-walnut mt-2">카드 옆 ♡ 아이콘으로 담아보세요.</p>
     </div>
   </section>
 
 </main>
 
 <!-- ===== Bottom nav ===== -->
-<nav class="fixed bottom-0 left-0 right-0 bg-paper/95 backdrop-blur border-t border-border-soft z-40">
+<nav class="fixed bottom-0 left-0 right-0 bg-paper/95 backdrop-blur z-40">
+  <div class="divider"></div>
   <div class="max-w-screen-md mx-auto grid grid-cols-3">
-    <button data-nav="home" class="nav-btn active flex flex-col items-center py-2.5 gap-0.5">
-      <span class="material-symbols-outlined" style="font-size:24px;">today</span>
-      <span class="text-[10px] font-semibold">오늘</span>
+    <button data-nav="home" class="nav-btn active flex flex-col items-center py-3 gap-1">
+      <span class="material-symbols-outlined" style="font-size:22px;">menu_book</span>
+      <span class="nav-label text-[10px] uppercase tracking-widest font-semibold">Today</span>
     </button>
-    <button data-nav="cards" class="nav-btn flex flex-col items-center py-2.5 gap-0.5">
-      <span class="material-symbols-outlined" style="font-size:24px;">collections_bookmark</span>
-      <span class="text-[10px] font-semibold">카드</span>
+    <button data-nav="cards" class="nav-btn flex flex-col items-center py-3 gap-1">
+      <span class="material-symbols-outlined" style="font-size:22px;">grid_view</span>
+      <span class="nav-label text-[10px] uppercase tracking-widest font-semibold">Cards</span>
     </button>
-    <button data-nav="bookmarks" class="nav-btn flex flex-col items-center py-2.5 gap-0.5">
-      <span class="material-symbols-outlined" style="font-size:24px;">bookmark</span>
-      <span class="text-[10px] font-semibold">북마크</span>
+    <button data-nav="bookmarks" class="nav-btn flex flex-col items-center py-3 gap-1">
+      <span class="material-symbols-outlined" style="font-size:22px;">bookmark</span>
+      <span class="nav-label text-[10px] uppercase tracking-widest font-semibold">Archive</span>
     </button>
   </div>
 </nav>
@@ -177,18 +282,19 @@
 <!-- ===== Detail modal ===== -->
 <div id="card-modal" class="modal-backdrop hidden">
   <div class="modal-sheet">
-    <div class="sticky top-0 bg-white border-b border-border-soft px-5 py-3 flex items-center justify-between">
-      <span class="text-sm font-semibold text-muted">카드 상세</span>
+    <div class="sticky top-0 bg-paper px-5 py-3 flex items-center justify-between">
+      <span class="label-eyebrow">Script Artifact</span>
       <button id="modal-close" class="p-1 -m-1" aria-label="닫기">
-        <span class="material-symbols-outlined">close</span>
+        <span class="material-symbols-outlined text-espresso">close</span>
       </button>
     </div>
+    <div class="divider"></div>
     <div id="modal-body" class="p-6"></div>
   </div>
 </div>
 
 <!-- ===== Toast ===== -->
-<div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 hidden px-4 py-2 bg-ink text-paper text-sm rounded-full shadow-lg z-50"></div>
+<div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-28 hidden px-4 py-2 bg-espresso text-paper text-xs uppercase tracking-widest font-semibold z-50"></div>
 
 <script type="module" src="/m/assets/m-app.js"></script>
 <script type="module" src="/assets/pwa.js"></script>
