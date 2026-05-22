@@ -1,6 +1,7 @@
 import Foundation
 
 struct WidgetCard {
+    let cardId: Int
     let quote: String
     let workTitle: String
 }
@@ -17,7 +18,7 @@ enum WidgetDataLoader {
             resolvingAgainstBaseURL: false
         )!
         components.queryItems = [
-            URLQueryItem(name: "select", value: "quote,works(title)"),
+            URLQueryItem(name: "select", value: "card_id,quote,works(title)"),
             URLQueryItem(name: "order", value: "card_id.desc"),
             URLQueryItem(name: "limit", value: "1"),
         ]
@@ -28,6 +29,7 @@ enum WidgetDataLoader {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         struct Row: Decodable {
+            let cardId: Int
             let quote: String
             let works: Work?
             struct Work: Decodable { let title: String }
@@ -38,9 +40,11 @@ enum WidgetDataLoader {
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 return nil
             }
-            let rows = try JSONDecoder().decode([Row].self, from: data)
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let rows = try decoder.decode([Row].self, from: data)
             guard let row = rows.first else { return nil }
-            return WidgetCard(quote: row.quote, workTitle: row.works?.title ?? "")
+            return WidgetCard(cardId: row.cardId, quote: row.quote, workTitle: row.works?.title ?? "")
         } catch {
             return nil
         }

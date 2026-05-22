@@ -45,7 +45,7 @@ struct CurtaincallEntry: TimelineEntry {
 }
 
 struct Provider: TimelineProvider {
-    private static let sample = WidgetCard(quote: "나 날고 있어!", workTitle: "Titanic")
+    private static let sample = WidgetCard(cardId: 1, quote: "나 날고 있어!", workTitle: "Titanic")
 
     func placeholder(in context: Context) -> CurtaincallEntry {
         CurtaincallEntry(date: .now, card: Provider.sample)
@@ -92,6 +92,12 @@ struct CurtaincallWidgetEntryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .containerBackground(bgColor, for: .widget)
+        .widgetURL(deepLinkURL)
+    }
+
+    private var deepLinkURL: URL? {
+        guard let id = entry.card?.cardId else { return nil }
+        return URL(string: "curtaincall://card/\(id)")
     }
 
     private var displayQuote: String {
@@ -118,6 +124,6 @@ struct CurtaincallWidget: Widget {
 #Preview(as: .systemMedium) {
     CurtaincallWidget()
 } timeline: {
-    CurtaincallEntry(date: .now, card: WidgetCard(quote: "나 날고 있어!", workTitle: "Titanic"))
+    CurtaincallEntry(date: .now, card: WidgetCard(cardId: 1, quote: "나 날고 있어!", workTitle: "Titanic"))
     CurtaincallEntry(date: .now, card: nil)
 }
