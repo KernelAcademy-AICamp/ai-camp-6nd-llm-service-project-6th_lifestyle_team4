@@ -1,10 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Paper background (full bleed for maskable) -->
   <rect width="512" height="512" fill="#FAF8F2"/>
-  <rect x="48" y="48" width="416" height="416" fill="#0E0C0A"/>
-  <g fill="#FAF8F2" font-family="Georgia, 'EB Garamond', 'Noto Serif KR', serif" text-anchor="middle">
-    <text x="256" y="200" font-size="56" font-weight="700" letter-spacing="2">Daily</text>
-    <text x="256" y="280" font-size="56" font-weight="700" letter-spacing="2">Script</text>
-    <line x1="180" y1="320" x2="332" y2="320" stroke="#D85A30" stroke-width="3"/>
-    <text x="256" y="385" font-size="32" font-weight="500" font-style="italic" fill="#C9B89A">오늘의 명대사</text>
+
+  <!-- Book block (closed book, viewed from front) -->
+  <!-- Cover -->
+  <rect x="128" y="96" width="256" height="320" rx="6" ry="6" fill="#0E0C0A"/>
+
+  <!-- Spine shadow on right (suggests depth) -->
+  <rect x="378" y="96" width="6" height="320" fill="#2C2620"/>
+
+  <!-- Page edges (left side, peeking out) -->
+  <rect x="124" y="104" width="8" height="304" fill="#FAF8F2"/>
+  <rect x="126" y="112" width="4" height="288" fill="#E8E1D3"/>
+  <rect x="128" y="120" width="2" height="272" fill="#C9B89A"/>
+
+  <!-- Bookmark ribbon hanging from top of cover -->
+  <path d="M 304 96 L 304 196 L 282 174 L 260 196 L 260 96 Z" fill="#D85A30"/>
+
+  <!-- Title typography on cover -->
+  <g fill="#FAF8F2" font-family="Georgia, 'Times New Roman', serif" text-anchor="middle">
+    <text x="256" y="268" font-size="44" font-weight="400" letter-spacing="2">Daily</text>
+    <text x="256" y="316" font-size="44" font-weight="400" letter-spacing="2">Script</text>
   </g>
+
+  <!-- Orange rule line under title -->
+  <line x1="208" y1="340" x2="304" y2="340" stroke="#D85A30" stroke-width="2"/>
+
+  <!-- Author plate -->
+  <text x="256" y="372" fill="#C9B89A" font-family="Georgia, serif" font-size="16"
+        font-style="italic" text-anchor="middle" letter-spacing="3">오늘의 명대사</text>
 </svg>

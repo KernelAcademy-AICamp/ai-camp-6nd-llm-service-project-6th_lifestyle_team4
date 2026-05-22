@@ -76,6 +76,12 @@ const displayTitle = (s) => TITLE_DISPLAY_ALIASES[String(s||'').trim().toLowerCa
     await Promise.all([loadAllCards(), loadBookmarks()]);
     renderHome();
     setView(getInitialView());
+    // 데이터 변경을 실시간으로 받아 즉시 반영
+    subscribeToChanges();
+    // 앱이 포그라운드로 돌아올 때마다 최신화 (실시간 누락 안전망)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refreshAll();
+    });
   } catch (err) {
     console.error('[m] bootstrap failed:', err);
     homeLoading.innerHTML = `<p class="t-body-md c-cta">초기화 실패: ${escapeHtml(err.message || String(err))}</p>`;
@@ -87,6 +93,63 @@ function getInitialView() {
   return ['home','archive','settings'].includes(hash) ? hash : 'home';
 }
 window.addEventListener('hashchange', () => setView(getInitialView()));
+
+// ---------- Realtime ----------
+// Supabase Postgres Changes — cards/works/user_bookmarks 변경을 실시간으로 듣고
+// 영향받는 데이터를 다시 불러와 화면을 갱신한다.
+let realtimeChannel = null;
+async function subscribeToChanges() {
+  try {
+    const sb = await getSupabase();
+    if (realtimeChannel) {
+      await sb.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+    realtimeChannel = sb
+      .channel('ds-public-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, async () => {
+        await loadAllCards();
+        rerenderActiveView();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'works' }, async () => {
+        // 작품 메타가 바뀌면 카드 join도 영향 받으므로 카드도 다시 로드
+        await loadAllCards();
+        rerenderActiveView();
+      })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'user_bookmarks', filter: state.userId ? `user_id=eq.${state.userId}` : undefined },
+        async () => {
+          await loadBookmarks();
+          rerenderActiveView();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[m] realtime status:', status, '— Supabase에서 cards/works/user_bookmarks publication 활성화 필요할 수 있음');
+        }
+      });
+  } catch (err) {
+    console.warn('[m] subscribeToChanges failed (계속 진행):', err);
+  }
+}
+
+function rerenderActiveView() {
+  if (state.currentView === 'home') {
+    // 오늘의 카드 다시 뽑되, 사용자가 셔플 중이면 그대로 두기 — 단순화: 항상 today 재계산
+    renderHome();
+  } else if (state.currentView === 'archive') {
+    renderArchive();
+  }
+}
+
+async function refreshAll() {
+  try {
+    await Promise.all([loadAllCards(), loadBookmarks()]);
+    rerenderActiveView();
+  } catch (err) {
+    console.warn('[m] refreshAll failed:', err);
+  }
+}
 
 // ---------- Auth ----------
 async function bootstrapAuth() {
