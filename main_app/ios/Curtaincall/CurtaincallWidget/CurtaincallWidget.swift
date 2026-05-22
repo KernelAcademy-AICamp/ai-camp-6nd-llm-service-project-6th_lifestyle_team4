@@ -85,9 +85,9 @@ struct CurtaincallWidgetEntryView: View {
             Spacer(minLength: 12)
             if let title = entry.card?.workTitle, !title.isEmpty {
                 Text(title.uppercased())
-                    .font(.custom("Pretendard-Medium", size: 13))
-                    .tracking(13 * 0.2)
-                    .foregroundStyle(metaColor)
+                    .font(.custom("Pretendard-Medium", size: 15))
+                    .tracking(15 * 0.2)
+                    .foregroundStyle(quoteColor)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
