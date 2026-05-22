@@ -5,7 +5,7 @@
 //  - 정적 자산 (JS/CSS/이미지) → stale-while-revalidate
 //  - API/Supabase/Anthropic → 항상 네트워크 패스스루
 //  - 업데이트는 즉시 활성화 (skipWaiting + clients.claim)
-const CACHE_VERSION = 'sq-v10-widget-settings';
+const CACHE_VERSION = 'sq-v9-nanum-myeongjo';
 const STATIC_ASSETS = [
   '/assets/login.js',
   '/assets/dashboard.js',
@@ -57,20 +57,6 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
-});
-
-// 알림 클릭 시 사용자 앱 홈으로 이동
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  event.waitUntil((async () => {
-    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const existing = all.find((c) => c.url.includes('/m/'));
-    if (existing) {
-      existing.focus();
-    } else {
-      await self.clients.openWindow('/m/');
-    }
-  })());
 });
 
 self.addEventListener('fetch', (event) => {
