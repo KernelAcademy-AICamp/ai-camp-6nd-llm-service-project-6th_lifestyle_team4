@@ -5,9 +5,9 @@ enum Tab: Hashable, CaseIterable {
 
     var title: String {
         switch self {
-        case .home: return "HOME"
-        case .archive: return "ARCHIVE"
-        case .settings: return "SETTINGS"
+        case .home: return "홈"
+        case .archive: return "보관함"
+        case .settings: return "설정"
         }
     }
 }

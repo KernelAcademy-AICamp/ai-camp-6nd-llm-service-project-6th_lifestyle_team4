@@ -30,8 +30,8 @@ private struct EditorialButtonModifier: ViewModifier {
 
 #Preview {
     VStack(spacing: 16) {
-        Text("READ FULL SCRIPT").editorialButton(style: .filled)
-        Text("COLLECT SCRIPT ARTIFACT").editorialButton(style: .outlined)
+        Text("전체 대본 읽기").editorialButton(style: .filled)
+        Text("대본 수집하기").editorialButton(style: .outlined)
     }
     .padding(24)
 }

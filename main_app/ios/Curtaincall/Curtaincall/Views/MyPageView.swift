@@ -9,12 +9,12 @@ struct MyPageView: View {
                 topBar
                 userBlock
                 Hairline()
-                sectionHeader("GENERAL PREFERENCES")
+                sectionHeader("일반 설정")
                 pushNotificationsRow
                 Hairline()
                 themeSettingsRow
                 Hairline()
-                sectionHeader("LEGAL & ABOUT")
+                sectionHeader("약관 및 정보")
                 termsRow
                 Hairline()
                 versionRow
@@ -35,7 +35,7 @@ struct MyPageView: View {
             Spacer()
             ZStack {
                 Color.inkBlack
-                Text("JT")
+                Text("박")
                     .font(.system(size: 12, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(.paperWhite)
@@ -49,10 +49,10 @@ struct MyPageView: View {
 
     private var userBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Jordan Tate")
+            Text("박지윤")
                 .font(.editorialSerif(32, weight: .semibold))
                 .foregroundStyle(.inkBlack)
-            Text("Curator of contemporary screenplays. Believes in the quiet power of stage direction.")
+            Text("현대 각본의 큐레이터. 지문이 가진 조용한 힘을 믿습니다.")
                 .font(.system(size: 15))
                 .foregroundStyle(.onSurfaceVariant)
                 .lineSpacing(2)
@@ -72,10 +72,10 @@ struct MyPageView: View {
     private var pushNotificationsRow: some View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Push Notifications")
+                Text("푸시 알림")
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(.inkBlack)
-                Text("Daily script delivered at 8:00 AM")
+                Text("매일 아침 8시, 한 편의 각본을 받아보세요")
                     .font(.system(size: 13))
                     .foregroundStyle(.onSurfaceVariant)
             }
@@ -92,10 +92,10 @@ struct MyPageView: View {
         Button(action: {}) {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Theme Settings")
+                    Text("테마 설정")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.inkBlack)
-                    Text("System default (Light)")
+                    Text("시스템 기본값 (라이트)")
                         .font(.system(size: 13))
                         .foregroundStyle(.onSurfaceVariant)
                 }
@@ -114,7 +114,7 @@ struct MyPageView: View {
     private var termsRow: some View {
         Button(action: {}) {
             HStack(alignment: .center, spacing: 16) {
-                Text("Terms of Service")
+                Text("이용약관")
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(.inkBlack)
                 Spacer()
@@ -131,11 +131,11 @@ struct MyPageView: View {
 
     private var versionRow: some View {
         HStack(alignment: .center, spacing: 16) {
-            Text("Version Info")
+            Text("버전 정보")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(.inkBlack)
             Spacer()
-            Text("v2.4.0 (Stable)")
+            Text("v2.4.0 (안정 버전)")
                 .font(.system(size: 13))
                 .foregroundStyle(.onSurfaceVariant)
         }
@@ -145,7 +145,7 @@ struct MyPageView: View {
 
     private var signOutButton: some View {
         Button(action: {}) {
-            Text("SIGN OUT").editorialButton(style: .outlined)
+            Text("로그아웃").editorialButton(style: .outlined)
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 24)

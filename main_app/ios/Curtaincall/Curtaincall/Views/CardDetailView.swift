@@ -27,12 +27,12 @@ struct CardDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Button(action: {}) {
-                        Text("COLLECT SCRIPT ARTIFACT").editorialButton(style: .outlined)
+                        Text("대본 수집하기").editorialButton(style: .outlined)
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 8)
 
-                    Text("LIMITED EDITION DIGITAL MANUSCRIPT #\(String(format: "%04d", card.cardId))")
+                    Text("한정판 디지털 매뉴스크립트 #\(String(format: "%04d", card.cardId))")
                         .labelCaps()
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 4)
@@ -72,7 +72,7 @@ struct CardDetailView: View {
 
     private var metadataStrip: some View {
         HStack(spacing: 18) {
-            Text("SCENE \(card.cardId)").labelCaps().underline()
+            Text("장면 \(card.cardId)").labelCaps().underline()
             Text(card.work.format.rawValue.uppercased()).labelCaps().underline()
             if let year = card.work.releaseYear {
                 Text(String(year)).labelCaps().underline()

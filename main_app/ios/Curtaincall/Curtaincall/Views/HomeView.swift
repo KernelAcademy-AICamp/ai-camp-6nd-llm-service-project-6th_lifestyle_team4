@@ -45,7 +45,7 @@ struct HomeView: View {
                 .foregroundStyle(.inkBlack)
             Spacer()
             Button { selectedTab = .settings } label: {
-                Text("MY PAGE").labelCaps()
+                Text("마이페이지").labelCaps()
             }
             .buttonStyle(.plain)
         }
@@ -72,7 +72,7 @@ struct HomeView: View {
                 .foregroundStyle(.inkBlack)
             Spacer()
             Button { selectedTab = .archive } label: {
-                Text("VIEW ARCHIVE").labelCaps()
+                Text("전체 보기").labelCaps()
             }
             .buttonStyle(.plain)
         }
@@ -132,7 +132,7 @@ private struct FeaturedBlock: View {
             }
 
             NavigationLink(value: card) {
-                Text("READ FULL SCRIPT").editorialButton(style: .filled)
+                Text("전체 대본 읽기").editorialButton(style: .filled)
             }
             .buttonStyle(.plain)
         }

@@ -39,7 +39,7 @@ struct ArchiveView: View {
                 .font(.editorialSerif(28, weight: .regular))
                 .foregroundStyle(.inkBlack)
             Spacer()
-            Text("\(cards.count) ENTRIES").labelCaps()
+            Text("기록 \(cards.count)개").labelCaps()
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
