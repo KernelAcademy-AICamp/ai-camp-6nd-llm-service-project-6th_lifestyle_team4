@@ -102,34 +102,65 @@ async function subscribeToChanges() {
   try {
     const sb = await getSupabase();
     if (realtimeChannel) {
-      await sb.removeChannel(realtimeChannel);
+      try { await sb.removeChannel(realtimeChannel); } catch {}
       realtimeChannel = null;
     }
-    realtimeChannel = sb
-      .channel('ds-public-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, async () => {
+    console.log('[m] realtime: subscribing… userId=', state.userId);
+    let ch = sb
+      .channel('ds-public-changes-' + Date.now())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, async (payload) => {
+        console.log('[m] realtime cards event:', payload.eventType);
         await loadAllCards();
         rerenderActiveView();
+        toast('데이터 갱신됨');
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'works' }, async () => {
-        // 작품 메타가 바뀌면 카드 join도 영향 받으므로 카드도 다시 로드
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'works' }, async (payload) => {
+        console.log('[m] realtime works event:', payload.eventType);
         await loadAllCards();
         rerenderActiveView();
-      })
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'user_bookmarks', filter: state.userId ? `user_id=eq.${state.userId}` : undefined },
-        async () => {
+      });
+    if (state.userId != null) {
+      ch = ch.on('postgres_changes',
+        { event: '*', schema: 'public', table: 'user_bookmarks', filter: `user_id=eq.${state.userId}` },
+        async (payload) => {
+          console.log('[m] realtime user_bookmarks event:', payload.eventType);
           await loadBookmarks();
           rerenderActiveView();
         }
-      )
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[m] realtime status:', status, '— Supabase에서 cards/works/user_bookmarks publication 활성화 필요할 수 있음');
-        }
-      });
+      );
+    }
+    realtimeChannel = ch;
+    ch.subscribe((status, err) => {
+      console.log('[m] realtime subscription status:', status, err || '');
+      setRealtimeStatus(status);
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        // 5초 후 재구독 시도
+        setTimeout(() => {
+          if (state.currentView) subscribeToChanges();
+        }, 5000);
+      }
+    });
   } catch (err) {
     console.warn('[m] subscribeToChanges failed (계속 진행):', err);
+    setRealtimeStatus('FAILED');
+  }
+}
+
+function setRealtimeStatus(status) {
+  const dot = document.getElementById('rt-status-dot');
+  const label = document.getElementById('rt-status-label');
+  if (!dot || !label) return;
+  if (status === 'SUBSCRIBED') {
+    dot.style.background = '#1a7f37';  // green
+    label.textContent = 'LIVE';
+    label.title = '실시간 동기화 활성';
+  } else if (status === 'CONNECTING' || status === 'JOINING') {
+    dot.style.background = '#F4C20D';  // yellow
+    label.textContent = 'CONNECTING';
+  } else {
+    dot.style.background = '#D85A30';  // orange/red
+    label.textContent = 'OFFLINE';
+    label.title = '실시간 비활성 — Supabase에서 publication 활성화 필요 (006_enable_realtime.sql)';
   }
 }
 

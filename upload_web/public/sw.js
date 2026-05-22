@@ -1,6 +1,6 @@
 // Service Worker — 정적 자산 캐시 + 오프라인 폴백
 // 캐시 버전은 배포 때마다 올려야 새 파일이 적용됩니다.
-const CACHE_VERSION = 'sq-v6-book-icon';
+const CACHE_VERSION = 'sq-v7-book-rename';
 const CORE_ASSETS = [
   '/',
   '/index.html',
@@ -14,6 +14,9 @@ const CORE_ASSETS = [
   '/m/icons/icon-192.png',
   '/m/icons/icon-512.png',
   '/m/icons/apple-touch-icon.png',
+  '/m/icons/icon-book-192.png',
+  '/m/icons/icon-book-512.png',
+  '/m/icons/apple-touch-icon-book.png',
   '/assets/login.js',
   '/assets/dashboard.js',
   '/assets/library.js',

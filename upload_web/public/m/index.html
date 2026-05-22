@@ -9,9 +9,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="Daily Script" />
-<link rel="apple-touch-icon" href="/m/icons/apple-touch-icon.png?v=book" />
-<link rel="icon" type="image/png" sizes="192x192" href="/m/icons/icon-192.png?v=book" />
-<link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg?v=book" />
+<!-- 새 파일명으로 iOS Safari 캐시 영구 우회 -->
+<link rel="apple-touch-icon" sizes="180x180" href="/m/icons/apple-touch-icon-book.png" />
+<link rel="apple-touch-icon" sizes="192x192" href="/m/icons/icon-book-192.png" />
+<link rel="apple-touch-icon" sizes="512x512" href="/m/icons/icon-book-512.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/m/icons/icon-book-192.png" />
+<link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg?v=2" />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <style>
   /* ===== LongBlack tokens (Android Color.kt mirror) ===== */
@@ -273,9 +276,15 @@
     <span class="material-symbols-outlined c-espresso" style="font-size:20px;">menu_book</span>
     <span class="t-headline-md c-espresso">Daily Script</span>
   </div>
-  <button id="my-page-btn" data-nav="settings" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;padding:4px 6px;">
-    MY PAGE
-  </button>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <div title="실시간 동기화 상태" style="display:flex;align-items:center;gap:6px;">
+      <span id="rt-status-dot" style="width:8px;height:8px;border-radius:50%;background:#C9B89A;display:inline-block;"></span>
+      <span id="rt-status-label" class="t-label-sm c-walnut" style="font-size:10px;">…</span>
+    </div>
+    <button id="my-page-btn" data-nav="settings" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;padding:4px 6px;">
+      MY PAGE
+    </button>
+  </div>
 </header>
 
 <header id="top-bar-settings" class="top-bar" style="display:none;">
