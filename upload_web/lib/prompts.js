@@ -95,7 +95,7 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
   "cards": [
     {
       "quote": "어이가 없네",
-      "script_excerpt": "조태오: ...(원문 그대로의 극본 일부)...",
+      "script_excerpt": "조태오\n어이가 없네 정말\n진짜 어이가 없어\n\n운전기사\n사장님, 이건 좀 아닌 것 같습니다\n\n조태오\n뭐라고?\n지금 나한테 뭐라고 한 거야\n\n운전기사\n그냥 사실대로 말씀드린 겁니다",
       "excerpt_description": "재벌 3세 조태오가 운전기사의 항의에 황당해하며 권력의 비대칭을 드러내는 장면.",
       "keywords": ["분노", "권력", "조롱"],
       "temperature": 1,

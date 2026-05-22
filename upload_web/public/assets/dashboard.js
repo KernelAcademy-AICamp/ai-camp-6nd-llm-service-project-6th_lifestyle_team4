@@ -244,6 +244,60 @@ function buildCardNode(card, idx) {
   return buildCardViewNode(card, idx);
 }
 
+// 화자/대사 포맷 정상화 — 콜론 제거 + 화자 블록 사이 빈 줄
+// (library.js의 cleanForDisplay 와 동일 로직)
+function cleanForDisplay(s) {
+  let text = String(s ?? '');
+  // em-dash 변형 제거
+  text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
+
+  // 화자 후보 수집
+  const speakers = new Set();
+  // (a) "이름:" 콜론 형식
+  const colonRegex = /^([^:：()\n]{1,14})[:：][ \t]*/gm;
+  let m;
+  while ((m = colonRegex.exec(text)) !== null) {
+    const name = m[1].trim();
+    if (name) speakers.add(name);
+  }
+  // (b) 콜론 없이 짧은 단어가 줄에 2번 이상 단독 등장
+  const lineCounts = {};
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.length > 14) continue;
+    if (/^[가-힣A-Za-z][가-힣A-Za-z0-9\s]{0,12}[가-힣A-Za-z0-9]$|^[가-힣A-Za-z]$/.test(line)) {
+      lineCounts[line] = (lineCounts[line] || 0) + 1;
+    }
+  }
+  Object.entries(lineCounts).forEach(([word, count]) => {
+    if (count >= 2) speakers.add(word);
+  });
+
+  // "이름:" → "이름\n"
+  text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
+
+  // 라인별 재조립 + 화자 줄 앞에 빈 줄
+  const lines = text.split('\n');
+  const out = [];
+  let firstSpeakerSeen = false;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line && speakers.has(line)) {
+      if (firstSpeakerSeen && out.length > 0 && out[out.length - 1].trim() !== '') {
+        out.push('');
+      }
+      out.push(line);
+      firstSpeakerSeen = true;
+    } else {
+      out.push(raw);
+    }
+  }
+  return out.join('\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function buildCardViewNode(card, idx) {
   const node = cardTemplate.content.firstElementChild.cloneNode(true);
 
@@ -255,9 +309,9 @@ function buildCardViewNode(card, idx) {
 
   node.querySelector('.card-tag').textContent =
     (card.keywords && card.keywords[0]) || `Card #${idx + 1}`;
-  node.querySelector('.card-quote').textContent = quote ? `"${quote}"` : '';
-  node.querySelector('.card-excerpt').textContent = excerpt || '';
-  node.querySelector('.card-description').textContent = desc || '';
+  node.querySelector('.card-quote').textContent = quote ? `"${cleanForDisplay(quote)}"` : '';
+  node.querySelector('.card-excerpt').textContent = cleanForDisplay(excerpt || '');
+  node.querySelector('.card-description').textContent = cleanForDisplay(desc || '');
 
   // significance — 있으면 표시, 없으면 안내 문구
   const sigWrap = node.querySelector('.card-significance-wrap');
