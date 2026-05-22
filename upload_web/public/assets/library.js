@@ -587,7 +587,7 @@ function buildViewNode(card) {
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
   node.querySelector('.lib-quote').textContent = card.quote ? `"${cleanForDisplay(card.quote)}"` : '';
-  node.querySelector('.lib-excerpt').textContent = cleanForDisplay(card.script_excerpt || '');
+  node.querySelector('.lib-excerpt').innerHTML = boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''));
   node.querySelector('.lib-description').textContent = cleanForDisplay(card.excerpt_description || '');
 
   const kwEl = node.querySelector('.lib-keywords');
@@ -904,6 +904,28 @@ function cleanForDisplay(s) {
     .trim();
 }
 
+// cleanForDisplay로 정리된 발췌문에서 '화자 이름 줄'만 <strong>으로 감싼다.
+// 정리 후 텍스트는 "이름 / 대사 / (빈 줄) / 이름 / 대사..." 구조이므로,
+// 블록의 첫 줄이면서 짧고 종결부호가 없는 줄을 화자로 본다. (지문(괄호)·일반 대사는 제외)
+// innerHTML에 넣기 때문에 모든 줄을 HTML 이스케이프한다.
+function boldSpeakerLines(cleanedText) {
+  const lines = String(cleanedText ?? '').split('\n');
+  return lines.map((line, i) => {
+    const safe = escapeHtml(line);
+    const t = line.trim();
+    const prevBlank = i === 0 || lines[i - 1].trim() === '';
+    const nextHasText = (lines[i + 1] || '').trim() !== '';
+    const looksLikeSpeaker =
+      t &&
+      prevBlank &&            // 블록의 첫 줄
+      nextHasText &&          // 바로 아래에 대사가 있음
+      !t.startsWith('(') &&   // 지문이 아님
+      t.length <= 15 &&       // 이름은 짧다
+      !/[.?!…,]$/.test(t);    // 종결부호로 끝나지 않음
+    return looksLikeSpeaker ? `<strong>${safe}</strong>` : safe;
+  }).join('\n');
+}
+
 function showMobilePreview(card) {
   const html = renderAppCardHtml(card);
   previewIosScreen.innerHTML = html;
@@ -984,7 +1006,7 @@ function renderAppCardHtml(card) {
         <p class="app-work-title">${escapeHtml(workLine)}</p>
         <p class="app-quote">${escapeHtml(cleanQuote)}</p>
         ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(cleanForDisplay(card.excerpt_description))}</p>` : ''}
-        <div class="app-excerpt">${escapeHtml(cleanForDisplay(card.script_excerpt || ''))}</div>
+        <div class="app-excerpt">${boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''))}</div>
         ${keywords ? `<div class="app-keywords">${keywords}</div>` : ''}
         <div class="app-meters">
           <div class="app-meter">
