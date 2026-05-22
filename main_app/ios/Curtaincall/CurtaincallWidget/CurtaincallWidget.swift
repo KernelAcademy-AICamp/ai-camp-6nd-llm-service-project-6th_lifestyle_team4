@@ -79,6 +79,7 @@ struct CurtaincallWidgetEntryView: View {
             Text(displayQuote)
                 .font(.custom("NanumMyeongjo", size: 18))
                 .foregroundStyle(quoteColor)
+                .lineSpacing(4)
                 .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
