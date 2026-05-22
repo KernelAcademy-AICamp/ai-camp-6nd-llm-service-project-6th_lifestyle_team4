@@ -448,6 +448,68 @@
     </div>
     <div class="hairline"></div>
 
+    <!-- ====== WIDGET SECTION ====== -->
+    <div style="height:40px;"></div>
+    <p class="t-label-sm c-walnut" style="margin-bottom:12px;">WIDGET</p>
+
+    <!-- 위젯 미리보기 — 실제 네이티브 위젯과 동일한 룩 -->
+    <div style="margin-bottom:16px;">
+      <p class="t-body-sm c-walnut" style="margin-bottom:10px;">미리보기 · 홈 화면에 표시될 모습</p>
+      <div id="widget-preview" style="
+        background:var(--paper);
+        border:0.5px solid var(--latte);
+        border-radius:8px;
+        padding:16px 18px;
+        min-height:120px;
+        display:flex;flex-direction:column;justify-content:space-between;
+        box-shadow:0 1px 3px rgba(14,12,10,0.06);
+      ">
+        <p id="widget-preview-quote" style="
+          font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;
+          font-size:18px;line-height:28px;color:var(--espresso);
+          word-break:keep-all;text-wrap:balance;
+          display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+        ">불러오는 중…</p>
+        <p id="widget-preview-title" class="t-label-sm c-walnut" style="margin-top:10px;"></p>
+      </div>
+    </div>
+
+    <div class="setting-row">
+      <div style="flex:1;">
+        <p class="t-title-lg c-espresso">매일 명대사 알림</p>
+        <div style="height:4px;"></div>
+        <p class="t-body-sm c-walnut">하루에 한 번 오늘의 명대사를 알림으로 받기</p>
+      </div>
+      <div id="daily-notif-toggle" class="editorial-toggle" role="switch" aria-checked="false" tabindex="0">
+        <div class="knob"></div>
+      </div>
+    </div>
+    <div class="hairline"></div>
+
+    <div class="setting-row" id="test-notif-row" style="cursor:pointer;">
+      <div style="flex:1;">
+        <p class="t-title-lg c-espresso">테스트 알림 보내기</p>
+        <div style="height:4px;"></div>
+        <p class="t-body-sm c-walnut">지금 명대사 알림을 한 번 띄워보기</p>
+      </div>
+      <span class="material-symbols-outlined c-walnut" style="font-size:18px;">notifications</span>
+    </div>
+    <div class="hairline"></div>
+
+    <details style="padding:14px 0;">
+      <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">
+        <span class="t-body-sm c-walnut">홈 화면 위젯은 어떻게 추가하나요?</span>
+        <span class="material-symbols-outlined c-walnut" style="font-size:18px;">expand_more</span>
+      </summary>
+      <p class="t-body-sm c-walnut" style="margin-top:10px;line-height:1.7;">
+        지금 보고 계신 건 <b>PWA(웹앱)</b>이라 OS의 홈 화면 위젯 영역에는 표시할 수 없습니다.<br/><br/>
+        <b>Android</b>: <code>main_app/android</code> 프로젝트를 Android Studio로 빌드해 설치하면 위젯이 활성화됩니다.<br/>
+        <b>iOS</b>: <code>main_app/ios/Curtaincall</code> 프로젝트를 Xcode(Mac)로 빌드해 설치하면 systemMedium 위젯을 추가할 수 있습니다.<br/><br/>
+        PWA에서는 매일 명대사 알림으로 대신할 수 있습니다.
+      </p>
+    </details>
+    <div class="hairline"></div>
+
     <div style="height:40px;"></div>
     <p class="t-label-sm c-walnut" style="margin-bottom:12px;">LEGAL & ABOUT</p>
 

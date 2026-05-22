@@ -72,10 +72,12 @@ const displayTitle = (s) => TITLE_DISPLAY_ALIASES[String(s||'').trim().toLowerCa
   try {
     state.pushEnabled = localStorage.getItem('ds.push') === '1';
     paintPushToggle();
+    paintDailyNotifToggle();
     await bootstrapAuth();
     await Promise.all([loadAllCards(), loadBookmarks()]);
     renderHome();
     setView(getInitialView());
+    scheduleDailyTick();
     // 데이터 변경을 실시간으로 받아 즉시 반영
     subscribeToChanges();
     // 앱이 포그라운드로 돌아올 때마다 최신화 (실시간 누락 안전망)
@@ -207,6 +209,8 @@ function rerenderActiveView() {
     renderHome();
   } else if (state.currentView === 'archive') {
     renderArchive();
+  } else if (state.currentView === 'settings') {
+    renderWidgetPreview();
   }
 }
 
@@ -574,6 +578,106 @@ function renderArchive() {
   });
 }
 
+// ---------- Widget preview + daily notification ----------
+const widgetPreviewQuote = document.getElementById('widget-preview-quote');
+const widgetPreviewTitle = document.getElementById('widget-preview-title');
+const dailyNotifToggle = document.getElementById('daily-notif-toggle');
+const testNotifRow = document.getElementById('test-notif-row');
+
+function renderWidgetPreview() {
+  // 가장 최신 카드 = state.allCards[0] (Android/iOS 위젯이 fetch하는 것과 동일)
+  const card = state.allCards[0];
+  if (!card) {
+    widgetPreviewQuote.textContent = '오늘의 한 줄을 불러오는 중';
+    widgetPreviewTitle.textContent = '';
+    return;
+  }
+  widgetPreviewQuote.textContent = `"${cleanQuote(card.quote)}"`;
+  const title = displayTitle(card.works?.title || '');
+  widgetPreviewTitle.textContent = title ? title.toUpperCase() : '';
+}
+
+function paintDailyNotifToggle() {
+  const enabled = localStorage.getItem('ds.dailyNotif') === '1';
+  dailyNotifToggle.classList.toggle('on', enabled);
+  dailyNotifToggle.setAttribute('aria-checked', enabled ? 'true' : 'false');
+  return enabled;
+}
+
+async function ensureNotificationPermission() {
+  if (!('Notification' in window)) {
+    toast('이 브라우저는 알림 미지원');
+    return false;
+  }
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') {
+    toast('알림 차단됨 — 설정에서 권한 변경 필요');
+    return false;
+  }
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+async function sendQuoteNotification() {
+  const card = state.allCards[0];
+  if (!card) {
+    toast('카드 없음');
+    return;
+  }
+  const granted = await ensureNotificationPermission();
+  if (!granted) return;
+  const title = displayTitle(card.works?.title || '오늘의 명대사');
+  const body = cleanQuote(card.quote).slice(0, 120);
+  const opts = {
+    body: `"${body}"`,
+    icon: '/m/icons/icon-book-192.png',
+    badge: '/m/icons/icon-book-192.png',
+    tag: 'daily-script',
+  };
+  // SW가 있으면 SW를 통해 보냄 (백그라운드에서도 동작)
+  try {
+    const reg = await navigator.serviceWorker?.ready;
+    if (reg) {
+      await reg.showNotification(title, opts);
+    } else {
+      new Notification(title, opts);
+    }
+  } catch (err) {
+    console.warn('[m] notification failed:', err);
+    try { new Notification(title, opts); } catch {}
+  }
+}
+
+dailyNotifToggle.addEventListener('click', async () => {
+  const currentlyOn = localStorage.getItem('ds.dailyNotif') === '1';
+  if (!currentlyOn) {
+    const granted = await ensureNotificationPermission();
+    if (!granted) return;
+    localStorage.setItem('ds.dailyNotif', '1');
+    paintDailyNotifToggle();
+    toast('매일 알림 켜짐');
+    // 첫 알림 한 번 발사 (확인용)
+    await sendQuoteNotification();
+    scheduleDailyTick();
+  } else {
+    localStorage.removeItem('ds.dailyNotif');
+    paintDailyNotifToggle();
+    toast('알림 꺼짐');
+  }
+});
+
+testNotifRow.addEventListener('click', () => sendQuoteNotification());
+
+// 하루에 한 번 — 앱 열렸을 때 오늘자 알림이 아직 안 갔으면 한 번 발사
+function scheduleDailyTick() {
+  if (localStorage.getItem('ds.dailyNotif') !== '1') return;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const last = localStorage.getItem('ds.dailyNotif.lastSent');
+  if (last === todayKey) return;
+  localStorage.setItem('ds.dailyNotif.lastSent', todayKey);
+  sendQuoteNotification();
+}
+
 // ---------- Settings ----------
 function paintPushToggle() {
   pushToggle.classList.toggle('on', !!state.pushEnabled);
@@ -689,6 +793,7 @@ function setView(view) {
   });
 
   if (view === 'archive') renderArchive();
+  if (view === 'settings') renderWidgetPreview();
 
   history.replaceState(null, '', `#${view}`);
   window.scrollTo({ top: 0, behavior: 'auto' });
