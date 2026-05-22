@@ -11,8 +11,9 @@ struct ArchiveView: View {
                 titleBlock
                 Hairline()
                 if cards.isEmpty {
-                    Text("기록이 없습니다")
-                        .labelCaps()
+                    Text("아직 기록이 없어요")
+                        .font(.metaSans(12))
+                        .foregroundStyle(.walnut)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 48)
                 } else {
@@ -27,7 +28,7 @@ struct ArchiveView: View {
             }
             .padding(.bottom, 24)
         }
-        .background(Color.paperWhite)
+        .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
         .task { await load() }
@@ -36,21 +37,21 @@ struct ArchiveView: View {
     private var topBar: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Daily Script")
-                .font(.editorialSerif(28, weight: .regular))
-                .foregroundStyle(.inkBlack)
+                .font(.headlineSerif(24))
+                .foregroundStyle(.espresso)
             Spacer()
             Text("기록 \(cards.count)개").labelCaps()
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 32)
     }
 
     private var titleBlock: some View {
         Text("지난 기록")
-            .font(.editorialSerif(32, weight: .semibold))
-            .foregroundStyle(.inkBlack)
-            .padding(.horizontal, 24)
+            .font(.displaySerif(34))
+            .foregroundStyle(.espresso)
+            .padding(.horizontal, 20)
             .padding(.bottom, 24)
     }
 
@@ -60,7 +61,6 @@ struct ArchiveView: View {
             cards = try await SupabaseClient.shared.fetchCards()
             hasLoaded = true
         } catch {
-            // Silent fallback — keep empty list.
         }
     }
 }

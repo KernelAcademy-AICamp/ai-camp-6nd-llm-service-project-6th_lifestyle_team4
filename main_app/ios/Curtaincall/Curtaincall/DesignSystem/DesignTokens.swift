@@ -1,12 +1,14 @@
 import SwiftUI
 
 extension Color {
-    static let paperWhite = Color(hex: 0xFFFFFF)
-    static let inkBlack = Color(hex: 0x1A1A1A)
-    static let onSurfaceVariant = Color(hex: 0x444748)
-    static let signatureOrange = Color(hex: 0xFF5126)
-    static let borderSubtle = Color(hex: 0xE2E2E4)
-    static let surfaceMuted = Color(hex: 0xF5F5F5)
+    static let espresso = Color(hex: 0x0E0C0A)
+    static let roast = Color(hex: 0x2C2620)
+    static let walnut = Color(hex: 0x6B5D4F)
+    static let paper = Color(hex: 0xFAF8F2)
+    static let latte = Color(hex: 0xE8E1D3)
+    static let sand = Color(hex: 0xC9B89A)
+    static let highlight = Color(hex: 0xF4C20D)
+    static let cta = Color(hex: 0xD85A30)
 
     init(hex: UInt32) {
         let r = Double((hex >> 16) & 0xFF) / 255
@@ -17,16 +19,18 @@ extension Color {
 }
 
 extension ShapeStyle where Self == Color {
-    static var paperWhite: Color { .paperWhite }
-    static var inkBlack: Color { .inkBlack }
-    static var onSurfaceVariant: Color { .onSurfaceVariant }
-    static var signatureOrange: Color { .signatureOrange }
-    static var borderSubtle: Color { .borderSubtle }
-    static var surfaceMuted: Color { .surfaceMuted }
+    static var espresso: Color { .espresso }
+    static var roast: Color { .roast }
+    static var walnut: Color { .walnut }
+    static var paper: Color { .paper }
+    static var latte: Color { .latte }
+    static var sand: Color { .sand }
+    static var highlight: Color { .highlight }
+    static var cta: Color { .cta }
 }
 
 struct Hairline: View {
-    var color: Color = .borderSubtle
+    var color: Color = .latte
     var body: some View {
         Rectangle()
             .fill(color)

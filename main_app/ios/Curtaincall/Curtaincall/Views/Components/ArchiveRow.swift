@@ -9,23 +9,24 @@ struct ArchiveRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(dateText).labelCaps()
                 Text(card.work.title)
-                    .font(.editorialSerif(18, weight: .semibold))
-                    .foregroundStyle(.inkBlack)
+                    .font(.titleSerif(16))
+                    .foregroundStyle(.espresso)
                 if let tagline = card.excerptDescription, !tagline.isEmpty {
                     Text(tagline)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.onSurfaceVariant)
+                        .font(.bodySans(13))
+                        .foregroundStyle(.walnut)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
+                        .bookLeading(size: 13)
                 }
             }
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.system(size: 14, weight: .light))
-                .foregroundStyle(.onSurfaceVariant)
+                .foregroundStyle(.walnut)
                 .padding(.top, 4)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 20)
         .padding(.vertical, 20)
         .contentShape(Rectangle())
     }
@@ -45,4 +46,5 @@ struct ArchiveRow: View {
         Hairline()
         ArchiveRow(card: .sample, daysAgo: 2)
     }
+    .background(Color.paper)
 }

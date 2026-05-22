@@ -10,6 +10,14 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
     let intensity: Int
     let work: Work
 
+    // Added by the Long Black migration. All optional so pre-migration rows still decode.
+    let expiresAt: Date?
+    let publishAt: Date?
+    let rating: Double?
+    let ratingCount: Int?
+    let imageUrl: String?
+    let category: String?
+
     var id: Int { cardId }
 }
 
@@ -23,7 +31,13 @@ extension Card {
         keywords: ["자유의 경험", "첫사랑", "초월성"],
         temperature: 5,
         intensity: 4,
-        work: Work(title: "Titanic", format: .movie, author: "James Cameron", releaseYear: 1997)
+        work: Work(title: "Titanic", format: .movie, author: "James Cameron", releaseYear: 1997),
+        expiresAt: Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: .now),
+        publishAt: nil,
+        rating: 4.6,
+        ratingCount: 2643,
+        imageUrl: nil,
+        category: "C"
     )
 }
 #endif

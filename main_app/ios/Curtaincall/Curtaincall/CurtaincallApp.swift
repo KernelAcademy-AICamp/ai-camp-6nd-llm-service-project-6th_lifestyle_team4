@@ -9,6 +9,10 @@ import SwiftUI
 
 @main
 struct CurtaincallApp: App {
+    init() {
+        FontRegistration.register()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

@@ -16,13 +16,19 @@ private struct EditorialButtonModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .labelCaps(color: style == .filled ? .paperWhite : .inkBlack)
+            .font(.titleSerif(16))
+            .foregroundStyle(style == .filled ? Color.paper : Color.espresso)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .background(style == .filled ? Color.inkBlack : Color.paperWhite)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 20)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(style == .filled ? Color.espresso : Color.paper)
+            )
             .overlay {
                 if style == .outlined {
-                    Rectangle().stroke(Color.inkBlack, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.walnut, lineWidth: 0.5)
                 }
             }
     }
@@ -34,4 +40,5 @@ private struct EditorialButtonModifier: ViewModifier {
         Text("대본 수집하기").editorialButton(style: .outlined)
     }
     .padding(24)
+    .background(Color.paper)
 }

@@ -12,7 +12,7 @@ struct EditorialTabBar: View {
                         selection = tab
                     } label: {
                         Text(tab.title)
-                            .labelCaps(color: tab == selection ? .signatureOrange : .onSurfaceVariant)
+                            .labelCaps(color: tab == selection ? .espresso : .walnut)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .contentShape(Rectangle())
@@ -21,7 +21,7 @@ struct EditorialTabBar: View {
                 }
             }
         }
-        .background(Color.paperWhite)
+        .background(Color.paper)
     }
 }
 

@@ -6,18 +6,32 @@ struct HomeView: View {
     @State private var hasLoaded = false
 
     private var featured: Card { cards.first ?? .sample }
-    private var archiveEntries: [Card] { Array(cards.dropFirst().prefix(5)) }
+    private var curated: [Card] { Array(cards.dropFirst().prefix(6)) }
+    private var archiveEntries: [Card] { Array(cards.dropFirst(1 + curated.count).prefix(5)) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 topBar
                 introBlock
-                FeaturedBlock(card: featured)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 40)
+
+                NavigationLink(value: featured) {
+                    TodaysNoteCard(card: featured)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+
+                SectionHeader(title: "짧지만 깊은 문장의 미학", action: { selectedTab = .archive })
+                curatedCarousel
+
+                SectionHeader(title: "곧 공개될 각본", actionTitle: nil)
+                scheduleGrid
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+
+                SectionHeader(title: "지난 기록", action: { selectedTab = .archive })
                 Hairline()
-                archiveHeader
                 if archiveEntries.isEmpty {
                     Hairline()
                 } else {
@@ -32,7 +46,7 @@ struct HomeView: View {
             }
             .padding(.bottom, 24)
         }
-        .background(Color.paperWhite)
+        .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
         .task { await load() }
@@ -41,15 +55,15 @@ struct HomeView: View {
     private var topBar: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Daily Script")
-                .font(.editorialSerif(28, weight: .regular))
-                .foregroundStyle(.inkBlack)
+                .font(.headlineSerif(24))
+                .foregroundStyle(.espresso)
             Spacer()
             Button { selectedTab = .settings } label: {
                 Text("마이페이지").labelCaps()
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 32)
     }
@@ -58,26 +72,39 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(Self.formattedToday).labelCaps()
             Text("오늘의 각본")
-                .font(.editorialSerif(32, weight: .semibold))
-                .foregroundStyle(.inkBlack)
+                .font(.displaySerif(34))
+                .foregroundStyle(.espresso)
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 20)
     }
 
-    private var archiveHeader: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("지난 기록")
-                .font(.editorialSerif(20, weight: .semibold))
-                .foregroundStyle(.inkBlack)
-            Spacer()
-            Button { selectedTab = .archive } label: {
-                Text("전체 보기").labelCaps()
+    private var curatedCarousel: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 16) {
+                ForEach(curated.isEmpty ? [Card.sample, .sample, .sample] : curated) { card in
+                    NavigationLink(value: card) {
+                        NoteCard(card: card)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 24)
+    }
+
+    private var scheduleGrid: some View {
+        let placeholders: [(Date, String)] = [
+            (Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now, "내일의 한 줄"),
+            (Calendar.current.date(byAdding: .day, value: 2, to: .now) ?? .now, "잔잔한 어느 오후"),
+            (Calendar.current.date(byAdding: .day, value: 4, to: .now) ?? .now, "다음 주의 다른 호흡"),
+        ]
+        return HStack(spacing: 8) {
+            ForEach(0..<placeholders.count, id: \.self) { i in
+                ScheduleCard(publishAt: placeholders[i].0, title: placeholders[i].1)
+            }
+        }
     }
 
     private static var formattedToday: String {
@@ -93,48 +120,6 @@ struct HomeView: View {
             cards = try await SupabaseClient.shared.fetchCards()
             hasLoaded = true
         } catch {
-            // Silent fallback — featured uses Card.sample, archive stays empty.
-        }
-    }
-}
-
-private struct FeaturedBlock: View {
-    let card: Card
-    @State private var isBookmarked = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            HStack(alignment: .top) {
-                if !card.work.genres.isEmpty {
-                    FlowLayout(spacing: 8, lineSpacing: 8) {
-                        ForEach(card.work.genres, id: \.self) { Chip(text: $0) }
-                    }
-                }
-                Spacer()
-                Button { isBookmarked.toggle() } label: {
-                    Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 20, weight: .regular))
-                        .foregroundStyle(.inkBlack)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Text("\u{201C}\(card.quote)\u{201D}")
-                .font(.editorialSerif(26, weight: .regular))
-                .foregroundStyle(.inkBlack)
-                .fixedSize(horizontal: false, vertical: true)
-                .lineSpacing(4)
-
-            if !card.keywords.isEmpty {
-                FlowLayout(spacing: 8, lineSpacing: 8) {
-                    ForEach(card.keywords, id: \.self) { Chip(text: $0) }
-                }
-            }
-
-            NavigationLink(value: card) {
-                Text("전체 대본 읽기").editorialButton(style: .filled)
-            }
-            .buttonStyle(.plain)
         }
     }
 }

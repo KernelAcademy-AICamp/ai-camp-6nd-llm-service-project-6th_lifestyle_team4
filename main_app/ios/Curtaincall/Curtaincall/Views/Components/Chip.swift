@@ -5,12 +5,12 @@ struct Chip: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 12, weight: .regular))
-            .tracking(0.3)
-            .foregroundStyle(.inkBlack)
+            .font(.uiSans(11))
+            .tracking(0.2)
+            .foregroundStyle(.walnut)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(Color.surfaceMuted)
+            .background(Color.latte)
     }
 }
 
@@ -21,4 +21,5 @@ struct Chip: View {
         Chip(text: "비극")
     }
     .padding()
+    .background(Color.paper)
 }
