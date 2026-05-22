@@ -37,15 +37,21 @@ const toastEl = $('#toast');
 // ---------------------------------------------------------------------------
 const state = {
   rows: [],           // 카드 + 작품 정보
-  workFilter: '',
+  workFilter: '',     // 작품 제목 문자열 (이전엔 work_id)
   searchText: '',
   editing: null,      // editing card_id
   selectedIds: new Set(), // 그리드 전체 선택용 card_id Set
   viewMode: 'shelf',  // 'shelf' (책꽂이) | 'grid' (격자)
   // 책꽂이 카드 골라 삭제 모드
-  deleteModeWorkId: null,         // 현재 삭제 모드인 work_id (한 번에 하나만)
+  deleteModeGroupKey: null,       // 현재 삭제 모드인 작품 그룹 키 (제목+작가)
   spineSelectedIds: new Set(),    // 삭제 모드에서 선택한 card_id 들
 };
+
+// 작품 그룹 키 — 제목+작가가 같으면 같은 그룹
+function makeGroupKey(work) {
+  if (!work) return '__';
+  return `${(work.title || '').trim()}__${(work.author || '').trim()}`;
+}
 
 // ---------------------------------------------------------------------------
 // Init: auth gate + load
@@ -93,23 +99,24 @@ async function loadLibrary() {
 }
 
 function refreshWorkFilterOptions() {
-  const seen = new Map();
+  // 작품 제목 기준으로 중복 제거 (같은 제목 여러 work_id는 한 옵션으로 통합)
+  const titles = new Set();
   state.rows.forEach((c) => {
-    const w = c.works;
-    if (w && !seen.has(w.work_id)) seen.set(w.work_id, w.title || `Work #${w.work_id}`);
+    const t = (c.works?.title || '').trim();
+    if (t) titles.add(t);
   });
 
   const current = libraryWorkFilter.value;
   libraryWorkFilter.innerHTML = '<option value="">모든 작품</option>';
-  [...seen.entries()]
-    .sort((a, b) => String(a[1]).localeCompare(String(b[1])))
-    .forEach(([id, title]) => {
+  [...titles]
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((title) => {
       const opt = document.createElement('option');
-      opt.value = String(id);
+      opt.value = title;
       opt.textContent = title;
       libraryWorkFilter.appendChild(opt);
     });
-  if (current && [...seen.keys()].some((k) => String(k) === current)) {
+  if (current && titles.has(current)) {
     libraryWorkFilter.value = current;
   } else {
     libraryWorkFilter.value = '';
@@ -120,7 +127,7 @@ function refreshWorkFilterOptions() {
 function filteredRows() {
   const q = state.searchText.trim().toLowerCase();
   return state.rows.filter((c) => {
-    if (state.workFilter && String(c.work_id) !== state.workFilter) return false;
+    if (state.workFilter && (c.works?.title || '').trim() !== state.workFilter) return false;
     if (q) {
       const hay = `${c.quote || ''} ${c.excerpt_description || ''} ${(c.keywords || []).join(' ')}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -172,34 +179,47 @@ function renderLibrary() {
 }
 
 // ---------------------------------------------------------------------------
-// Bookshelf rendering — 작품별로 그룹화
+// Bookshelf rendering — 작품 제목+작가 기준 그룹화 (같은 제목은 한 책꽂이로 통합)
 // ---------------------------------------------------------------------------
 function renderShelf(rows) {
-  // 작품 ID로 그룹화 (작품 정보 + 카드 목록)
-  const byWork = new Map();
+  const byGroup = new Map();
   rows.forEach((card) => {
-    const wid = card.work_id;
-    if (!byWork.has(wid)) {
-      byWork.set(wid, { work: card.works || { work_id: wid, title: `Work #${wid}` }, cards: [] });
+    const work = card.works || { work_id: card.work_id, title: `Work #${card.work_id}` };
+    const key = makeGroupKey(work);
+    if (!byGroup.has(key)) {
+      byGroup.set(key, {
+        key,
+        // 대표 work 정보 (제목·작가·형식·연도는 대표 work에서)
+        representative: work,
+        // 통합된 모든 work_id 모음
+        workIds: new Set(),
+        cards: [],
+      });
     }
-    byWork.get(wid).cards.push(card);
+    const group = byGroup.get(key);
+    group.workIds.add(card.work_id);
+    group.cards.push(card);
   });
 
-  // 작품 제목 순으로 정렬
-  const sortedWorks = [...byWork.values()].sort((a, b) =>
-    String(a.work.title || '').localeCompare(String(b.work.title || ''))
+  // 제목 순으로 정렬
+  const sortedGroups = [...byGroup.values()].sort((a, b) =>
+    String(a.representative.title || '').localeCompare(String(b.representative.title || ''))
   );
 
-  sortedWorks.forEach(({ work, cards }) => {
-    libraryShelf.appendChild(buildShelfSection(work, cards));
+  sortedGroups.forEach((group) => {
+    libraryShelf.appendChild(buildShelfSection(group));
   });
 }
 
-function buildShelfSection(work, cards) {
+function buildShelfSection(group) {
   const wrap = document.createElement('div');
   wrap.className = 'flex flex-col gap-2';
 
-  const isDeleteMode = state.deleteModeWorkId === work.work_id;
+  const work = group.representative;
+  const cards = group.cards;
+  const isDeleteMode = state.deleteModeGroupKey === group.key;
+  const uploadCount = group.workIds.size;
+  const mergedHint = uploadCount > 1 ? ` · 업로드 ${uploadCount}개 통합` : '';
 
   // 헤더: 일반 모드 / 카드 삭제 모드에 따라 다른 컨트롤
   const header = document.createElement('div');
@@ -219,7 +239,7 @@ function buildShelfSection(work, cards) {
       </button>
     `;
     header.querySelector('.shelf-cancel-delete-btn').addEventListener('click', () => {
-      state.deleteModeWorkId = null;
+      state.deleteModeGroupKey = null;
       state.spineSelectedIds.clear();
       renderLibrary();
     });
@@ -240,27 +260,28 @@ function buildShelfSection(work, cards) {
     const authorLabel = work.author ? `· ${work.author}` : '';
     header.innerHTML = `
       <h3 class="text-lg font-bold text-on-surface">${escapeHtml(work.title || '제목 없음')}</h3>
-      <span class="text-xs text-on-surface-variant flex-1">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}`.trim())}</span>
+      <span class="text-xs text-on-surface-variant flex-1">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}${mergedHint}`.trim())}</span>
       <button type="button" class="shelf-start-delete-btn p-1.5 rounded hover:bg-primary/10 text-primary transition-colors flex items-center gap-1 text-sm font-semibold" title="카드 골라 삭제">
         <span class="material-symbols-outlined text-base">checklist</span>
         카드 골라 삭제
       </button>
-      <button type="button" class="shelf-delete-work-btn p-1.5 rounded hover:bg-error/10 text-error transition-colors flex items-center gap-1 text-sm font-semibold" title="작품 전체 삭제">
+      <button type="button" class="shelf-delete-work-btn p-1.5 rounded hover:bg-error/10 text-error transition-colors flex items-center gap-1 text-sm font-semibold" title="작품 전체 삭제 (통합된 업로드 모두)">
         <span class="material-symbols-outlined text-base">delete_sweep</span>
         작품 삭제
       </button>
     `;
     header.querySelector('.shelf-start-delete-btn').addEventListener('click', () => {
-      state.deleteModeWorkId = work.work_id;
+      state.deleteModeGroupKey = group.key;
       state.spineSelectedIds.clear();
       renderLibrary();
     });
     header.querySelector('.shelf-delete-work-btn').addEventListener('click', (e) => {
       e.stopPropagation();
+      const uploadInfo = uploadCount > 1 ? ` (${uploadCount}개 업로드 통합)` : '';
       showConfirmModal({
         title: '정말 삭제하시겠습니까?',
-        message: `"${work.title || `Work #${work.work_id}`}" 작품과 카드 ${cards.length}장이 모두 영구 삭제됩니다.\n\n복구할 수 없습니다.`,
-        onConfirm: () => deleteWork(work, cards),
+        message: `"${work.title || '제목 없음'}" 작품${uploadInfo}과 카드 ${cards.length}장이 모두 영구 삭제됩니다.\n\n복구할 수 없습니다.`,
+        onConfirm: () => deleteWorkGroup(group),
       });
     });
   }
@@ -272,7 +293,8 @@ function buildShelfSection(work, cards) {
   if (isDeleteMode) bookshelf.classList.add('bookshelf-delete-mode');
   const shelfRow = document.createElement('div');
   shelfRow.className = 'shelf-row';
-  const baseColor = colorForWork(work.work_id);
+  // 같은 제목 그룹은 같은 색 — 제목 해시 기반
+  const baseColor = colorForTitle(work.title || group.key);
   cards.forEach((card, idx) => {
     shelfRow.appendChild(buildSpine(card, baseColor, idx, isDeleteMode));
   });
@@ -317,11 +339,15 @@ function buildSpine(card, baseColor, idx, isDeleteMode = false) {
   return spine;
 }
 
-// 작품 ID 기반 베이스 색상 (HSL 회전)
-function colorForWork(workId) {
-  const id = Number(workId) || 0;
-  const hue = (id * 67) % 360; // 각 작품마다 다른 hue
-  return hslToHex(hue, 55, 38); // 중간 채도·중간 명도
+// 작품 제목 기반 베이스 색상 — 같은 제목이면 항상 같은 색 (같은 work_id끼리도 동일)
+function colorForTitle(title) {
+  const s = String(title || '');
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) {
+    hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
+  }
+  const hue = Math.abs(hash * 67) % 360;
+  return hslToHex(hue, 55, 38);
 }
 
 function hslToHex(h, s, l) {
@@ -456,32 +482,40 @@ async function bulkDeleteCards(targetIds) {
 }
 
 // ---------------------------------------------------------------------------
-// 작품 통째로 삭제 (book_genres → cards → works 순서, FK 위반 방지)
+// 작품 그룹 통째로 삭제 — 같은 제목 여러 업로드 모두 한 번에 정리
+// (book_genres → cards → works 순서, FK 위반 방지)
 // ---------------------------------------------------------------------------
-async function deleteWork(work, cards) {
+async function deleteWorkGroup(group) {
+  const workIds = [...group.workIds];
+  const cards = group.cards;
   try {
     const sb = await getSupabase();
-    // 1) work_genres 정리
-    const { error: wgErr } = await sb.from('work_genres').delete().eq('work_id', work.work_id);
+    // 1) work_genres
+    const { error: wgErr } = await sb.from('work_genres').delete().in('work_id', workIds);
     if (wgErr) throw wgErr;
-    // 2) cards 정리
-    const { error: cErr } = await sb.from('cards').delete().eq('work_id', work.work_id);
+    // 2) cards
+    const { error: cErr } = await sb.from('cards').delete().in('work_id', workIds);
     if (cErr) throw cErr;
-    // 3) works 본체 삭제
-    const { error: wErr } = await sb.from('works').delete().eq('work_id', work.work_id);
+    // 3) works
+    const { error: wErr } = await sb.from('works').delete().in('work_id', workIds);
     if (wErr) throw wErr;
 
-    // 로컬 캐시에서 제거
-    const removedCardIds = new Set(cards.map((c) => c.card_id));
-    state.rows = state.rows.filter((c) => c.work_id !== work.work_id);
-    removedCardIds.forEach((id) => state.selectedIds.delete(id));
+    // 로컬 캐시 정리
+    const workIdSet = new Set(workIds);
+    state.rows = state.rows.filter((c) => !workIdSet.has(c.work_id));
+    cards.forEach((c) => state.selectedIds.delete(c.card_id));
+    if (state.deleteModeGroupKey === group.key) {
+      state.deleteModeGroupKey = null;
+      state.spineSelectedIds.clear();
+    }
 
     refreshWorkFilterOptions();
     renderLibrary();
     refreshPullout();
-    toast(`'${work.title || `Work #${work.work_id}`}' 작품 삭제 완료 (카드 ${cards.length}장 포함)`, 'success');
+    const uploadInfo = workIds.length > 1 ? ` (${workIds.length}개 업로드 통합)` : '';
+    toast(`'${group.representative.title || '제목 없음'}' 작품 삭제 완료${uploadInfo} (카드 ${cards.length}장)`, 'success');
   } catch (err) {
-    console.error('[library] delete work failed:', err);
+    console.error('[library] delete work group failed:', err);
     toast(`작품 삭제 실패: ${err.message || err}`, 'error');
   }
 }
