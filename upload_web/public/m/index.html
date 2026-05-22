@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" sizes="512x512" href="/m/icons/icon-book-512.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="/m/icons/icon-book-192.png" />
 <link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg?v=2" />
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <style>
   /* ===== LongBlack tokens (Android Color.kt mirror) ===== */
   :root {
@@ -32,17 +32,18 @@
   html, body { background: var(--paper); color: var(--espresso); }
   body {
     font-family: 'Noto Sans KR', 'Roboto', system-ui, sans-serif;
+    /* 명조체는 .t-display / .t-headline / .t-title / .quote-22 에서 별도 지정 */
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
     padding-bottom: 64px;  /* bottom nav height */
   }
   /* Editorial type scale — mirrors Android Type.kt */
-  .t-display-lg { font-family: 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 40px; line-height: 52px; }
-  .t-display-md { font-family: 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 42px; }
-  .t-headline-lg { font-family: 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 34px; }
-  .t-headline-md { font-family: 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 31px; }
-  .t-headline-sm { font-family: 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 18px; line-height: 26px; }
-  .t-title-lg { font-family: 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 16px; line-height: 24px; }
+  .t-display-lg { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 40px; line-height: 52px; }
+  .t-display-md { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 42px; }
+  .t-headline-lg { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 34px; }
+  .t-headline-md { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 31px; }
+  .t-headline-sm { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 18px; line-height: 26px; }
+  .t-title-lg { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 16px; line-height: 24px; }
   .t-body-lg { font-size: 16px; line-height: 29px; font-weight: 400; }
   .t-body-md { font-size: 14px; line-height: 25px; font-weight: 400; }
   .t-body-sm { font-size: 12px; line-height: 19px; font-weight: 400; }
@@ -291,7 +292,7 @@
 
   /* Quote text — 22sp serif inside TodayCard */
   .quote-22 {
-    font-family: 'Noto Serif KR', Georgia, serif;
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
     font-weight: 400; font-size: 22px; line-height: 34px;
     color: var(--espresso);
     word-break: keep-all;

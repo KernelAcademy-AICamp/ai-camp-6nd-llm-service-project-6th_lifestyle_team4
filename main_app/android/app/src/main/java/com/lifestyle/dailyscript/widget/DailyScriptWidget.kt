@@ -62,7 +62,8 @@ internal object DailyScriptWidget : GlanceAppWidget() {
                     style = TextStyle(
                         color = androidx.glance.color.ColorProvider(Espresso),
                         fontSize = 16.sp,
-                        fontFamily = FontFamily.Serif,
+                        // 앱/iOS 위젯과 동일한 NanumMyeongjo (res/font/nanum_myeongjo.ttf)
+                        fontFamily = FontFamily("nanum_myeongjo"),
                     ),
                     maxLines = 4,
                 )

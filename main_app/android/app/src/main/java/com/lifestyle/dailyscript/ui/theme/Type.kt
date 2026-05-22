@@ -2,23 +2,22 @@ package com.lifestyle.dailyscript.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.lifestyle.dailyscript.R
 
 // LongBlack typography
 //
-//  Korean headlines/quotes → 명조체 (system Serif fallback; swap to
-//      Nanum Myeongjo / Noto Serif KR when ttf is embedded)
-//  Body / UI / labels       → 시스템 sans (Roboto + 한글 fallback;
-//      replace with Pretendard when embedded)
+//  Korean headlines/quotes → 명조체 (NanumMyeongjo, res/font에 번들)
+//  Body / UI / labels       → 시스템 sans (Pretendard 번들 시 교체 가능)
 //  Screenplay (Detail body) → 시스템 monospace
 //
-// Weight policy: never go above 500. Visual weight comes from size,
-// spacing, and serif vs sans contrast — not from boldness.
-val EditorialSerif: FontFamily = FontFamily.Serif
+// Weight policy: never go above 500. 위젯/iOS와 동일한 폰트 사용.
+val EditorialSerif: FontFamily = FontFamily(Font(R.font.nanum_myeongjo))
 val EditorialSans:  FontFamily = FontFamily.Default
 val ScreenplayMono: FontFamily = FontFamily.Monospace
 
