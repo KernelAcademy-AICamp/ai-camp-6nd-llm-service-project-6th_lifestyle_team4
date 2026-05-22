@@ -789,24 +789,28 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-// DB에 콜론·em-dash가 남아 있는 옛 카드도 화면에선 정리해 보여줌
-// 결과 포맷:
+// DB에 콜론·em-dash·libretto 스타일 카드도 화면에선 정리해 보여줌
+// 처리하는 패턴:
+//   1) "이름: 대사"      (콜론 형식)
+//   2) "이름\n대사"      (이미 분리됨)
+//   3) "이름 대사"        (콜론 없이 공백, libretto/한국 영화 대본)
+//   4) "이름 (지문) 대사" (지문 포함)
+// 결과 포맷 (공통):
 //   화자A
 //   대사A
-//   대사A 연속
 //   (빈 줄)
 //   화자B
 //   대사B
 function cleanForDisplay(s) {
   let text = String(s ?? '');
 
-  // 1) em-dash 변형 일괄 제거 (regular hyphen은 유지)
+  // 1) em-dash 변형 일괄 제거
   text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
 
-  // 2) 화자 이름 후보 수집
+  // 2) 화자 후보 수집
   const speakers = new Set();
 
-  // (a) 콜론 형식: "이름:" 패턴 (공백 포함 1~14자)
+  // (a) 콜론 형식: "이름:"
   const colonRegex = /^([^:：()\n]{1,14})[:：][ \t]*/gm;
   let m;
   while ((m = colonRegex.exec(text)) !== null) {
@@ -814,43 +818,75 @@ function cleanForDisplay(s) {
     if (name) speakers.add(name);
   }
 
-  // (b) 콜론 없는 줄: 짧고 글자만으로 된 줄이 2번 이상 등장하면 화자로 간주
-  //     (이미 시스템 프롬프트로 화자\n대사 형식으로 저장된 카드 대응)
-  const lineCounts = {};
-  const allLines = text.split(/\r?\n/);
-  for (const raw of allLines) {
+  // (b) 줄 머리 첫 단어 빈도 — "이름" 단독 또는 "이름 + 공백 + 내용" 패턴
+  //     2회 이상 등장하면 화자 후보
+  //     단, 명사+조사로 끝나는 narrative 주어는 제외 (강재가/강재의/강재에게…)
+  const PARTICLE_END = /(가|이|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  const headCounts = {};
+  for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.length > 14) continue;
-    // 1~14자, 한글/영문/숫자/공백만, 끝글자는 알파벳/한글 (구두점 없음)
-    if (/^[가-힣A-Za-z][가-힣A-Za-z0-9\s]{0,12}[가-힣A-Za-z0-9]$|^[가-힣A-Za-z]$/.test(line)) {
-      lineCounts[line] = (lineCounts[line] || 0) + 1;
+    if (!line || line.length > 60) continue;
+    // 줄 머리에서 첫 한글/영문 토큰 추출 (공백 또는 줄끝으로 종료)
+    const headM = line.match(/^([가-힣A-Za-z]{2,7}[0-9]?)(?=\s|$)/);
+    if (headM) {
+      const word = headM[1];
+      // 조사로 끝나는 단어는 narrative 주어로 보고 카운트 안 함
+      if (word.length > 2 && PARTICLE_END.test(word)) continue;
+      headCounts[word] = (headCounts[word] || 0) + 1;
     }
   }
-  Object.entries(lineCounts).forEach(([word, count]) => {
+  Object.entries(headCounts).forEach(([word, count]) => {
     if (count >= 2) speakers.add(word);
   });
 
-  // 3) "이름:" → "이름\n" (콜론 제거, 다음 줄에 대사 오도록)
+  // 3) "이름:" → "이름\n" (콜론 제거)
   text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
 
-  // 4) 라인별로 다시 조립 — 화자 이름 줄 앞에 빈 줄 추가 (첫 화자는 제외)
+  // 4) 라인별 재조립 — 긴 이름부터 매칭해 짧은 이름이 긴 이름의 접두어인 경우 회피
+  const sortedSpeakers = [...speakers].sort((a, b) => b.length - a.length);
   const lines = text.split('\n');
   const out = [];
   let firstSpeakerSeen = false;
+  const pushSpeakerBoundary = () => {
+    if (firstSpeakerSeen && out.length > 0 && out[out.length - 1].trim() !== '') {
+      out.push('');
+    }
+  };
   for (const raw of lines) {
     const line = raw.trim();
-    if (line && speakers.has(line)) {
-      if (firstSpeakerSeen && out.length > 0 && out[out.length - 1].trim() !== '') {
-        out.push(''); // 화자 블록 사이 빈 줄
-      }
+    if (!line) { out.push(''); continue; }
+
+    // 4a) 줄 전체가 화자 이름
+    if (speakers.has(line)) {
+      pushSpeakerBoundary();
       out.push(line);
       firstSpeakerSeen = true;
-    } else {
-      out.push(raw);
+      continue;
     }
+
+    // 4b) "이름 + 공백 + 내용" 형태 — 화자명만 분리해 다음 줄로
+    let matched = false;
+    for (const name of sortedSpeakers) {
+      if (line.length <= name.length + 1) continue;
+      if (line.startsWith(name + ' ') || line.startsWith(name + '\t')) {
+        const rest = line.slice(name.length).trim();
+        if (rest) {
+          pushSpeakerBoundary();
+          out.push(name);
+          out.push(rest);
+          firstSpeakerSeen = true;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (matched) continue;
+
+    // 4c) narrative 또는 기타 — 그대로
+    out.push(raw);
   }
 
-  // 5) 연속 공백·과다 빈 줄 정리
+  // 5) 정리
   return out.join('\n')
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')

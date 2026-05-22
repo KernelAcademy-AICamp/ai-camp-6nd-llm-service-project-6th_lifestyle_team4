@@ -245,52 +245,76 @@ function buildCardNode(card, idx) {
 }
 
 // 화자/대사 포맷 정상화 — 콜론 제거 + 화자 블록 사이 빈 줄
-// (library.js의 cleanForDisplay 와 동일 로직)
+// (library.js 의 cleanForDisplay 와 동일 로직)
+// 처리하는 패턴:
+//   "이름: 대사"  /  "이름\n대사"  /  "이름 대사"  /  "이름 (지문) 대사"
 function cleanForDisplay(s) {
   let text = String(s ?? '');
-  // em-dash 변형 제거
   text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
 
-  // 화자 후보 수집
   const speakers = new Set();
-  // (a) "이름:" 콜론 형식
+  // (a) 콜론 형식
   const colonRegex = /^([^:：()\n]{1,14})[:：][ \t]*/gm;
   let m;
   while ((m = colonRegex.exec(text)) !== null) {
     const name = m[1].trim();
     if (name) speakers.add(name);
   }
-  // (b) 콜론 없이 짧은 단어가 줄에 2번 이상 단독 등장
-  const lineCounts = {};
+
+  // (b) 줄 머리 첫 단어 빈도 (조사 끝 narrative 주어 제외)
+  const PARTICLE_END = /(가|이|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  const headCounts = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.length > 14) continue;
-    if (/^[가-힣A-Za-z][가-힣A-Za-z0-9\s]{0,12}[가-힣A-Za-z0-9]$|^[가-힣A-Za-z]$/.test(line)) {
-      lineCounts[line] = (lineCounts[line] || 0) + 1;
+    if (!line || line.length > 60) continue;
+    const headM = line.match(/^([가-힣A-Za-z]{2,7}[0-9]?)(?=\s|$)/);
+    if (headM) {
+      const word = headM[1];
+      if (word.length > 2 && PARTICLE_END.test(word)) continue;
+      headCounts[word] = (headCounts[word] || 0) + 1;
     }
   }
-  Object.entries(lineCounts).forEach(([word, count]) => {
+  Object.entries(headCounts).forEach(([word, count]) => {
     if (count >= 2) speakers.add(word);
   });
 
   // "이름:" → "이름\n"
   text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
 
-  // 라인별 재조립 + 화자 줄 앞에 빈 줄
+  // 라인별 재조립
+  const sortedSpeakers = [...speakers].sort((a, b) => b.length - a.length);
   const lines = text.split('\n');
   const out = [];
   let firstSpeakerSeen = false;
+  const pushBoundary = () => {
+    if (firstSpeakerSeen && out.length > 0 && out[out.length - 1].trim() !== '') out.push('');
+  };
   for (const raw of lines) {
     const line = raw.trim();
-    if (line && speakers.has(line)) {
-      if (firstSpeakerSeen && out.length > 0 && out[out.length - 1].trim() !== '') {
-        out.push('');
-      }
+    if (!line) { out.push(''); continue; }
+    if (speakers.has(line)) {
+      pushBoundary();
       out.push(line);
       firstSpeakerSeen = true;
-    } else {
-      out.push(raw);
+      continue;
     }
+    let matched = false;
+    for (const name of sortedSpeakers) {
+      if (line.length <= name.length + 1) continue;
+      if (line.startsWith(name + ' ') || line.startsWith(name + '\t')) {
+        const rest = line.slice(name.length).trim();
+        if (rest) {
+          pushBoundary();
+          out.push(name);
+          out.push(rest);
+          firstSpeakerSeen = true;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (matched) continue;
+    out.push(raw);
   }
   return out.join('\n')
     .replace(/[ \t]{2,}/g, ' ')
