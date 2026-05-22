@@ -53,6 +53,17 @@ function makeGroupKey(work) {
   return `${(work.title || '').trim()}__${(work.author || '').trim()}`;
 }
 
+// 표시용 제목 정규화 — DB 원본은 그대로 두고 화면에만 한글 표기 적용
+const TITLE_DISPLAY_ALIASES = {
+  'titanic': '타이타닉',
+};
+function displayTitle(rawTitle) {
+  const t = String(rawTitle || '').trim();
+  if (!t) return t;
+  const key = t.toLowerCase();
+  return TITLE_DISPLAY_ALIASES[key] || t;
+}
+
 // ---------------------------------------------------------------------------
 // Init: auth gate + load
 // ---------------------------------------------------------------------------
@@ -113,7 +124,7 @@ function refreshWorkFilterOptions() {
     .forEach((title) => {
       const opt = document.createElement('option');
       opt.value = title;
-      opt.textContent = title;
+      opt.textContent = displayTitle(title);
       libraryWorkFilter.appendChild(opt);
     });
   if (current && titles.has(current)) {
@@ -228,7 +239,7 @@ function buildShelfSection(group) {
   if (isDeleteMode) {
     const selectedCount = cards.filter((c) => state.spineSelectedIds.has(c.card_id)).length;
     header.innerHTML = `
-      <h3 class="text-lg font-bold text-error">${escapeHtml(work.title || '제목 없음')} <span class="text-sm font-medium">— 삭제할 책을 선택하세요</span></h3>
+      <h3 class="text-lg font-bold text-error">${escapeHtml(displayTitle(work.title) || '제목 없음')} <span class="text-sm font-medium">— 삭제할 책을 선택하세요</span></h3>
       <span class="text-sm font-semibold text-error flex-1"><span class="font-bold">${selectedCount}</span>장 선택됨</span>
       <button type="button" class="shelf-cancel-delete-btn px-3 py-1.5 rounded-lg border-2 border-outline-variant font-semibold text-sm hover:bg-surface-container-low transition-colors">
         놔두기
@@ -259,7 +270,7 @@ function buildShelfSection(group) {
     const yearLabel = work.release_year ? `· ${work.release_year}` : '';
     const authorLabel = work.author ? `· ${work.author}` : '';
     header.innerHTML = `
-      <h3 class="text-lg font-bold text-on-surface">${escapeHtml(work.title || '제목 없음')}</h3>
+      <h3 class="text-lg font-bold text-on-surface">${escapeHtml(displayTitle(work.title) || '제목 없음')}</h3>
       <span class="text-xs text-on-surface-variant flex-1">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}${mergedHint}`.trim())}</span>
       <button type="button" class="shelf-start-delete-btn p-1.5 rounded hover:bg-primary/10 text-primary transition-colors flex items-center gap-1 text-sm font-semibold" title="카드 골라 삭제">
         <span class="material-symbols-outlined text-base">checklist</span>
@@ -280,7 +291,7 @@ function buildShelfSection(group) {
       const uploadInfo = uploadCount > 1 ? ` (${uploadCount}개 업로드 통합)` : '';
       showConfirmModal({
         title: '정말 삭제하시겠습니까?',
-        message: `"${work.title || '제목 없음'}" 작품${uploadInfo}과 카드 ${cards.length}장이 모두 영구 삭제됩니다.\n\n복구할 수 없습니다.`,
+        message: `"${displayTitle(work.title) || '제목 없음'}" 작품${uploadInfo}과 카드 ${cards.length}장이 모두 영구 삭제됩니다.\n\n복구할 수 없습니다.`,
         onConfirm: () => deleteWorkGroup(group),
       });
     });
@@ -525,7 +536,7 @@ async function deleteWorkGroup(group) {
     renderLibrary();
     refreshPullout();
     const uploadInfo = workIds.length > 1 ? ` (${workIds.length}개 업로드 통합)` : '';
-    toast(`'${group.representative.title || '제목 없음'}' 작품 삭제 완료${uploadInfo} (카드 ${cards.length}장)`, 'success');
+    toast(`'${displayTitle(group.representative.title) || '제목 없음'}' 작품 삭제 완료${uploadInfo} (카드 ${cards.length}장)`, 'success');
   } catch (err) {
     console.error('[library] delete work group failed:', err);
     toast(`작품 삭제 실패: ${err.message || err}`, 'error');
@@ -571,7 +582,7 @@ function buildViewNode(card) {
   const node = libraryCardTemplate.content.firstElementChild.cloneNode(true);
   const work = card.works || {};
 
-  const workLine = [work.title || `Work #${card.work_id}`, work.format, work.release_year, work.author]
+  const workLine = [displayTitle(work.title) || `Work #${card.work_id}`, work.format, work.release_year, work.author]
     .filter(Boolean).join(' · ');
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
@@ -944,7 +955,7 @@ function closeMobilePreview() {
 
 function renderAppCardHtml(card) {
   const work = card.works || {};
-  const workLine = [work.title || `Work #${card.work_id}`, work.author, work.release_year]
+  const workLine = [displayTitle(work.title) || `Work #${card.work_id}`, work.author, work.release_year]
     .filter(Boolean).join(' · ');
 
   const keywords = (card.keywords || [])

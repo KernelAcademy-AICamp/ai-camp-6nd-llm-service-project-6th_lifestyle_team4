@@ -54,7 +54,8 @@ const state = {
   awaitingNext: false,
 };
 
-const RANKING_KEY = 'quiz.rankings.v1';
+let currentUserId = null;
+let lastInsertedRankingId = null;
 
 // Init
 (async () => {
@@ -62,12 +63,18 @@ const RANKING_KEY = 'quiz.rankings.v1';
   if (!token) return;
   const sb = await getSupabase();
   const { data } = await sb.auth.getUser();
+  currentUserId = data?.user?.id || null;
   userEmailEl.textContent = emailToDisplayId(data?.user?.email);
 
   await loadCards();
-  renderRanking(rankingList);
-  rankingSection.classList.toggle('hidden', getRankings().length === 0);
+  await refreshSetupRanking();
 })();
+
+async function refreshSetupRanking() {
+  const arr = await fetchRankings();
+  await renderRanking(rankingList, arr, null);
+  rankingSection.classList.toggle('hidden', arr.length === 0);
+}
 
 logoutBtn.addEventListener('click', async () => {
   const sb = await getSupabase();
@@ -199,13 +206,13 @@ function handleSubmit() {
     feedbackEl.classList.remove('hidden');
     feedbackEl.classList.add('feedback-correct');
     feedbackText.textContent = '✅ 정답! +10점';
-    feedbackDetail.textContent = `작품: ${card.title}`;
+    feedbackDetail.textContent = `작품: ${displayTitle(card.title)}`;
   } else {
     state.score -= 10;
     feedbackEl.classList.remove('hidden');
     feedbackEl.classList.add('feedback-wrong');
     feedbackText.textContent = '❌ 오답 -10점';
-    feedbackDetail.textContent = `정답은: ${card.title}`;
+    feedbackDetail.textContent = `정답은: ${displayTitle(card.title)}`;
   }
   state.results.push({
     quote: card.quote,
@@ -227,7 +234,7 @@ quitBtn.addEventListener('click', () => {
 });
 
 // ---------- End phase ----------
-function endGame() {
+async function endGame() {
   phasePlay.classList.add('hidden');
   phaseEnd.classList.remove('hidden');
 
@@ -238,8 +245,18 @@ function endGame() {
   endAccuracyEl.textContent = `${accuracy}%`;
 
   renderResults();
-  saveRanking(playerNameInput.value.trim(), state.score, state.correctCount, played);
-  renderRanking(endRankingList, playerNameInput.value.trim(), state.score);
+  // 랭킹 저장 (Supabase)
+  lastInsertedRankingId = null;
+  if (played > 0) {
+    lastInsertedRankingId = await saveRanking(
+      playerNameInput.value.trim(),
+      state.score,
+      state.correctCount,
+      played,
+    );
+  }
+  const arr = await fetchRankings();
+  await renderRanking(endRankingList, arr, lastInsertedRankingId);
 }
 
 function renderResults() {
@@ -250,7 +267,7 @@ function renderResults() {
     row.innerHTML = `
       <div class="flex items-start gap-2 mb-1">
         <span class="text-xs font-bold ${r.correct ? 'text-green-700' : 'text-red-700'} shrink-0">#${i + 1} ${r.correct ? '✓' : '✗'}</span>
-        <p class="text-sm font-semibold">${escapeHtml(r.title)}</p>
+        <p class="text-sm font-semibold">${escapeHtml(displayTitle(r.title))}</p>
       </div>
       <p class="text-xs text-on-surface-variant pl-6 italic">"${escapeHtml(truncate(r.quote, 80))}"</p>
       ${!r.correct ? `<p class="text-xs text-red-600 pl-6 mt-1">내 답: ${escapeHtml(r.userAnswer)}</p>` : ''}
@@ -262,54 +279,63 @@ function renderResults() {
   }
 }
 
-playAgainBtn.addEventListener('click', () => {
+playAgainBtn.addEventListener('click', async () => {
   phaseEnd.classList.add('hidden');
   phaseSetup.classList.remove('hidden');
-  renderRanking(rankingList);
-  rankingSection.classList.toggle('hidden', getRankings().length === 0);
+  await refreshSetupRanking();
 });
 
-// ---------- Ranking (localStorage) ----------
-function getRankings() {
+// ---------- Ranking (Supabase shared) ----------
+async function fetchRankings(limit = 10) {
   try {
-    const raw = localStorage.getItem(RANKING_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
-  } catch {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('quiz_rankings')
+      .select('id, name, score, correct, played, created_at, user_id')
+      .order('score', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error('[quiz] fetch rankings failed:', err);
     return [];
   }
 }
 
-function saveRanking(name, score, correct, played) {
-  if (!name) return;
-  const entry = {
-    name,
-    score,
-    correct,
-    played,
-    at: new Date().toISOString(),
-  };
-  const arr = getRankings();
-  arr.push(entry);
-  arr.sort((a, b) => b.score - a.score);
-  const trimmed = arr.slice(0, 50);
+async function saveRanking(name, score, correct, played) {
+  if (!name || !currentUserId) return null;
   try {
-    localStorage.setItem(RANKING_KEY, JSON.stringify(trimmed));
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('quiz_rankings')
+      .insert({
+        name,
+        score,
+        correct,
+        played,
+        user_id: currentUserId,
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    return data?.id ?? null;
   } catch (err) {
-    console.warn('[quiz] save ranking failed:', err);
+    console.error('[quiz] save ranking failed:', err);
+    showToast(`랭킹 저장 실패: ${err.message || err}`, true);
+    return null;
   }
 }
 
-function renderRanking(container, highlightName, highlightScore) {
-  const arr = getRankings().slice(0, 10);
+async function renderRanking(container, rankings, highlightId) {
+  const arr = Array.isArray(rankings) ? rankings : [];
   container.innerHTML = '';
   if (arr.length === 0) {
     container.innerHTML = '<p class="text-sm text-on-surface-variant text-center py-3">아직 기록이 없습니다.</p>';
     return;
   }
   arr.forEach((entry, i) => {
-    const isCurrent = entry.name === highlightName && entry.score === highlightScore;
+    const isCurrent = highlightId != null && entry.id === highlightId;
     const row = document.createElement('div');
     row.className = `ranking-row flex items-center justify-between px-3 py-2 border-b border-outline-variant/30 last:border-b-0 ${isCurrent ? 'current' : ''}`;
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `<span class="text-on-surface-variant text-xs font-mono">${String(i + 1).padStart(2, '0')}</span>`;
@@ -345,16 +371,39 @@ function normalizeTitle(s) {
     .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
+// 영문/한글 alias — DB 원본은 영문이지만 한글 입력도 정답 처리
+const TITLE_DISPLAY_ALIASES = {
+  'titanic': '타이타닉',
+};
+function displayTitle(rawTitle) {
+  const t = String(rawTitle || '').trim();
+  if (!t) return t;
+  return TITLE_DISPLAY_ALIASES[t.toLowerCase()] || t;
+}
+function aliasesFor(target) {
+  const out = new Set();
+  const t = String(target || '').trim();
+  if (!t) return out;
+  out.add(t);
+  const lower = t.toLowerCase();
+  if (TITLE_DISPLAY_ALIASES[lower]) out.add(TITLE_DISPLAY_ALIASES[lower]);
+  Object.entries(TITLE_DISPLAY_ALIASES).forEach(([k, v]) => {
+    if (v === t) out.add(k);
+  });
+  return out;
+}
+
 function matchTitle(userAnswer, target) {
   const u = normalizeTitle(userAnswer);
-  const t = normalizeTitle(target);
-  if (!u || !t) return false;
-  if (u === t) return true;
-  // Substring match — user input contained in title or vice versa, min 2 chars
-  if (u.length >= 2 && t.length >= 2 && (t.includes(u) || u.includes(t))) {
-    // require length ratio >= 0.5 to avoid trivial matches
-    const ratio = Math.min(u.length, t.length) / Math.max(u.length, t.length);
-    if (ratio >= 0.5) return true;
+  if (!u) return false;
+  for (const alias of aliasesFor(target)) {
+    const t = normalizeTitle(alias);
+    if (!t) continue;
+    if (u === t) return true;
+    if (u.length >= 2 && t.length >= 2 && (t.includes(u) || u.includes(t))) {
+      const ratio = Math.min(u.length, t.length) / Math.max(u.length, t.length);
+      if (ratio >= 0.5) return true;
+    }
   }
   return false;
 }
