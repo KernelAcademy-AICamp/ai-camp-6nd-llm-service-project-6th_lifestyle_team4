@@ -1,6 +1,6 @@
 // Service Worker — 정적 자산 캐시 + 오프라인 폴백
 // 캐시 버전은 배포 때마다 올려야 새 파일이 적용됩니다.
-const CACHE_VERSION = 'sq-v4-longblack';
+const CACHE_VERSION = 'sq-v5-android-port';
 const CORE_ASSETS = [
   '/',
   '/index.html',
