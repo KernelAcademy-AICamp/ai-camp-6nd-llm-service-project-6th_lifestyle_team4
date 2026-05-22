@@ -25,29 +25,43 @@ class HomeViewModel : ViewModel() {
             val cardResult = runCatching { cardRepo.fetchRandomCard() }
             val bookmarksResult = runCatching { bookmarkRepo.list(userId) }
             val card = cardResult.getOrNull()
-            val cardIsBookmarked = card?.cardId?.let { id ->
-                runCatching { bookmarkRepo.isBookmarked(userId, id) }.getOrDefault(false)
-            } ?: false
+            val bookmarkStateResult = card?.cardId?.let { id ->
+                runCatching { bookmarkRepo.isBookmarked(userId, id) }
+            }
             _state.value = HomeState(
                 loading = false,
                 todayCard = card,
-                todayBookmarked = cardIsBookmarked,
+                todayBookmarked = bookmarkStateResult?.getOrDefault(false) ?: false,
                 bookmarks = bookmarksResult.getOrDefault(emptyList()),
                 error = listOfNotNull(
                     cardResult.exceptionOrNull()?.message,
                     bookmarksResult.exceptionOrNull()?.message,
-                ).joinToString(" • ").ifBlank { null },
+                    bookmarkStateResult?.exceptionOrNull()?.message,
+                ).joinToString(" / ").ifBlank { null },
             )
         }
     }
 
     fun toggleTodayBookmark(userId: Long) {
         val card = _state.value.todayCard ?: return
+        if (_state.value.bookmarkActionInFlight) return
+        _state.value = _state.value.copy(bookmarkActionInFlight = true, error = null)
         viewModelScope.launch {
             runCatching { bookmarkRepo.toggle(userId, card.cardId) }
                 .onSuccess { now ->
-                    val refreshed = runCatching { bookmarkRepo.list(userId) }.getOrDefault(_state.value.bookmarks)
-                    _state.value = _state.value.copy(todayBookmarked = now, bookmarks = refreshed)
+                    val refreshedResult = runCatching { bookmarkRepo.list(userId) }
+                    _state.value = _state.value.copy(
+                        todayBookmarked = now,
+                        bookmarks = refreshedResult.getOrDefault(_state.value.bookmarks),
+                        bookmarkActionInFlight = false,
+                        error = refreshedResult.exceptionOrNull()?.message,
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        bookmarkActionInFlight = false,
+                        error = error.message ?: "Bookmark update failed.",
+                    )
                 }
         }
     }
@@ -59,4 +73,5 @@ data class HomeState(
     val todayBookmarked: Boolean = false,
     val bookmarks: List<BookmarkRow> = emptyList(),
     val error: String? = null,
+    val bookmarkActionInFlight: Boolean = false,
 )

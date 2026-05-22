@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html class="light" lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+<title>Script & Quote Intelligence — 명대사 맞추기</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#3525cd" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="S&Q" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+KR:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<style>
+  body { font-family: 'Inter', 'Noto Sans KR', sans-serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
+  .quote-display {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.5;
+    color: #1a1a1a;
+    word-break: keep-all;
+    text-wrap: balance;
+  }
+  @media (max-width: 900px) { .quote-display { font-size: 24px; } }
+  .round-btn {
+    flex: 1; padding: 16px 8px; font-size: 18px; font-weight: 700;
+    border: 2px solid #c7c4d8; border-radius: 12px; background: white;
+    color: #464555; cursor: pointer; transition: all 0.15s ease;
+  }
+  .round-btn:hover { border-color: #3525cd; transform: translateY(-2px); }
+  .round-btn.active { border-color: #3525cd; background: #3525cd; color: white; }
+  .feedback-correct {
+    background: #1a7f37; color: white;
+    animation: feedback-pop 0.3s ease;
+  }
+  .feedback-wrong {
+    background: #ba1a1a; color: white;
+    animation: feedback-pop 0.3s ease;
+  }
+  @keyframes feedback-pop {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .ranking-row.current { background: #fff7ed; border-left: 4px solid #f59e0b; }
+  .rf-btn {
+    padding: 6px 14px; border: 1px solid #c7c4d8; border-radius: 999px;
+    background: white; color: #464555; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s ease;
+  }
+  .rf-btn:hover { border-color: #3525cd; }
+  .rf-btn.active { background: #3525cd; color: white; border-color: #3525cd; }
+</style>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          'surface-variant': '#d8e3fb', 'inverse-surface': '#263143', 'outline': '#777587',
+          'surface': '#f9f9ff', 'primary-fixed-dim': '#c3c0ff', 'error': '#ba1a1a',
+          'background': '#f9f9ff', 'surface-container-high': '#dee8ff', 'inverse-primary': '#c3c0ff',
+          'on-surface-variant': '#464555', 'surface-container-low': '#f0f3ff',
+          'outline-variant': '#c7c4d8', 'on-primary': '#ffffff', 'surface-container-lowest': '#ffffff',
+          'surface-container': '#e7eeff', 'on-error-container': '#93000a',
+          'on-primary-container': '#dad7ff', 'surface-bright': '#f9f9ff',
+          'secondary': '#006591', 'primary-container': '#4f46e5', 'tertiary': '#684000',
+          'primary': '#3525cd', 'primary-fixed': '#e2dfff',
+          'on-background': '#111c2d', 'on-surface': '#111c2d',
+          'error-container': '#ffdad6', 'secondary-container': '#39b8fd',
+          'inverse-on-surface': '#ecf1ff',
+        },
+        borderRadius: { DEFAULT: '0.25rem', lg: '0.5rem', xl: '0.75rem', full: '9999px' },
+      },
+    },
+  };
+</script>
+</head>
+<body class="bg-surface text-on-background min-h-screen">
+
+<aside class="fixed left-0 top-0 h-full w-[280px] bg-surface border-r border-outline-variant flex flex-col p-4 gap-2 z-50">
+  <div class="mb-8 px-2">
+    <h1 class="text-xl font-bold text-primary tracking-tight">Script &amp; Quote Intelligence</h1>
+    <p class="text-sm text-on-surface-variant mt-1">스크립트 및 견적 관리</p>
+  </div>
+  <nav class="flex flex-col gap-1 flex-1">
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors" href="/dashboard.html">
+      <span class="material-symbols-outlined">dashboard</span>
+      <span class="text-sm">대시보드</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors" href="/library.html">
+      <span class="material-symbols-outlined">inventory_2</span>
+      <span class="text-sm">조회</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 bg-secondary-container/20 text-primary rounded-lg font-bold" href="/quiz.html">
+      <span class="material-symbols-outlined">quiz</span>
+      <span class="text-sm">명대사 맞추기</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors opacity-50 cursor-not-allowed" href="#" aria-disabled="true">
+      <span class="material-symbols-outlined">history</span>
+      <span class="text-sm">히스토리 (Coming soon)</span>
+    </a>
+  </nav>
+  <div class="border-t border-outline-variant pt-4 flex flex-col gap-1">
+    <button id="logout-btn" class="flex items-center gap-3 px-4 py-2 text-error hover:bg-surface-container-low rounded-lg transition-colors text-left">
+      <span class="material-symbols-outlined">logout</span>
+      <span class="text-sm font-medium">로그아웃</span>
+    </button>
+  </div>
+</aside>
+
+<header class="fixed top-0 left-[280px] w-[calc(100%-280px)] h-16 bg-surface-container-lowest border-b border-outline-variant flex justify-between items-center px-8 z-40">
+  <h2 class="text-xl font-extrabold text-primary">명대사 맞추기</h2>
+  <div class="flex items-center gap-3">
+    <span id="user-email" class="text-sm text-on-surface-variant"></span>
+  </div>
+</header>
+
+<main class="ml-[280px] pt-16 min-h-screen pb-16">
+  <div class="p-8 max-w-3xl mx-auto">
+
+    <!-- ===== Phase: SETUP ===== -->
+    <section id="phase-setup" class="flex flex-col gap-8">
+      <div>
+        <h1 class="text-3xl font-bold mb-2">🎬 영화 명대사 맞추기</h1>
+        <p class="text-on-surface-variant">DB에 저장된 명대사를 보고 어떤 작품의 대사인지 맞춰보세요.</p>
+      </div>
+
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 flex flex-col gap-5 shadow-sm">
+        <div>
+          <label class="block text-sm font-semibold text-on-surface-variant mb-2">닉네임</label>
+          <input type="text" id="player-name" maxlength="12"
+                 class="w-full p-3 rounded-lg border-2 border-outline-variant text-base focus:outline-none focus:border-primary"
+                 placeholder="랭킹에 표시될 이름 (최대 12자)" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-on-surface-variant mb-2">라운드 수</label>
+          <div class="flex gap-2 flex-wrap">
+            <button type="button" class="round-btn" data-rounds="10">10</button>
+            <button type="button" class="round-btn" data-rounds="20">20</button>
+            <button type="button" class="round-btn" data-rounds="30">30</button>
+            <button type="button" class="round-btn" data-rounds="40">40</button>
+            <button type="button" class="round-btn" data-rounds="50">50</button>
+          </div>
+        </div>
+
+        <div class="text-xs text-on-surface-variant pt-2 border-t border-outline-variant/40">
+          <p>📌 규칙: 정답 +10점, 오답 -10점. 카드 랜덤 선정. 종료 시 랭킹 표시.</p>
+          <p class="mt-1">📚 사용 가능한 카드: <span id="card-pool-count" class="font-bold text-primary">…</span>장</p>
+        </div>
+
+        <button type="button" id="start-btn"
+                class="w-full bg-primary text-on-primary py-3 rounded-lg text-lg font-bold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                disabled>
+          <span class="material-symbols-outlined">play_arrow</span>
+          게임 시작
+        </button>
+      </div>
+
+      <!-- 랭킹 (저장된 기록) -->
+      <div id="ranking-section" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+        <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+          <span class="material-symbols-outlined">emoji_events</span>
+          역대 랭킹 (TOP 10) — 라운드별
+        </h3>
+        <div id="ranking-filter-setup" class="flex flex-wrap gap-1 mb-3">
+          <button type="button" class="rf-btn active" data-rf="10">10라운드</button>
+          <button type="button" class="rf-btn" data-rf="20">20라운드</button>
+          <button type="button" class="rf-btn" data-rf="30">30라운드</button>
+          <button type="button" class="rf-btn" data-rf="40">40라운드</button>
+          <button type="button" class="rf-btn" data-rf="50">50라운드</button>
+        </div>
+        <div id="ranking-list" class="flex flex-col"></div>
+      </div>
+    </section>
+
+    <!-- ===== Phase: PLAY ===== -->
+    <section id="phase-play" class="flex flex-col gap-6 hidden">
+      <!-- 상태 패널: 진행 + 점수 -->
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3 gap-4 flex-wrap">
+          <div>
+            <p class="text-xs text-on-surface-variant mb-0.5">진행 상황</p>
+            <p class="text-2xl font-bold leading-tight">
+              <span id="round-current" class="text-primary">1</span>
+              <span class="opacity-40 font-medium"> / </span>
+              <span id="round-total" class="opacity-70">10</span>
+              <span class="text-sm font-medium opacity-60 ml-1">라운드</span>
+              <span id="round-percent" class="text-sm font-medium text-on-surface-variant ml-2">(0%)</span>
+            </p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-on-surface-variant mb-0.5">현재 점수</p>
+            <p id="score-current" class="text-3xl font-extrabold text-primary leading-tight">0</p>
+            <p class="text-xs text-on-surface-variant mt-0.5">
+              <span class="text-green-700 font-semibold">✓ <span id="correct-count">0</span></span>
+              <span class="mx-1 opacity-40">·</span>
+              <span class="text-red-700 font-semibold">✗ <span id="wrong-count">0</span></span>
+            </p>
+          </div>
+        </div>
+
+        <!-- 진행 바 -->
+        <div class="h-2.5 bg-surface-container rounded-full overflow-hidden">
+          <div id="progress-bar" class="h-full bg-primary transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- 명대사 카드 -->
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-sm min-h-[200px] flex items-center justify-center text-center">
+        <p id="quote-text" class="quote-display"></p>
+      </div>
+
+      <!-- 답 입력 -->
+      <div class="flex flex-col gap-3">
+        <label class="text-sm font-semibold text-on-surface-variant">이 명대사가 나온 작품의 제목은?</label>
+        <div class="flex gap-2">
+          <input type="text" id="answer-input"
+                 class="flex-1 p-3 rounded-lg border-2 border-outline-variant text-base focus:outline-none focus:border-primary"
+                 placeholder="작품 제목을 입력하세요" autocomplete="off" />
+          <button type="button" id="submit-btn"
+                  class="bg-primary text-on-primary px-6 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center gap-1">
+            제출
+            <span class="material-symbols-outlined text-base">arrow_forward</span>
+          </button>
+        </div>
+        <p class="text-xs text-on-surface-variant">Enter 키로도 제출됩니다. 띄어쓰기·대소문자는 무시됩니다.</p>
+      </div>
+
+      <!-- 피드백 (정답/오답 알림) -->
+      <div id="feedback" class="hidden rounded-xl p-4 text-center">
+        <p id="feedback-text" class="text-lg font-bold mb-1"></p>
+        <p id="feedback-detail" class="text-sm"></p>
+      </div>
+
+      <button type="button" id="quit-btn"
+              class="self-center text-sm text-on-surface-variant hover:text-error mt-4">
+        포기하고 결과 보기
+      </button>
+    </section>
+
+    <!-- ===== Phase: END ===== -->
+    <section id="phase-end" class="flex flex-col gap-6 hidden">
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-sm text-center">
+        <h2 class="text-3xl font-bold mb-4">🎯 게임 종료</h2>
+        <div class="grid grid-cols-3 gap-4 mb-6">
+          <div>
+            <p class="text-xs text-on-surface-variant">최종 점수</p>
+            <p id="end-score" class="text-3xl font-bold text-primary">0</p>
+          </div>
+          <div>
+            <p class="text-xs text-on-surface-variant">정답</p>
+            <p id="end-correct" class="text-3xl font-bold text-secondary">0</p>
+          </div>
+          <div>
+            <p class="text-xs text-on-surface-variant">정답률</p>
+            <p id="end-accuracy" class="text-3xl font-bold">0%</p>
+          </div>
+        </div>
+        <div class="flex gap-2 justify-center">
+          <button type="button" id="play-again-btn"
+                  class="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-semibold hover:opacity-90 flex items-center gap-1">
+            <span class="material-symbols-outlined text-base">replay</span>
+            다시 도전
+          </button>
+          <a href="/library.html"
+             class="bg-surface-container border border-outline-variant px-6 py-2.5 rounded-lg font-semibold hover:bg-surface-container-low flex items-center gap-1">
+            조회로 돌아가기
+          </a>
+        </div>
+      </div>
+
+      <!-- 결과 리스트 (각 라운드 정답/오답) -->
+      <details class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 shadow-sm">
+        <summary class="cursor-pointer font-semibold text-on-surface-variant">📋 라운드별 결과 보기</summary>
+        <div id="end-results" class="mt-4 flex flex-col gap-2 max-h-96 overflow-y-auto"></div>
+      </details>
+
+      <!-- 랭킹 -->
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+        <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+          <span class="material-symbols-outlined">emoji_events</span>
+          역대 랭킹 (TOP 10) — 라운드별
+        </h3>
+        <div id="ranking-filter-end" class="flex flex-wrap gap-1 mb-3">
+          <button type="button" class="rf-btn" data-rf="10">10라운드</button>
+          <button type="button" class="rf-btn" data-rf="20">20라운드</button>
+          <button type="button" class="rf-btn" data-rf="30">30라운드</button>
+          <button type="button" class="rf-btn" data-rf="40">40라운드</button>
+          <button type="button" class="rf-btn" data-rf="50">50라운드</button>
+        </div>
+        <div id="end-ranking-list" class="flex flex-col"></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-8 right-8 hidden px-4 py-3 bg-inverse-surface text-inverse-on-surface rounded-lg shadow-xl z-50 text-sm"></div>
+
+<script type="module" src="/assets/quiz.js"></script>
+<script type="module" src="/assets/pwa.js"></script>
+</body>
+</html>

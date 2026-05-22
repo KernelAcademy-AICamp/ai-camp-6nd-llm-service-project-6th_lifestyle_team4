@@ -280,6 +280,84 @@ function buildCardNode(card, idx) {
   return buildCardViewNode(card, idx);
 }
 
+// 화자/대사 포맷 정상화 — 콜론 제거 + 화자 블록 사이 빈 줄
+// (library.js 의 cleanForDisplay 와 동일 로직)
+// 처리하는 패턴:
+//   "이름: 대사"  /  "이름\n대사"  /  "이름 대사"  /  "이름 (지문) 대사"
+function cleanForDisplay(s) {
+  let text = String(s ?? '');
+  text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
+
+  const speakers = new Set();
+  // (a) 콜론 형식
+  const colonRegex = /^([^:：()\n]{1,14})[:：][ \t]*/gm;
+  let m;
+  while ((m = colonRegex.exec(text)) !== null) {
+    const name = m[1].trim();
+    if (name) speakers.add(name);
+  }
+
+  // (b) 줄 머리 첫 단어 빈도 (조사 끝 narrative 주어 제외)
+  const PARTICLE_END = /(가|이|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  const headCounts = {};
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.length > 60) continue;
+    const headM = line.match(/^([가-힣A-Za-z]{2,7}[0-9]?)(?=\s|$)/);
+    if (headM) {
+      const word = headM[1];
+      if (word.length > 2 && PARTICLE_END.test(word)) continue;
+      headCounts[word] = (headCounts[word] || 0) + 1;
+    }
+  }
+  Object.entries(headCounts).forEach(([word, count]) => {
+    if (count >= 2) speakers.add(word);
+  });
+
+  // "이름:" → "이름\n"
+  text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
+
+  // 라인별 재조립
+  const sortedSpeakers = [...speakers].sort((a, b) => b.length - a.length);
+  const lines = text.split('\n');
+  const out = [];
+  let firstSpeakerSeen = false;
+  const pushBoundary = () => {
+    if (firstSpeakerSeen && out.length > 0 && out[out.length - 1].trim() !== '') out.push('');
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { out.push(''); continue; }
+    if (speakers.has(line)) {
+      pushBoundary();
+      out.push(line);
+      firstSpeakerSeen = true;
+      continue;
+    }
+    let matched = false;
+    for (const name of sortedSpeakers) {
+      if (line.length <= name.length + 1) continue;
+      if (line.startsWith(name + ' ') || line.startsWith(name + '\t')) {
+        const rest = line.slice(name.length).trim();
+        if (rest) {
+          pushBoundary();
+          out.push(name);
+          out.push(rest);
+          firstSpeakerSeen = true;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (matched) continue;
+    out.push(raw);
+  }
+  return out.join('\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function buildCardViewNode(card, idx) {
   const node = cardTemplate.content.firstElementChild.cloneNode(true);
 
@@ -291,9 +369,9 @@ function buildCardViewNode(card, idx) {
 
   node.querySelector('.card-tag').textContent =
     (card.keywords && card.keywords[0]) || `Card #${idx + 1}`;
-  node.querySelector('.card-quote').textContent = quote ? `"${quote}"` : '';
-  node.querySelector('.card-excerpt').textContent = excerpt || '';
-  node.querySelector('.card-description').textContent = desc || '';
+  node.querySelector('.card-quote').textContent = quote ? `"${cleanForDisplay(quote)}"` : '';
+  node.querySelector('.card-excerpt').textContent = cleanForDisplay(excerpt || '');
+  node.querySelector('.card-description').textContent = cleanForDisplay(desc || '');
 
   // significance — 있으면 표시, 없으면 안내 문구
   const sigWrap = node.querySelector('.card-significance-wrap');

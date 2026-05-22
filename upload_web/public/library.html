@@ -2,8 +2,16 @@
 <html class="light" lang="ko">
 <head>
 <meta charset="utf-8" />
-<meta content="width=device-width, initial-scale=1.0" name="viewport" />
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
 <title>Script & Quote Intelligence — 조회</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#3525cd" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="S&Q" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+KR:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <style>
@@ -393,6 +401,10 @@
       <span class="material-symbols-outlined">inventory_2</span>
       <span class="text-sm">조회</span>
     </a>
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors" href="/quiz.html">
+      <span class="material-symbols-outlined">quiz</span>
+      <span class="text-sm">명대사 맞추기</span>
+    </a>
     <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors opacity-50 cursor-not-allowed" href="#" aria-disabled="true">
       <span class="material-symbols-outlined">history</span>
       <span class="text-sm">히스토리 (Coming soon)</span>
@@ -660,5 +672,6 @@
 </template>
 
 <script type="module" src="/assets/library.js"></script>
+<script type="module" src="/assets/pwa.js"></script>
 </body>
 </html>

@@ -7,7 +7,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 
 class CardRepository {
 
-    private val client = SupabaseProvider.client
+    private val client get() = SupabaseProvider.client
 
     private val cardSelect = Columns.raw(
         """

@@ -1,12 +1,14 @@
 package com.lifestyle.dailyscript.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,6 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -25,6 +28,7 @@ import androidx.navigation.navArgument
 import com.lifestyle.dailyscript.ui.archive.ArchiveScreen
 import com.lifestyle.dailyscript.ui.components.BottomNavBar
 import com.lifestyle.dailyscript.ui.components.HomeTopBar
+import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SettingsTopBar
 import com.lifestyle.dailyscript.ui.detail.DetailScreen
 import com.lifestyle.dailyscript.ui.home.HomeScreen
@@ -47,8 +51,13 @@ fun DailyScriptRoot() {
             .navigationBarsPadding(),
     ) {
         when (val s = sessionState) {
-            SessionState.Loading -> CenteredMessage(text = "…")
-            is SessionState.Error -> CenteredMessage(text = s.message, error = true)
+            SessionState.Loading -> CenteredMessage(text = "Loading...")
+            is SessionState.Error -> CenteredMessage(
+                text = s.message,
+                error = true,
+                actionLabel = "Retry",
+                onAction = sessionVm::bootstrap,
+            )
             is SessionState.Ready -> ScaffoldWithNav(
                 userId = s.userId,
                 onSignOut = sessionVm::signOutAndReauth,
@@ -86,7 +95,12 @@ private fun ScaffoldWithNav(userId: Long, onSignOut: () -> Unit) {
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
-                composable(Routes.ARCHIVE) { ArchiveScreen() }
+                composable(Routes.ARCHIVE) {
+                    ArchiveScreen(
+                        userId = userId,
+                        onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                    )
+                }
                 composable(Routes.SETTINGS) {
                     SettingsScreen(nickname = null, onSignOut = onSignOut)
                 }
@@ -120,13 +134,31 @@ private fun ScaffoldWithNav(userId: Long, onSignOut: () -> Unit) {
 }
 
 @Composable
-private fun CenteredMessage(text: String, error: Boolean = false) {
+private fun CenteredMessage(
+    text: String,
+    error: Boolean = false,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (error) Cta else Walnut,
+        Column(
             modifier = Modifier.padding(24.dp),
-        )
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (error) Cta else Walnut,
+                textAlign = TextAlign.Center,
+            )
+            if (actionLabel != null && onAction != null) {
+                SharpButton(
+                    label = actionLabel,
+                    onClick = onAction,
+                    modifier = Modifier.width(180.dp),
+                )
+            }
+        }
     }
 }

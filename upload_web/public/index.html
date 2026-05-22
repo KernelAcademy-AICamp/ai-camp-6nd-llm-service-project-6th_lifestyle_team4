@@ -3,8 +3,16 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8" />
-<meta content="width=device-width, initial-scale=1.0" name="viewport" />
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
 <title>Admin Login | Script &amp; Quote Intelligence</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#3525cd" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="S&Q" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <script id="tailwind-config">
@@ -34,6 +42,11 @@
 </style>
 </head>
 <body class="bg-surface text-on-surface min-h-screen flex flex-col items-center justify-center">
+
+<a href="/m/" class="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-primary-container text-white text-xs font-semibold flex items-center gap-1 shadow-sm hover:opacity-90">
+  <span class="material-symbols-outlined" style="font-size:16px;">smartphone</span>
+  사용자 앱
+</a>
 
 <header class="mb-8 flex flex-col items-center gap-2">
   <span class="material-symbols-outlined text-primary-container" style="font-size: 48px;">description</span>
@@ -68,6 +81,15 @@
       </button>
     </form>
 
+    <button type="button" data-install-app data-install-always
+            class="w-full mt-3 bg-white border-2 border-primary-container text-primary-container py-3 rounded-lg text-sm font-semibold hover:bg-primary-container/5 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+      <span class="material-symbols-outlined" style="font-family:'Material Symbols Outlined';font-size:20px;">install_mobile</span>
+      앱으로 설치
+    </button>
+    <p class="mt-2 text-center text-xs text-on-surface-variant/70">
+      홈 화면에 추가해 일반 앱처럼 사용하세요
+    </p>
+
     <div class="mt-6 pt-6 border-t border-outline-variant text-center">
       <span class="text-on-surface-variant text-xs">
         계정은 관리자에게 문의하세요.
@@ -81,5 +103,6 @@
 </footer>
 
 <script type="module" src="/assets/login.js"></script>
+<script type="module" src="/assets/pwa.js"></script>
 </body>
 </html>
