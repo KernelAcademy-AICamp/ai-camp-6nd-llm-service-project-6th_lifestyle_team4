@@ -39,6 +39,13 @@
     100% { transform: scale(1); opacity: 1; }
   }
   .ranking-row.current { background: #fff7ed; border-left: 4px solid #f59e0b; }
+  .rf-btn {
+    padding: 6px 14px; border: 1px solid #c7c4d8; border-radius: 999px;
+    background: white; color: #464555; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s ease;
+  }
+  .rf-btn:hover { border-color: #3525cd; }
+  .rf-btn.active { background: #3525cd; color: white; border-color: #3525cd; }
 </style>
 <script id="tailwind-config">
   tailwind.config = {
@@ -148,32 +155,52 @@
       </div>
 
       <!-- 랭킹 (저장된 기록) -->
-      <div id="ranking-section" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm hidden">
+      <div id="ranking-section" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
         <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
           <span class="material-symbols-outlined">emoji_events</span>
-          역대 랭킹 (TOP 10)
+          역대 랭킹 (TOP 10) — 라운드별
         </h3>
+        <div id="ranking-filter-setup" class="flex flex-wrap gap-1 mb-3">
+          <button type="button" class="rf-btn active" data-rf="10">10라운드</button>
+          <button type="button" class="rf-btn" data-rf="20">20라운드</button>
+          <button type="button" class="rf-btn" data-rf="30">30라운드</button>
+          <button type="button" class="rf-btn" data-rf="40">40라운드</button>
+          <button type="button" class="rf-btn" data-rf="50">50라운드</button>
+        </div>
         <div id="ranking-list" class="flex flex-col"></div>
       </div>
     </section>
 
     <!-- ===== Phase: PLAY ===== -->
     <section id="phase-play" class="flex flex-col gap-6 hidden">
-      <div class="flex items-center justify-between">
-        <div class="text-sm font-semibold text-on-surface-variant">
-          <span id="round-current" class="text-primary text-lg font-bold">1</span>
-          <span class="opacity-50"> / </span>
-          <span id="round-total">10</span>
-          <span class="opacity-50"> 라운드</span>
+      <!-- 상태 패널: 진행 + 점수 -->
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3 gap-4 flex-wrap">
+          <div>
+            <p class="text-xs text-on-surface-variant mb-0.5">진행 상황</p>
+            <p class="text-2xl font-bold leading-tight">
+              <span id="round-current" class="text-primary">1</span>
+              <span class="opacity-40 font-medium"> / </span>
+              <span id="round-total" class="opacity-70">10</span>
+              <span class="text-sm font-medium opacity-60 ml-1">라운드</span>
+              <span id="round-percent" class="text-sm font-medium text-on-surface-variant ml-2">(0%)</span>
+            </p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-on-surface-variant mb-0.5">현재 점수</p>
+            <p id="score-current" class="text-3xl font-extrabold text-primary leading-tight">0</p>
+            <p class="text-xs text-on-surface-variant mt-0.5">
+              <span class="text-green-700 font-semibold">✓ <span id="correct-count">0</span></span>
+              <span class="mx-1 opacity-40">·</span>
+              <span class="text-red-700 font-semibold">✗ <span id="wrong-count">0</span></span>
+            </p>
+          </div>
         </div>
-        <div class="text-sm font-semibold text-on-surface-variant">
-          점수: <span id="score-current" class="text-primary text-lg font-bold">0</span>
-        </div>
-      </div>
 
-      <!-- 진행 바 -->
-      <div class="h-2 bg-surface-container rounded-full overflow-hidden">
-        <div id="progress-bar" class="h-full bg-primary transition-all duration-300" style="width: 0%"></div>
+        <!-- 진행 바 -->
+        <div class="h-2.5 bg-surface-container rounded-full overflow-hidden">
+          <div id="progress-bar" class="h-full bg-primary transition-all duration-300" style="width: 0%"></div>
+        </div>
       </div>
 
       <!-- 명대사 카드 -->
@@ -250,8 +277,15 @@
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
         <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
           <span class="material-symbols-outlined">emoji_events</span>
-          역대 랭킹 (TOP 10)
+          역대 랭킹 (TOP 10) — 라운드별
         </h3>
+        <div id="ranking-filter-end" class="flex flex-wrap gap-1 mb-3">
+          <button type="button" class="rf-btn" data-rf="10">10라운드</button>
+          <button type="button" class="rf-btn" data-rf="20">20라운드</button>
+          <button type="button" class="rf-btn" data-rf="30">30라운드</button>
+          <button type="button" class="rf-btn" data-rf="40">40라운드</button>
+          <button type="button" class="rf-btn" data-rf="50">50라운드</button>
+        </div>
         <div id="end-ranking-list" class="flex flex-col"></div>
       </div>
     </section>

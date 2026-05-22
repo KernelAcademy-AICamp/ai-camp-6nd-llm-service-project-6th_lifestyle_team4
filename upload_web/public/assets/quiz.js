@@ -24,7 +24,10 @@ const rankingList = $('#ranking-list');
 // Play elements
 const roundCurrentEl = $('#round-current');
 const roundTotalEl = $('#round-total');
+const roundPercentEl = $('#round-percent');
 const scoreCurrentEl = $('#score-current');
+const correctCountEl = $('#correct-count');
+const wrongCountEl = $('#wrong-count');
 const progressBar = $('#progress-bar');
 const quoteText = $('#quote-text');
 const answerInput = $('#answer-input');
@@ -56,6 +59,8 @@ const state = {
 
 let currentUserId = null;
 let lastInsertedRankingId = null;
+let setupRankingFilter = 10;  // 기본 10라운드 랭킹 표시
+let endRankingFilter = 10;
 
 // Init
 (async () => {
@@ -67,13 +72,39 @@ let lastInsertedRankingId = null;
   userEmailEl.textContent = emailToDisplayId(data?.user?.email);
 
   await loadCards();
+  bindRankingFilters();
   await refreshSetupRanking();
 })();
 
+function bindRankingFilters() {
+  document.querySelectorAll('#ranking-filter-setup .rf-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      setupRankingFilter = Number(btn.dataset.rf);
+      document.querySelectorAll('#ranking-filter-setup .rf-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      await refreshSetupRanking();
+    });
+  });
+  document.querySelectorAll('#ranking-filter-end .rf-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      endRankingFilter = Number(btn.dataset.rf);
+      document.querySelectorAll('#ranking-filter-end .rf-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const arr = await fetchRankings(endRankingFilter);
+      await renderRanking(endRankingList, arr, lastInsertedRankingId);
+    });
+  });
+}
+
+function setEndFilterButtonActive(rounds) {
+  document.querySelectorAll('#ranking-filter-end .rf-btn').forEach((b) => {
+    b.classList.toggle('active', Number(b.dataset.rf) === rounds);
+  });
+}
+
 async function refreshSetupRanking() {
-  const arr = await fetchRankings();
+  const arr = await fetchRankings(setupRankingFilter);
   await renderRanking(rankingList, arr, null);
-  rankingSection.classList.toggle('hidden', arr.length === 0);
 }
 
 logoutBtn.addEventListener('click', async () => {
@@ -97,7 +128,9 @@ async function loadCards() {
         quote: String(c.quote || '').trim(),
         title: String(c.works?.title || '').trim(),
       }))
-      .filter((c) => c.quote && c.title);
+      .filter((c) => c.quote && c.title)
+      // 명대사 안에 작품 제목이 들어있으면 정답 노출이 되니 제외
+      .filter((c) => !quoteContainsTitle(c.quote, c.title));
     cardPoolCount.textContent = state.cards.length;
     updateStartButton();
   } catch (err) {
@@ -109,11 +142,17 @@ async function loadCards() {
 
 // ---------- Setup phase ----------
 roundButtons.forEach((btn) => {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     roundButtons.forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
     state.selectedRounds = Number(btn.dataset.rounds);
     updateStartButton();
+    // 선택한 라운드 수의 랭킹으로 자동 전환
+    setupRankingFilter = state.selectedRounds;
+    document.querySelectorAll('#ranking-filter-setup .rf-btn').forEach((b) => {
+      b.classList.toggle('active', Number(b.dataset.rf) === setupRankingFilter);
+    });
+    await refreshSetupRanking();
   });
 });
 
@@ -156,15 +195,30 @@ function startGame() {
 }
 
 // ---------- Play phase ----------
+function updateStatusPanel(progressOverride) {
+  const total = state.queue.length || 1;
+  const current = Math.min(state.index + 1, total);
+  roundCurrentEl.textContent = current;
+  roundTotalEl.textContent = total;
+  scoreCurrentEl.textContent = state.score;
+  correctCountEl.textContent = state.correctCount;
+  wrongCountEl.textContent = state.results.length - state.correctCount;
+  // progressOverride 있으면 그 비율 사용 (예: 답 제출 후 채워주기)
+  const ratio = progressOverride != null
+    ? progressOverride
+    : state.index / total;
+  const pct = Math.round(ratio * 100);
+  progressBar.style.width = `${pct}%`;
+  if (roundPercentEl) roundPercentEl.textContent = `(${pct}%)`;
+}
+
 function showCurrentCard() {
   const card = state.queue[state.index];
   if (!card) {
     endGame();
     return;
   }
-  roundCurrentEl.textContent = state.index + 1;
-  scoreCurrentEl.textContent = state.score;
-  progressBar.style.width = `${(state.index / state.queue.length) * 100}%`;
+  updateStatusPanel();
 
   quoteText.textContent = cleanQuoteForDisplay(card.quote);
   answerInput.value = '';
@@ -220,7 +274,8 @@ function handleSubmit() {
     userAnswer,
     correct,
   });
-  scoreCurrentEl.textContent = state.score;
+  // 답이 채점된 직후 — 진행률을 (현재 라운드 완료)까지 채우고 점수/정답수 갱신
+  updateStatusPanel((state.index + 1) / state.queue.length);
   answerInput.disabled = true;
   state.awaitingNext = true;
   submitBtn.innerHTML = '다음 <span class="material-symbols-outlined text-base">arrow_forward</span>';
@@ -255,7 +310,10 @@ async function endGame() {
       played,
     );
   }
-  const arr = await fetchRankings();
+  // 방금 플레이한 라운드 수의 랭킹을 기본으로 표시
+  endRankingFilter = played > 0 ? played : (state.selectedRounds || 10);
+  setEndFilterButtonActive(endRankingFilter);
+  const arr = await fetchRankings(endRankingFilter);
   await renderRanking(endRankingList, arr, lastInsertedRankingId);
 }
 
@@ -286,15 +344,17 @@ playAgainBtn.addEventListener('click', async () => {
 });
 
 // ---------- Ranking (Supabase shared) ----------
-async function fetchRankings(limit = 10) {
+async function fetchRankings(rounds, limit = 10) {
   try {
     const sb = await getSupabase();
-    const { data, error } = await sb
+    let query = sb
       .from('quiz_rankings')
       .select('id, name, score, correct, played, created_at, user_id')
       .order('score', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(limit);
+    if (rounds) query = query.eq('played', rounds);
+    const { data, error } = await query;
     if (error) throw error;
     return Array.isArray(data) ? data : [];
   } catch (err) {
@@ -391,6 +451,17 @@ function aliasesFor(target) {
     if (v === t) out.add(k);
   });
   return out;
+}
+
+// 명대사 안에 제목(또는 alias)이 그대로 등장하는지 검사 — 정답 노출 카드 배제용
+function quoteContainsTitle(quote, title) {
+  const q = normalizeTitle(quote);
+  if (!q) return false;
+  for (const alias of aliasesFor(title)) {
+    const t = normalizeTitle(alias);
+    if (t.length >= 2 && q.includes(t)) return true;
+  }
+  return false;
 }
 
 function matchTitle(userAnswer, target) {
