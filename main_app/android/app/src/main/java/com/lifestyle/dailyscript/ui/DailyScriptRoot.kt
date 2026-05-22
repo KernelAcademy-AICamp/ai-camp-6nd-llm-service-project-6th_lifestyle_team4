@@ -95,7 +95,12 @@ private fun ScaffoldWithNav(userId: Long, onSignOut: () -> Unit) {
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
-                composable(Routes.ARCHIVE) { ArchiveScreen() }
+                composable(Routes.ARCHIVE) {
+                    ArchiveScreen(
+                        userId = userId,
+                        onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                    )
+                }
                 composable(Routes.SETTINGS) {
                     SettingsScreen(nickname = null, onSignOut = onSignOut)
                 }
