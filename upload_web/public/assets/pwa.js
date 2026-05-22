@@ -5,7 +5,46 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        // 새 버전이 대기 중이면 즉시 활성화 요청
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener('statechange', () => {
+            if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+              // 새 SW가 설치됨 — 활성화 요청
+              sw.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+        // 30초마다 새 SW 있는지 점검
+        setInterval(() => reg.update().catch(() => {}), 30000);
+      })
       .catch((err) => console.warn('[pwa] sw register failed:', err));
+
+    // 새 SW가 컨트롤러로 활성화되면 페이지를 한 번 리로드 (단, 무한 루프 방지)
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
+
+    // SW에서 'SW_UPDATED' 메시지 받으면 사용자에게 안내 (선택적)
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (e.data?.type === 'SW_UPDATED') {
+        console.log('[pwa] SW updated to', e.data.version);
+      }
+    });
+  });
+
+  // 페이지가 다시 포커스 받으면 SW 업데이트 체크 + 강제로 페이지 새 fetch
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      if (reg) reg.update().catch(() => {});
+    });
   });
 }
 

@@ -97,7 +97,40 @@ window.addEventListener('hashchange', () => setView(getInitialView()));
 // ---------- Realtime ----------
 // Supabase Postgres Changes — cards/works/user_bookmarks 변경을 실시간으로 듣고
 // 영향받는 데이터를 다시 불러와 화면을 갱신한다.
+// iOS PWA 환경에서 WebSocket이 끊기는 경우가 있어 30초 폴링 폴백도 둠.
 let realtimeChannel = null;
+let pollingTimer = null;
+let lastCardCount = 0;
+let lastBookmarkCount = 0;
+let realtimeIsHealthy = false;
+
+function startPollingFallback() {
+  if (pollingTimer) return;
+  console.log('[m] starting polling fallback (30s)');
+  pollingTimer = setInterval(async () => {
+    if (document.hidden) return;
+    if (realtimeIsHealthy) return; // realtime이 살아있으면 폴링 스킵
+    try {
+      const sb = await getSupabase();
+      const { count: cardCount } = await sb.from('cards').select('*', { count: 'exact', head: true });
+      let bookmarkCount = lastBookmarkCount;
+      if (state.userId) {
+        const { count: bc } = await sb.from('user_bookmarks').select('*', { count: 'exact', head: true }).eq('user_id', state.userId);
+        bookmarkCount = bc || 0;
+      }
+      if (cardCount !== lastCardCount || bookmarkCount !== lastBookmarkCount) {
+        console.log('[m] polling detected change — reloading');
+        lastCardCount = cardCount;
+        lastBookmarkCount = bookmarkCount;
+        await Promise.all([loadAllCards(), loadBookmarks()]);
+        rerenderActiveView();
+        toast('데이터 갱신됨');
+      }
+    } catch (err) {
+      console.warn('[m] polling check failed:', err);
+    }
+  }, 30000);
+}
 async function subscribeToChanges() {
   try {
     const sb = await getSupabase();
@@ -154,13 +187,17 @@ function setRealtimeStatus(status) {
     dot.style.background = '#1a7f37';  // green
     label.textContent = 'LIVE';
     label.title = '실시간 동기화 활성';
+    realtimeIsHealthy = true;
   } else if (status === 'CONNECTING' || status === 'JOINING') {
     dot.style.background = '#F4C20D';  // yellow
     label.textContent = 'CONNECTING';
+    realtimeIsHealthy = false;
   } else {
     dot.style.background = '#D85A30';  // orange/red
-    label.textContent = 'OFFLINE';
-    label.title = '실시간 비활성 — Supabase에서 publication 활성화 필요 (006_enable_realtime.sql)';
+    label.textContent = 'SYNC';
+    label.title = '폴링 모드 (30초 주기) — 실시간 비활성. 006_enable_realtime.sql 실행 권장';
+    realtimeIsHealthy = false;
+    startPollingFallback();
   }
 }
 
@@ -181,6 +218,85 @@ async function refreshAll() {
     console.warn('[m] refreshAll failed:', err);
   }
 }
+
+// ---------- Pull-to-refresh ----------
+(function setupPullToRefresh() {
+  const ptr = document.getElementById('ptr');
+  const ptrCircle = ptr?.querySelector('.ptr-circle');
+  const ptrLabel = document.getElementById('ptr-label');
+  if (!ptr || !ptrCircle || !ptrLabel) return;
+
+  const THRESHOLD = 70;       // 이만큼 당기면 트리거
+  const MAX_PULL = 140;       // 시각적으로 더는 늘어나지 않음
+  let startY = 0;
+  let pulling = false;
+  let pulledBy = 0;
+  let refreshing = false;
+  // 모달이 열려있을 땐 PTR 비활성
+  function isLocked() {
+    return refreshing
+      || document.getElementById('detail-screen')?.classList.contains('open');
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    if (isLocked()) return;
+    if (window.scrollY > 0) return;        // 페이지 최상단일 때만
+    startY = e.touches[0].clientY;
+    pulling = true;
+    pulledBy = 0;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!pulling || isLocked()) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { resetPtr(); return; }
+    // 끌어내리는 거리 계산 (점점 둔감해지게)
+    pulledBy = Math.min(MAX_PULL, dy * 0.55);
+    paintPtr(pulledBy);
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (!pulling) return;
+    pulling = false;
+    if (pulledBy >= THRESHOLD) {
+      triggerRefresh();
+    } else {
+      resetPtr();
+    }
+  }, { passive: true });
+
+  function paintPtr(distance) {
+    ptr.style.transform = `translateY(${Math.max(0, distance - 12)}px)`;
+    ptr.classList.add('visible');
+    const progress = Math.min(1, distance / THRESHOLD);
+    ptrCircle.style.transform = `rotate(${progress * 360}deg)`;
+    ptrLabel.textContent = progress >= 1 ? 'Release to refresh' : 'Pull to refresh';
+  }
+  function resetPtr() {
+    ptr.classList.remove('visible', 'refreshing');
+    ptr.style.transform = '';
+    pulledBy = 0;
+  }
+  async function triggerRefresh() {
+    refreshing = true;
+    ptr.classList.add('refreshing');
+    ptrLabel.textContent = 'Refreshing…';
+    ptr.style.transform = `translateY(${THRESHOLD - 12}px)`;
+    try {
+      await refreshAll();
+      toast('갱신됨');
+    } catch (err) {
+      console.warn('[m] PTR refresh failed:', err);
+      toast('갱신 실패');
+    } finally {
+      // 짧게 보여주고 닫기
+      setTimeout(() => {
+        refreshing = false;
+        resetPtr();
+      }, 350);
+    }
+  }
+})();
 
 // ---------- Auth ----------
 async function bootstrapAuth() {
