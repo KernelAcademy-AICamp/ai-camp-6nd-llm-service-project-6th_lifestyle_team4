@@ -37,7 +37,8 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
       "excerpt_description": "이 장면이 어떤 상황인지에 대한 1-2줄 설명",
       "keywords": ["키워드1", "키워드2", "키워드3"],
       "temperature": 1~5 사이 정수,
-      "intensity": 1~5 사이 정수
+      "intensity": 1~5 사이 정수,
+      "significance": "이 명대사·장면이 작품 전체에서 갖는 의의"
     }
   ]
 }
@@ -54,6 +55,7 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
 - keywords: 정확히 3개. 명사 또는 명사구. 문장·형용사 단독 금지
 - temperature: 1(차가움/단절) ~ 3(중립) ~ 5(따뜻함/포용)
 - intensity: 1(잔잔함/고요) ~ 3(보통) ~ 5(격렬함/폭발적)
+- significance: 이 명대사·장면이 작품 전체에서 갖는 의의. 80~200자. 가르치려 들지 말고 이 장면이 무엇을 말하는지 한두 문장으로 응축. 카드마다 다른 각도로(반복 금지). 모든 카드에 반드시 포함.
 - cards : 품질 우선, 무리해서 채우지 말 것
 - language : 언어는 한국어로 할  것
 
@@ -82,7 +84,8 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
       "excerpt_description": "재벌 3세 조태오가 운전기사의 항의에 황당해하며 권력의 비대칭을 드러내는 장면.",
       "keywords": ["분노", "권력", "조롱"],
       "temperature": 1,
-      "intensity": 4
+      "intensity": 4,
+      "significance": "권력에 익숙한 자가 처음으로 거부당했을 때 분노가 아니라 황당함으로 반응한다는 점에서, 그 오만이 더 선명히 드러난다."
     }
   ]
 }
@@ -453,7 +456,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
       "excerpt_description": "이 장면이 어떤 상황인지에 대한 1-2줄 설명",
       "keywords": ["키워드1", "키워드2", "키워드3"],
       "temperature": 1~5 사이 정수,
-      "intensity": 1~5 사이 정수
+      "intensity": 1~5 사이 정수,
+      "significance": "이 명대사·장면이 작품 전체에서 갖는 의의"
     }
   ]
 }
@@ -557,6 +561,12 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
 - intensity
   · 1(잔잔함/고요) ~ 3(보통) ~ 5(격렬함/폭발적)
 
+- significance
+  · 이 명대사·장면이 작품 전체에서 갖는 의의. 80~200자.
+  · 가르치려 들지 말 것("관객은 ~를 느낀다" 금지). 이 장면이 무엇을 말하는지 한두 문장으로 응축.
+  · 카드마다 다른 각도·표현으로 (반복 금지).
+  · 모든 카드에 반드시 포함.
+
 - cards
   · 품질 우선
   · 5막 작품 기준 15~30장 권장
@@ -642,7 +652,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
       "excerpt_description": "3막에서 출산 중 죽은 에밀리가 무대감독의 허락으로 12살 생일을 다시 살아본 뒤, 산 자들의 무심함을 견디지 못하고 묘지로 돌아가며 묻는 장면.",
       "keywords": ["삶의 자각", "죽음", "일상의 무게"],
       "temperature": 3,
-      "intensity": 2
+      "intensity": 2,
+      "significance": "살아있는 동안에는 삶의 매 순간을 결코 알아채지 못한다는, 산 자에게 가장 잔인한 진실을 죽은 자의 눈으로 되비춘다."
     }
   ]
 }
@@ -669,7 +680,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
       "excerpt_description": "3막 3장. 햄릿을 영국으로 보내기로 결정한 직후 무릎 꿇고 회개를 시도하던 클로디어스가, 살인의 대가를 놓을 수 없어 기도가 형식뿐임을 자인하며 일어서는 장면.",
       "keywords": ["기도", "위선", "양심"],
       "temperature": 2,
-      "intensity": 2
+      "intensity": 2,
+      "significance": "용서를 구하는 말과 그 죄의 열매를 놓지 못하는 욕망이 한 몸에 있을 때, 회개는 입술에서 멈추고 끝내 하늘에 닿지 못한다."
     }
   ]
 }
@@ -696,7 +708,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
       "excerpt_description": "2막. 성공한 작가 트리고린이 작가를 꿈꾸는 니나에게 글쓰기의 영광이 아니라 강박을 고백하는 장면.",
       "keywords": ["글쓰기", "강박", "직업"],
       "temperature": 2,
-      "intensity": 3
+      "intensity": 3,
+      "significance": "예술이 영광이 아니라 멈출 수 없는 강박임을 성공한 자의 입으로 고백하게 함으로써, 창작에 덧씌운 낭만을 벗겨낸다."
     }
   ]
 }
