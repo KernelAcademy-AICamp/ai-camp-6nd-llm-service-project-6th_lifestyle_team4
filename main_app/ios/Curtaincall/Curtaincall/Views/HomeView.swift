@@ -5,6 +5,7 @@ struct HomeView: View {
     @State private var cards: [Card] = []
     @State private var hasLoaded = false
     @State private var isLoading = false
+    @State private var fetchFailed = false
 
     private var todayCard: Card? { cards.first }
     private var archive: [Card] { Array(cards.dropFirst().prefix(5)) }
@@ -13,6 +14,9 @@ struct HomeView: View {
         VStack(spacing: 0) {
             homeTopBar
             Hairline()
+            if fetchFailed {
+                FetchErrorBanner { Task { await reload() } }
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 32)
@@ -39,9 +43,11 @@ struct HomeView: View {
                             TodayCardView(card: card, isLoading: isLoading)
                         }
                         .buttonStyle(.plain)
-                    } else {
-                        TodayCardView(card: nil, isLoading: isLoading)
+                    } else if isLoading {
+                        TodayCardView(card: nil, isLoading: true)
                     }
+                    // On fetch failure with no cached card, render nothing —
+                    // the banner above carries the message.
 
                     Spacer().frame(height: 56)
                     Hairline()
@@ -58,18 +64,18 @@ struct HomeView: View {
                     .padding(.top, 32)
                     .padding(.bottom, 12)
 
-                    if archive.isEmpty {
-                        Text("아직 북마크한 카드가 없습니다.")
-                            .font(.bodySans(14))
-                            .foregroundStyle(.walnut)
-                            .padding(.vertical, 16)
-                    } else {
+                    if !archive.isEmpty {
                         ForEach(Array(archive.enumerated()), id: \.element.id) { idx, card in
                             NavigationLink(value: card) {
                                 ArchiveRow(card: card, daysAgo: idx + 1)
                             }
                             .buttonStyle(.plain)
                         }
+                    } else if !fetchFailed {
+                        Text("아직 북마크한 카드가 없습니다.")
+                            .font(.bodySans(14))
+                            .foregroundStyle(.walnut)
+                            .padding(.vertical, 16)
                     }
                     Spacer().frame(height: 40)
                 }
@@ -124,7 +130,9 @@ struct HomeView: View {
         defer { isLoading = false }
         do {
             cards = try await SupabaseClient.shared.fetchCards()
+            fetchFailed = false
         } catch {
+            fetchFailed = true
         }
     }
 }
