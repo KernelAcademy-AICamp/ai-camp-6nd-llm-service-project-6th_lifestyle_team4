@@ -2,6 +2,7 @@
   "functions": {
     "api/extract.js": { "maxDuration": 300 },
     "api/translate.js": { "maxDuration": 60 },
-    "api/save.js": { "maxDuration": 30 }
+    "api/save.js": { "maxDuration": 30 },
+    "api/backfill-characters.js": { "maxDuration": 300 }
   }
 }

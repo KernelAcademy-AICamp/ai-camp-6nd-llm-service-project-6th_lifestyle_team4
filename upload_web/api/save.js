@@ -24,6 +24,10 @@ function normalizeWork(work, fullScriptText) {
     author: work.author ?? null,
     release_year: work.release_year ?? null,
     full_script_text: String(fullScriptText),
+    // 등장인물 이름 목록 (jsonb). LLM이 줬을 때만 저장, 없으면 null.
+    characters: Array.isArray(work.characters)
+      ? [...new Set(work.characters.map((c) => String(c).trim()).filter(Boolean))]
+      : null,
   };
 }
 

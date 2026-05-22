@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { EXTRACT_PROMPTS, TRANSLATE_PROMPT } from './prompts.js';
+import { EXTRACT_PROMPTS, TRANSLATE_PROMPT, CHARACTERS_PROMPT } from './prompts.js';
 
 // SDK 기본 재시도(2회)에 더해 우리도 직접 백오프 재시도를 한 번 더 감쌉니다.
 // 529(overloaded) / 429(rate limit) / 5xx 는 일시적인 경우가 많아 재시도가 효과적.
@@ -160,6 +160,17 @@ export async function runExtract(scriptText, category = 'screen') {
   const tpl = EXTRACT_PROMPTS[category] || EXTRACT_PROMPTS.screen;
   const prompt = tpl.replace('{{SCRIPT_TEXT}}', scriptText);
   return callClaude(prompt, { maxTokens: 16000 });
+}
+
+// 대본 전문에서 등장인물 이름 목록만 추출. (works.characters 백필용)
+// 등장인물 페이지는 보통 앞부분에 있으므로 앞부분만 보내 토큰·시간 절약.
+export async function runExtractCharacters(scriptText) {
+  const text = String(scriptText || '').slice(0, 24000);
+  if (!text.trim()) return [];
+  const prompt = CHARACTERS_PROMPT.replace('{{SCRIPT_TEXT}}', text);
+  const result = await callClaude(prompt, { maxTokens: 1024 });
+  const arr = Array.isArray(result?.characters) ? result.characters : [];
+  return [...new Set(arr.map((s) => String(s).trim()).filter(Boolean))];
 }
 
 export async function runTranslate(card) {

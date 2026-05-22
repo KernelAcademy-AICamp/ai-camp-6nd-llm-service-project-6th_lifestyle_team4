@@ -70,6 +70,42 @@ logoutBtn.addEventListener('click', async () => {
   location.href = '/';
 });
 
+// 등장인물 목록(works.characters)이 비어 있는 기존 작품들을 일괄로 채운다.
+// 한 번에 몇 개씩 처리하는 백필 API를, 남은 작품이 0이 될 때까지 반복 호출.
+const backfillBtn = $('#backfill-btn');
+backfillBtn?.addEventListener('click', async () => {
+  if (!confirm('등장인물 목록이 비어 있는 작품들을 분석해서 채웁니다.\n작품 수에 따라 몇 분 걸릴 수 있어요. 진행할까요?')) return;
+  backfillBtn.disabled = true;
+  const orig = backfillBtn.innerHTML;
+  let totalProcessed = 0;
+  try {
+    let remaining = Infinity;
+    let guard = 0;
+    while (remaining > 0 && guard < 300) {
+      guard += 1;
+      backfillBtn.innerHTML =
+        `<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>` +
+        `<span class="text-sm">채우는 중... (${totalProcessed})</span>`;
+      const token = await getAccessToken();
+      const json = await apiFetch('/api/backfill-characters?limit=3', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      totalProcessed += json.processed || 0;
+      remaining = json.remaining ?? 0;
+      // 더 처리할 게 없거나(0개) 남은 게 전부 에러면 무한루프 방지로 중단
+      if ((json.processed || 0) === 0) break;
+      toast(`인물 채우는 중 · 누적 ${totalProcessed}개 / 남음 ${remaining}`, 'info');
+    }
+    toast(`인물 목록 채우기 완료 (총 ${totalProcessed}개 작품)`, 'success');
+  } catch (err) {
+    toast(err.message || '인물 채우기 실패', 'error');
+  } finally {
+    backfillBtn.disabled = false;
+    backfillBtn.innerHTML = orig;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Category toggle (영화/드라마 ↔ 연극/뮤지컬)
 // ---------------------------------------------------------------------------
