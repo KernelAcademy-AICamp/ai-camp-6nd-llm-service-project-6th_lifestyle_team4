@@ -31,6 +31,7 @@ const archiveEmpty = $('#archive-empty');
 const archiveNoResult = $('#archive-no-result');
 const archiveCount = $('#archive-count');
 const archiveSearchInput = $('#archive-search-input');
+const archiveChips = $('#archive-chips');
 const bookModal = $('#book-modal');
 const bookEyebrow = $('#book-eyebrow');
 const bookTitleEl = $('#book-title');
@@ -82,6 +83,8 @@ const state = {
   pushEnabled: false,
   bookmarkActionInFlight: false,
   archiveSearch: '',
+  archiveGenre: '',        // '' = all, or 'movie'|'drama'|'musical'|'opera'|'play'
+  recentlyShownIds: [],    // 오늘의 명대사 셔플 시 최근 10개 제외용 큐
 };
 
 const TITLE_DISPLAY_ALIASES = {
@@ -501,25 +504,51 @@ function pickByTasteSeeded(seed) {
 function pickByTasteRandom() {
   if (state.allCards.length === 0) return null;
   const taste = computeTasteProfile();
-  if (!taste) return state.allCards[Math.floor(Math.random() * state.allCards.length)];
+  const exclude = new Set(state.recentlyShownIds);
 
-  if (Math.random() < 0.1) {
-    return state.allCards[Math.floor(Math.random() * state.allCards.length)];
+  // taste 프로파일 없을 때 — 단순 랜덤 + 최근 제외
+  if (!taste) {
+    const pool = candidatesExcludingRecent();
+    const p = pool[Math.floor(Math.random() * pool.length)];
+    rememberShown(p?.card_id);
+    return p;
   }
 
-  const candidates = state.allCards.filter(
-    (c) => typeof c.temperature === 'number' || typeof c.intensity === 'number'
+  // 10% variety — pure random (단, 최근 제외)
+  if (Math.random() < 0.1) {
+    const pool = candidatesExcludingRecent();
+    const p = pool[Math.floor(Math.random() * pool.length)];
+    rememberShown(p?.card_id);
+    return p;
+  }
+
+  // 거리 역수 가중 — 최근 제외
+  let candidates = state.allCards.filter(
+    (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number') && !exclude.has(c.card_id)
   );
-  if (candidates.length === 0) return state.allCards[Math.floor(Math.random() * state.allCards.length)];
+  if (candidates.length === 0) {
+    // 폴백 — 전체에서 가중 랜덤
+    candidates = state.allCards.filter(
+      (c) => typeof c.temperature === 'number' || typeof c.intensity === 'number'
+    );
+  }
+  if (candidates.length === 0) {
+    const pool = candidatesExcludingRecent();
+    const p = pool[Math.floor(Math.random() * pool.length)];
+    rememberShown(p?.card_id);
+    return p;
+  }
 
   const weights = candidates.map((c) => 1 / (1 + tasteDistance(c, taste)));
   const total = weights.reduce((a, b) => a + b, 0);
   let r = Math.random() * total;
+  let picked = candidates[candidates.length - 1];
   for (let i = 0; i < candidates.length; i++) {
     r -= weights[i];
-    if (r <= 0) return candidates[i];
+    if (r <= 0) { picked = candidates[i]; break; }
   }
-  return candidates[candidates.length - 1];
+  rememberShown(picked?.card_id);
+  return picked;
 }
 
 function pickTodayCard() {
@@ -529,10 +558,30 @@ function pickTodayCard() {
   return state.allCards[seed % state.allCards.length];
 }
 
+// 셔플 시 최근 10개에 있는 카드는 제외
+const RECENT_EXCLUDE_SIZE = 10;
+function candidatesExcludingRecent() {
+  const exclude = new Set(state.recentlyShownIds);
+  const pool = state.allCards.filter((c) => !exclude.has(c.card_id));
+  // 풀이 너무 작으면 (전체가 10개 이하) 폴백
+  return pool.length > 0 ? pool : state.allCards;
+}
+
+function rememberShown(cardId) {
+  if (cardId == null) return;
+  state.recentlyShownIds.push(cardId);
+  if (state.recentlyShownIds.length > RECENT_EXCLUDE_SIZE) {
+    state.recentlyShownIds.shift();
+  }
+}
+
 function pickRandomCard() {
   if (state.allCards.length === 0) return null;
   if (isTasteEnabled()) return pickByTasteRandom();
-  return state.allCards[Math.floor(Math.random() * state.allCards.length)];
+  const pool = candidatesExcludingRecent();
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+  rememberShown(picked?.card_id);
+  return picked;
 }
 
 // ---------- Bookmark API ----------
@@ -570,7 +619,10 @@ async function toggleBookmark(cardId) {
     toast('저장 실패');
   } finally {
     state.bookmarkActionInFlight = false;
-    if (state.currentView === 'archive') renderArchive();
+    if (state.currentView === 'archive') {
+      renderArchiveChips();
+      renderArchive();
+    }
     if (state.currentView === 'home') renderHomeBookmarks();
     if (state.currentView === 'settings') paintTasteProfile();
   }
@@ -622,8 +674,13 @@ function renderHome() {
 }
 
 function applyTodayCard(card) {
+  if (!card) return;
   state.todayCard = card;
   state.todayBookmarked = state.bookmarkedIds.has(card.card_id);
+  // 최근 표시 목록에 추가 (셔플 시 중복 방지)
+  if (!state.recentlyShownIds.includes(card.card_id)) {
+    rememberShown(card.card_id);
+  }
 
   // Quote with curly quotes (mirror Android: "“$it”")
   todayQuote.textContent = `“${cleanQuote(card.quote)}”`;
@@ -788,11 +845,14 @@ function renderArchive() {
   archiveCount.textContent = `소장 ${allWorks.length}권 · 명대사 ${state.bookmarks.length}편`;
 
   const q = (state.archiveSearch || '').trim().toLowerCase();
+  const genre = state.archiveGenre || '';
   const works = allWorks.filter((w) => {
-    if (!q) return true;
-    const title = displayTitle(w.title).toLowerCase();
-    const genreLabel = (GENRE_LABEL[w.format] || w.format || '').toLowerCase();
-    return title.includes(q) || w.format.includes(q) || genreLabel.includes(q);
+    if (genre && w.format !== genre) return false;
+    if (q) {
+      const title = displayTitle(w.title).toLowerCase();
+      if (!title.includes(q)) return false;
+    }
+    return true;
   });
 
   if (works.length === 0) {
@@ -914,6 +974,41 @@ archiveSearchInput.addEventListener('input', (e) => {
   state.archiveSearch = e.target.value;
   renderArchive();
 });
+
+// ===== Genre chips =====
+function renderArchiveChips() {
+  if (!archiveChips) return;
+  const allWorks = groupBookmarksByWork();
+  // 사용자가 가진 장르만 표시 (사용 안 한 장르 칩 노출 안 함)
+  const availableGenres = new Set(allWorks.map((w) => w.format).filter(Boolean));
+  archiveChips.innerHTML = '';
+  // All 칩
+  const allChip = document.createElement('button');
+  allChip.type = 'button';
+  allChip.className = 'a-chip' + (state.archiveGenre === '' ? ' active' : '');
+  allChip.dataset.genre = '';
+  allChip.textContent = `All · ${allWorks.length}`;
+  archiveChips.appendChild(allChip);
+  // 장르별
+  for (const g of GENRE_ORDER) {
+    if (!availableGenres.has(g)) continue;
+    const count = allWorks.filter((w) => w.format === g).length;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'a-chip' + (state.archiveGenre === g ? ' active' : '');
+    chip.dataset.genre = g;
+    chip.textContent = `${GENRE_LABEL[g]} · ${count}`;
+    archiveChips.appendChild(chip);
+  }
+  // 클릭 위임
+  archiveChips.querySelectorAll('.a-chip').forEach((c) => {
+    c.addEventListener('click', () => {
+      state.archiveGenre = c.dataset.genre;
+      renderArchiveChips();
+      renderArchive();
+    });
+  });
+}
 
 // ---------- Settings ----------
 function paintPushToggle() {
@@ -1126,7 +1221,7 @@ function setView(view) {
     b.classList.toggle('active', b.dataset.nav === view);
   });
 
-  if (view === 'archive') renderArchive();
+  if (view === 'archive') { renderArchiveChips(); renderArchive(); }
   if (view === 'settings') paintTasteProfile();
 
   history.replaceState(null, '', `#${view}`);

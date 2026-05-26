@@ -299,8 +299,33 @@
   }
 
   /* ===== Archive bookshelf ===== */
-  .archive-search {
+  .archive-chips {
+    display: flex; gap: 6px; flex-wrap: wrap;
     margin-top: 24px;
+    margin-bottom: 14px;
+  }
+  .archive-chips .a-chip {
+    padding: 6px 14px;
+    border: 0.5px solid var(--walnut);
+    background: var(--paper);
+    color: var(--walnut);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .archive-chips .a-chip:hover { border-color: var(--espresso); color: var(--espresso); }
+  .archive-chips .a-chip.active {
+    background: var(--espresso);
+    color: var(--paper);
+    border-color: var(--espresso);
+  }
+
+  .archive-search {
+    margin-top: 4px;
     position: relative;
   }
   .archive-search input {
@@ -497,12 +522,33 @@
   .book .book-divider {
     margin: 20px 0 12px; height: 0.5px; background: var(--sand);
   }
+  #book-list { counter-reset: quote-counter; }
   .book .book-quote-item {
-    padding: 18px 0;
-    border-bottom: 0.5px solid var(--latte);
+    background: #FFFDF7;
+    border: 0.5px solid var(--latte);
+    border-left: 3px solid var(--sand);
+    padding: 22px 16px 16px 18px;
+    margin-bottom: 12px;
     cursor: pointer;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(14,12,10,0.04);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-left-color 0.15s ease;
   }
-  .book .book-quote-item:last-child { border-bottom: 0; }
+  .book .book-quote-item:last-child { margin-bottom: 4px; }
+  .book .book-quote-item:hover,
+  .book .book-quote-item:active {
+    transform: translateX(2px);
+    box-shadow: -4px 4px 10px rgba(14,12,10,0.10);
+    border-left-color: var(--cta);
+  }
+  .book .book-quote-item::before {
+    content: '#' counter(quote-counter, decimal-leading-zero);
+    counter-increment: quote-counter;
+    position: absolute;
+    top: 8px; right: 12px;
+    font-size: 9px; letter-spacing: 0.25em;
+    color: var(--sand); font-weight: 700;
+  }
   .book .book-quote-text {
     font-family: 'Nanum Myeongjo', Georgia, serif;
     font-size: 16px; line-height: 26px;
@@ -512,7 +558,9 @@
   .book .book-quote-meta {
     font-size: 10px; letter-spacing: 0.2em;
     text-transform: uppercase; color: var(--walnut);
-    margin-top: 8px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 0.5px dashed var(--latte);
   }
   .book .book-pagefoot {
     text-align: center; margin-top: 24px;
@@ -620,10 +668,13 @@
     <h1 class="t-display-md c-espresso">수집한 대본</h1>
     <p id="archive-count" class="t-label-sm c-walnut" style="margin-top:6px;"></p>
 
-    <!-- Search -->
+    <!-- Genre chips -->
+    <div class="archive-chips" id="archive-chips" role="tablist"></div>
+
+    <!-- Title search -->
     <div class="archive-search">
       <span class="material-symbols-outlined">search</span>
-      <input id="archive-search-input" type="search" placeholder="장르 또는 작품 제목으로 검색" />
+      <input id="archive-search-input" type="search" placeholder="작품 제목으로 검색" />
     </div>
 
     <div id="archive-loading" style="padding:16px 0;">
