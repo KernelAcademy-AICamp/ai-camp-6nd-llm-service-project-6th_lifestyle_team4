@@ -31,8 +31,12 @@ const archiveEmpty = $('#archive-empty');
 const archiveCount = $('#archive-count');
 
 const settingsName = $('#settings-name');
+const settingsBio = $('#settings-bio');
 const pushToggle = $('#push-toggle');
 const signOutBtn = $('#sign-out-btn');
+const signinBlock = $('#signin-block');
+const signinGoogle = $('#signin-google');
+const signinKakao = $('#signin-kakao');
 
 const detailScreen = $('#detail-screen');
 const detailBack = $('#detail-back');
@@ -53,6 +57,11 @@ const toastEl = $('#toast');
 const state = {
   userId: null,
   authUid: null,
+  isAnonymous: true,        // 익명 세션인지
+  authProvider: null,       // 'google' | 'kakao' | null
+  authEmail: null,
+  authName: null,
+  authAvatarUrl: null,
   todayCard: null,
   todayBookmarked: false,
   allCards: [],
@@ -73,6 +82,7 @@ const displayTitle = (s) => TITLE_DISPLAY_ALIASES[String(s||'').trim().toLowerCa
     state.pushEnabled = localStorage.getItem('ds.push') === '1';
     paintPushToggle();
     await bootstrapAuth();
+    paintAuthIdentity();
     await Promise.all([loadAllCards(), loadBookmarks()]);
     renderHome();
     setView(getInitialView());
@@ -308,23 +318,68 @@ async function bootstrapAuth() {
     if (error) throw new Error(`익명 로그인 실패: ${error.message}`);
     session = data?.session ?? null;
   }
-  state.authUid = session?.user?.id ?? null;
+  const user = session?.user;
+  state.authUid = user?.id ?? null;
   if (!state.authUid) throw new Error('auth uid 없음');
 
+  // 소셜 인증 정보 추출 (provider, identity 데이터)
+  state.isAnonymous = !!user.is_anonymous;
+  state.authProvider = user.app_metadata?.provider ?? null;
+  state.authEmail = user.email ?? null;
+  const meta = user.user_metadata || {};
+  state.authName = meta.full_name || meta.name || meta.nickname || meta.user_name || null;
+  state.authAvatarUrl = meta.avatar_url || meta.picture || null;
+
+  // users 행 조회/생성
   const { data: existingUser, error: selErr } = await sb
     .from('users').select('user_id, nickname')
     .eq('anonymous_id', state.authUid).maybeSingle();
   if (selErr) throw selErr;
   if (existingUser) {
     state.userId = existingUser.user_id;
-    if (existingUser.nickname) settingsName.textContent = existingUser.nickname;
     return;
   }
   const { data: inserted, error: insErr } = await sb
-    .from('users').insert({ anonymous_id: state.authUid })
+    .from('users')
+    .insert({
+      anonymous_id: state.authUid,
+      nickname: state.authName || null,
+    })
     .select('user_id').single();
   if (insErr) throw insErr;
   state.userId = inserted.user_id;
+
+  // 소셜 로그인 직후라면 이전 익명 user_id의 북마크를 옮긴다
+  if (!state.isAnonymous) {
+    const prevAnonUserId = localStorage.getItem('ds.prevAnonUserId');
+    if (prevAnonUserId && prevAnonUserId !== String(state.userId)) {
+      await migrateAnonymousBookmarks(parseInt(prevAnonUserId, 10), state.userId);
+      localStorage.removeItem('ds.prevAnonUserId');
+    }
+  } else {
+    // 익명 user_id 기억 — 나중에 소셜 로그인 시 이전 익명 데이터 이전용
+    localStorage.setItem('ds.prevAnonUserId', String(state.userId));
+  }
+}
+
+async function migrateAnonymousBookmarks(oldUserId, newUserId) {
+  if (!oldUserId || oldUserId === newUserId) return;
+  try {
+    const sb = await getSupabase();
+    const { data: oldBookmarks } = await sb
+      .from('user_bookmarks').select('card_id').eq('user_id', oldUserId);
+    if (oldBookmarks && oldBookmarks.length > 0) {
+      const rows = oldBookmarks.map((b) => ({ user_id: newUserId, card_id: b.card_id }));
+      await sb.from('user_bookmarks')
+        .upsert(rows, { onConflict: 'user_id,card_id', ignoreDuplicates: true });
+      // 옛 익명 row + 북마크 정리 (RLS가 anonymous_id 매칭만 허용해 실패할 수 있음 — 무시)
+      await sb.from('user_bookmarks').delete().eq('user_id', oldUserId);
+      await sb.from('users').delete().eq('user_id', oldUserId);
+      toast(`북마크 ${oldBookmarks.length}개 이전됨`);
+    }
+  } catch (err) {
+    console.warn('[m] migration failed:', err);
+  }
 }
 
 // ---------- Data ----------
@@ -592,11 +647,63 @@ pushToggle.addEventListener('keydown', (e) => {
 });
 
 signOutBtn.addEventListener('click', async () => {
-  if (!confirm('정말 로그아웃하시겠습니까? 익명 세션이 종료되고 북마크 접근이 끊깁니다.')) return;
+  const msg = state.isAnonymous
+    ? '익명 세션을 종료할까요? 다시 입장하면 새 익명 ID가 생성됩니다.'
+    : '로그아웃할까요? 다음 로그인 전까지 익명 세션으로 동작합니다.';
+  if (!confirm(msg)) return;
   const sb = await getSupabase();
   await sb.auth.signOut();
+  localStorage.removeItem('ds.prevAnonUserId');
   location.reload();
 });
+
+// ---------- Social Login ----------
+async function startOAuth(provider) {
+  try {
+    const sb = await getSupabase();
+    // 현재 익명 user_id를 마이그레이션용으로 백업
+    if (state.userId) localStorage.setItem('ds.prevAnonUserId', String(state.userId));
+    const { error } = await sb.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${location.origin}/m/`,
+      },
+    });
+    if (error) throw error;
+    // 성공 시 브라우저가 OAuth 제공자로 리디렉트됨 — 돌아오면 자동 세션 복원
+  } catch (err) {
+    console.error('[m] oauth failed:', err);
+    toast(`${provider} 로그인 실패: ${err.message || err}`);
+  }
+}
+
+signinGoogle.addEventListener('click', () => startOAuth('google'));
+signinKakao.addEventListener('click', () => startOAuth('kakao'));
+
+function paintAuthIdentity() {
+  // 닉네임/이름 헤더
+  const name = state.authName
+    || state.authEmail
+    || (state.isAnonymous ? 'Anonymous' : 'Signed In');
+  settingsName.textContent = name;
+
+  // bio 영역에 provider 뱃지 / 이메일
+  if (state.isAnonymous) {
+    settingsBio.textContent = '매일 한 장의 명대사로 하루를 시작합니다.';
+    signinBlock.style.display = 'block';
+    signOutBtn.textContent = 'Reset Anonymous';
+  } else {
+    const providerLabel = state.authProvider === 'google' ? 'Google'
+      : state.authProvider === 'kakao' ? 'Kakao'
+      : (state.authProvider || 'Account');
+    const bio = state.authEmail
+      ? `${providerLabel} · ${state.authEmail}`
+      : `${providerLabel} 계정으로 로그인됨`;
+    settingsBio.textContent = bio;
+    signinBlock.style.display = 'none';
+    signOutBtn.textContent = 'Sign Out';
+  }
+}
 
 // ---------- Detail (full-screen) ----------
 function openDetail(card) {
