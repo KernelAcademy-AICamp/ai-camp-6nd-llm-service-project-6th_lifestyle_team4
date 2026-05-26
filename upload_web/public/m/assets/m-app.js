@@ -121,7 +121,11 @@ function displayTitle(rawTitle) {
     await Promise.all([loadAllCards(), loadBookmarks()]);
     paintTasteProfile();
     renderHome();
+    // 초기 setView — history에 중복 entry 안 쌓이게 suppress 후 replaceState로 마무리
+    suppressPushState = true;
     setView(getInitialView());
+    suppressPushState = false;
+    history.replaceState({ tab: state.currentView }, '', '#' + state.currentView);
     // 데이터 변경을 실시간으로 받아 즉시 반영
     subscribeToChanges();
     // 앱이 포그라운드로 돌아올 때마다 최신화 (실시간 누락 안전망)
@@ -139,6 +143,23 @@ function getInitialView() {
   return ['home','archive','settings'].includes(hash) ? hash : 'home';
 }
 window.addEventListener('hashchange', () => setView(getInitialView()));
+
+// ===== Hardware/swipe back (Android edge swipe, iOS swipe-from-edge) =====
+// 우선순위: detail screen 닫기 → book modal 닫기 → tab 이동
+window.addEventListener('popstate', () => {
+  if (detailScreen && detailScreen.classList.contains('open')) {
+    closeDetailInternal();
+    return;
+  }
+  if (bookModal && bookModal.classList.contains('open')) {
+    closeBookModalInternal();
+    return;
+  }
+  // tab 이동 — pushState 중복 방지
+  suppressPushState = true;
+  setView(getInitialView());
+  suppressPushState = false;
+});
 
 // ---------- Realtime ----------
 // Supabase Postgres Changes — cards/works/user_bookmarks 변경을 실시간으로 듣고
@@ -1055,13 +1076,24 @@ function openBookModal(work) {
     bookList.appendChild(item);
   });
 
+  // history에 overlay 상태 push — swipe-back / 시스템 back으로 닫히게
+  history.pushState({ overlay: 'book', key: work.key }, '');
   bookModal.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
 
-function closeBookModal() {
+// 실제 DOM 닫기 — popstate 콜백에서 호출
+function closeBookModalInternal() {
   bookModal.classList.remove('open');
   document.body.style.overflow = '';
+}
+// 사용자 의도(X 버튼 / 백드롭 / Esc / quote 클릭) → history.back() 으로 통일
+function closeBookModal() {
+  if (history.state && history.state.overlay === 'book') {
+    history.back();
+  } else {
+    closeBookModalInternal();
+  }
 }
 
 function truncateText(s, n) {
@@ -1327,7 +1359,8 @@ function openDetail(card) {
   const idStr = String(card.card_id).padStart(4, '0');
   detailEdition.textContent = `LIMITED EDITION DIGITAL MANUSCRIPT #${idStr}`;
 
-  // open the screen
+  // open the screen — history 에 overlay 상태 push (swipe-back으로 닫히도록)
+  history.pushState({ overlay: 'detail', cardId: card.card_id }, '');
   detailScreen.style.display = 'flex';
   requestAnimationFrame(() => detailScreen.classList.add('open'));
   document.body.style.overflow = 'hidden';
@@ -1337,13 +1370,20 @@ function paintDetailCollectBtn(isBookmarked) {
   detailCollectBtn.textContent = isBookmarked ? 'Collected' : 'Collect Script Artifact';
 }
 
-function closeDetail() {
+function closeDetailInternal() {
   detailScreen.classList.remove('open');
   setTimeout(() => {
     detailScreen.style.display = 'none';
     document.body.style.overflow = '';
     state.detailCardId = null;
   }, 250);
+}
+function closeDetail() {
+  if (history.state && history.state.overlay === 'detail') {
+    history.back();
+  } else {
+    closeDetailInternal();
+  }
 }
 
 detailBack.addEventListener('click', closeDetail);
@@ -1372,9 +1412,20 @@ function setView(view) {
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
   if (view === 'settings') paintTasteProfile();
 
-  history.replaceState(null, '', `#${view}`);
+  // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
+  if (!suppressPushState) {
+    const newHash = `#${view}`;
+    if (location.hash !== newHash) {
+      history.pushState({ tab: view }, '', newHash);
+    } else {
+      history.replaceState({ tab: view }, '', newHash);
+    }
+  }
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
+
+// popstate로 setView 호출 시 다시 push되지 않도록 가드
+let suppressPushState = false;
 
 $$('[data-nav]').forEach((btn) => {
   btn.addEventListener('click', () => setView(btn.dataset.nav));

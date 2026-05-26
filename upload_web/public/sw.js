@@ -5,7 +5,7 @@
 //  - 정적 자산 (JS/CSS/이미지) → stale-while-revalidate
 //  - API/Supabase/Anthropic → 항상 네트워크 패스스루
 //  - 업데이트는 즉시 활성화 (skipWaiting + clients.claim)
-const CACHE_VERSION = 'sq-v23-dark-theme';
+const CACHE_VERSION = 'sq-v24-swipe-back';
 const STATIC_ASSETS = [
   '/assets/login.js',
   '/assets/dashboard.js',
