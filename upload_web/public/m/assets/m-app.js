@@ -579,12 +579,19 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
 function loadRecentlyShownFromStorage() {
   try {
     const raw = localStorage.getItem(RECENT_STORAGE_KEY);
-    if (!raw) return;
+    if (!raw) {
+      console.log('[m] recent storage empty — fresh start');
+      return;
+    }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return;
+    if (!Array.isArray(parsed)) {
+      console.warn('[m] recent storage was not array:', parsed);
+      return;
+    }
     state.recentlyShownIds = parsed
       .filter((v) => typeof v === 'number')
       .slice(-RECENT_EXCLUDE_SIZE);
+    console.log(`[m] recent restored: ${state.recentlyShownIds.length} ids`, state.recentlyShownIds);
   } catch (err) {
     console.warn('[m] loadRecentlyShown failed:', err);
   }
@@ -971,18 +978,27 @@ function buildGenreShelf(genre, items) {
 
   items.forEach((w) => {
     const count = w.cards.length;
-    const height = 188 + Math.min(28, count * 4);
-    const width = 44 + Math.min(16, count * 2);
+    const displayName = displayTitle(w.title);
+    // 제목 길이에 따라 폰트·높이 동적 조정 — 풀텍스트 보장
+    const titleLen = displayName.length;
+    const fontSize = titleLen <= 5 ? 16 : titleLen <= 8 ? 14 : titleLen <= 12 ? 12 : 11;
+    const perChar = fontSize + 4;
+    const reserved = 110;  // 상하 가죽 밴드 + count + genre + padding
+    const height = Math.max(200, reserved + titleLen * perChar);
+    const width = 44 + Math.min(20, count * 3);
+
     const spine = document.createElement('button');
     spine.type = 'button';
     spine.className = 'spine';
     spine.style.height = `${height}px`;
     spine.style.width = `${width}px`;
-    spine.style.background = leatherColorFor(w.title);
+    spine.style.backgroundColor = leatherColorFor(w.title);
     spine.innerHTML = `
-      <span class="spine-count">${count}</span>
-      <span class="spine-title">${escapeHtml(displayTitle(w.title))}</span>
-      <span class="spine-genre">${escapeHtml(label)}</span>
+      <div class="spine-inner">
+        <span class="spine-count">${count}</span>
+        <span class="spine-title" style="font-size:${fontSize}px;">${escapeHtml(displayName)}</span>
+        <span class="spine-genre">${escapeHtml(label)}</span>
+      </div>
     `;
     spine.addEventListener('click', () => openBookModal(w));
     row.appendChild(spine);

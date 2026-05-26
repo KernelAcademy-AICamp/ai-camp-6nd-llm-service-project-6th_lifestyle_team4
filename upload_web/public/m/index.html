@@ -368,87 +368,156 @@
     color: var(--walnut);
   }
 
+  /* === v4: 우드 프레임 책꽂이 === */
   .bookshelf {
-    padding: 18px 14px 6px;
-    border-radius: 8px;
-    box-shadow: inset 0 4px 12px rgba(0,0,0,0.25);
+    --frame: #4A2A18;
+    --frame-light: #6E4A2E;
+    --back: #2E1D10;
+    position: relative;
+    padding: 8px 0 0;
+    border-radius: 4px;
+    border: 10px solid var(--frame);
+    border-top-width: 14px;
+    background:
+      linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.45) 30%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.6)),
+      linear-gradient(180deg, var(--back) 0%, #1B0E06 100%);
+    box-shadow:
+      0 6px 14px rgba(0,0,0,0.35),
+      inset 0 8px 20px rgba(0,0,0,0.6),
+      inset 0 2px 0 rgba(255,235,190,0.18);
+  }
+  .bookshelf::before {
+    content: '';
+    position: absolute;
+    top: -14px; left: -10px; right: -10px;
+    height: 14px;
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.08) 0 6px, transparent 6px 14px),
+      linear-gradient(180deg, var(--frame-light), var(--frame));
+    border-bottom: 1px solid rgba(0,0,0,0.4);
   }
   .shelf-row {
-    display: flex; gap: 4px;
-    padding: 0 4px 14px;
-    border-radius: 0 0 4px 4px;
+    display: flex; gap: 2px;
+    padding: 0 6px;
     align-items: flex-end;
-    min-height: 200px;
+    min-height: 220px;
     flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow-x: auto; overflow-y: hidden;
+    position: relative;
+    border-bottom: 16px solid var(--frame);
+    box-shadow:
+      0 1px 0 rgba(255,235,190,0.20) inset,
+      0 6px 8px rgba(0,0,0,0.5),
+      inset 0 -2px 4px rgba(0,0,0,0.4);
   }
   .shelf-row::-webkit-scrollbar { display: none; }
+  .shelf-row::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -16px; height: 16px;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.10) 0 8px, transparent 8px 22px),
+      linear-gradient(180deg, var(--frame-light) 0%, var(--frame) 50%, #2E180B 100%);
+    border-top: 0.5px solid rgba(255,235,190,0.18);
+  }
+  .bookshelf.g-movie   { --frame:#4A2A18; --frame-light:#6E4A2E; --back:#2E1D10; }
+  .bookshelf.g-drama   { --frame:#6B4A2A; --frame-light:#947040; --back:#3F2A14; }
+  .bookshelf.g-musical { --frame:#5A2818; --frame-light:#7E3A28; --back:#321008; }
+  .bookshelf.g-opera   { --frame:#26180E; --frame-light:#3F2A1A; --back:#140A05; }
+  .bookshelf.g-play    { --frame:#3F2818; --frame-light:#5C3A24; --back:#241408; }
 
-  .bookshelf.g-movie { background: linear-gradient(180deg, #8B6F47 0%, #5A4022 100%); }
-  .bookshelf.g-movie .shelf-row { border-bottom: 10px solid #3A2810; }
-  .bookshelf.g-drama { background: linear-gradient(180deg, #B89868 0%, #7B5E32 100%); }
-  .bookshelf.g-drama .shelf-row { border-bottom: 10px solid #4D3818; }
-  .bookshelf.g-musical { background: linear-gradient(180deg, #7B3F30 0%, #4A1F18 100%); }
-  .bookshelf.g-musical .shelf-row { border-bottom: 10px solid #2D110C; }
-  .bookshelf.g-opera { background: linear-gradient(180deg, #3B2A1E 0%, #1F140C 100%); }
-  .bookshelf.g-opera .shelf-row { border-bottom: 10px solid #100904; }
-  .bookshelf.g-play { background: linear-gradient(180deg, #6B4A38 0%, #3F2A1E 100%); }
-  .bookshelf.g-play .shelf-row { border-bottom: 10px solid #2A1A10; }
-
+  /* Spine v4 — gold 가죽 밴드 + 풀텍스트 제목 */
   .spine {
     flex-shrink: 0;
-    border-radius: 3px 3px 1px 1px;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: space-between;
+    border-radius: 2px 2px 0 0;
+    display: flex;
     cursor: pointer;
-    padding: 14px 6px 10px;
-    box-shadow:
-      inset 2px 0 4px rgba(0,0,0,0.25),
-      inset -2px 0 4px rgba(255,255,255,0.08),
-      2px 0 4px rgba(0,0,0,0.35);
-    transition: transform 0.18s ease, box-shadow 0.18s ease, margin 0.18s ease;
     position: relative;
-    color: #FAF8F2;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
     border: none;
+    color: var(--gold-bright, #E6CC82);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    box-shadow:
+      inset 4px 0 6px rgba(0,0,0,0.45),
+      inset -3px 0 4px rgba(255,255,255,0.10),
+      inset 0 3px 4px rgba(255,255,255,0.10),
+      inset 0 -4px 6px rgba(0,0,0,0.5),
+      2px 0 4px rgba(0,0,0,0.55);
+    background-image:
+      radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.10), transparent 60%),
+      radial-gradient(ellipse at 70% 80%, rgba(0,0,0,0.25), transparent 55%);
+    overflow: hidden;
   }
   .spine:hover, .spine.active {
-    transform: translateY(-14px);
+    transform: translateY(-22px);
+    filter: brightness(1.08);
     box-shadow:
-      inset 2px 0 4px rgba(0,0,0,0.25),
-      4px 6px 18px rgba(0,0,0,0.5),
-      0 0 0 1px var(--cta) inset;
-    margin: 0 4px;
+      inset 4px 0 6px rgba(0,0,0,0.45),
+      inset -3px 0 4px rgba(255,255,255,0.14),
+      inset 0 3px 4px rgba(255,255,255,0.12),
+      inset 0 -4px 6px rgba(0,0,0,0.5),
+      0 14px 22px rgba(0,0,0,0.60),
+      0 0 0 1px var(--cta);
     z-index: 2;
   }
+  .spine::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 10px; height: 12px;
+    background:
+      linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.5) 30%, #C9A24B 50%, rgba(0,0,0,0.5) 70%, transparent 100%);
+    border-top: 0.5px solid rgba(255, 230, 180, 0.4);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.7);
+    z-index: 1;
+  }
+  .spine::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 12px; height: 12px;
+    background:
+      linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.5) 30%, #C9A24B 50%, rgba(0,0,0,0.5) 70%, transparent 100%);
+    border-top: 0.5px solid rgba(255, 230, 180, 0.4);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.7);
+    z-index: 1;
+  }
+  .spine-inner {
+    position: relative; z-index: 2;
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between;
+    padding: 32px 3px 32px;
+    width: 100%; height: 100%;
+  }
   .spine .spine-count {
-    font-family: 'Nanum Myeongjo', serif;
-    font-size: 11px;
-    opacity: 0.85;
-    background: rgba(255,255,255,0.1);
-    border-radius: 50%;
-    width: 22px; height: 22px;
-    display: flex; align-items: center; justify-content: center;
+    font-family: 'Nanum Myeongjo', serif; font-size: 11px;
+    color: #E6CC82;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    flex-shrink: 0;
+    background: transparent;
+    width: auto; height: auto;
   }
   .spine .spine-title {
     writing-mode: vertical-rl;
     text-orientation: mixed;
     font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
     font-weight: 700;
-    font-size: 14px;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
+    color: #E6CC82;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-height: 140px;
+    /* 잘리지 않게 — ellipsis/overflow 제거 */
+    overflow: visible;
+    text-align: center;
+    flex: 1 1 auto;
+    display: flex; align-items: center; justify-content: center;
   }
   .spine .spine-genre {
     font-size: 8px;
-    opacity: 0.7;
+    color: #C9A24B;
     text-transform: uppercase;
-    letter-spacing: 0.18em;
-    font-weight: 600;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    flex-shrink: 0;
   }
 
   /* Book opening modal */
