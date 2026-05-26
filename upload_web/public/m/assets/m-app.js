@@ -769,13 +769,13 @@ function paintTasteProfile() {
   const taste = computeTasteProfile();
   if (!taste) {
     tasteProfileEl.style.display = 'block';
-    tasteProfileEl.textContent = '북마크가 없어 아직 랜덤 추천 · 카드를 모으면 분석 시작';
+    tasteProfileEl.textContent = 'No bookmarks yet — collect cards to start analysis';
     return;
   }
   const t = taste.avgTemperature?.toFixed(1) ?? '—';
   const i = taste.avgIntensity?.toFixed(1) ?? '—';
   tasteProfileEl.style.display = 'block';
-  tasteProfileEl.textContent = `기준: 온도 ${t} · 강도 ${i} (북마크 ${taste.count}개)`;
+  tasteProfileEl.textContent = `Based on: temperature ${t} · intensity ${i} (from ${taste.count} bookmark${taste.count === 1 ? '' : 's'})`;
 }
 
 tasteToggle.addEventListener('click', () => {
@@ -787,7 +787,7 @@ tasteToggle.addEventListener('click', () => {
     state.todayCard = pickTodayCard();
     if (state.todayCard) applyTodayCard(state.todayCard);
   }
-  toast(newEnabled ? '취향 기반 추천 ON' : '완전 랜덤으로');
+  toast(newEnabled ? 'Personalized recommendations on' : 'Switched to fully random');
 });
 
 tasteToggle.addEventListener('keydown', (e) => {
