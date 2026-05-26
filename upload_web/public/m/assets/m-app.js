@@ -889,17 +889,28 @@ function leatherColorFor(title) {
   return LEATHER_PALETTE[Math.abs(h) % LEATHER_PALETTE.length];
 }
 
+// displayTitle alias 적용 후 lowercase + 작가명으로 그룹 키 생성.
+// 같은 제목인데 work_id가 다른 경우(예: 동일 작품을 여러 번 업로드)도 하나로 묶음.
+// 'titanic' / 'Titanic' / '아,저,씨' / '아저씨' 등 모든 변형이 alias·소문자 정규화 후 동일 키.
+function workGroupKey(work) {
+  const t = displayTitle(work?.title || '').toLowerCase().trim();
+  const a = (work?.author || '').toLowerCase().trim();
+  return `${t}__${a}`;
+}
+
 function groupBookmarksByWork() {
   const byWork = new Map();
   for (const b of state.bookmarks) {
     const card = b.cards;
     if (!card) continue;
     const work = card.works || {};
-    const key = `${(work.title || '').trim()}__${(work.work_id || '')}`;
+    const key = workGroupKey(work);
     if (!byWork.has(key)) {
       byWork.set(key, {
         key,
-        title: work.title || '제목 없음',
+        // displayTitle 적용된 정규화 제목을 보관 → spine/modal 표시 시 일관됨
+        title: displayTitle(work.title) || work.title || '제목 없음',
+        rawTitle: work.title || '',
         format: (work.format || '').toLowerCase(),
         author: work.author || null,
         year: work.release_year || null,
