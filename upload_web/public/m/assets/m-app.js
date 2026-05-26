@@ -727,22 +727,49 @@ function applyTodayCard(card) {
   paintBookmarkBtn(todayBookmark, state.todayBookmarked);
 }
 
+// '지난 기록' — 새로고침 전 표시됐던 카드 최대 3개
+// state.recentlyShownIds 큐에서 현재(맨 뒤)를 제외한 직전 카드들을 가져와 가장 최근 순으로 노출
 function renderHomeBookmarks() {
   homeBookmarksList.innerHTML = '';
-  if (state.bookmarks.length === 0) {
+  const ids = state.recentlyShownIds;
+  if (!ids || ids.length <= 1) {
     const p = document.createElement('p');
     p.className = 't-body-md c-walnut';
     p.style.padding = '16px 0';
-    p.textContent = '아직 북마크한 카드가 없습니다.';
+    p.textContent = '새로고침하면 이전 카드가 여기에 쌓입니다.';
     homeBookmarksList.appendChild(p);
     return;
   }
-  // Show all bookmarks (Android pattern)
-  state.bookmarks.forEach((row) => {
-    const card = row.cards;
+  // 마지막 = 현재 카드. 그 직전 카드들을 최근 → 과거 순으로.
+  const prev = ids.slice(0, -1).reverse().slice(0, 3);
+  prev.forEach((id) => {
+    const card = state.allCards.find((c) => c.card_id === id);
     if (!card) return;
-    homeBookmarksList.appendChild(buildBookmarkRow(row));
+    homeBookmarksList.appendChild(buildRecentRow(card));
   });
+}
+
+function buildRecentRow(card) {
+  const wrap = document.createElement('div');
+  const node = document.createElement('div');
+  node.className = 'bookmark-row';
+  const w = card?.works || {};
+  const meta = (w.format || '').toUpperCase();
+  node.innerHTML = `
+    <div style="flex:1;min-width:0;">
+      ${meta ? `<p class="t-label-sm c-walnut">${escapeHtml(meta)}</p><div style="height:6px;"></div>` : ''}
+      <p class="t-title-lg c-espresso single-line">${escapeHtml(displayTitle(w.title) || '—')}</p>
+      <div style="height:4px;"></div>
+      <p class="t-body-md c-walnut single-line">${escapeHtml(cleanQuote(card.quote))}</p>
+    </div>
+    <span class="material-symbols-outlined arrow">arrow_forward_ios</span>
+  `;
+  node.addEventListener('click', () => openDetail(card));
+  wrap.appendChild(node);
+  const hr = document.createElement('div');
+  hr.className = 'hairline';
+  wrap.appendChild(hr);
+  return wrap;
 }
 
 function buildBookmarkRow(row) {
@@ -795,6 +822,7 @@ todayRead.addEventListener('click', (e) => {
 });
 homeRefresh.addEventListener('click', () => {
   applyTodayCard(pickRandomCard());
+  renderHomeBookmarks();  // '지난 기록' 갱신 (직전 카드가 추가됨)
 });
 
 // ---------- Archive ----------
