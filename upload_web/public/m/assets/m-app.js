@@ -19,6 +19,8 @@ const homeRefresh = $('#home-refresh');
 const homeError = $('#home-error');
 const todayCard = $('#today-card');
 const todayChips = $('#today-chips');
+const todayAttribution = $('#today-attribution');
+const todayAttributionSpacer = $('#today-attribution-spacer');
 const todayQuote = $('#today-quote');
 const todayKeywords = $('#today-keywords');
 const todayBookmark = $('#today-bookmark');
@@ -106,6 +108,25 @@ function displayTitle(rawTitle) {
     return TITLE_DISPLAY_ALIASES[stripped];
   }
   return t;
+}
+
+// script_excerpt 첫 부분에서 화자명 휴리스틱 추출.
+// 형식: "이름: 대사" / "이름(상황): 대사" / "이름 - 대사" — 콜론 또는 대시 앞 20자 미만.
+function extractSpeaker(scriptExcerpt) {
+  if (!scriptExcerpt) return '';
+  const lines = String(scriptExcerpt).split('\n');
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = line.match(/^([^\n:：—\-]{1,20})\s*[:：]\s*\S/);
+    if (m) {
+      // 괄호 안 부가설명 제거 — "줄리엣 (창가에서)" → "줄리엣"
+      return m[1].replace(/\s*[(（].*?[)）]\s*$/, '').trim();
+    }
+    // 첫 줄에 콜론이 없으면 더 안 찾고 종료 (지문일 가능성)
+    break;
+  }
+  return '';
 }
 
 // ---------- Init ----------
@@ -778,6 +799,21 @@ function applyTodayCard(card) {
     chip.className = 'chip';
     chip.textContent = kws[0];
     todayChips.appendChild(chip);
+  }
+
+  // Attribution: 인물명 · 《작품명》 — 인물명 없으면 작품명만
+  const workTitle = displayTitle(card.works?.title || '');
+  const speaker = extractSpeaker(card.script_excerpt);
+  let attribution = '';
+  if (workTitle && speaker) attribution = `${speaker} · 《${workTitle}》`;
+  else if (workTitle) attribution = `《${workTitle}》`;
+  if (attribution) {
+    todayAttribution.textContent = attribution;
+    todayAttribution.style.display = 'block';
+    todayAttributionSpacer.style.height = '8px';
+  } else {
+    todayAttribution.style.display = 'none';
+    todayAttributionSpacer.style.height = '0';
   }
 
   // Keyword list (hashtags)
