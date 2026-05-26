@@ -1438,8 +1438,11 @@ function openDetail(card) {
     detailDescSpacer.style.height = '0';
   }
 
-  // script_excerpt (left aligned, mono)
-  detailScript.textContent = card.script_excerpt || '';
+  // script_excerpt (left aligned, mono) — 화자 라인 볼드 (admin library.js와 동일 처리)
+  detailScript.innerHTML = boldSpeakerLines(
+    cleanForDisplay(card.script_excerpt || ''),
+    w.characters
+  );
 
   // significance — only for opera/play
   const fmt = String(w.format || '').toLowerCase();
@@ -1544,6 +1547,91 @@ function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 발췌문 표시용 정리. admin library.js와 동일 로직 — 화자/대사 라인 재조립.
+function cleanForDisplay(s) {
+  let text = String(s ?? '');
+  text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
+  const speakers = new Set();
+  const colonRegex = /^([^:：()\n]{1,14})[:：][ \t]*/gm;
+  let m;
+  while ((m = colonRegex.exec(text)) !== null) {
+    const name = m[1].trim();
+    if (name) speakers.add(name);
+  }
+  const PARTICLE_END = /(가|이|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  const headCounts = {};
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.length > 60) continue;
+    const headM = line.match(/^([가-힣A-Za-z]{2,7}[0-9]?)(?=\s|$)/);
+    if (headM) {
+      const word = headM[1];
+      if (word.length > 2 && PARTICLE_END.test(word)) continue;
+      headCounts[word] = (headCounts[word] || 0) + 1;
+    }
+  }
+  Object.entries(headCounts).forEach(([word, count]) => {
+    if (count >= 2) speakers.add(word);
+  });
+  text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
+  const sortedSpeakers = [...speakers].sort((a, b) => b.length - a.length);
+  const lines = text.split('\n');
+  const out = [];
+  let firstSpeakerSeen = false;
+  const pushSpeakerBoundary = () => {
+    if (firstSpeakerSeen && out.length > 0 && out[out.length - 1].trim() !== '') {
+      out.push('');
+    }
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { out.push(''); continue; }
+    if (speakers.has(line)) {
+      pushSpeakerBoundary();
+      out.push(line);
+      firstSpeakerSeen = true;
+      continue;
+    }
+    let matched = false;
+    for (const name of sortedSpeakers) {
+      if (line.length <= name.length + 1) continue;
+      if (line.startsWith(name + ' ') || line.startsWith(name + '\t')) {
+        const rest = line.slice(name.length).trim();
+        if (rest) {
+          pushSpeakerBoundary();
+          out.push(name);
+          out.push(rest);
+          firstSpeakerSeen = true;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (matched) continue;
+    out.push(raw);
+  }
+  return out.join('\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// works.characters에 있는 이름과 정확히 일치하는 라인만 <strong>으로 감싸 볼드.
+// 목록 없으면 볼드 없이 escape만.
+function boldSpeakerLines(cleanedText, characterNames) {
+  const text = String(cleanedText ?? '');
+  const names = Array.isArray(characterNames) ? characterNames : [];
+  if (names.length === 0) return escapeHtml(text);
+  const nameSet = new Set(names.map((n) => String(n).trim()).filter(Boolean));
+  return text.split('\n').map((line) => {
+    const safe = escapeHtml(line);
+    const t = line.trim();
+    const namePart = t.split('(')[0].trim();
+    const isSpeaker = !!t && (nameSet.has(t) || nameSet.has(namePart));
+    return isSpeaker ? `<strong>${safe}</strong>` : safe;
+  }).join('\n');
 }
 
 let toastTimer = null;
