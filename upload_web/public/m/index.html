@@ -297,6 +297,228 @@
     color: var(--espresso);
     word-break: keep-all;
   }
+
+  /* ===== Archive bookshelf ===== */
+  .archive-search {
+    margin-top: 24px;
+    position: relative;
+  }
+  .archive-search input {
+    width: 100%;
+    padding: 12px 14px 12px 42px;
+    background: var(--paper);
+    border: 0.5px solid var(--walnut);
+    color: var(--espresso);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px;
+    border-radius: 0;
+    outline: none;
+  }
+  .archive-search input:focus { border-color: var(--espresso); }
+  .archive-search input::placeholder { color: var(--sand); }
+  .archive-search .material-symbols-outlined {
+    position: absolute; left: 14px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--walnut); font-size: 18px !important;
+    pointer-events: none;
+  }
+
+  .genre-section { margin-top: 24px; }
+  .genre-section.hidden { display: none; }
+  .genre-header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 10px;
+    padding: 0 4px;
+  }
+  .genre-name {
+    font-family: 'Nanum Myeongjo', serif;
+    font-size: 18px;
+    color: var(--espresso);
+    letter-spacing: 0.5px;
+  }
+  .genre-count {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--walnut);
+  }
+
+  .bookshelf {
+    padding: 18px 14px 6px;
+    border-radius: 8px;
+    box-shadow: inset 0 4px 12px rgba(0,0,0,0.25);
+  }
+  .shelf-row {
+    display: flex; gap: 4px;
+    padding: 0 4px 14px;
+    border-radius: 0 0 4px 4px;
+    align-items: flex-end;
+    min-height: 200px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .shelf-row::-webkit-scrollbar { display: none; }
+
+  .bookshelf.g-movie { background: linear-gradient(180deg, #8B6F47 0%, #5A4022 100%); }
+  .bookshelf.g-movie .shelf-row { border-bottom: 10px solid #3A2810; }
+  .bookshelf.g-drama { background: linear-gradient(180deg, #B89868 0%, #7B5E32 100%); }
+  .bookshelf.g-drama .shelf-row { border-bottom: 10px solid #4D3818; }
+  .bookshelf.g-musical { background: linear-gradient(180deg, #7B3F30 0%, #4A1F18 100%); }
+  .bookshelf.g-musical .shelf-row { border-bottom: 10px solid #2D110C; }
+  .bookshelf.g-opera { background: linear-gradient(180deg, #3B2A1E 0%, #1F140C 100%); }
+  .bookshelf.g-opera .shelf-row { border-bottom: 10px solid #100904; }
+  .bookshelf.g-play { background: linear-gradient(180deg, #6B4A38 0%, #3F2A1E 100%); }
+  .bookshelf.g-play .shelf-row { border-bottom: 10px solid #2A1A10; }
+
+  .spine {
+    flex-shrink: 0;
+    border-radius: 3px 3px 1px 1px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between;
+    cursor: pointer;
+    padding: 14px 6px 10px;
+    box-shadow:
+      inset 2px 0 4px rgba(0,0,0,0.25),
+      inset -2px 0 4px rgba(255,255,255,0.08),
+      2px 0 4px rgba(0,0,0,0.35);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, margin 0.18s ease;
+    position: relative;
+    color: #FAF8F2;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    border: none;
+  }
+  .spine:hover, .spine.active {
+    transform: translateY(-14px);
+    box-shadow:
+      inset 2px 0 4px rgba(0,0,0,0.25),
+      4px 6px 18px rgba(0,0,0,0.5),
+      0 0 0 1px var(--cta) inset;
+    margin: 0 4px;
+    z-index: 2;
+  }
+  .spine .spine-count {
+    font-family: 'Nanum Myeongjo', serif;
+    font-size: 11px;
+    opacity: 0.85;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .spine .spine-title {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-height: 140px;
+  }
+  .spine .spine-genre {
+    font-size: 8px;
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-weight: 600;
+  }
+
+  /* Book opening modal */
+  .book-modal {
+    position: fixed; inset: 0;
+    background: rgba(14,12,10,0.65);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; padding: 20px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+    perspective: 1500px;
+  }
+  .book-modal.open { opacity: 1; pointer-events: auto; }
+  .book {
+    background: var(--paper);
+    width: 100%; max-width: 480px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 36px 28px 28px 40px;
+    border-left: 8px solid #5A2A24;
+    border-right: 0.5px solid var(--latte);
+    box-shadow:
+      -10px 0 18px rgba(0,0,0,0.25),
+      inset 10px 0 12px rgba(0,0,0,0.05),
+      inset -2px 0 0 var(--latte);
+    transform: rotateY(-100deg) scale(0.6);
+    transform-origin: left center;
+    transition: transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1);
+    position: relative;
+  }
+  .book-modal.open .book { transform: rotateY(0deg) scale(1); }
+  .book::before {
+    content: '';
+    position: absolute;
+    inset: 36px 28px 28px 40px;
+    background: repeating-linear-gradient(
+      180deg,
+      transparent 0px,
+      transparent 28px,
+      rgba(107,93,79,0.08) 28px,
+      rgba(107,93,79,0.08) 29px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+  .book > * { position: relative; z-index: 1; }
+  .book .book-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; margin-bottom: 6px;
+  }
+  .book .book-eyebrow {
+    font-size: 10px; letter-spacing: 0.3em;
+    text-transform: uppercase; color: var(--walnut);
+    margin-bottom: 6px;
+  }
+  .book .book-title {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 28px; line-height: 36px; color: var(--espresso);
+  }
+  .book .book-close {
+    background: transparent; border: 0.5px solid var(--walnut);
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .book .book-meta {
+    margin-top: 8px; font-size: 10px;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--walnut);
+  }
+  .book .book-divider {
+    margin: 20px 0 12px; height: 0.5px; background: var(--sand);
+  }
+  .book .book-quote-item {
+    padding: 18px 0;
+    border-bottom: 0.5px solid var(--latte);
+    cursor: pointer;
+  }
+  .book .book-quote-item:last-child { border-bottom: 0; }
+  .book .book-quote-text {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 16px; line-height: 26px;
+    color: var(--espresso);
+    word-break: keep-all;
+  }
+  .book .book-quote-meta {
+    font-size: 10px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--walnut);
+    margin-top: 8px;
+  }
+  .book .book-pagefoot {
+    text-align: center; margin-top: 24px;
+    font-size: 10px; letter-spacing: 0.3em;
+    text-transform: uppercase; color: var(--sand);
+  }
 </style>
 </head>
 <body>
@@ -392,24 +614,35 @@
     </div>
   </section>
 
-  <!-- ===== Archive view ===== -->
+  <!-- ===== Archive view (bookshelf) ===== -->
   <section id="view-archive" style="display:none;">
-    <div style="height:28px;"></div>
+    <div style="height:24px;"></div>
     <h1 class="t-display-md c-espresso">수집한 대본</h1>
-    <p id="archive-count" class="t-label-sm c-walnut" style="margin-top:6px;display:none;"></p>
+    <p id="archive-count" class="t-label-sm c-walnut" style="margin-top:6px;"></p>
 
-    <div style="height:8px;"></div>
+    <!-- Search -->
+    <div class="archive-search">
+      <span class="material-symbols-outlined">search</span>
+      <input id="archive-search-input" type="search" placeholder="장르 또는 작품 제목으로 검색" />
+    </div>
 
     <div id="archive-loading" style="padding:16px 0;">
       <p class="t-body-md c-walnut">Loading…</p>
     </div>
 
-    <div id="archive-list" style="display:none;"></div>
+    <!-- 장르별 책꽂이 컨테이너 -->
+    <div id="archive-shelves" style="display:none;"></div>
 
     <div id="archive-empty" style="display:none;padding:60px 0;text-align:center;">
       <span class="material-symbols-outlined c-sand" style="font-size:64px;">bookmark_border</span>
       <p class="t-headline-sm c-espresso" style="margin-top:16px;">아직 수집한 대본이 없습니다.</p>
       <p class="t-body-md c-walnut" style="margin-top:8px;">오늘의 명대사를 북마크하면 여기에 모입니다.</p>
+    </div>
+
+    <div id="archive-no-result" style="display:none;padding:60px 0;text-align:center;">
+      <span class="material-symbols-outlined c-sand" style="font-size:56px;">search_off</span>
+      <p class="t-headline-sm c-espresso" style="margin-top:14px;">검색 결과가 없습니다</p>
+      <p class="t-body-md c-walnut" style="margin-top:6px;">다른 단어로 시도해보세요</p>
     </div>
 
     <div style="height:40px;"></div>
@@ -593,6 +826,25 @@
 <div id="ptr">
   <div class="ptr-circle"></div>
   <div class="ptr-label" id="ptr-label">Pull to refresh</div>
+</div>
+
+<!-- ===== Book opening modal (Archive) ===== -->
+<div id="book-modal" class="book-modal" role="dialog" aria-modal="true">
+  <div class="book">
+    <div class="book-header">
+      <div style="flex:1;min-width:0;">
+        <p id="book-eyebrow" class="book-eyebrow"></p>
+        <h2 id="book-title" class="book-title"></h2>
+        <p id="book-meta" class="book-meta"></p>
+      </div>
+      <button id="book-close" class="book-close" aria-label="close">
+        <span class="material-symbols-outlined" style="font-size:18px;color:#2C2620;">close</span>
+      </button>
+    </div>
+    <div class="book-divider"></div>
+    <div id="book-list"></div>
+    <p class="book-pagefoot">— Daily Script · Limited Edition —</p>
+  </div>
 </div>
 
 <!-- ===== Toast ===== -->

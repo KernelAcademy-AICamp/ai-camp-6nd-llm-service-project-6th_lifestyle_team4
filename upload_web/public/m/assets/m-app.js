@@ -26,9 +26,17 @@ const todayRead = $('#today-read');
 const homeBookmarksList = $('#home-bookmarks-list');
 
 const archiveLoading = $('#archive-loading');
-const archiveList = $('#archive-list');
+const archiveShelves = $('#archive-shelves');
 const archiveEmpty = $('#archive-empty');
+const archiveNoResult = $('#archive-no-result');
 const archiveCount = $('#archive-count');
+const archiveSearchInput = $('#archive-search-input');
+const bookModal = $('#book-modal');
+const bookEyebrow = $('#book-eyebrow');
+const bookTitleEl = $('#book-title');
+const bookMetaEl = $('#book-meta');
+const bookList = $('#book-list');
+const bookClose = $('#book-close');
 
 const settingsName = $('#settings-name');
 const settingsBio = $('#settings-bio');
@@ -73,6 +81,7 @@ const state = {
   detailCardId: null,
   pushEnabled: false,
   bookmarkActionInFlight: false,
+  archiveSearch: '',
 };
 
 const TITLE_DISPLAY_ALIASES = { 'titanic': '타이타닉' };
@@ -716,24 +725,192 @@ homeRefresh.addEventListener('click', () => {
 });
 
 // ---------- Archive ----------
+// ---------- Archive: bookshelf grouped by genre ----------
+const GENRE_ORDER = ['movie', 'drama', 'musical', 'opera', 'play'];
+const GENRE_LABEL = {
+  movie: '영화',
+  drama: '드라마',
+  musical: '뮤지컬',
+  opera: '오페라',
+  play: '희곡 / 연극',
+};
+// 작품 제목 해시 → 고정 가죽 색상 (같은 작품엔 항상 같은 책등 색)
+const LEATHER_PALETTE = [
+  '#0E0C0A', '#5A2A24', '#2F3A30', '#293541',
+  '#6A4A30', '#40303B', '#3A463F', '#1F2A3A',
+  '#4A2B1A', '#3D2E22', '#26393B', '#2E2538',
+];
+function leatherColorFor(title) {
+  const t = String(title || '');
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+  return LEATHER_PALETTE[Math.abs(h) % LEATHER_PALETTE.length];
+}
+
+function groupBookmarksByWork() {
+  const byWork = new Map();
+  for (const b of state.bookmarks) {
+    const card = b.cards;
+    if (!card) continue;
+    const work = card.works || {};
+    const key = `${(work.title || '').trim()}__${(work.work_id || '')}`;
+    if (!byWork.has(key)) {
+      byWork.set(key, {
+        key,
+        title: work.title || '제목 없음',
+        format: (work.format || '').toLowerCase(),
+        author: work.author || null,
+        year: work.release_year || null,
+        cards: [],
+      });
+    }
+    byWork.get(key).cards.push(card);
+  }
+  return Array.from(byWork.values());
+}
+
 function renderArchive() {
   archiveLoading.style.display = 'none';
+
   if (state.bookmarks.length === 0) {
-    archiveList.style.display = 'none';
-    archiveCount.style.display = 'none';
+    archiveShelves.style.display = 'none';
+    archiveNoResult.style.display = 'none';
     archiveEmpty.style.display = 'block';
+    archiveCount.textContent = '';
     return;
   }
-  archiveEmpty.style.display = 'none';
-  archiveList.style.display = 'block';
-  archiveCount.style.display = 'block';
-  archiveCount.textContent = `소장 ${state.bookmarks.length}권 · 명대사 ${state.bookmarks.length}편`;
 
-  archiveList.innerHTML = '';
-  state.bookmarks.forEach((row) => {
-    archiveList.appendChild(buildBookmarkRow(row));
+  archiveEmpty.style.display = 'none';
+  const allWorks = groupBookmarksByWork();
+  archiveCount.textContent = `소장 ${allWorks.length}권 · 명대사 ${state.bookmarks.length}편`;
+
+  const q = (state.archiveSearch || '').trim().toLowerCase();
+  const works = allWorks.filter((w) => {
+    if (!q) return true;
+    const title = displayTitle(w.title).toLowerCase();
+    const genreLabel = (GENRE_LABEL[w.format] || w.format || '').toLowerCase();
+    return title.includes(q) || w.format.includes(q) || genreLabel.includes(q);
   });
+
+  if (works.length === 0) {
+    archiveShelves.style.display = 'none';
+    archiveNoResult.style.display = 'block';
+    return;
+  }
+  archiveNoResult.style.display = 'none';
+  archiveShelves.style.display = 'block';
+  archiveShelves.innerHTML = '';
+
+  for (const genre of GENRE_ORDER) {
+    const items = works.filter((w) => w.format === genre);
+    if (items.length === 0) continue;
+    archiveShelves.appendChild(buildGenreShelf(genre, items));
+  }
+  const otherItems = works.filter((w) => !GENRE_ORDER.includes(w.format));
+  if (otherItems.length > 0) {
+    archiveShelves.appendChild(buildGenreShelf('other', otherItems));
+  }
 }
+
+function buildGenreShelf(genre, items) {
+  const section = document.createElement('section');
+  section.className = 'genre-section';
+  const label = GENRE_LABEL[genre] || '기타';
+  const shelfClass = GENRE_ORDER.includes(genre) ? `g-${genre}` : 'g-movie';
+
+  const header = document.createElement('div');
+  header.className = 'genre-header';
+  header.innerHTML = `
+    <span class="genre-name">${escapeHtml(label)}</span>
+    <span class="genre-count">${items.length} ${items.length === 1 ? 'BOOK' : 'BOOKS'}</span>
+  `;
+  section.appendChild(header);
+
+  const shelf = document.createElement('div');
+  shelf.className = `bookshelf ${shelfClass}`;
+  const row = document.createElement('div');
+  row.className = 'shelf-row';
+
+  items.forEach((w) => {
+    const count = w.cards.length;
+    const height = 188 + Math.min(28, count * 4);
+    const width = 44 + Math.min(16, count * 2);
+    const spine = document.createElement('button');
+    spine.type = 'button';
+    spine.className = 'spine';
+    spine.style.height = `${height}px`;
+    spine.style.width = `${width}px`;
+    spine.style.background = leatherColorFor(w.title);
+    spine.innerHTML = `
+      <span class="spine-count">${count}</span>
+      <span class="spine-title">${escapeHtml(displayTitle(w.title))}</span>
+      <span class="spine-genre">${escapeHtml(label)}</span>
+    `;
+    spine.addEventListener('click', () => openBookModal(w));
+    row.appendChild(spine);
+  });
+
+  shelf.appendChild(row);
+  section.appendChild(shelf);
+  return section;
+}
+
+// Book opening modal
+function openBookModal(work) {
+  const label = GENRE_LABEL[work.format] || '기타';
+  const allWorks = groupBookmarksByWork();
+  const idx = allWorks.findIndex((w) => w.key === work.key) + 1;
+
+  bookEyebrow.textContent = `Collected · Volume #${String(idx).padStart(2, '0')}`;
+  bookTitleEl.textContent = displayTitle(work.title);
+  bookMetaEl.textContent = [label.toUpperCase(), work.author, work.year]
+    .filter(Boolean).join(' · ');
+
+  const book = bookModal.querySelector('.book');
+  book.style.borderLeftColor = leatherColorFor(work.title);
+
+  bookList.innerHTML = '';
+  work.cards.forEach((card) => {
+    const item = document.createElement('div');
+    item.className = 'book-quote-item';
+    const meta = card.excerpt_description
+      ? truncateText(cleanQuote(card.excerpt_description), 60)
+      : '';
+    item.innerHTML = `
+      <p class="book-quote-text">"${escapeHtml(cleanQuote(card.quote))}"</p>
+      ${meta ? `<p class="book-quote-meta">${escapeHtml(meta)}</p>` : ''}
+    `;
+    item.addEventListener('click', () => {
+      closeBookModal();
+      setTimeout(() => openDetail(card), 280);
+    });
+    bookList.appendChild(item);
+  });
+
+  bookModal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeBookModal() {
+  bookModal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function truncateText(s, n) {
+  const t = String(s ?? '');
+  return t.length > n ? t.slice(0, n) + '…' : t;
+}
+
+bookClose.addEventListener('click', closeBookModal);
+bookModal.addEventListener('click', (e) => { if (e.target === bookModal) closeBookModal(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && bookModal.classList.contains('open')) closeBookModal();
+});
+
+archiveSearchInput.addEventListener('input', (e) => {
+  state.archiveSearch = e.target.value;
+  renderArchive();
+});
 
 // ---------- Settings ----------
 function paintPushToggle() {
