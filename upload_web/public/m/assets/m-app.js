@@ -913,19 +913,30 @@ function leatherColorFor(title) {
   return LEATHER_PALETTE[Math.abs(h) % LEATHER_PALETTE.length];
 }
 
-// 시리즈 패턴 감지 — 같은 시리즈 작품은 series명으로 통합, 부제별로 책 분리/색상.
-// 예: '셜록홈즈 - 주홍색 연구', '셜록 홈즈: 네 사람의 서명' → series='셜록홈즈', subtitle='주홍색 연구' / '네 사람의 서명'
+// 시리즈 패턴 감지 — '셜록' '홈즈' 'sherlock' 'holmes' 중 하나만 들어가도 셜록홈즈로 통합.
+// 부제는 시리즈 키워드 + 흔한 조사/구분자를 제거하고 남는 부분.
 const SERIES_PATTERNS = [
-  { name: '셜록홈즈', regex: /^\s*(?:셜록\s*홈즈|sherlock\s*holmes)\s*(?:[-:·,—–]\s*)?(.*?)\s*$/i },
+  {
+    name: '셜록홈즈',
+    detect: /(?:셜록|홈즈|sherlock|holmes)/i,
+    strip: [
+      /셜록\s*홈즈/gi, /sherlock\s*holmes/gi,
+      /셜록/g, /홈즈/g, /sherlock/gi, /holmes/gi,
+    ],
+  },
 ];
 function extractSeries(title) {
   const t = String(title || '').trim();
   if (!t) return { series: '', subtitle: '', full: '' };
   for (const sp of SERIES_PATTERNS) {
-    const m = t.match(sp.regex);
-    if (m) {
-      const sub = (m[1] || '').trim();
-      return { series: sp.name, subtitle: sub, full: t };
+    if (sp.detect.test(t)) {
+      let subtitle = t;
+      for (const re of sp.strip) subtitle = subtitle.replace(re, '');
+      subtitle = subtitle
+        .replace(/^[\s\-:·,—–의와과]+|[\s\-:·,—–의와과]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return { series: sp.name, subtitle, full: t };
     }
   }
   return { series: t, subtitle: '', full: t };
@@ -1042,12 +1053,16 @@ function buildGenreShelf(genre, items) {
   items.forEach((w) => {
     const count = w.cards.length;
     const displayName = displayTitle(w.title);
+    // series 라벨 표시 여부 — subtitle이 있으면 (시리즈 안의 한 권) series 라벨 위에 표시
+    const showSeries = !!w.subtitle && w.subtitle !== w.series && w.series !== displayName;
+    const seriesLabel = showSeries ? w.series : '';
     // 제목 길이에 따라 폰트·높이 동적 조정 — 풀텍스트 보장
     const titleLen = displayName.length;
     const fontSize = titleLen <= 5 ? 16 : titleLen <= 8 ? 14 : titleLen <= 12 ? 12 : 11;
     const perChar = fontSize + 4;
     const reserved = 110;  // 상하 가죽 밴드 + count + genre + padding
-    const height = Math.max(200, reserved + titleLen * perChar);
+    const seriesReserve = showSeries ? (seriesLabel.length * 12 + 8) : 0;  // 시리즈 라벨 자리
+    const height = Math.max(200, reserved + titleLen * perChar + seriesReserve);
     const width = 44 + Math.min(20, count * 3);
 
     const spine = document.createElement('button');
@@ -1059,6 +1074,7 @@ function buildGenreShelf(genre, items) {
     spine.innerHTML = `
       <div class="spine-inner">
         <span class="spine-count">${count}</span>
+        ${showSeries ? `<span class="spine-series">${escapeHtml(seriesLabel)}</span>` : ''}
         <span class="spine-title" style="font-size:${fontSize}px;">${escapeHtml(displayName)}</span>
         <span class="spine-genre">${escapeHtml(label)}</span>
       </div>

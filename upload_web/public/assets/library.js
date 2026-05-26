@@ -48,18 +48,29 @@ const state = {
 };
 
 // 작품 그룹 키 — 제목+작가가 같으면 같은 그룹
-// 시리즈 패턴 감지 — 셜록홈즈처럼 부제가 다른 여러 작품을 같은 시리즈로 묶음
+// 시리즈 패턴 감지 — '셜록' '홈즈' 'sherlock' 'holmes' 중 하나만 들어가도 셜록홈즈로 통합.
 const SERIES_PATTERNS = [
-  { name: '셜록홈즈', regex: /^\s*(?:셜록\s*홈즈|sherlock\s*holmes)\s*(?:[-:·,—–]\s*)?(.*?)\s*$/i },
+  {
+    name: '셜록홈즈',
+    detect: /(?:셜록|홈즈|sherlock|holmes)/i,
+    strip: [
+      /셜록\s*홈즈/gi, /sherlock\s*holmes/gi,
+      /셜록/g, /홈즈/g, /sherlock/gi, /holmes/gi,
+    ],
+  },
 ];
 function extractSeries(title) {
   const t = String(title || '').trim();
   if (!t) return { series: '', subtitle: '', full: '' };
   for (const sp of SERIES_PATTERNS) {
-    const m = t.match(sp.regex);
-    if (m) {
-      const sub = (m[1] || '').trim();
-      return { series: sp.name, subtitle: sub, full: t };
+    if (sp.detect.test(t)) {
+      let subtitle = t;
+      for (const re of sp.strip) subtitle = subtitle.replace(re, '');
+      subtitle = subtitle
+        .replace(/^[\s\-:·,—–의와과]+|[\s\-:·,—–의와과]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return { series: sp.name, subtitle, full: t };
     }
   }
   return { series: t, subtitle: '', full: t };

@@ -541,6 +541,20 @@
     font-weight: 700;
     flex-shrink: 0;
   }
+  /* 시리즈 라벨 — 책등 위쪽에 부제 위에 작게 (셜록홈즈 같은 시리즈 표시) */
+  .spine .spine-series {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: #C9A24B;
+    opacity: 0.9;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-bottom: 2px;
+  }
 
   /* Book opening modal */
   .book-modal {
