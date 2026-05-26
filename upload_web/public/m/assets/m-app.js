@@ -37,6 +37,8 @@ const signOutBtn = $('#sign-out-btn');
 const signinBlock = $('#signin-block');
 const signinGoogle = $('#signin-google');
 const signinKakao = $('#signin-kakao');
+const tasteToggle = $('#taste-toggle');
+const tasteProfileEl = $('#taste-profile');
 
 const detailScreen = $('#detail-screen');
 const detailBack = $('#detail-back');
@@ -81,9 +83,11 @@ const displayTitle = (s) => TITLE_DISPLAY_ALIASES[String(s||'').trim().toLowerCa
   try {
     state.pushEnabled = localStorage.getItem('ds.push') === '1';
     paintPushToggle();
+    paintTasteToggle();
     await bootstrapAuth();
     paintAuthIdentity();
     await Promise.all([loadAllCards(), loadBookmarks()]);
+    paintTasteProfile();
     renderHome();
     setView(getInitialView());
     // 데이터 변경을 실시간으로 받아 즉시 반영
@@ -406,15 +410,116 @@ async function loadBookmarks() {
   state.bookmarkedIds = new Set(state.bookmarks.map((b) => b.card_id));
 }
 
-// ---------- Today's card ----------
+// ---------- Today's card / 추천 ----------
+function getTodaySeed() {
+  const d = new Date();
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+function isTasteEnabled() {
+  return localStorage.getItem('ds.taste') === '1';
+}
+
+/**
+ * 북마크 카드들의 온도/강도 평균으로 사용자 취향 프로파일을 구성.
+ * 카드의 temperature/intensity 가 숫자가 아니면 무시.
+ */
+function computeTasteProfile() {
+  const bookmarkedCards = (state.bookmarks || [])
+    .map((b) => b.cards)
+    .filter(Boolean);
+  if (bookmarkedCards.length === 0) return null;
+  let sumT = 0, sumI = 0, nT = 0, nI = 0;
+  for (const c of bookmarkedCards) {
+    if (typeof c.temperature === 'number') { sumT += c.temperature; nT++; }
+    if (typeof c.intensity === 'number')   { sumI += c.intensity;   nI++; }
+  }
+  if (nT === 0 && nI === 0) return null;
+  return {
+    avgTemperature: nT > 0 ? sumT / nT : null,
+    avgIntensity:   nI > 0 ? sumI / nI : null,
+    count: bookmarkedCards.length,
+  };
+}
+
+/** taste 프로파일과 카드 간 거리 (작을수록 비슷). */
+function tasteDistance(card, taste) {
+  let sum = 0, dims = 0;
+  if (taste.avgTemperature != null && typeof card.temperature === 'number') {
+    const d = card.temperature - taste.avgTemperature;
+    sum += d * d; dims++;
+  }
+  if (taste.avgIntensity != null && typeof card.intensity === 'number') {
+    const d = card.intensity - taste.avgIntensity;
+    sum += d * d; dims++;
+  }
+  if (dims === 0) return Infinity;
+  return Math.sqrt(sum);
+}
+
+/**
+ * 시드 기반 결정론적 + taste 가중 선택.
+ *  - taste 프로파일 없거나 candidate 없으면 시드 모듈로 폴백
+ *  - seed % 10 === 0 인 날(10%)엔 variety로 먼 카드도 허용
+ *  - 그 외 90% 는 상위 30% 유사 카드 풀에서 시드 모듈로 선택
+ */
+function pickByTasteSeeded(seed) {
+  if (state.allCards.length === 0) return null;
+  const taste = computeTasteProfile();
+  if (!taste) return state.allCards[Math.abs(seed) % state.allCards.length];
+
+  const candidates = state.allCards.filter(
+    (c) => typeof c.temperature === 'number' || typeof c.intensity === 'number'
+  );
+  if (candidates.length === 0) return state.allCards[Math.abs(seed) % state.allCards.length];
+
+  const sorted = candidates.slice().sort((a, b) => tasteDistance(a, taste) - tasteDistance(b, taste));
+  const variety = (Math.abs(seed) % 10) === 0;
+  const pool = variety
+    ? sorted.slice(Math.floor(sorted.length * 0.3))   // 멀리 있는 70%에서 (가끔 변형)
+    : sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.3)));  // 가까운 30%만
+  return pool[Math.abs(seed) % pool.length];
+}
+
+/**
+ * 비시드 (refresh) — 매번 다른 카드를 보여주되 taste 가중.
+ *  - 10% 확률로 pure random (variety)
+ *  - 그 외 90%는 거리 역수로 가중 랜덤
+ */
+function pickByTasteRandom() {
+  if (state.allCards.length === 0) return null;
+  const taste = computeTasteProfile();
+  if (!taste) return state.allCards[Math.floor(Math.random() * state.allCards.length)];
+
+  if (Math.random() < 0.1) {
+    return state.allCards[Math.floor(Math.random() * state.allCards.length)];
+  }
+
+  const candidates = state.allCards.filter(
+    (c) => typeof c.temperature === 'number' || typeof c.intensity === 'number'
+  );
+  if (candidates.length === 0) return state.allCards[Math.floor(Math.random() * state.allCards.length)];
+
+  const weights = candidates.map((c) => 1 / (1 + tasteDistance(c, taste)));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return candidates[i];
+  }
+  return candidates[candidates.length - 1];
+}
+
 function pickTodayCard() {
   if (state.allCards.length === 0) return null;
-  const today = new Date();
-  const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+  const seed = getTodaySeed();
+  if (isTasteEnabled()) return pickByTasteSeeded(seed);
   return state.allCards[seed % state.allCards.length];
 }
+
 function pickRandomCard() {
   if (state.allCards.length === 0) return null;
+  if (isTasteEnabled()) return pickByTasteRandom();
   return state.allCards[Math.floor(Math.random() * state.allCards.length)];
 }
 
@@ -455,6 +560,7 @@ async function toggleBookmark(cardId) {
     state.bookmarkActionInFlight = false;
     if (state.currentView === 'archive') renderArchive();
     if (state.currentView === 'home') renderHomeBookmarks();
+    if (state.currentView === 'settings') paintTasteProfile();
   }
 }
 
@@ -646,6 +752,51 @@ pushToggle.addEventListener('keydown', (e) => {
   }
 });
 
+// ---------- Taste toggle (취향 기반 추천) ----------
+function paintTasteToggle() {
+  const enabled = isTasteEnabled();
+  tasteToggle.classList.toggle('on', enabled);
+  tasteToggle.setAttribute('aria-checked', enabled ? 'true' : 'false');
+  paintTasteProfile();
+}
+
+function paintTasteProfile() {
+  if (!tasteProfileEl) return;
+  if (!isTasteEnabled()) {
+    tasteProfileEl.style.display = 'none';
+    return;
+  }
+  const taste = computeTasteProfile();
+  if (!taste) {
+    tasteProfileEl.style.display = 'block';
+    tasteProfileEl.textContent = '북마크가 없어 아직 랜덤 추천 · 카드를 모으면 분석 시작';
+    return;
+  }
+  const t = taste.avgTemperature?.toFixed(1) ?? '—';
+  const i = taste.avgIntensity?.toFixed(1) ?? '—';
+  tasteProfileEl.style.display = 'block';
+  tasteProfileEl.textContent = `기준: 온도 ${t} · 강도 ${i} (북마크 ${taste.count}개)`;
+}
+
+tasteToggle.addEventListener('click', () => {
+  const newEnabled = !isTasteEnabled();
+  localStorage.setItem('ds.taste', newEnabled ? '1' : '0');
+  paintTasteToggle();
+  // 즉시 효과 — 오늘의 카드 다시 뽑기
+  if (state.currentView === 'home') {
+    state.todayCard = pickTodayCard();
+    if (state.todayCard) applyTodayCard(state.todayCard);
+  }
+  toast(newEnabled ? '취향 기반 추천 ON' : '완전 랜덤으로');
+});
+
+tasteToggle.addEventListener('keydown', (e) => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    tasteToggle.click();
+  }
+});
+
 signOutBtn.addEventListener('click', async () => {
   const msg = state.isAnonymous
     ? '익명 세션을 종료할까요? 다시 입장하면 새 익명 ID가 생성됩니다.'
@@ -796,6 +947,7 @@ function setView(view) {
   });
 
   if (view === 'archive') renderArchive();
+  if (view === 'settings') paintTasteProfile();
 
   history.replaceState(null, '', `#${view}`);
   window.scrollTo({ top: 0, behavior: 'auto' });
