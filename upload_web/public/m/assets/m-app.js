@@ -112,6 +112,7 @@ function displayTitle(rawTitle) {
     state.pushEnabled = localStorage.getItem('ds.push') === '1';
     paintPushToggle();
     paintTasteToggle();
+    loadRecentlyShownFromStorage();
     await bootstrapAuth();
     paintAuthIdentity();
     await Promise.all([loadAllCards(), loadBookmarks()]);
@@ -571,8 +572,32 @@ function pickTodayCard() {
   return state.allCards[seed % state.allCards.length];
 }
 
-// 셔플 시 최근 10개에 있는 카드는 제외
+// 셔플 시 최근 10개에 있는 카드는 제외 + localStorage 영구 저장
 const RECENT_EXCLUDE_SIZE = 10;
+const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
+
+function loadRecentlyShownFromStorage() {
+  try {
+    const raw = localStorage.getItem(RECENT_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    state.recentlyShownIds = parsed
+      .filter((v) => typeof v === 'number')
+      .slice(-RECENT_EXCLUDE_SIZE);
+  } catch (err) {
+    console.warn('[m] loadRecentlyShown failed:', err);
+  }
+}
+
+function saveRecentlyShownToStorage() {
+  try {
+    localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(state.recentlyShownIds));
+  } catch (err) {
+    console.warn('[m] saveRecentlyShown failed:', err);
+  }
+}
+
 function candidatesExcludingRecent() {
   const exclude = new Set(state.recentlyShownIds);
   const pool = state.allCards.filter((c) => !exclude.has(c.card_id));
@@ -582,10 +607,14 @@ function candidatesExcludingRecent() {
 
 function rememberShown(cardId) {
   if (cardId == null) return;
+  // dedupe: 이미 큐에 있으면 제거 후 맨 뒤에 다시 추가 (가장 최근 위치)
+  const idx = state.recentlyShownIds.indexOf(cardId);
+  if (idx >= 0) state.recentlyShownIds.splice(idx, 1);
   state.recentlyShownIds.push(cardId);
   if (state.recentlyShownIds.length > RECENT_EXCLUDE_SIZE) {
     state.recentlyShownIds.shift();
   }
+  saveRecentlyShownToStorage();
 }
 
 function pickRandomCard() {
@@ -690,10 +719,8 @@ function applyTodayCard(card) {
   if (!card) return;
   state.todayCard = card;
   state.todayBookmarked = state.bookmarkedIds.has(card.card_id);
-  // 최근 표시 목록에 추가 (셔플 시 중복 방지)
-  if (!state.recentlyShownIds.includes(card.card_id)) {
-    rememberShown(card.card_id);
-  }
+  // 최근 표시 큐에 추가 (rememberShown이 dedupe + localStorage 저장 처리)
+  rememberShown(card.card_id);
 
   // Quote with curly quotes (mirror Android: "“$it”")
   todayQuote.textContent = `“${cleanQuote(card.quote)}”`;
