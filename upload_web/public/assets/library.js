@@ -54,15 +54,21 @@ function makeGroupKey(work) {
 }
 
 // 표시용 제목 정규화 — DB 원본은 그대로 두고 화면에만 한글 표기 적용
+// 키는 '구분자 제거 + lowercase' 정규화 형태로 매칭해 '아,저,씨' '아·저,씨' 등 모든 변형 처리.
 const TITLE_DISPLAY_ALIASES = {
   'titanic': '타이타닉',
-  '아,저,씨': '아저씨',
+  '아저씨': '아저씨',
 };
 function displayTitle(rawTitle) {
   const t = String(rawTitle || '').trim();
   if (!t) return t;
-  const key = t.toLowerCase();
-  return TITLE_DISPLAY_ALIASES[key] || t;
+  const lc = t.toLowerCase();
+  if (TITLE_DISPLAY_ALIASES[lc]) return TITLE_DISPLAY_ALIASES[lc];
+  const stripped = lc.replace(/[^\p{L}\p{N}]/gu, '');
+  if (stripped && TITLE_DISPLAY_ALIASES[stripped]) {
+    return TITLE_DISPLAY_ALIASES[stripped];
+  }
+  return t;
 }
 
 // ---------------------------------------------------------------------------

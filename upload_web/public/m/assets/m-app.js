@@ -87,11 +87,24 @@ const state = {
   recentlyShownIds: [],    // 오늘의 명대사 셔플 시 최근 10개 제외용 큐
 };
 
+// 표시용 제목 정규화 — DB 원본은 그대로 두고 화면에만 적용.
+// 키는 '구분자 제거 + lowercase' 형태로 보관해서 '아,저,씨' '아·저·씨' '아 . 저 . 씨' 등 모든 변형 매칭.
 const TITLE_DISPLAY_ALIASES = {
   'titanic': '타이타닉',
-  '아,저,씨': '아저씨',
+  '아저씨': '아저씨',
 };
-const displayTitle = (s) => TITLE_DISPLAY_ALIASES[String(s||'').trim().toLowerCase()] || String(s||'').trim();
+function displayTitle(rawTitle) {
+  const t = String(rawTitle || '').trim();
+  if (!t) return t;
+  const lc = t.toLowerCase();
+  if (TITLE_DISPLAY_ALIASES[lc]) return TITLE_DISPLAY_ALIASES[lc];
+  // 구두점/공백 제거 후 다시 매칭 (아,저,씨 / 아·저·씨 / 아 . 저 . 씨 등 모두 정규화)
+  const stripped = lc.replace(/[^\p{L}\p{N}]/gu, '');
+  if (stripped && TITLE_DISPLAY_ALIASES[stripped]) {
+    return TITLE_DISPLAY_ALIASES[stripped];
+  }
+  return t;
+}
 
 // ---------- Init ----------
 (async () => {

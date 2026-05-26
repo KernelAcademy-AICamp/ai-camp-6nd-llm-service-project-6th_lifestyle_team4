@@ -434,12 +434,18 @@ function normalizeTitle(s) {
 // 영문/한글 alias — DB 원본은 영문이지만 한글 입력도 정답 처리
 const TITLE_DISPLAY_ALIASES = {
   'titanic': '타이타닉',
-  '아,저,씨': '아저씨',
+  '아저씨': '아저씨',
 };
 function displayTitle(rawTitle) {
   const t = String(rawTitle || '').trim();
   if (!t) return t;
-  return TITLE_DISPLAY_ALIASES[t.toLowerCase()] || t;
+  const lc = t.toLowerCase();
+  if (TITLE_DISPLAY_ALIASES[lc]) return TITLE_DISPLAY_ALIASES[lc];
+  const stripped = lc.replace(/[^\p{L}\p{N}]/gu, '');
+  if (stripped && TITLE_DISPLAY_ALIASES[stripped]) {
+    return TITLE_DISPLAY_ALIASES[stripped];
+  }
+  return t;
 }
 function aliasesFor(target) {
   const out = new Set();
