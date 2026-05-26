@@ -831,9 +831,9 @@ function applyTodayCard(card) {
   if (workTitle) {
     const fmt = card.works?.format || '';
     const genreLabel = GENRE_LABEL[fmt] || '';
-    todayWork.textContent = genreLabel ? `${genreLabel} <${workTitle}>` : `<${workTitle}>`;
+    todayWork.textContent = genreLabel ? `— ${genreLabel} <${workTitle}>` : `— <${workTitle}>`;
     todayWork.style.display = 'block';
-    todayWorkSpacer.style.height = '12px';
+    todayWorkSpacer.style.height = '20px';
   } else {
     todayWork.style.display = 'none';
     todayWorkSpacer.style.height = '0';
