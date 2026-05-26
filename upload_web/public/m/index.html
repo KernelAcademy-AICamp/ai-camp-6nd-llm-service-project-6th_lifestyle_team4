@@ -98,12 +98,13 @@
 
   /* ChipTag — espresso filled / paper outlined (mirror ChipTag.kt) */
   .chip {
-    display: inline-flex; align-items: center;
+    display: inline-flex; align-items: center; justify-content: center;
     height: 22px; min-width: 44px;
     padding: 0 10px;
     border-radius: 4px;
     font-size: 11px; font-weight: 400;
     letter-spacing: 0.2em; text-transform: uppercase;
+    text-indent: 0.2em;  /* letter-spacing 끝 공간 보정 — 가운데 정렬 시각적 안정 */
     border: 1px solid var(--latte);
     background: var(--paper);
     color: var(--walnut);
