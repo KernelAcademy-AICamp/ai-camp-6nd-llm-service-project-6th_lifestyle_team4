@@ -19,8 +19,10 @@ const homeRefresh = $('#home-refresh');
 const homeError = $('#home-error');
 const todayCard = $('#today-card');
 const todayChips = $('#today-chips');
-const todayAttribution = $('#today-attribution');
-const todayAttributionSpacer = $('#today-attribution-spacer');
+const todaySpeaker = $('#today-speaker');
+const todaySpeakerSpacer = $('#today-speaker-spacer');
+const todayWork = $('#today-work');
+const todayWorkSpacer = $('#today-work-spacer');
 const todayQuote = $('#today-quote');
 const todayKeywords = $('#today-keywords');
 const todayBookmark = $('#today-bookmark');
@@ -801,19 +803,24 @@ function applyTodayCard(card) {
     todayChips.appendChild(chip);
   }
 
-  // Attribution: 인물명 · 《작품명》 — 인물명 없으면 작품명만
+  // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
   const workTitle = displayTitle(card.works?.title || '');
   const speaker = extractSpeaker(card.script_excerpt);
-  let attribution = '';
-  if (workTitle && speaker) attribution = `${speaker} · 《${workTitle}》`;
-  else if (workTitle) attribution = `《${workTitle}》`;
-  if (attribution) {
-    todayAttribution.textContent = attribution;
-    todayAttribution.style.display = 'block';
-    todayAttributionSpacer.style.height = '8px';
+  if (speaker) {
+    todaySpeaker.textContent = speaker;
+    todaySpeaker.style.display = 'block';
+    todaySpeakerSpacer.style.height = '12px';
   } else {
-    todayAttribution.style.display = 'none';
-    todayAttributionSpacer.style.height = '0';
+    todaySpeaker.style.display = 'none';
+    todaySpeakerSpacer.style.height = '0';
+  }
+  if (workTitle) {
+    todayWork.textContent = `— ${workTitle}`;
+    todayWork.style.display = 'block';
+    todayWorkSpacer.style.height = '12px';
+  } else {
+    todayWork.style.display = 'none';
+    todayWorkSpacer.style.height = '0';
   }
 
   // Keyword list (hashtags)
