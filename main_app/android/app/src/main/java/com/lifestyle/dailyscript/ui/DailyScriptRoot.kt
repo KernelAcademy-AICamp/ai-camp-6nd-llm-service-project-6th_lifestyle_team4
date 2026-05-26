@@ -51,7 +51,7 @@ fun DailyScriptRoot() {
             .navigationBarsPadding(),
     ) {
         when (val s = sessionState) {
-            SessionState.Loading -> CenteredMessage(text = "Loading...")
+            SessionState.Loading -> CenteredMessage(text = "Loading⋯")
             is SessionState.Error -> CenteredMessage(
                 text = s.message,
                 error = true,
