@@ -152,7 +152,7 @@ private struct TodayCardView: View {
                         .onTapGesture { bookmarked.toggle() }
                 }
                 Spacer().frame(height: 28)
-                Text(card.map { "\u{201C}\($0.quote)\u{201D}" } ?? (isLoading ? "Loading…" : "—"))
+                Text(card.map { "\u{201C}\($0.quote)\u{201D}" } ?? (isLoading ? "Loading⋯" : "—"))
                     .font(.headlineSerif(22))
                     .foregroundStyle(.espresso)
                     .fixedSize(horizontal: false, vertical: true)

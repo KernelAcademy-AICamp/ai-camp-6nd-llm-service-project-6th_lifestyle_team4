@@ -124,7 +124,7 @@ logoutBtn.addEventListener('click', async () => {
 // Load
 // ---------------------------------------------------------------------------
 async function loadLibrary() {
-  libraryStatus.textContent = '불러오는 중…';
+  libraryStatus.textContent = '불러오는 중⋯';
   libraryStatus.classList.remove('text-error');
 
   try {
@@ -744,7 +744,7 @@ function buildEditNode(card) {
 
 async function onDelete(card) {
   const preview = (card.quote || '').slice(0, 30) || `카드 ${card.card_id}`;
-  if (!confirm(`"${preview}${(card.quote || '').length > 30 ? '…' : ''}" 카드를 DB에서 영구 삭제할까요?\n\n복구할 수 없습니다.`)) return;
+  if (!confirm(`"${preview}${(card.quote || '').length > 30 ? '⋯' : ''}" 카드를 DB에서 영구 삭제할까요?\n\n복구할 수 없습니다.`)) return;
   try {
     const sb = await getSupabase();
     // .select() 를 붙여 실제 삭제된 행 반환 — RLS 가 차단하면 빈 배열

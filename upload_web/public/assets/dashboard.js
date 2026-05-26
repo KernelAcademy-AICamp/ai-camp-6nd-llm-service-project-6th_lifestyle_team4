@@ -85,7 +85,7 @@ backfillBtn?.addEventListener('click', async () => {
       guard += 1;
       backfillBtn.innerHTML =
         `<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>` +
-        `<span class="text-sm">채우는 중... (${totalProcessed})</span>`;
+        `<span class="text-sm">채우는 중⋯ (${totalProcessed})</span>`;
       const token = await getAccessToken();
       const json = await apiFetch('/api/backfill-characters?limit=3', {
         method: 'POST',
@@ -494,7 +494,7 @@ function onEditClick(idx) {
 function onDeleteClick(idx) {
   const card = state.cards[idx];
   const preview = (card.quote || '').slice(0, 30) || `카드 ${idx + 1}`;
-  if (!confirm(`"${preview}${(card.quote || '').length > 30 ? '…' : ''}" 카드를 삭제할까요?`)) return;
+  if (!confirm(`"${preview}${(card.quote || '').length > 30 ? '⋯' : ''}" 카드를 삭제할까요?`)) return;
   state.cards.splice(idx, 1);
   render();
   toast('카드 삭제됨', 'success');
@@ -561,7 +561,7 @@ async function onTranslateClick(idx) {
   }
 
   try {
-    toast('번역 중...', 'info');
+    toast('번역 중⋯', 'info');
     const token = await getAccessToken();
     const json = await apiFetch('/api/translate', {
       method: 'POST',
@@ -596,7 +596,7 @@ saveBtn.addEventListener('click', async () => {
 
   saveBtn.disabled = true;
   const orig = saveBtn.innerHTML;
-  saveBtn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> 저장 중...';
+  saveBtn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> 저장 중⋯';
 
   try {
     const token = await getAccessToken();
