@@ -898,7 +898,7 @@ const GENRE_LABEL = {
   drama: '드라마',
   musical: '뮤지컬',
   opera: '오페라',
-  play: '희곡 / 연극',
+  play: '연극',
 };
 // 작품 제목 해시 → 고정 가죽 색상 (같은 작품엔 항상 같은 책등 색)
 const LEATHER_PALETTE = [

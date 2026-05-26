@@ -126,7 +126,7 @@ function paintCategory() {
     const hints = {
       screen: '기본 프롬프트로 분석됩니다 (영화·드라마용).',
       opera: '오페라·뮤지컬 전용 프롬프트로 분석됩니다 (libretto 화자 표기 보존).',
-      play: '희곡·연극 전용 프롬프트로 분석됩니다 (speaker_label·상황 단서 포함).',
+      play: '연극 전용 프롬프트로 분석됩니다 (speaker_label·상황 단서 포함).',
     };
     categoryHint.textContent = hints[state.category] || '';
   }

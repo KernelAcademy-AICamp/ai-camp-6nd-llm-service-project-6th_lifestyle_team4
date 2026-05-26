@@ -336,7 +336,7 @@
     <button class="a-chip">영화 · 3</button>
     <button class="a-chip">오페라 · 2</button>
     <button class="a-chip">뮤지컬 · 1</button>
-    <button class="a-chip">희곡 · 1</button>
+    <button class="a-chip">연극 · 1</button>
   </div>
 
   <div class="archive-search">
@@ -376,11 +376,11 @@
     { key: 'carmen', title: 'CARMEN', genre: 'opera', genreLabel: '오페라', author: 'Bizet', year: '1875', color: '#5A2A24', quotes: [{q:'사랑은 길들이지 못한 새',d:'하바네라 도입부'},{q:'사랑은 어디로 갈지 모르는 집시의 아이',d:'하바네라'},{q:'내가 너를 사랑한다면 조심해',d:'카르멘의 경고'}] },
     { key: 'rigoletto', title: 'RIGOLETTO', genre: 'opera', genreLabel: '오페라', author: 'Verdi', year: '1851', color: '#40303B', quotes: [{q:'여자의 마음은 갈대와 같이',d:'만토바 공작 아리아'}] },
     { key: 'billy', title: 'BILLY ELLIOT', genre: 'musical', genreLabel: '뮤지컬', author: 'Elton John', year: '2005', color: '#6A4A30', quotes: [{q:'Electricity, sparks inside of me',d:'Electricity 솔로'},{q:"I can't really explain it…",d:'오디션'}] },
-    { key: 'sontuk', title: '바람의 노래', genre: 'play', genreLabel: '희곡', author: '연극', year: '—', color: '#3A463F', quotes: [{q:'바람은 어디서 와서 어디로 가는가',d:'도입부 독백'},{q:'끝은 또 다른 시작',d:'엔딩'}] },
+    { key: 'sontuk', title: '바람의 노래', genre: 'play', genreLabel: '연극', author: '연극', year: '—', color: '#3A463F', quotes: [{q:'바람은 어디서 와서 어디로 가는가',d:'도입부 독백'},{q:'끝은 또 다른 시작',d:'엔딩'}] },
   ];
 
   const GENRE_ORDER = ['movie','drama','musical','opera','play'];
-  const GENRE_LABEL = { movie:'영화', drama:'드라마', musical:'뮤지컬', opera:'오페라', play:'희곡 / 연극' };
+  const GENRE_LABEL = { movie:'영화', drama:'드라마', musical:'뮤지컬', opera:'오페라', play:'연극' };
 
   // 책 사이즈 동적 — 제목 길이에 따라 높이·폭·폰트 크기 조정
   function bookDims(w) {
