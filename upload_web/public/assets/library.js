@@ -635,7 +635,7 @@ function buildViewNode(card) {
     .filter(Boolean).join(' · ');
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
-  node.querySelector('.lib-quote').textContent = card.quote ? `"${breakQuoteByBreath(cleanForDisplay(card.quote))}"` : '';
+  node.querySelector('.lib-quote').textContent = card.quote ? `"${cleanForDisplay(card.quote)}"` : '';
   node.querySelector('.lib-excerpt').innerHTML = boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters);
   node.querySelector('.lib-description').textContent = cleanForDisplay(card.excerpt_description || '');
 
@@ -972,15 +972,6 @@ function boldSpeakerLines(cleanedText, characterNames) {
     const isSpeaker = !!t && (nameSet.has(t) || nameSet.has(namePart));
     return isSpeaker ? `<strong>${safe}</strong>` : safe;
   }).join('\n');
-}
-
-// 명대사(quote)를 호흡 단위(쉼표·마침표·물음표·느낌표) 뒤에서 줄바꿈해 가독성을 높인다.
-// 화면 표시용 — 저장된 데이터는 바뀌지 않음. (.lib-quote 는 whitespace-pre-wrap 필요)
-function breakQuoteByBreath(text) {
-  return String(text ?? '')
-    .replace(/([,，.。?!？！…])[ \t]+/g, '$1\n')
-    .replace(/\n+$/g, '')
-    .trim();
 }
 
 function showMobilePreview(card) {
