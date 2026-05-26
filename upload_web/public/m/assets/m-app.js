@@ -800,7 +800,7 @@ function applyTodayCard(card) {
   // Quote with curly quotes (mirror Android: "“$it”")
   todayQuote.textContent = `“${cleanQuote(card.quote)}”`;
 
-  // Chips: filled format + outlined first keyword
+  // Chips: filled format only
   todayChips.innerHTML = '';
   const format = card.works?.format;
   if (format) {
@@ -810,12 +810,6 @@ function applyTodayCard(card) {
     todayChips.appendChild(chip);
   }
   const kws = Array.isArray(card.keywords) ? card.keywords : [];
-  if (kws[0]) {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.textContent = kws[0];
-    todayChips.appendChild(chip);
-  }
 
   // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
   const workTitle = displayTitle(card.works?.title || '');
