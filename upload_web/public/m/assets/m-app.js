@@ -84,7 +84,10 @@ const state = {
   archiveSearch: '',
 };
 
-const TITLE_DISPLAY_ALIASES = { 'titanic': '타이타닉' };
+const TITLE_DISPLAY_ALIASES = {
+  'titanic': '타이타닉',
+  '아,저,씨': '아저씨',
+};
 const displayTitle = (s) => TITLE_DISPLAY_ALIASES[String(s||'').trim().toLowerCase()] || String(s||'').trim();
 
 // ---------- Init ----------

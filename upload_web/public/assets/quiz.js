@@ -434,6 +434,7 @@ function normalizeTitle(s) {
 // 영문/한글 alias — DB 원본은 영문이지만 한글 입력도 정답 처리
 const TITLE_DISPLAY_ALIASES = {
   'titanic': '타이타닉',
+  '아,저,씨': '아저씨',
 };
 function displayTitle(rawTitle) {
   const t = String(rawTitle || '').trim();

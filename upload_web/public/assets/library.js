@@ -56,6 +56,7 @@ function makeGroupKey(work) {
 // 표시용 제목 정규화 — DB 원본은 그대로 두고 화면에만 한글 표기 적용
 const TITLE_DISPLAY_ALIASES = {
   'titanic': '타이타닉',
+  '아,저,씨': '아저씨',
 };
 function displayTitle(rawTitle) {
   const t = String(rawTitle || '').trim();
