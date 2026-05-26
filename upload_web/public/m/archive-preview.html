@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+<title>Archive Preview — Daily Script</title>
+<meta name="theme-color" content="#FAF8F2" />
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --espresso: #0E0C0A;
+    --roast:    #2C2620;
+    --walnut:   #6B5D4F;
+    --paper:    #FAF8F2;
+    --latte:    #E8E1D3;
+    --sand:     #C9B89A;
+    --cta:      #D85A30;
+    --wood-light: #B8956A;
+    --wood-mid:   #8B6F47;
+    --wood-dark:  #5A4022;
+    --wood-shadow:#3A2810;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans KR', system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--espresso);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: 80px;
+  }
+  .serif { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+    vertical-align: middle;
+  }
+
+  /* Top bar */
+  .top-bar {
+    background: var(--paper);
+    height: 64px;
+    padding: 0 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 0.5px solid var(--latte);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .preview-banner {
+    background: #fff7ed;
+    border-bottom: 1px solid #fde68a;
+    color: #92400e;
+    text-align: center;
+    padding: 10px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  main { padding: 0 20px; }
+
+  .display-md {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 32px;
+    line-height: 42px;
+  }
+  .label-sm {
+    font-size: 11px; line-height: 16px;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--walnut);
+  }
+
+  /* ===== Bookshelf ===== */
+  .bookshelf {
+    margin-top: 20px;
+    background: linear-gradient(180deg, var(--wood-mid) 0%, var(--wood-dark) 100%);
+    padding: 20px 14px 8px;
+    border-radius: 10px;
+    box-shadow: inset 0 4px 12px rgba(0,0,0,0.25);
+  }
+  .shelf-row {
+    display: flex; gap: 4px;
+    padding: 0 4px 14px;
+    margin-bottom: 12px;
+    border-bottom: 10px solid var(--wood-shadow);
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    align-items: flex-end;
+    min-height: 200px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .shelf-row:last-child { margin-bottom: 0; }
+  .shelf-row::-webkit-scrollbar { display: none; }
+  .spine {
+    flex-shrink: 0;
+    border-radius: 3px 3px 1px 1px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    padding: 14px 6px 10px;
+    box-shadow:
+      inset 2px 0 4px rgba(0,0,0,0.25),
+      inset -2px 0 4px rgba(255,255,255,0.08),
+      2px 0 4px rgba(0,0,0,0.35);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, margin 0.18s ease;
+    position: relative;
+    color: #FAF8F2;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    border: none;
+    background: var(--espresso);
+  }
+  .spine:hover, .spine.active {
+    transform: translateY(-14px);
+    box-shadow:
+      inset 2px 0 4px rgba(0,0,0,0.25),
+      4px 6px 18px rgba(0,0,0,0.5),
+      0 0 0 1px var(--cta) inset;
+    margin: 0 4px;
+    z-index: 2;
+  }
+  .spine .spine-count {
+    font-family: 'Nanum Myeongjo', serif;
+    font-size: 11px;
+    opacity: 0.8;
+    background: rgba(255,255,255,0.08);
+    border-radius: 50%;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .spine .spine-title {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-height: 140px;
+  }
+  .spine .spine-foot {
+    font-size: 8px;
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+
+  /* ===== Expansion panel ===== */
+  .expansion {
+    margin-top: 24px;
+    background: var(--paper);
+    border: 0.5px solid var(--latte);
+    border-radius: 8px;
+    padding: 20px;
+    display: none;
+    animation: fadeIn 0.25s ease;
+  }
+  .expansion.open { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .expansion-header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .expansion-title {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 24px; line-height: 32px;
+    color: var(--espresso);
+  }
+  .expansion-meta {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--walnut);
+  }
+  .expansion-divider {
+    height: 0.5px; background: var(--latte);
+    margin: 12px 0 16px;
+  }
+  .quote-item {
+    padding: 16px 0;
+    border-bottom: 0.5px solid var(--latte);
+    cursor: pointer;
+  }
+  .quote-item:last-child { border-bottom: 0; }
+  .quote-text {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 16px; line-height: 26px;
+    color: var(--espresso);
+    word-break: keep-all;
+  }
+  .quote-meta {
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--walnut);
+    margin-top: 6px;
+  }
+
+  /* Buttons row */
+  .preview-actions {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    background: var(--paper);
+    border-top: 0.5px solid var(--latte);
+    padding: 14px 20px;
+    display: flex; gap: 10px;
+    z-index: 50;
+  }
+  .preview-actions button, .preview-actions a {
+    flex: 1; padding: 14px;
+    border: none;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.1em;
+    text-align: center;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .preview-actions .approve {
+    background: var(--espresso); color: var(--paper);
+  }
+  .preview-actions .reject {
+    background: transparent; color: var(--espresso);
+    border: 0.5px solid var(--espresso);
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-banner">
+  Archive Preview — 적용 전 디자인 미리보기
+</div>
+
+<header class="top-bar">
+  <span class="serif" style="font-size:22px;">Daily Script</span>
+  <span class="label-sm">PREVIEW</span>
+</header>
+
+<main>
+  <div style="height:28px;"></div>
+  <h1 class="display-md">수집한 대본</h1>
+  <p class="label-sm" style="margin-top:6px;">소장 6권 · 명대사 17편</p>
+
+  <div style="height:8px;"></div>
+
+  <!-- ===== Bookshelf ===== -->
+  <div class="bookshelf">
+    <!-- Shelf 1 -->
+    <div class="shelf-row">
+      <div class="spine" data-key="titanic" style="height:210px;width:50px;background:#0E0C0A;">
+        <span class="spine-count">5</span>
+        <span class="spine-title">TITANIC</span>
+        <span class="spine-foot">1997</span>
+      </div>
+      <div class="spine" data-key="carmen" style="height:195px;width:46px;background:#5A2A24;">
+        <span class="spine-count">3</span>
+        <span class="spine-title">CARMEN</span>
+        <span class="spine-foot">OPERA</span>
+      </div>
+      <div class="spine" data-key="pirang" style="height:205px;width:54px;background:#2F3A30;">
+        <span class="spine-count">4</span>
+        <span class="spine-title">파이란</span>
+        <span class="spine-foot">2001</span>
+      </div>
+      <div class="spine" data-key="ahjeossi" style="height:200px;width:48px;background:#293541;">
+        <span class="spine-count">2</span>
+        <span class="spine-title">아저씨</span>
+        <span class="spine-foot">2010</span>
+      </div>
+    </div>
+
+    <!-- Shelf 2 -->
+    <div class="shelf-row">
+      <div class="spine" data-key="billy" style="height:198px;width:52px;background:#6A4A30;">
+        <span class="spine-count">2</span>
+        <span class="spine-title">BILLY ELLIOT</span>
+        <span class="spine-foot">MUSICAL</span>
+      </div>
+      <div class="spine" data-key="berdi" style="height:210px;width:50px;background:#40303B;">
+        <span class="spine-count">1</span>
+        <span class="spine-title">베르디</span>
+        <span class="spine-foot">OPERA</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Expansion panel — tap any spine to open ===== -->
+  <div id="expansion" class="expansion">
+    <div class="expansion-header">
+      <h2 id="exp-title" class="expansion-title">TITANIC</h2>
+      <span id="exp-meta" class="expansion-meta">MOVIE · 1997 · 5 QUOTES</span>
+    </div>
+    <div class="expansion-divider"></div>
+    <div id="exp-list"></div>
+  </div>
+</main>
+
+<div class="preview-actions">
+  <button class="reject" onclick="alert('알겠습니다. 다른 디자인을 제안해주세요.')">다른 디자인 보고싶음</button>
+  <button class="approve" onclick="alert('OK 라고 채팅에 답변해주세요. 그러면 실제 archive에 적용합니다.')">이 디자인으로 OK</button>
+</div>
+
+<script>
+  // Mock data — 실제 구현 시엔 user_bookmarks에서 가져옴
+  const mockData = {
+    titanic: {
+      title: 'TITANIC', format: 'MOVIE', year: '1997',
+      quotes: [
+        { quote: "I'm the king of the world!", desc: 'Jack at the bow' },
+        { quote: 'You jump, I jump.', desc: 'Rose to Jack on the railing' },
+        { quote: 'Never let go.', desc: "The final promise on the door" },
+        { quote: 'Promise me you\'ll survive.', desc: 'Jack\'s last wish' },
+        { quote: 'It\'s been 84 years…', desc: 'Old Rose\'s memory' },
+      ],
+    },
+    carmen: {
+      title: 'CARMEN', format: 'OPERA', year: 'Bizet',
+      quotes: [
+        { quote: '사랑은 길들이지 못한 새', desc: '하바네라 아리아 도입부' },
+        { quote: '사랑은 어디로 갈지 모르는 집시의 아이', desc: '하바네라' },
+        { quote: '내가 너를 사랑한다면 조심해', desc: '카르멘의 경고' },
+      ],
+    },
+    pirang: {
+      title: '파이란', format: 'MOVIE', year: '2001',
+      quotes: [
+        { quote: '당신은… 나에게는 너무 좋은 사람이었어요.', desc: '파이란의 편지' },
+        { quote: '강재 씨, 정말 미안해요.', desc: '편지 마무리' },
+        { quote: '왜 죽어야 했는지 알 것 같아.', desc: '강재의 깨달음' },
+        { quote: '바다는 너무나 푸르고…', desc: '엔딩 내레이션' },
+      ],
+    },
+    ahjeossi: {
+      title: '아저씨', format: 'MOVIE', year: '2010',
+      quotes: [
+        { quote: '너희들은 내일을 보고 살지만, 나는 오늘만 산다.', desc: '차태식의 명대사' },
+        { quote: '그러니까 오늘만 사는 사람한테 까불지 마라.', desc: '협박 장면' },
+      ],
+    },
+    billy: {
+      title: 'BILLY ELLIOT', format: 'MUSICAL', year: '뮤지컬',
+      quotes: [
+        { quote: "Electricity, sparks inside of me", desc: 'Electricity 솔로' },
+        { quote: "I can't really explain it…", desc: '오디션 장면' },
+      ],
+    },
+    berdi: {
+      title: '베르디', format: 'OPERA', year: '리골레토',
+      quotes: [
+        { quote: '여자의 마음은 갈대와 같이', desc: '만토바 공작 아리아' },
+      ],
+    },
+  };
+
+  const spines = document.querySelectorAll('.spine');
+  const exp = document.getElementById('expansion');
+  const expTitle = document.getElementById('exp-title');
+  const expMeta = document.getElementById('exp-meta');
+  const expList = document.getElementById('exp-list');
+  let activeKey = null;
+
+  spines.forEach((s) => {
+    s.addEventListener('click', () => {
+      const key = s.dataset.key;
+      if (activeKey === key) {
+        // 같은 책 다시 누르면 닫기
+        spines.forEach((x) => x.classList.remove('active'));
+        exp.classList.remove('open');
+        activeKey = null;
+        return;
+      }
+      activeKey = key;
+      spines.forEach((x) => x.classList.toggle('active', x.dataset.key === key));
+      const d = mockData[key];
+      if (!d) return;
+      expTitle.textContent = d.title;
+      expMeta.textContent = `${d.format} · ${d.year} · ${d.quotes.length} QUOTE${d.quotes.length === 1 ? '' : 'S'}`;
+      expList.innerHTML = d.quotes.map((q) => `
+        <div class="quote-item">
+          <p class="quote-text">"${q.quote}"</p>
+          <p class="quote-meta">${q.desc}</p>
+        </div>
+      `).join('');
+      exp.classList.add('open');
+      // 스크롤 자연스럽게
+      setTimeout(() => exp.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+    });
+  });
+</script>
+</body>
+</html>
