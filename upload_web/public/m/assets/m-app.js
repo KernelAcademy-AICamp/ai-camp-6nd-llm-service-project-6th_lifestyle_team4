@@ -48,6 +48,8 @@ const signinGoogle = $('#signin-google');
 const signinKakao = $('#signin-kakao');
 const tasteToggle = $('#taste-toggle');
 const tasteProfileEl = $('#taste-profile');
+const themeToggle = $('#theme-toggle');
+const themeSubtitle = $('#theme-subtitle');
 
 const detailScreen = $('#detail-screen');
 const detailBack = $('#detail-back');
@@ -112,6 +114,7 @@ function displayTitle(rawTitle) {
     state.pushEnabled = localStorage.getItem('ds.push') === '1';
     paintPushToggle();
     paintTasteToggle();
+    paintThemeToggle();
     loadRecentlyShownFromStorage();
     await bootstrapAuth();
     paintAuthIdentity();
@@ -1171,6 +1174,49 @@ tasteToggle.addEventListener('keydown', (e) => {
   if (e.key === ' ' || e.key === 'Enter') {
     e.preventDefault();
     tasteToggle.click();
+  }
+});
+
+// ---------- Theme (Light / Dark) ----------
+function getCurrentTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+}
+
+function applyTheme(theme) {
+  if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  localStorage.setItem('ds.theme', theme);
+  // theme-color meta 태그도 동기화 — iOS status bar 영역 색
+  let meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+  }
+  meta.content = theme === 'dark' ? '#0E0C0A' : '#FAF8F2';
+  paintThemeToggle();
+}
+
+function paintThemeToggle() {
+  if (!themeToggle) return;
+  const isDark = getCurrentTheme() === 'dark';
+  themeToggle.classList.toggle('on', isDark);
+  themeToggle.setAttribute('aria-checked', isDark ? 'true' : 'false');
+  if (themeSubtitle) {
+    themeSubtitle.textContent = isDark ? 'Dark · espresso night' : 'Light · cream paper';
+  }
+}
+
+themeToggle.addEventListener('click', () => {
+  const next = getCurrentTheme() === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  toast(next === 'dark' ? 'Dark mode' : 'Light mode');
+});
+
+themeToggle.addEventListener('keydown', (e) => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    themeToggle.click();
   }
 });
 

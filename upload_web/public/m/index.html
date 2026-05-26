@@ -16,6 +16,15 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/m/icons/icon-book-192.png" />
 <link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg?v=2" />
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<script>
+  /* FOUC 방지 — 페이지 렌더 직전에 테마 적용 */
+  (function(){
+    try {
+      var t = localStorage.getItem('ds.theme') || 'light';
+      if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    } catch (e) {}
+  })();
+</script>
 <style>
   /* ===== LongBlack tokens (Android Color.kt mirror) ===== */
   :root {
@@ -27,6 +36,19 @@
     --sand:     #C9B89A;
     --highlight:#F4C20D;
     --cta:      #D85A30;
+    --card-warm:#FFFDF7;  /* book modal 안 quote 카드 배경 */
+    color-scheme: light;
+  }
+  /* Dark mode — 의미 반전: paper ↔ espresso */
+  :root[data-theme="dark"] {
+    --espresso: #FAF8F2;  /* 본문 텍스트 = 크림 */
+    --roast:    #E8E1D3;  /* 보조 텍스트 */
+    --walnut:   #9C8B79;  /* 흐린 텍스트 */
+    --paper:    #0E0C0A;  /* 배경 = 에스프레소 */
+    --latte:    #2C2620;  /* 외곽선·구분선 */
+    --sand:     #6B5D4F;  /* 흐린 액센트 */
+    --card-warm:#15120E;  /* 어두운 카드 배경 */
+    color-scheme: dark;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { background: var(--paper); color: var(--espresso); }
@@ -593,7 +615,7 @@
   }
   #book-list { counter-reset: quote-counter; }
   .book .book-quote-item {
-    background: #FFFDF7;
+    background: var(--card-warm);
     border: 0.5px solid var(--latte);
     border-left: 3px solid var(--sand);
     padding: 22px 16px 16px 18px;
@@ -829,7 +851,10 @@
       <div style="flex:1;">
         <p class="t-title-lg c-espresso">Theme Settings</p>
         <div style="height:4px;"></div>
-        <p class="t-body-sm c-walnut">System default (Light)</p>
+        <p id="theme-subtitle" class="t-body-sm c-walnut">Light · cream paper</p>
+      </div>
+      <div id="theme-toggle" class="editorial-toggle" role="switch" aria-checked="false" tabindex="0" aria-label="Toggle dark theme">
+        <div class="knob"></div>
       </div>
     </div>
     <div class="hairline"></div>
