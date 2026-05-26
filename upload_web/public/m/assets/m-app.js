@@ -384,7 +384,7 @@ async function refreshAll() {
   async function triggerRefresh() {
     refreshing = true;
     ptr.classList.add('refreshing');
-    ptrLabel.textContent = 'Refreshing…';
+    ptrLabel.textContent = 'Refreshing⋯';
     ptr.style.transform = `translateY(${THRESHOLD - 12}px)`;
     try {
       await refreshAll();
@@ -1198,7 +1198,7 @@ function closeBookModal() {
 
 function truncateText(s, n) {
   const t = String(s ?? '');
-  return t.length > n ? t.slice(0, n) + '…' : t;
+  return t.length > n ? t.slice(0, n) + '⋯' : t;
 }
 
 bookClose.addEventListener('click', closeBookModal);

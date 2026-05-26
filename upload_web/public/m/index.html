@@ -688,7 +688,7 @@
   <div style="display:flex;align-items:center;gap:14px;">
     <div title="실시간 동기화 상태" style="display:flex;align-items:center;gap:6px;">
       <span id="rt-status-dot" style="width:8px;height:8px;border-radius:50%;background:#C9B89A;display:inline-block;"></span>
-      <span id="rt-status-label" class="t-label-sm c-walnut" style="font-size:10px;">…</span>
+      <span id="rt-status-label" class="t-label-sm c-walnut" style="font-size:10px;">⋯</span>
     </div>
     <button id="my-page-btn" data-nav="settings" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;padding:4px 6px;">
       MY PAGE
@@ -711,16 +711,16 @@
   <section id="view-home">
     <div id="home-loading" style="display:flex;flex-direction:column;align-items:center;padding:80px 0;">
       <div class="spinner"></div>
-      <p class="t-label-sm c-walnut" style="margin-top:16px;">Loading…</p>
+      <p class="t-label-sm c-walnut" style="margin-top:16px;">Loading⋯</p>
     </div>
 
     <div id="home-content" style="display:none;">
       <div style="padding-top:40px;"></div>
-      <p class="t-label-sm c-walnut" id="home-date">— · — · —</p>
+      <p class="t-label-sm c-walnut" id="home-date" style="text-align:center;">— · — · —</p>
       <div style="height:8px;"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h1 class="t-display-md c-espresso">오늘의 명대사</h1>
-        <button id="home-refresh" aria-label="Refresh" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <div style="position:relative;text-align:center;">
+        <h1 class="t-display-md c-espresso" style="font-size:28px;line-height:38px;">오늘<span style="font-size:0.7em;letter-spacing:-0.02em;">의</span> 명대사</h1>
+        <button id="home-refresh" aria-label="Refresh" style="position:absolute;right:0;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;padding:8px;">
           <span class="material-symbols-outlined c-walnut" style="font-size:24px;">refresh</span>
         </button>
       </div>
@@ -792,7 +792,7 @@
     </div>
 
     <div id="archive-loading" style="padding:16px 0;">
-      <p class="t-body-md c-walnut">Loading…</p>
+      <p class="t-body-md c-walnut">Loading⋯</p>
     </div>
 
     <!-- 장르별 책꽂이 컨테이너 -->

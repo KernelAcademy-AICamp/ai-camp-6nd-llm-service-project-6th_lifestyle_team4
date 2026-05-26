@@ -45,7 +45,7 @@ form.addEventListener('submit', async (event) => {
   }
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Signing in...';
+  submitBtn.textContent = 'Signing in⋯';
 
   try {
     const sb = await getSupabase();

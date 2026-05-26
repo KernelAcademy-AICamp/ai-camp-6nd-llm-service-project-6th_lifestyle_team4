@@ -114,7 +114,7 @@ logoutBtn.addEventListener('click', async () => {
 });
 
 async function loadCards() {
-  cardPoolCount.textContent = '…';
+  cardPoolCount.textContent = '⋯';
   try {
     const sb = await getSupabase();
     const { data, error } = await sb
@@ -507,7 +507,7 @@ function escapeHtml(s) {
 
 function truncate(s, n) {
   const t = String(s ?? '');
-  return t.length > n ? t.slice(0, n) + '…' : t;
+  return t.length > n ? t.slice(0, n) + '⋯' : t;
 }
 
 let toastTimer = null;
