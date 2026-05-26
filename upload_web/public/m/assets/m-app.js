@@ -112,20 +112,34 @@ function displayTitle(rawTitle) {
   return t;
 }
 
-// script_excerpt 첫 부분에서 화자명 휴리스틱 추출.
-// 형식: "이름: 대사" / "이름(상황): 대사" / "이름 - 대사" — 콜론 또는 대시 앞 20자 미만.
-function extractSpeaker(scriptExcerpt) {
+// script_excerpt 첫 부분에서 화자명 추출.
+// 1순위: works.characters 배열과 라인 시작 매칭 (가장 정확)
+// 2순위: "이름: 대사" / "이름 - 대사" 콜론·대시 패턴 — 콜론 앞 20자 미만
+function extractSpeaker(scriptExcerpt, characters) {
   if (!scriptExcerpt) return '';
   const lines = String(scriptExcerpt).split('\n');
+  // 긴 이름 우선 정렬 — "줄리엣의 유모"가 "줄리엣"보다 먼저 매칭되도록
+  const names = (Array.isArray(characters) ? characters : [])
+    .map((c) => String(c).trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
+    // 1) characters 매칭 — 라인 시작이 등장인물 이름 + 비-식별자 문자
+    for (const name of names) {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // 한글에는 \b가 동작 안 함 → lookahead로 다음 문자가 한글/영문/숫자가 아닌지 확인
+      const re = new RegExp(`^${escaped}(?![가-힣A-Za-z0-9])`);
+      if (re.test(line)) return name;
+    }
+    // 2) 콜론·세미콜론·대시 패턴 폴백
     const m = line.match(/^([^\n:：—\-]{1,20})\s*[:：]\s*\S/);
     if (m) {
-      // 괄호 안 부가설명 제거 — "줄리엣 (창가에서)" → "줄리엣"
       return m[1].replace(/\s*[(（].*?[)）]\s*$/, '').trim();
     }
-    // 첫 줄에 콜론이 없으면 더 안 찾고 종료 (지문일 가능성)
+    // 첫 비어있지 않은 줄에서 매칭 실패 시 지문일 가능성이 높음 — 종료
     break;
   }
   return '';
@@ -467,7 +481,7 @@ async function loadAllCards() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('cards')
-    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year)')
+    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year, characters)')
     .order('card_id', { ascending: false }).limit(500);
   if (error) throw error;
   state.allCards = Array.isArray(data) ? data : [];
@@ -805,7 +819,7 @@ function applyTodayCard(card) {
 
   // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
   const workTitle = displayTitle(card.works?.title || '');
-  const speaker = extractSpeaker(card.script_excerpt);
+  const speaker = extractSpeaker(card.script_excerpt, card.works?.characters);
   if (speaker) {
     todaySpeaker.textContent = speaker;
     todaySpeaker.style.display = 'block';
