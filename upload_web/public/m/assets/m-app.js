@@ -913,13 +913,30 @@ function leatherColorFor(title) {
   return LEATHER_PALETTE[Math.abs(h) % LEATHER_PALETTE.length];
 }
 
-// displayTitle alias 적용 후 lowercase + 작가명으로 그룹 키 생성.
-// 같은 제목인데 work_id가 다른 경우(예: 동일 작품을 여러 번 업로드)도 하나로 묶음.
-// 'titanic' / 'Titanic' / '아,저,씨' / '아저씨' 등 모든 변형이 alias·소문자 정규화 후 동일 키.
+// 시리즈 패턴 감지 — 같은 시리즈 작품은 series명으로 통합, 부제별로 책 분리/색상.
+// 예: '셜록홈즈 - 주홍색 연구', '셜록 홈즈: 네 사람의 서명' → series='셜록홈즈', subtitle='주홍색 연구' / '네 사람의 서명'
+const SERIES_PATTERNS = [
+  { name: '셜록홈즈', regex: /^\s*(?:셜록\s*홈즈|sherlock\s*holmes)\s*(?:[-:·,—–]\s*)?(.*?)\s*$/i },
+];
+function extractSeries(title) {
+  const t = String(title || '').trim();
+  if (!t) return { series: '', subtitle: '', full: '' };
+  for (const sp of SERIES_PATTERNS) {
+    const m = t.match(sp.regex);
+    if (m) {
+      const sub = (m[1] || '').trim();
+      return { series: sp.name, subtitle: sub, full: t };
+    }
+  }
+  return { series: t, subtitle: '', full: t };
+}
+
+// displayTitle alias 적용 후 series + subtitle + author 로 그룹 키 생성.
+// 같은 series지만 subtitle이 다르면 별도 책으로 유지 (책꽂이에 시리즈가 여러 권으로 늘어섬).
 function workGroupKey(work) {
-  const t = displayTitle(work?.title || '').toLowerCase().trim();
+  const { series, subtitle } = extractSeries(displayTitle(work?.title || ''));
   const a = (work?.author || '').toLowerCase().trim();
-  return `${t}__${a}`;
+  return `${series.toLowerCase()}__${subtitle.toLowerCase()}__${a}`;
 }
 
 function groupBookmarksByWork() {
@@ -930,10 +947,13 @@ function groupBookmarksByWork() {
     const work = card.works || {};
     const key = workGroupKey(work);
     if (!byWork.has(key)) {
+      const { series, subtitle } = extractSeries(displayTitle(work.title || ''));
       byWork.set(key, {
         key,
-        // displayTitle 적용된 정규화 제목을 보관 → spine/modal 표시 시 일관됨
-        title: displayTitle(work.title) || work.title || '제목 없음',
+        series,
+        subtitle,
+        // spine 표시용 — subtitle 있으면 부제, 없으면 시리즈명
+        title: subtitle || series || displayTitle(work.title) || '제목 없음',
         rawTitle: work.title || '',
         format: (work.format || '').toLowerCase(),
         author: work.author || null,
@@ -943,7 +963,12 @@ function groupBookmarksByWork() {
     }
     byWork.get(key).cards.push(card);
   }
-  return Array.from(byWork.values());
+  // series 가 같은 책들은 책꽂이에서 인접해서 표시되도록 정렬
+  return Array.from(byWork.values()).sort((a, b) => {
+    const s = a.series.localeCompare(b.series);
+    if (s !== 0) return s;
+    return a.subtitle.localeCompare(b.subtitle);
+  });
 }
 
 function renderArchive() {
@@ -967,7 +992,10 @@ function renderArchive() {
     if (genre && w.format !== genre) return false;
     if (q) {
       const title = displayTitle(w.title).toLowerCase();
-      if (!title.includes(q)) return false;
+      const series = (w.series || '').toLowerCase();
+      const sub = (w.subtitle || '').toLowerCase();
+      // 시리즈명, 부제, 합쳐진 title 어느 하나로도 검색 매칭
+      if (!title.includes(q) && !series.includes(q) && !sub.includes(q)) return false;
     }
     return true;
   });
@@ -1050,8 +1078,11 @@ function openBookModal(work) {
   const allWorks = groupBookmarksByWork();
   const idx = allWorks.findIndex((w) => w.key === work.key) + 1;
 
-  bookEyebrow.textContent = `Collected · Volume #${String(idx).padStart(2, '0')}`;
-  bookTitleEl.textContent = displayTitle(work.title);
+  bookEyebrow.textContent = work.subtitle
+    ? `${work.series.toUpperCase()} · VOLUME #${String(idx).padStart(2, '0')}`
+    : `Collected · Volume #${String(idx).padStart(2, '0')}`;
+  // 부제가 있으면 부제를 메인 타이틀로, 없으면 시리즈명/원제목
+  bookTitleEl.textContent = work.subtitle || displayTitle(work.title);
   bookMetaEl.textContent = [label.toUpperCase(), work.author, work.year]
     .filter(Boolean).join(' · ');
 

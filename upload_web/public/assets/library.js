@@ -48,9 +48,29 @@ const state = {
 };
 
 // 작품 그룹 키 — 제목+작가가 같으면 같은 그룹
+// 시리즈 패턴 감지 — 셜록홈즈처럼 부제가 다른 여러 작품을 같은 시리즈로 묶음
+const SERIES_PATTERNS = [
+  { name: '셜록홈즈', regex: /^\s*(?:셜록\s*홈즈|sherlock\s*holmes)\s*(?:[-:·,—–]\s*)?(.*?)\s*$/i },
+];
+function extractSeries(title) {
+  const t = String(title || '').trim();
+  if (!t) return { series: '', subtitle: '', full: '' };
+  for (const sp of SERIES_PATTERNS) {
+    const m = t.match(sp.regex);
+    if (m) {
+      const sub = (m[1] || '').trim();
+      return { series: sp.name, subtitle: sub, full: t };
+    }
+  }
+  return { series: t, subtitle: '', full: t };
+}
+
 function makeGroupKey(work) {
   if (!work) return '__';
-  return `${(work.title || '').trim()}__${(work.author || '').trim()}`;
+  // series 기반으로 그룹화 — 같은 시리즈는 1 section. 부제는 section 내부에서
+  // 카드 색상으로 구분 (셜록홈즈 - 주홍색 연구 / 셜록홈즈 - 네 사람의 서명 → 같은 section, 다른 색)
+  const { series } = extractSeries(work.title || '');
+  return `${series}__${(work.author || '').trim()}`;
 }
 
 // 표시용 제목 정규화 — DB 원본은 그대로 두고 화면에만 한글 표기 적용
@@ -117,24 +137,25 @@ async function loadLibrary() {
 }
 
 function refreshWorkFilterOptions() {
-  // 작품 제목 기준으로 중복 제거 (같은 제목 여러 work_id는 한 옵션으로 통합)
-  const titles = new Set();
+  // 시리즈 기준으로 중복 제거 — '셜록홈즈 - 주홍색 연구', '셜록홈즈 - 네 사람의 서명'은
+  // 둘 다 '셜록홈즈' 한 옵션으로 통합됨
+  const seriesSet = new Set();
   state.rows.forEach((c) => {
-    const t = (c.works?.title || '').trim();
-    if (t) titles.add(t);
+    const series = extractSeries((c.works?.title || '').trim()).series;
+    if (series) seriesSet.add(series);
   });
 
   const current = libraryWorkFilter.value;
   libraryWorkFilter.innerHTML = '<option value="">모든 작품</option>';
-  [...titles]
+  [...seriesSet]
     .sort((a, b) => a.localeCompare(b))
-    .forEach((title) => {
+    .forEach((series) => {
       const opt = document.createElement('option');
-      opt.value = title;
-      opt.textContent = displayTitle(title);
+      opt.value = series;
+      opt.textContent = displayTitle(series);
       libraryWorkFilter.appendChild(opt);
     });
-  if (current && titles.has(current)) {
+  if (current && seriesSet.has(current)) {
     libraryWorkFilter.value = current;
   } else {
     libraryWorkFilter.value = '';
@@ -145,7 +166,10 @@ function refreshWorkFilterOptions() {
 function filteredRows() {
   const q = state.searchText.trim().toLowerCase();
   return state.rows.filter((c) => {
-    if (state.workFilter && (c.works?.title || '').trim() !== state.workFilter) return false;
+    if (state.workFilter) {
+      const cSeries = extractSeries((c.works?.title || '').trim()).series;
+      if (cSeries !== state.workFilter) return false;
+    }
     if (q) {
       const hay = `${c.quote || ''} ${c.excerpt_description || ''} ${(c.keywords || []).join(' ')}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -277,7 +301,7 @@ function buildShelfSection(group) {
     const yearLabel = work.release_year ? `· ${work.release_year}` : '';
     const authorLabel = work.author ? `· ${work.author}` : '';
     header.innerHTML = `
-      <h3 class="text-lg font-bold text-on-surface">${escapeHtml(displayTitle(work.title) || '제목 없음')}</h3>
+      <h3 class="text-lg font-bold text-on-surface">${escapeHtml(extractSeries(work.title).series || displayTitle(work.title) || '제목 없음')}</h3>
       <span class="text-xs text-on-surface-variant flex-1">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}${mergedHint}`.trim())}</span>
       <button type="button" class="shelf-start-delete-btn p-1.5 rounded hover:bg-primary/10 text-primary transition-colors flex items-center gap-1 text-sm font-semibold" title="카드 골라 삭제">
         <span class="material-symbols-outlined text-base">checklist</span>
@@ -311,9 +335,16 @@ function buildShelfSection(group) {
   if (isDeleteMode) bookshelf.classList.add('bookshelf-delete-mode');
   const shelfRow = document.createElement('div');
   shelfRow.className = 'shelf-row';
-  // 같은 제목 그룹은 같은 색 — 제목 해시 기반
-  const baseColor = colorForTitle(work.title || group.key);
-  cards.forEach((card, idx) => {
+  // 같은 그룹(시리즈) 내에서도 work.title이 다르면(부제별) 색상이 다름.
+  // 정렬: title 기준 — 같은 부제 카드는 인접해서 표시됨
+  const sortedCards = [...cards].sort((a, b) => {
+    const ta = a.works?.title || '';
+    const tb = b.works?.title || '';
+    return ta.localeCompare(tb);
+  });
+  sortedCards.forEach((card, idx) => {
+    // 카드별 base color — work.title 기반 (부제가 다르면 다른 hue)
+    const baseColor = colorForTitle(card.works?.title || group.key);
     shelfRow.appendChild(buildSpine(card, baseColor, idx, isDeleteMode));
   });
   bookshelf.appendChild(shelfRow);
