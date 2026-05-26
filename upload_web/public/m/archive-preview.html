@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
-<title>Archive Preview v2 — Daily Script</title>
+<title>Archive Preview v3 — Daily Script</title>
 <meta name="theme-color" content="#FAF8F2" />
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <style>
@@ -15,6 +15,8 @@
     --latte:    #E8E1D3;
     --sand:     #C9B89A;
     --cta:      #D85A30;
+    --gold:     #C9A24B;
+    --gold-bright: #E6CC82;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -25,7 +27,7 @@
     -webkit-font-smoothing: antialiased;
     padding-bottom: 80px;
   }
-  .serif { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; }
+  .serif { font-family: 'Nanum Myeongjo', Georgia, serif; }
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
     vertical-align: middle;
@@ -42,7 +44,6 @@
     text-transform: uppercase;
     font-weight: 600;
   }
-
   .top-bar {
     background: var(--paper);
     height: 64px;
@@ -51,26 +52,29 @@
     border-bottom: 0.5px solid var(--latte);
     position: sticky; top: 0; z-index: 10;
   }
-
   main { padding: 0 20px; }
-
-  .display-md {
-    font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 32px;
-    line-height: 42px;
-  }
+  .display-md { font-family: 'Nanum Myeongjo', Georgia, serif; font-size: 32px; line-height: 42px; }
   .label-sm {
-    font-size: 11px; line-height: 16px;
-    letter-spacing: 0.2em; text-transform: uppercase;
+    font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
     color: var(--walnut);
   }
 
-  /* ===== Search bar ===== */
-  .search-wrap {
-    margin-top: 24px;
-    position: relative;
+  /* ===== Chips ===== */
+  .archive-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 24px; margin-bottom: 14px; }
+  .a-chip {
+    padding: 6px 14px;
+    border: 0.5px solid var(--walnut);
+    background: var(--paper); color: var(--walnut);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 11px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    cursor: pointer;
   }
-  .search-wrap input {
+  .a-chip.active { background: var(--espresso); color: var(--paper); border-color: var(--espresso); }
+
+  /* ===== Search ===== */
+  .archive-search { margin-top: 4px; position: relative; }
+  .archive-search input {
     width: 100%;
     padding: 12px 14px 12px 42px;
     background: var(--paper);
@@ -78,171 +82,211 @@
     color: var(--espresso);
     font-family: 'Noto Sans KR', sans-serif;
     font-size: 14px;
-    border-radius: 0;
-    outline: none;
+    border-radius: 0; outline: none;
   }
-  .search-wrap input:focus {
-    border-color: var(--espresso);
-  }
-  .search-wrap .material-symbols-outlined {
-    position: absolute;
-    left: 14px; top: 50%;
+  .archive-search input:focus { border-color: var(--espresso); }
+  .archive-search input::placeholder { color: var(--sand); }
+  .archive-search .material-symbols-outlined {
+    position: absolute; left: 14px; top: 50%;
     transform: translateY(-50%);
-    color: var(--walnut);
-    font-size: 18px;
+    color: var(--walnut); font-size: 18px !important;
     pointer-events: none;
   }
-  .search-wrap input::placeholder { color: var(--sand); }
 
   /* ===== Genre section ===== */
   .genre-section { margin-top: 28px; }
   .genre-header {
     display: flex; align-items: baseline; justify-content: space-between;
-    margin-bottom: 10px;
-    padding: 0 4px;
+    margin-bottom: 10px; padding: 0 4px;
   }
   .genre-name {
     font-family: 'Nanum Myeongjo', serif;
-    font-size: 18px;
-    color: var(--espresso);
-    letter-spacing: 0.5px;
+    font-size: 18px; color: var(--espresso); letter-spacing: 0.5px;
   }
   .genre-count {
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--walnut);
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--walnut);
   }
-  .genre-section.hidden { display: none; }
 
-  /* ===== Bookshelf — base ===== */
+  /* ===== Bookshelf — richer wood ===== */
   .bookshelf {
-    padding: 18px 14px 6px;
-    border-radius: 8px;
-    box-shadow: inset 0 4px 12px rgba(0,0,0,0.25);
+    padding: 26px 14px 4px;
+    border-radius: 10px;
+    position: relative;
+    /* 우드결 그라데이션 (가로 streak) */
+    background-image:
+      repeating-linear-gradient(
+        90deg,
+        rgba(0,0,0,0.04) 0px,
+        rgba(0,0,0,0.04) 2px,
+        transparent 2px,
+        transparent 32px
+      );
+    background-color: #8B6F47;
+    box-shadow: inset 0 6px 14px rgba(0,0,0,0.35);
+  }
+  .bookshelf::before {
+    /* 상단 빛 highlight */
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(180deg, rgba(255,240,200,0.25), transparent);
+    border-radius: 10px 10px 0 0;
   }
   .shelf-row {
-    display: flex; gap: 4px;
-    padding: 0 4px 14px;
+    display: flex; gap: 3px;
+    padding: 0 6px 16px;
     border-radius: 0 0 4px 4px;
     align-items: flex-end;
-    min-height: 200px;
+    min-height: 215px;
     flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow-x: auto; overflow-y: hidden;
+    /* 선반 두께 */
+    border-bottom: 12px solid #3A2810;
+    box-shadow:
+      0 6px 8px rgba(0,0,0,0.4),
+      0 1px 0 rgba(255,255,255,0.08) inset;
   }
   .shelf-row::-webkit-scrollbar { display: none; }
 
-  /* Genre-specific wood tones */
-  .bookshelf.g-movie {
-    background: linear-gradient(180deg, #8B6F47 0%, #5A4022 100%);
-  }
-  .bookshelf.g-movie .shelf-row { border-bottom: 10px solid #3A2810; }
+  /* Genre-specific wood tone (background-color overrides default) */
+  .bookshelf.g-movie    { background-color: #8B6F47; }
+  .bookshelf.g-drama    { background-color: #A88556; }
+  .bookshelf.g-musical  { background-color: #7B3F30; }
+  .bookshelf.g-opera    { background-color: #3B2A1E; }
+  .bookshelf.g-play     { background-color: #6B4A38; }
 
-  .bookshelf.g-drama {
-    background: linear-gradient(180deg, #B89868 0%, #7B5E32 100%);
-  }
-  .bookshelf.g-drama .shelf-row { border-bottom: 10px solid #4D3818; }
-
-  .bookshelf.g-musical {
-    background: linear-gradient(180deg, #7B3F30 0%, #4A1F18 100%);
-  }
-  .bookshelf.g-musical .shelf-row { border-bottom: 10px solid #2D110C; }
-
-  .bookshelf.g-opera {
-    background: linear-gradient(180deg, #3B2A1E 0%, #1F140C 100%);
-  }
-  .bookshelf.g-opera .shelf-row { border-bottom: 10px solid #100904; }
-
-  .bookshelf.g-play {
-    background: linear-gradient(180deg, #6B4A38 0%, #3F2A1E 100%);
-  }
-  .bookshelf.g-play .shelf-row { border-bottom: 10px solid #2A1A10; }
-
-  /* ===== Spine ===== */
+  /* ===== Spine — much more "real book" feel ===== */
   .spine {
     flex-shrink: 0;
-    border-radius: 3px 3px 1px 1px;
+    border-radius: 2px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
-    padding: 14px 6px 10px;
-    box-shadow:
-      inset 2px 0 4px rgba(0,0,0,0.25),
-      inset -2px 0 4px rgba(255,255,255,0.08),
-      2px 0 4px rgba(0,0,0,0.35);
-    transition: transform 0.18s ease, box-shadow 0.18s ease, margin 0.18s ease;
+    padding: 0;
     position: relative;
-    color: #FAF8F2;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
     border: none;
+    color: var(--gold-bright);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, margin 0.2s ease, filter 0.2s ease;
+    /* 강한 그림자 — 책이 떠 있는 느낌이 아니라 선반 위에 단단히 서있음 */
+    box-shadow:
+      /* 좌측 어두운 그림자 (옆 책에 묻혀가는) */
+      inset 4px 0 6px rgba(0,0,0,0.4),
+      /* 우측 빛 (책등 광택) */
+      inset -3px 0 4px rgba(255,255,255,0.12),
+      /* 상단 빛 (light from above) */
+      inset 0 3px 4px rgba(255,255,255,0.10),
+      /* 하단 어둠 */
+      inset 0 -4px 6px rgba(0,0,0,0.4),
+      /* 책 바닥 그림자 — shelf 위에 서있는 느낌 */
+      3px 4px 6px rgba(0,0,0,0.5),
+      /* 외곽 어두운 윤곽선 */
+      0 0 0 0.5px rgba(0,0,0,0.6);
+    /* 가죽 텍스처 — 살짝 빛나는 반점 */
+    background-image:
+      radial-gradient(ellipse at 35% 30%, rgba(255,255,255,0.10), transparent 60%),
+      radial-gradient(ellipse at 70% 80%, rgba(0,0,0,0.20), transparent 50%);
+    overflow: hidden;
   }
   .spine:hover, .spine.active {
-    transform: translateY(-14px);
+    transform: translateY(-18px) scale(1.03);
+    filter: brightness(1.08);
     box-shadow:
-      inset 2px 0 4px rgba(0,0,0,0.25),
-      4px 6px 18px rgba(0,0,0,0.5),
-      0 0 0 1px var(--cta) inset;
-    margin: 0 4px;
+      inset 4px 0 6px rgba(0,0,0,0.4),
+      inset -3px 0 4px rgba(255,255,255,0.15),
+      inset 0 3px 4px rgba(255,255,255,0.12),
+      inset 0 -4px 6px rgba(0,0,0,0.4),
+      0 12px 24px rgba(0,0,0,0.55),
+      0 0 0 1px var(--cta);
+    margin: 0 5px;
     z-index: 2;
   }
-  .spine .spine-count {
+
+  /* 상단 가죽 밴드 — gold/sand 띠 */
+  .spine::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 12px;
+    height: 14px;
+    background:
+      linear-gradient(180deg, transparent, rgba(0,0,0,0.3) 40%, var(--gold) 50%, rgba(0,0,0,0.3) 60%, transparent);
+    border-top: 0.5px solid rgba(255, 230, 180, 0.3);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.6);
+    z-index: 1;
+  }
+  /* 하단 가죽 밴드 — 동일 패턴 */
+  .spine::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 16px;
+    height: 14px;
+    background:
+      linear-gradient(180deg, transparent, rgba(0,0,0,0.3) 40%, var(--gold) 50%, rgba(0,0,0,0.3) 60%, transparent);
+    border-top: 0.5px solid rgba(255, 230, 180, 0.3);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.6);
+    z-index: 1;
+  }
+
+  .spine-inner {
+    position: relative; z-index: 2;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between;
+    padding: 36px 4px 38px;
+  }
+  .spine-count {
     font-family: 'Nanum Myeongjo', serif;
     font-size: 11px;
-    opacity: 0.85;
-    background: rgba(255,255,255,0.1);
-    border-radius: 50%;
-    width: 22px; height: 22px;
-    display: flex; align-items: center; justify-content: center;
+    color: var(--gold-bright);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   }
-  .spine .spine-title {
+  .spine-title {
     writing-mode: vertical-rl;
     text-orientation: mixed;
     font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
     font-weight: 700;
     font-size: 14px;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
+    color: var(--gold-bright);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-height: 140px;
+    max-height: 130px;
+    flex: 0 1 auto;
   }
-  .spine .spine-genre {
+  .spine-genre {
     font-size: 8px;
-    opacity: 0.7;
+    color: var(--gold);
     text-transform: uppercase;
-    letter-spacing: 0.18em;
-    font-weight: 600;
+    letter-spacing: 0.2em;
+    font-weight: 700;
   }
 
-  /* ===== Book modal (opens from spine, book-flip animation) ===== */
+  /* 자연스러운 살짝 기운 책들 */
+  .spine.tilt-l { transform: rotate(-1.5deg); }
+  .spine.tilt-r { transform: rotate(1.5deg); }
+  .spine.tilt-l:hover, .spine.tilt-l.active { transform: translateY(-18px) scale(1.03) rotate(-1.5deg); }
+  .spine.tilt-r:hover, .spine.tilt-r.active { transform: translateY(-18px) scale(1.03) rotate(1.5deg); }
+
+  /* ===== Book modal ===== */
   .book-modal {
     position: fixed; inset: 0;
     background: rgba(14,12,10,0.65);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    padding: 20px;
-    opacity: 0;
-    pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; padding: 20px;
+    opacity: 0; pointer-events: none;
     transition: opacity 0.25s;
     perspective: 1500px;
   }
-  .book-modal.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
+  .book-modal.open { opacity: 1; pointer-events: auto; }
   .book {
     background: var(--paper);
-    width: 100%;
-    max-width: 480px;
+    width: 100%; max-width: 480px;
     max-height: 85vh;
     overflow-y: auto;
     padding: 36px 28px 28px 40px;
-    /* book look — spine on left, page edge on right */
     border-left: 8px solid #5A2A24;
     border-right: 0.5px solid var(--latte);
     box-shadow:
@@ -254,105 +298,63 @@
     transition: transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1);
     position: relative;
   }
-  .book-modal.open .book {
-    transform: rotateY(0deg) scale(1);
-  }
-  /* faint horizontal ruling on the page */
+  .book-modal.open .book { transform: rotateY(0deg) scale(1); }
   .book::before {
     content: '';
     position: absolute;
     inset: 36px 28px 28px 40px;
     background: repeating-linear-gradient(
       180deg,
-      transparent 0px,
-      transparent 28px,
-      rgba(107,93,79,0.08) 28px,
-      rgba(107,93,79,0.08) 29px
+      transparent 0px, transparent 28px,
+      rgba(107,93,79,0.08) 28px, rgba(107,93,79,0.08) 29px
     );
-    pointer-events: none;
-    z-index: 0;
+    pointer-events: none; z-index: 0;
   }
   .book > * { position: relative; z-index: 1; }
-
-  .book .book-header {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 6px;
-  }
-  .book .book-eyebrow {
-    font-size: 10px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--walnut);
-    margin-bottom: 6px;
-  }
-  .book .book-title {
-    font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 28px;
-    line-height: 36px;
-    color: var(--espresso);
-  }
-  .book .book-close {
-    background: transparent;
-    border: 0.5px solid var(--walnut);
+  .book-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .book-eyebrow { font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--walnut); margin-bottom: 6px; }
+  .book-title { font-family: 'Nanum Myeongjo', Georgia, serif; font-size: 28px; line-height: 36px; color: var(--espresso); }
+  .book-close {
+    background: transparent; border: 0.5px solid var(--walnut);
     width: 32px; height: 32px;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
   }
-  .book .book-meta {
-    margin-top: 8px;
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--walnut);
+  .book-meta { margin-top: 8px; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--walnut); }
+  .book-divider { margin: 20px 0 12px; height: 0.5px; background: var(--sand); }
+  #book-list { counter-reset: quote-counter; }
+  .book-quote-item {
+    background: #FFFDF7;
+    border: 0.5px solid var(--latte);
+    border-left: 3px solid var(--sand);
+    padding: 22px 16px 16px 18px;
+    margin-bottom: 12px;
+    cursor: pointer; position: relative;
+    box-shadow: 0 1px 2px rgba(14,12,10,0.04);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-left-color 0.15s ease;
   }
-  .book .book-divider {
-    margin: 20px 0 12px;
-    height: 0.5px;
-    background: var(--sand);
+  .book-quote-item:last-child { margin-bottom: 4px; }
+  .book-quote-item:hover {
+    transform: translateX(2px);
+    box-shadow: -4px 4px 10px rgba(14,12,10,0.10);
+    border-left-color: var(--cta);
   }
-  .book .book-quote-item {
-    padding: 18px 0;
-    border-bottom: 0.5px solid var(--latte);
-    cursor: pointer;
+  .book-quote-item::before {
+    content: '#' counter(quote-counter, decimal-leading-zero);
+    counter-increment: quote-counter;
+    position: absolute;
+    top: 8px; right: 12px;
+    font-size: 9px; letter-spacing: 0.25em;
+    color: var(--sand); font-weight: 700;
   }
-  .book .book-quote-item:last-child { border-bottom: 0; }
-  .book .book-quote-text {
-    font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 16px;
-    line-height: 26px;
-    color: var(--espresso);
-    word-break: keep-all;
+  .book-quote-text { font-family: 'Nanum Myeongjo', Georgia, serif; font-size: 16px; line-height: 26px; color: var(--espresso); word-break: keep-all; }
+  .book-quote-meta {
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--walnut);
+    margin-top: 10px; padding-top: 8px;
+    border-top: 0.5px dashed var(--latte);
   }
-  .book .book-quote-meta {
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--walnut);
-    margin-top: 8px;
-  }
-  .book .book-pagefoot {
-    text-align: center;
-    margin-top: 24px;
-    font-size: 10px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--sand);
-  }
+  .book-pagefoot { text-align: center; margin-top: 24px; font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--sand); }
 
-  /* ===== Empty / no-result ===== */
-  .empty-state {
-    text-align: center;
-    padding: 80px 20px;
-    color: var(--walnut);
-  }
-  .empty-state .material-symbols-outlined {
-    font-size: 56px !important;
-    color: var(--sand);
-  }
-
-  /* ===== Preview action bar ===== */
+  /* Preview action bar */
   .preview-actions {
     position: fixed; left: 0; right: 0; bottom: 0;
     background: var(--paper);
@@ -366,19 +368,15 @@
     border: none;
     font-family: 'Noto Sans KR', sans-serif;
     font-size: 13px; font-weight: 500;
-    letter-spacing: 0.1em;
-    cursor: pointer;
+    letter-spacing: 0.1em; cursor: pointer;
   }
   .preview-actions .approve { background: var(--espresso); color: var(--paper); }
-  .preview-actions .reject {
-    background: transparent; color: var(--espresso);
-    border: 0.5px solid var(--espresso);
-  }
+  .preview-actions .reject { background: transparent; color: var(--espresso); border: 0.5px solid var(--espresso); }
 </style>
 </head>
 <body>
 
-<div class="preview-banner">Archive Preview v2 — 적용 전 확인용</div>
+<div class="preview-banner">Archive Preview v3 — 입체감 강화 책꽂이</div>
 
 <header class="top-bar">
   <span class="serif" style="font-size:22px;">Daily Script</span>
@@ -388,26 +386,25 @@
 <main>
   <div style="height:24px;"></div>
   <h1 class="display-md">수집한 대본</h1>
-  <p id="archive-stats" class="label-sm" style="margin-top:6px;">소장 7권 · 명대사 21편</p>
+  <p class="label-sm" style="margin-top:6px;">소장 7권 · 명대사 21편</p>
 
-  <!-- Search -->
-  <div class="search-wrap">
+  <div class="archive-chips">
+    <button class="a-chip active">All · 7</button>
+    <button class="a-chip">영화 · 3</button>
+    <button class="a-chip">오페라 · 2</button>
+    <button class="a-chip">뮤지컬 · 1</button>
+    <button class="a-chip">희곡 · 1</button>
+  </div>
+
+  <div class="archive-search">
     <span class="material-symbols-outlined">search</span>
-    <input id="search-input" type="search" placeholder="장르 또는 작품 제목으로 검색" />
+    <input type="search" placeholder="작품 제목으로 검색" />
   </div>
 
-  <!-- 장르별 책꽂이 -->
   <div id="bookshelves"></div>
-
-  <!-- No result -->
-  <div id="empty" class="empty-state" style="display:none;">
-    <span class="material-symbols-outlined">search_off</span>
-    <p class="serif" style="font-size:18px;margin-top:14px;">검색 결과가 없습니다</p>
-    <p style="font-size:12px;margin-top:6px;">다른 단어로 시도해보세요</p>
-  </div>
 </main>
 
-<!-- ===== Book opening modal ===== -->
+<!-- Book modal (same as v2) -->
 <div id="book-modal" class="book-modal" role="dialog" aria-modal="true">
   <div class="book">
     <div class="book-header">
@@ -416,9 +413,7 @@
         <h2 id="b-title" class="book-title">Title</h2>
         <p id="b-meta" class="book-meta">GENRE · AUTHOR · YEAR</p>
       </div>
-      <button id="b-close" class="book-close" aria-label="close">
-        <span class="material-symbols-outlined" style="font-size:18px;color:#2C2620;">close</span>
-      </button>
+      <button id="b-close" class="book-close"><span class="material-symbols-outlined" style="font-size:18px;color:#2C2620;">close</span></button>
     </div>
     <div class="book-divider"></div>
     <div id="b-list"></div>
@@ -428,181 +423,88 @@
 
 <div class="preview-actions">
   <button class="reject" onclick="alert('어떤 부분이 별로인지 채팅에 적어주세요.')">다른 디자인</button>
-  <button class="approve" onclick="alert('OK 라고 채팅에 답변해주세요. 그러면 /m/ Archive 탭에 적용됩니다.')">이 디자인 OK</button>
+  <button class="approve" onclick="alert('OK 라고 채팅에 답변해주세요. 그러면 /m/ Archive에 적용합니다.')">이 디자인 OK</button>
 </div>
 
 <script>
-  // ===== Mock data — 실제 구현 시엔 user_bookmarks 에서 가져와 작품별 그룹 =====
+  // Mock 6 books (same data as v2)
   const works = [
-    {
-      key: 'titanic', title: 'TITANIC', genre: 'movie', genreLabel: '영화',
-      author: 'James Cameron', year: '1997',
-      color: '#0E0C0A', height: 210, width: 50,
-      quotes: [
-        { quote: "I'm the king of the world!", desc: 'Jack at the bow' },
-        { quote: 'You jump, I jump.', desc: 'Rose to Jack on the railing' },
-        { quote: 'Never let go.', desc: 'The final promise on the door' },
-        { quote: 'Promise me you will survive.', desc: 'Jack\'s last wish' },
-        { quote: "It's been 84 years…", desc: 'Old Rose\'s memory' },
-      ],
-    },
-    {
-      key: 'pirang', title: '파이란', genre: 'movie', genreLabel: '영화',
-      author: '송해성', year: '2001',
-      color: '#2F3A30', height: 205, width: 54,
-      quotes: [
-        { quote: '당신은… 나에게는 너무 좋은 사람이었어요.', desc: '파이란의 편지' },
-        { quote: '강재 씨, 정말 미안해요.', desc: '편지 마무리' },
-        { quote: '왜 죽어야 했는지 알 것 같아.', desc: '강재의 깨달음' },
-        { quote: '바다는 너무나 푸르고…', desc: '엔딩 내레이션' },
-      ],
-    },
-    {
-      key: 'ahjeossi', title: '아저씨', genre: 'movie', genreLabel: '영화',
-      author: '이정범', year: '2010',
-      color: '#293541', height: 200, width: 48,
-      quotes: [
-        { quote: '너희들은 내일을 보고 살지만, 나는 오늘만 산다.', desc: '차태식의 명대사' },
-        { quote: '그러니까 오늘만 사는 사람한테 까불지 마라.', desc: '협박 장면' },
-      ],
-    },
-    {
-      key: 'carmen', title: 'CARMEN', genre: 'opera', genreLabel: '오페라',
-      author: 'Bizet', year: '1875',
-      color: '#5A2A24', height: 195, width: 46,
-      quotes: [
-        { quote: '사랑은 길들이지 못한 새', desc: '하바네라 아리아 도입부' },
-        { quote: '사랑은 어디로 갈지 모르는 집시의 아이', desc: '하바네라' },
-        { quote: '내가 너를 사랑한다면 조심해', desc: '카르멘의 경고' },
-      ],
-    },
-    {
-      key: 'rigoletto', title: 'RIGOLETTO', genre: 'opera', genreLabel: '오페라',
-      author: 'Verdi', year: '1851',
-      color: '#40303B', height: 210, width: 50,
-      quotes: [
-        { quote: '여자의 마음은 갈대와 같이', desc: '만토바 공작 아리아' },
-      ],
-    },
-    {
-      key: 'billy', title: 'BILLY ELLIOT', genre: 'musical', genreLabel: '뮤지컬',
-      author: 'Elton John', year: '2005',
-      color: '#6A4A30', height: 198, width: 52,
-      quotes: [
-        { quote: 'Electricity, sparks inside of me', desc: 'Electricity 솔로' },
-        { quote: "I can't really explain it…", desc: '오디션 장면' },
-      ],
-    },
-    {
-      key: 'sontuk', title: '손톡과 일더', genre: 'play', genreLabel: '희곡',
-      author: '연극 대본', year: '—',
-      color: '#3A463F', height: 192, width: 48,
-      quotes: [
-        { quote: '바람은 어디서 와서 어디로 가는가', desc: '도입부 독백' },
-        { quote: '우리는 모두 자기만의 이야기를 짊어진다', desc: '중반 명대사' },
-        { quote: '끝은 또 다른 시작', desc: '엔딩' },
-      ],
-    },
+    { key: 'titanic', title: 'TITANIC', genre: 'movie', genreLabel: '영화', author: 'James Cameron', year: '1997', color: '#0E0C0A', height: 215, width: 52, quotes:[{quote:"I'm the king of the world!",desc:'Jack at the bow'},{quote:'You jump, I jump.',desc:'Rose to Jack'},{quote:'Never let go.',desc:'On the door'},{quote:'Promise me you will survive.',desc:'Jack\'s wish'},{quote:"It's been 84 years…",desc:'Old Rose'}] },
+    { key: 'pirang', title: '파이란', genre: 'movie', genreLabel: '영화', author: '송해성', year: '2001', color: '#2F3A30', height: 205, width: 56, quotes:[{quote:'당신은… 나에게는 너무 좋은 사람이었어요.',desc:'파이란의 편지'},{quote:'강재 씨, 정말 미안해요.',desc:'편지 마무리'},{quote:'바다는 너무나 푸르고…',desc:'엔딩 내레이션'},{quote:'왜 죽어야 했는지 알 것 같아.',desc:'강재의 깨달음'}] },
+    { key: 'ahjeossi', title: '아저씨', genre: 'movie', genreLabel: '영화', author: '이정범', year: '2010', color: '#293541', height: 200, width: 50, quotes:[{quote:'너희들은 내일을 보고 살지만, 나는 오늘만 산다.',desc:'차태식 명대사'},{quote:'그러니까 오늘만 사는 사람한테 까불지 마라.',desc:'협박 장면'}] },
+    { key: 'carmen', title: 'CARMEN', genre: 'opera', genreLabel: '오페라', author: 'Bizet', year: '1875', color: '#5A2A24', height: 198, width: 48, quotes:[{quote:'사랑은 길들이지 못한 새',desc:'하바네라 도입부'},{quote:'사랑은 어디로 갈지 모르는 집시의 아이',desc:'하바네라'},{quote:'내가 너를 사랑한다면 조심해',desc:'카르멘의 경고'}] },
+    { key: 'rigoletto', title: 'RIGOLETTO', genre: 'opera', genreLabel: '오페라', author: 'Verdi', year: '1851', color: '#40303B', height: 212, width: 52, quotes:[{quote:'여자의 마음은 갈대와 같이',desc:'만토바 공작 아리아'}] },
+    { key: 'billy', title: 'BILLY ELLIOT', genre: 'musical', genreLabel: '뮤지컬', author: 'Elton John', year: '2005', color: '#6A4A30', height: 202, width: 54, quotes:[{quote:'Electricity, sparks inside of me',desc:'Electricity 솔로'},{quote:"I can't really explain it…",desc:'오디션'}] },
+    { key: 'sontuk', title: '바람의 노래', genre: 'play', genreLabel: '희곡', author: '연극', year: '—', color: '#3A463F', height: 196, width: 50, quotes:[{quote:'바람은 어디서 와서 어디로 가는가',desc:'도입부 독백'},{quote:'끝은 또 다른 시작',desc:'엔딩'}] },
   ];
 
-  const GENRE_ORDER = ['movie', 'drama', 'musical', 'opera', 'play'];
-  const GENRE_LABEL = {
-    movie: '영화', drama: '드라마', musical: '뮤지컬', opera: '오페라', play: '희곡 / 연극',
-  };
+  const GENRE_ORDER = ['movie','drama','musical','opera','play'];
+  const GENRE_LABEL = { movie:'영화', drama:'드라마', musical:'뮤지컬', opera:'오페라', play:'희곡 / 연극' };
 
-  // ===== Render bookshelves =====
   const shelvesEl = document.getElementById('bookshelves');
-  const searchInput = document.getElementById('search-input');
-  const emptyEl = document.getElementById('empty');
-  const statsEl = document.getElementById('archive-stats');
 
-  function renderShelves(filter = '') {
+  function renderShelves() {
     shelvesEl.innerHTML = '';
-    const q = filter.trim().toLowerCase();
-    let totalShown = 0;
-
-    for (const genre of GENRE_ORDER) {
-      const items = works.filter((w) => {
-        if (w.genre !== genre) return false;
-        if (!q) return true;
-        return w.title.toLowerCase().includes(q)
-          || w.genreLabel.includes(q)
-          || GENRE_LABEL[genre].includes(q);
-      });
+    for (const g of GENRE_ORDER) {
+      const items = works.filter(w => w.genre === g);
       if (items.length === 0) continue;
-      totalShown += items.length;
-
       const section = document.createElement('section');
       section.className = 'genre-section';
       section.innerHTML = `
         <div class="genre-header">
-          <span class="genre-name">${GENRE_LABEL[genre]}</span>
-          <span class="genre-count">${items.length} ${items.length === 1 ? 'BOOK' : 'BOOKS'}</span>
+          <span class="genre-name">${GENRE_LABEL[g]}</span>
+          <span class="genre-count">${items.length} ${items.length===1?'BOOK':'BOOKS'}</span>
         </div>
-        <div class="bookshelf g-${genre}">
+        <div class="bookshelf g-${g}">
           <div class="shelf-row">
-            ${items.map((w) => `
-              <button class="spine" type="button" data-key="${w.key}"
-                style="height:${w.height}px;width:${w.width}px;background:${w.color};">
-                <span class="spine-count">${w.quotes.length}</span>
-                <span class="spine-title">${w.title}</span>
-                <span class="spine-genre">${w.genreLabel}</span>
-              </button>
-            `).join('')}
+            ${items.map((w, i) => {
+              const tilt = i % 3 === 0 ? 'tilt-l' : (i % 3 === 2 ? 'tilt-r' : '');
+              return `
+                <button class="spine ${tilt}" type="button" data-key="${w.key}"
+                  style="height:${w.height}px;width:${w.width}px;background-color:${w.color};">
+                  <div class="spine-inner">
+                    <span class="spine-count">${w.quotes.length}</span>
+                    <span class="spine-title">${w.title}</span>
+                    <span class="spine-genre">${w.genreLabel}</span>
+                  </div>
+                </button>
+              `;
+            }).join('')}
           </div>
         </div>
       `;
       shelvesEl.appendChild(section);
     }
-
-    // 결과 없음
-    emptyEl.style.display = totalShown === 0 ? 'block' : 'none';
-    const totalQuotes = works.reduce((s, w) => s + w.quotes.length, 0);
-    statsEl.textContent = `소장 ${works.length}권 · 명대사 ${totalQuotes}편`;
-
-    // bind spine clicks
-    shelvesEl.querySelectorAll('.spine').forEach((s) => {
+    shelvesEl.querySelectorAll('.spine').forEach(s => {
       s.addEventListener('click', () => openBook(s.dataset.key));
     });
   }
 
-  // ===== Book modal =====
   const modal = document.getElementById('book-modal');
   const bEyebrow = document.getElementById('b-eyebrow');
   const bTitle = document.getElementById('b-title');
   const bMeta = document.getElementById('b-meta');
   const bList = document.getElementById('b-list');
-  const bClose = document.getElementById('b-close');
+  document.getElementById('b-close').addEventListener('click', closeBook);
+  modal.addEventListener('click', e => { if (e.target === modal) closeBook(); });
 
   function openBook(key) {
-    const w = works.find((x) => x.key === key);
+    const w = works.find(x => x.key === key);
     if (!w) return;
-    const idx = works.findIndex((x) => x.key === key) + 1;
-    bEyebrow.textContent = `Collected · Volume #${String(idx).padStart(2, '0')}`;
+    const idx = works.findIndex(x => x.key === key) + 1;
+    bEyebrow.textContent = `Collected · Volume #${String(idx).padStart(2,'0')}`;
     bTitle.textContent = w.title;
     bMeta.textContent = `${w.genreLabel.toUpperCase()} · ${w.author} · ${w.year}`;
-    bList.innerHTML = w.quotes.map((q) => `
+    bList.innerHTML = w.quotes.map(q => `
       <div class="book-quote-item">
         <p class="book-quote-text">"${q.quote}"</p>
         <p class="book-quote-meta">${q.desc}</p>
       </div>
     `).join('');
     modal.classList.add('open');
-    document.body.style.overflow = 'hidden';
   }
+  function closeBook() { modal.classList.remove('open'); }
 
-  function closeBook() {
-    modal.classList.remove('open');
-    document.body.style.overflow = '';
-  }
-  bClose.addEventListener('click', closeBook);
-  modal.addEventListener('click', (e) => { if (e.target === modal) closeBook(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBook(); });
-
-  // ===== Search wiring =====
-  searchInput.addEventListener('input', (e) => renderShelves(e.target.value));
-
-  // initial
   renderShelves();
 </script>
 </body>

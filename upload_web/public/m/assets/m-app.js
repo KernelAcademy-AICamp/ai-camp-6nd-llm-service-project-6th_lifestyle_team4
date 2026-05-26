@@ -598,6 +598,13 @@ function saveRecentlyShownToStorage() {
   }
 }
 
+// 페이지가 백그라운드/언로드로 갈 때도 한 번 더 저장 (안전망)
+window.addEventListener('pagehide', saveRecentlyShownToStorage);
+window.addEventListener('beforeunload', saveRecentlyShownToStorage);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) saveRecentlyShownToStorage();
+});
+
 function candidatesExcludingRecent() {
   const exclude = new Set(state.recentlyShownIds);
   const pool = state.allCards.filter((c) => !exclude.has(c.card_id));
