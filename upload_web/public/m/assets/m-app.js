@@ -829,7 +829,9 @@ function applyTodayCard(card) {
     todaySpeakerSpacer.style.height = '0';
   }
   if (workTitle) {
-    todayWork.textContent = `— ${workTitle}`;
+    const fmt = card.works?.format || '';
+    const genreLabel = GENRE_LABEL[fmt] || '';
+    todayWork.textContent = genreLabel ? `${genreLabel} <${workTitle}>` : `<${workTitle}>`;
     todayWork.style.display = 'block';
     todayWorkSpacer.style.height = '12px';
   } else {
@@ -841,7 +843,7 @@ function applyTodayCard(card) {
   todayKeywords.innerHTML = '';
   kws.forEach((k) => {
     const span = document.createElement('span');
-    span.className = 't-body-md c-walnut';
+    span.className = 't-label-sm c-sand';
     span.textContent = `#${k}`;
     todayKeywords.appendChild(span);
   });
