@@ -37,6 +37,15 @@ function clampInt(value, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+// 마이그레이션 010/011과 동일 규칙: 말줄임표 통일 + 구두점 뒤 공백을 줄바꿈으로 치환.
+// 새 카드가 항상 정규형으로 들어가도록 DB 저장 직전에 한 번 더 강제.
+function normalizeText(s) {
+  if (s == null) return s;
+  return String(s)
+    .replace(/\.{3,}|…/g, '⋯')
+    .replace(/([,，.。?!？！⋯])[ \t]+/g, '$1\n');
+}
+
 // 카드의 quote / script_excerpt 는 "현재 보고 있는 텍스트"(원문 또는 번역본)로 저장.
 // excerpt_description 은 번역하지 않으므로 항상 원본 저장.
 function pickDisplayedFields(card) {
@@ -57,15 +66,15 @@ function normalizeCard(card, workId) {
   const display = pickDisplayedFields(card);
   return {
     work_id: workId,
-    quote: display.quote,
-    script_excerpt: display.script_excerpt,
-    excerpt_description: display.excerpt_description,
+    quote: normalizeText(display.quote),
+    script_excerpt: normalizeText(display.script_excerpt),
+    excerpt_description: normalizeText(display.excerpt_description),
     // keywords 컬럼은 jsonb. Supabase JS가 배열을 그대로 JSON으로 직렬화함.
     keywords: Array.isArray(card.keywords) ? card.keywords.map(String) : [],
     temperature: clampInt(card.temperature, 1, 5),
     intensity: clampInt(card.intensity, 1, 5),
     // 의의(significance) — DB의 cards.significance 컬럼에 저장 (텍스트, NULL 허용)
-    significance: card.significance ? String(card.significance) : null,
+    significance: card.significance ? normalizeText(String(card.significance)) : null,
   };
 }
 
