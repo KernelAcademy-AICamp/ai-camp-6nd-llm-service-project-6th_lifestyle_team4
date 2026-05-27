@@ -9,13 +9,13 @@ async function readJsonBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
-const ALLOWED_FORMATS = new Set(['movie', 'drama', 'play', 'musical']);
+const ALLOWED_FORMATS = new Set(['movie', 'drama', 'play', 'musical', 'opera']);
 
 function normalizeWork(work, fullScriptText) {
   if (!work || typeof work !== 'object') throw new Error('work is required');
   if (!work.title) throw new Error('work.title is required');
   if (!ALLOWED_FORMATS.has(work.format)) {
-    throw new Error('work.format must be one of movie | drama | play | musical');
+    throw new Error('work.format must be one of movie | drama | play | musical | opera');
   }
   if (!fullScriptText) throw new Error('full_script_text is required');
   return {
@@ -24,6 +24,10 @@ function normalizeWork(work, fullScriptText) {
     author: work.author ?? null,
     release_year: work.release_year ?? null,
     full_script_text: String(fullScriptText),
+    // 등장인물 이름 목록 (jsonb). LLM이 줬을 때만 저장, 없으면 null.
+    characters: Array.isArray(work.characters)
+      ? [...new Set(work.characters.map((c) => String(c).trim()).filter(Boolean))]
+      : null,
   };
 }
 
@@ -60,6 +64,8 @@ function normalizeCard(card, workId) {
     keywords: Array.isArray(card.keywords) ? card.keywords.map(String) : [],
     temperature: clampInt(card.temperature, 1, 5),
     intensity: clampInt(card.intensity, 1, 5),
+    // 의의(significance) — DB의 cards.significance 컬럼에 저장 (텍스트, NULL 허용)
+    significance: card.significance ? String(card.significance) : null,
   };
 }
 

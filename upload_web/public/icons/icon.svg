@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3525cd"/>
+      <stop offset="1" stop-color="#1a0f8a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#g)"/>
+  <g fill="#ffffff" font-family="Inter, system-ui, sans-serif" text-anchor="middle">
+    <text x="256" y="240" font-size="180" font-weight="800" letter-spacing="-8">S&amp;Q</text>
+    <text x="256" y="340" font-size="56" font-weight="600" opacity="0.9">명대사</text>
+    <text x="256" y="410" font-size="48" font-weight="500" opacity="0.7">Script · Quote</text>
+  </g>
+</svg>

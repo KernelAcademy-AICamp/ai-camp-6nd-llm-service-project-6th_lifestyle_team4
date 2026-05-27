@@ -2,8 +2,16 @@
 <html class="light" lang="ko">
 <head>
 <meta charset="utf-8" />
-<meta content="width=device-width, initial-scale=1.0" name="viewport" />
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
 <title>Script &amp; Quote Intelligence</title>
+<link rel="manifest" href="/manifest-admin.webmanifest" />
+<meta name="theme-color" content="#3525cd" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="S&Q Admin" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+KR:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <style>
@@ -56,12 +64,24 @@
       <span class="material-symbols-outlined">inventory_2</span>
       <span class="text-sm">조회</span>
     </a>
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors" href="/quiz.html">
+      <span class="material-symbols-outlined">quiz</span>
+      <span class="text-sm">명대사 맞추기</span>
+    </a>
     <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors opacity-50 cursor-not-allowed" href="#" aria-disabled="true">
       <span class="material-symbols-outlined">history</span>
       <span class="text-sm">히스토리 (Coming soon)</span>
     </a>
   </nav>
   <div class="border-t border-outline-variant pt-4 flex flex-col gap-1">
+    <button id="backfill-btn" class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors text-left">
+      <span class="material-symbols-outlined">groups</span>
+      <span class="text-sm font-medium">인물 목록 채우기</span>
+    </button>
+    <button data-install-app data-install-always class="flex items-center gap-3 px-4 py-2 text-primary hover:bg-surface-container-low rounded-lg transition-colors text-left border border-primary/30">
+      <span class="material-symbols-outlined">install_mobile</span>
+      <span class="text-sm font-medium">관리자 앱 설치</span>
+    </button>
     <button id="logout-btn" class="flex items-center gap-3 px-4 py-2 text-error hover:bg-surface-container-low rounded-lg transition-colors text-left">
       <span class="material-symbols-outlined">logout</span>
       <span class="text-sm font-medium">로그아웃</span>
@@ -89,17 +109,13 @@
                   class="cat-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
             영화 / 드라마
           </button>
-          <button type="button" data-category="stage"
-                  class="cat-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
-            연극 / 뮤지컬
-          </button>
           <button type="button" data-category="opera"
                   class="cat-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
-            오페라
+            오페라 / 뮤지컬
           </button>
-          <button type="button" data-category="playscript"
+          <button type="button" data-category="play"
                   class="cat-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
-            희곡
+            연극
           </button>
         </div>
         <span id="category-hint" class="text-xs text-on-surface-variant"></span>
@@ -130,7 +146,7 @@
           <span id="work-genres" class="flex items-center gap-1"></span>
         </div>
       </div>
-      <div class="flex gap-4">
+      <div class="flex gap-4 items-center">
         <div class="text-center px-4">
           <p class="text-xs text-on-surface-variant mb-1">Found Quotes</p>
           <p id="found-count" class="text-2xl font-semibold text-primary">0</p>
@@ -140,6 +156,12 @@
           <p class="text-xs text-on-surface-variant mb-1">Selected</p>
           <p id="selected-count" class="text-2xl font-semibold text-secondary">0</p>
         </div>
+        <div class="w-px h-10 bg-outline-variant self-center"></div>
+        <button type="button" id="select-all-btn"
+                class="px-3 py-2 rounded-lg border-2 border-outline-variant text-sm font-semibold hover:border-primary transition-colors flex items-center gap-1">
+          <span class="material-symbols-outlined text-base">select_all</span>
+          <span id="select-all-label">전체 선택</span>
+        </button>
       </div>
     </section>
 
@@ -183,13 +205,18 @@
       </div>
     </div>
 
-    <p class="card-quote text-xl font-semibold leading-relaxed text-on-surface"></p>
+    <p class="card-quote text-xl font-semibold leading-relaxed text-on-surface whitespace-pre-line"></p>
 
     <div class="mono bg-surface-container-low rounded-lg p-4 text-[13px] text-on-surface-variant leading-relaxed border border-outline-variant/30 card-excerpt whitespace-pre-wrap"></div>
 
     <div class="flex flex-col gap-2">
       <p class="text-sm font-semibold text-on-surface-variant">상황 설명</p>
       <p class="card-description text-sm text-on-surface"></p>
+    </div>
+
+    <div class="card-significance-wrap hidden flex-col gap-2">
+      <p class="text-sm font-semibold text-primary">의의</p>
+      <p class="card-significance text-sm text-on-surface italic leading-relaxed bg-primary/5 border-l-2 border-primary px-3 py-2 rounded-r"></p>
     </div>
 
     <div class="card-keywords flex flex-wrap gap-2"></div>
@@ -273,5 +300,6 @@
 </template>
 
 <script type="module" src="/assets/dashboard.js"></script>
+<script type="module" src="/assets/pwa.js"></script>
 </body>
 </html>

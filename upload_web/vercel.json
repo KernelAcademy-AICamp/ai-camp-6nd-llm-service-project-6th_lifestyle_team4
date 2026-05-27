@@ -1,7 +1,30 @@
 {
   "functions": {
-    "api/extract.js": { "maxDuration": 60 },
-    "api/translate.js": { "maxDuration": 30 },
-    "api/save.js": { "maxDuration": 15 }
-  }
+    "api/extract.js": { "maxDuration": 300 },
+    "api/translate.js": { "maxDuration": 60 },
+    "api/save.js": { "maxDuration": 30 },
+    "api/backfill-characters.js": { "maxDuration": 300 }
+  },
+  "headers": [
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
+    },
+    {
+      "source": "/manifest-admin.webmanifest",
+      "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/m/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/m/",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    }
+  ]
 }

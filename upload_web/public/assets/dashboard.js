@@ -50,6 +50,8 @@ const userEmailEl = $('#user-email');
 const logoutBtn = $('#logout-btn');
 const cardTemplate = $('#card-template');
 const cardEditTemplate = $('#card-edit-template');
+const selectAllBtn = $('#select-all-btn');
+const selectAllLabel = $('#select-all-label');
 
 // ---------------------------------------------------------------------------
 // Init: auth gate
@@ -66,6 +68,42 @@ logoutBtn.addEventListener('click', async () => {
   const sb = await getSupabase();
   await sb.auth.signOut();
   location.href = '/';
+});
+
+// 등장인물 목록(works.characters)이 비어 있는 기존 작품들을 일괄로 채운다.
+// 한 번에 몇 개씩 처리하는 백필 API를, 남은 작품이 0이 될 때까지 반복 호출.
+const backfillBtn = $('#backfill-btn');
+backfillBtn?.addEventListener('click', async () => {
+  if (!confirm('등장인물 목록이 비어 있는 작품들을 분석해서 채웁니다.\n작품 수에 따라 몇 분 걸릴 수 있어요. 진행할까요?')) return;
+  backfillBtn.disabled = true;
+  const orig = backfillBtn.innerHTML;
+  let totalProcessed = 0;
+  try {
+    let remaining = Infinity;
+    let guard = 0;
+    while (remaining > 0 && guard < 300) {
+      guard += 1;
+      backfillBtn.innerHTML =
+        `<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>` +
+        `<span class="text-sm">채우는 중⋯ (${totalProcessed})</span>`;
+      const token = await getAccessToken();
+      const json = await apiFetch('/api/backfill-characters?limit=3', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      totalProcessed += json.processed || 0;
+      remaining = json.remaining ?? 0;
+      // 더 처리할 게 없거나(0개) 남은 게 전부 에러면 무한루프 방지로 중단
+      if ((json.processed || 0) === 0) break;
+      toast(`인물 채우는 중 · 누적 ${totalProcessed}개 / 남음 ${remaining}`, 'info');
+    }
+    toast(`인물 목록 채우기 완료 (총 ${totalProcessed}개 작품)`, 'success');
+  } catch (err) {
+    toast(err.message || '인물 채우기 실패', 'error');
+  } finally {
+    backfillBtn.disabled = false;
+    backfillBtn.innerHTML = orig;
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -86,10 +124,9 @@ function paintCategory() {
   });
   if (categoryHint) {
     const hints = {
-      screen: '기존 프롬프트로 분석됩니다 (영화·드라마·연극·뮤지컬 공용).',
-      stage: '기존 프롬프트로 분석됩니다 (영화·드라마·연극·뮤지컬 공용).',
-      opera: '오페라 전용 프롬프트로 분석됩니다 (libretto 화자 표기 보존).',
-      playscript: '희곡 — 전용 프롬프트 추가 예정. 현재는 기존 프롬프트 임시 사용.',
+      screen: '기본 프롬프트로 분석됩니다 (영화·드라마용).',
+      opera: '오페라·뮤지컬 전용 프롬프트로 분석됩니다 (libretto 화자 표기 보존).',
+      play: '연극 전용 프롬프트로 분석됩니다 (speaker_label·상황 단서 포함).',
     };
     categoryHint.textContent = hints[state.category] || '';
   }
@@ -243,6 +280,84 @@ function buildCardNode(card, idx) {
   return buildCardViewNode(card, idx);
 }
 
+// 화자/대사 포맷 정상화 — 콜론 제거 + 화자 블록 사이 빈 줄
+// (library.js 의 cleanForDisplay 와 동일 로직)
+// 처리하는 패턴:
+//   "이름: 대사"  /  "이름\n대사"  /  "이름 대사"  /  "이름 (지문) 대사"
+function cleanForDisplay(s) {
+  let text = String(s ?? '');
+  text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
+
+  const speakers = new Set();
+  // (a) 콜론 형식
+  const colonRegex = /^([^:：()\n]{1,14})[:：][ \t]*/gm;
+  let m;
+  while ((m = colonRegex.exec(text)) !== null) {
+    const name = m[1].trim();
+    if (name) speakers.add(name);
+  }
+
+  // (b) 줄 머리 첫 단어 빈도 (조사 끝 narrative 주어 제외)
+  const PARTICLE_END = /(가|이|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  const headCounts = {};
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.length > 60) continue;
+    const headM = line.match(/^([가-힣A-Za-z]{2,7}[0-9]?)(?=\s|$)/);
+    if (headM) {
+      const word = headM[1];
+      if (word.length > 2 && PARTICLE_END.test(word)) continue;
+      headCounts[word] = (headCounts[word] || 0) + 1;
+    }
+  }
+  Object.entries(headCounts).forEach(([word, count]) => {
+    if (count >= 2) speakers.add(word);
+  });
+
+  // "이름:" → "이름\n"
+  text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
+
+  // 라인별 재조립
+  const sortedSpeakers = [...speakers].sort((a, b) => b.length - a.length);
+  const lines = text.split('\n');
+  const out = [];
+  let firstSpeakerSeen = false;
+  const pushBoundary = () => {
+    if (firstSpeakerSeen && out.length > 0 && out[out.length - 1].trim() !== '') out.push('');
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { out.push(''); continue; }
+    if (speakers.has(line)) {
+      pushBoundary();
+      out.push(line);
+      firstSpeakerSeen = true;
+      continue;
+    }
+    let matched = false;
+    for (const name of sortedSpeakers) {
+      if (line.length <= name.length + 1) continue;
+      if (line.startsWith(name + ' ') || line.startsWith(name + '\t')) {
+        const rest = line.slice(name.length).trim();
+        if (rest) {
+          pushBoundary();
+          out.push(name);
+          out.push(rest);
+          firstSpeakerSeen = true;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (matched) continue;
+    out.push(raw);
+  }
+  return out.join('\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function buildCardViewNode(card, idx) {
   const node = cardTemplate.content.firstElementChild.cloneNode(true);
 
@@ -254,9 +369,26 @@ function buildCardViewNode(card, idx) {
 
   node.querySelector('.card-tag').textContent =
     (card.keywords && card.keywords[0]) || `Card #${idx + 1}`;
-  node.querySelector('.card-quote').textContent = quote ? `"${quote}"` : '';
-  node.querySelector('.card-excerpt').textContent = excerpt || '';
-  node.querySelector('.card-description').textContent = desc || '';
+  node.querySelector('.card-quote').textContent = quote ? `"${cleanForDisplay(quote)}"` : '';
+  node.querySelector('.card-excerpt').textContent = cleanForDisplay(excerpt || '');
+  node.querySelector('.card-description').textContent = cleanForDisplay(desc || '');
+
+  // significance — 있으면 표시, 없으면 안내 문구
+  const sigWrap = node.querySelector('.card-significance-wrap');
+  const sigEl = node.querySelector('.card-significance');
+  if (sigWrap && sigEl) {
+    if (card.significance && String(card.significance).trim()) {
+      sigEl.textContent = card.significance;
+      sigWrap.classList.remove('hidden');
+      sigWrap.classList.add('flex');
+    } else {
+      // LLM이 누락한 경우 시각적으로 알림
+      sigEl.textContent = '(LLM이 의의 필드를 생성하지 않았습니다)';
+      sigEl.classList.add('text-error');
+      sigWrap.classList.remove('hidden');
+      sigWrap.classList.add('flex');
+    }
+  }
 
   const kwEl = node.querySelector('.card-keywords');
   (card.keywords || []).forEach((k) => {
@@ -362,7 +494,7 @@ function onEditClick(idx) {
 function onDeleteClick(idx) {
   const card = state.cards[idx];
   const preview = (card.quote || '').slice(0, 30) || `카드 ${idx + 1}`;
-  if (!confirm(`"${preview}${(card.quote || '').length > 30 ? '…' : ''}" 카드를 삭제할까요?`)) return;
+  if (!confirm(`"${preview}${(card.quote || '').length > 30 ? '⋯' : ''}" 카드를 삭제할까요?`)) return;
   state.cards.splice(idx, 1);
   render();
   toast('카드 삭제됨', 'success');
@@ -390,6 +522,29 @@ function renderSaveBar() {
     saveBar.classList.add('flex');
   }
   saveBtn.disabled = count === 0;
+
+  // 전체 선택 버튼 라벨 갱신 — 전체 선택 상태면 '전체 해제', 아니면 '전체 선택'
+  if (selectAllBtn && selectAllLabel) {
+    const total = state.cards.length;
+    if (total === 0) {
+      selectAllBtn.classList.add('hidden');
+    } else {
+      selectAllBtn.classList.remove('hidden');
+      selectAllLabel.textContent = (count === total) ? '전체 해제' : '전체 선택';
+    }
+  }
+}
+
+// 전체 선택 토글
+if (selectAllBtn) {
+  selectAllBtn.addEventListener('click', () => {
+    if (!state.cards.length) return;
+    const total = state.cards.length;
+    const selectedCount = state.cards.filter((c) => c.selected).length;
+    const shouldSelectAll = selectedCount !== total;
+    state.cards.forEach((c) => { c.selected = shouldSelectAll; });
+    render();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -406,7 +561,7 @@ async function onTranslateClick(idx) {
   }
 
   try {
-    toast('번역 중...', 'info');
+    toast('번역 중⋯', 'info');
     const token = await getAccessToken();
     const json = await apiFetch('/api/translate', {
       method: 'POST',
@@ -441,7 +596,7 @@ saveBtn.addEventListener('click', async () => {
 
   saveBtn.disabled = true;
   const orig = saveBtn.innerHTML;
-  saveBtn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> 저장 중...';
+  saveBtn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> 저장 중⋯';
 
   try {
     const token = await getAccessToken();
@@ -453,6 +608,7 @@ saveBtn.addEventListener('click', async () => {
       keywords: c.keywords,
       temperature: c.temperature,
       intensity: c.intensity,
+      significance: c.significance || null,
       translated: c.translated || null,
       showingTranslation: !!c.showingTranslation,
     }));

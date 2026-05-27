@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Daily Script</string>
+    <string name="app_brand">Daily Script</string>
+    <string name="my_page">MY PAGE</string>
+    <string name="today_script">오늘의 명대사</string>
+    <string name="read_full_script">Read Full Script</string>
+    <string name="past_records">지난 기록</string>
+    <string name="view_archive">VIEW ARCHIVE</string>
+    <string name="empty_bookmarks">아직 북마크한 카드가 없습니다.</string>
+    <string name="collect_artifact">Collect Script Artifact</string>
+    <string name="collected_artifact">Collected</string>
+    <string name="edition_note">Limited Edition Digital Manuscript</string>
+    <string name="significance_label">작품의 의의</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_archive">Archive</string>
+    <string name="nav_settings">Settings</string>
+    <string name="anonymous_user">Anonymous</string>
+    <string name="profile_bio">매일 한 장의 명대사로 하루를 시작합니다.</string>
+    <string name="general_preferences">General Preferences</string>
+    <string name="push_notifications">Push Notifications</string>
+    <string name="push_notifications_desc">Daily digest and breaking insights</string>
+    <string name="theme_settings">Theme Settings</string>
+    <string name="theme_settings_desc">System default (Light)</string>
+    <string name="legal_about">Legal &amp; About</string>
+    <string name="terms_of_service">Terms of Service</string>
+    <string name="version_info">Version Info</string>
+    <string name="sign_out">Sign Out</string>
+    <string name="back">Back</string>
+    <string name="bookmark">Bookmark</string>
+    <string name="archive_title">수집한 대본</string>
+    <string name="archive_volume_count">소장 %1$d권</string>
+    <string name="archive_card_count">명대사 %1$d편</string>
+    <string name="loading">Loading⋯</string>
+    <string name="widget_label">Daily Script</string>
+    <string name="widget_description">매일의 한 줄을 홈 화면에서</string>
+    <string name="widget_loading">오늘의 한 줄을 불러오는 중⋯</string>
+</resources>
