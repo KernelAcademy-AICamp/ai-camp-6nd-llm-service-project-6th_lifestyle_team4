@@ -1,10 +1,29 @@
 import CoreText
 import SwiftUI
+import UIKit
 import WidgetKit
 
-private let paper = Color(red: 0xFA / 255.0, green: 0xF8 / 255.0, blue: 0xF2 / 255.0)
-private let espresso = Color(red: 0x0E / 255.0, green: 0x0C / 255.0, blue: 0x0A / 255.0)
-private let walnut = Color(red: 0x6B / 255.0, green: 0x5D / 255.0, blue: 0x4F / 255.0)
+private extension Color {
+    init(light: Color, dark: Color) {
+        self.init(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        })
+    }
+}
+
+// Adaptive — light vs dark mode is driven by the iOS system setting.
+private let bgColor = Color(
+    light: Color(red: 0xFA / 255.0, green: 0xF8 / 255.0, blue: 0xF2 / 255.0), // paper
+    dark:  Color(red: 0x0E / 255.0, green: 0x0C / 255.0, blue: 0x0A / 255.0)  // ink-black
+)
+private let quoteColor = Color(
+    light: Color(red: 0x0E / 255.0, green: 0x0C / 255.0, blue: 0x0A / 255.0), // espresso
+    dark:  Color(red: 0xFA / 255.0, green: 0xF8 / 255.0, blue: 0xF2 / 255.0)  // paper
+)
+private let metaColor = Color(
+    light: Color(red: 0x6B / 255.0, green: 0x5D / 255.0, blue: 0x4F / 255.0), // walnut
+    dark:  Color(red: 0x9C / 255.0, green: 0x8E / 255.0, blue: 0x80 / 255.0)  // warm-gray
+)
 
 enum WidgetFonts {
     private static let registerOnce: Void = {
@@ -26,7 +45,7 @@ struct CurtaincallEntry: TimelineEntry {
 }
 
 struct Provider: TimelineProvider {
-    private static let sample = WidgetCard(quote: "나 날고 있어!", workTitle: "Titanic")
+    private static let sample = WidgetCard(cardId: 1, quote: "나 날고 있어!", workTitle: "Titanic")
 
     func placeholder(in context: Context) -> CurtaincallEntry {
         CurtaincallEntry(date: .now, card: Provider.sample)
@@ -59,19 +78,26 @@ struct CurtaincallWidgetEntryView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(displayQuote)
                 .font(.custom("NanumMyeongjo", size: 18))
-                .foregroundStyle(espresso)
+                .foregroundStyle(quoteColor)
+                .lineSpacing(4)
                 .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+            Spacer(minLength: 12)
             if let title = entry.card?.workTitle, !title.isEmpty {
                 Text(title.uppercased())
-                    .font(.custom("Pretendard-Medium", size: 10))
-                    .tracking(10 * 0.2)
-                    .foregroundStyle(walnut)
+                    .font(.custom("Pretendard-Medium", size: 15))
+                    .tracking(15 * 0.2)
+                    .foregroundStyle(quoteColor)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .containerBackground(paper, for: .widget)
+        .containerBackground(bgColor, for: .widget)
+        .widgetURL(deepLinkURL)
+    }
+
+    private var deepLinkURL: URL? {
+        guard let id = entry.card?.cardId else { return nil }
+        return URL(string: "curtaincall://card/\(id)")
     }
 
     private var displayQuote: String {
@@ -98,6 +124,6 @@ struct CurtaincallWidget: Widget {
 #Preview(as: .systemMedium) {
     CurtaincallWidget()
 } timeline: {
-    CurtaincallEntry(date: .now, card: WidgetCard(quote: "나 날고 있어!", workTitle: "Titanic"))
+    CurtaincallEntry(date: .now, card: WidgetCard(cardId: 1, quote: "나 날고 있어!", workTitle: "Titanic"))
     CurtaincallEntry(date: .now, card: nil)
 }
