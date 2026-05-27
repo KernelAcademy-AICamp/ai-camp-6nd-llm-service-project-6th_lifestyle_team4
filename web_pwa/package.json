@@ -1,0 +1,12 @@
+{
+  "name": "pwa-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Daily Script — consumer PWA (오늘의 명대사)",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel deploy"
+  }
+}

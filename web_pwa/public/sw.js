@@ -5,20 +5,16 @@
 //  - 정적 자산 (JS/CSS/이미지) → stale-while-revalidate
 //  - API/Supabase/Anthropic → 항상 네트워크 패스스루
 //  - 업데이트는 즉시 활성화 (skipWaiting + clients.claim)
-const CACHE_VERSION = 'sq-v38-admin-split';
+const CACHE_VERSION = 'pwa-v1-split';
 const STATIC_ASSETS = [
-  '/assets/login.js',
-  '/assets/dashboard.js',
-  '/assets/library.js',
-  '/assets/quiz.js',
   '/assets/supabase-client.js',
-  '/assets/auth-utils.js',
   '/assets/pwa.js',
-  '/manifest-admin.webmanifest',
-  '/icons/icon.svg',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/apple-touch-icon.png',
+  '/m/assets/m-app.js',
+  '/m/icons/icon.svg',
+  '/m/icons/icon-book-192.png',
+  '/m/icons/icon-book-512.png',
+  '/m/icons/apple-touch-icon-book.png',
+  '/manifest.webmanifest',
 ];
 
 self.addEventListener('install', (event) => {
@@ -92,8 +88,8 @@ async function networkFirst(req) {
     // 네트워크 실패 — 캐시 폴백
     const cached = await caches.match(req);
     if (cached) return cached;
-    // 그것도 없으면 index 폴백
-    return caches.match('/index.html');
+    // 그것도 없으면 PWA index 폴백
+    return caches.match('/m/index.html');
   }
 }
 
