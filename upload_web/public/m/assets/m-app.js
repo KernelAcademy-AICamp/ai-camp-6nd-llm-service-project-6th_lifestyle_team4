@@ -1645,12 +1645,17 @@ signinIdInput?.addEventListener('keydown', (e) => {
 });
 
 function paintAuthIdentity() {
-  // 닉네임/이름 헤더 — users.nickname(사용자 수정 가능) 우선
-  const name = state.userNickname
-    || state.authName
-    || state.authEmail
-    || (state.isAnonymous ? 'Anonymous' : 'Signed In');
+  // 닉네임은 로그인된 사용자에게만 노출.
+  // 익명 상태에선 'Anonymous' 만 보이고, 가입/로그인 직후 cute nickname 노출됨.
+  const name = state.isAnonymous
+    ? 'Anonymous'
+    : (state.userNickname || state.authName || state.authEmail || 'Signed In');
   settingsName.textContent = name;
+
+  // EDIT 버튼은 로그인 상태에서만 노출 (익명일 땐 수정 의미 없음)
+  if (editNicknameBtn) {
+    editNicknameBtn.style.display = state.isAnonymous ? 'none' : '';
+  }
 
   // bio 영역에 provider 뱃지 / 이메일
   // 익명일 때만 SIGN IN 섹션 (ID + 비밀번호 모달 열기) 노출
