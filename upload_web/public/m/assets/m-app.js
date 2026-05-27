@@ -493,9 +493,52 @@ async function bootstrapAuth() {
       await migrateAnonymousBookmarks(parseInt(prevAnonUserId, 10), state.userId);
       localStorage.removeItem('ds.prevAnonUserId');
     }
+    // === 중복 로그인 감지/방지 (last-login-wins) ===
+    await enforceSingleSession(sb);
   } else {
     // 익명 user_id 기억 — 나중에 소셜 로그인 시 이전 익명 데이터 이전용
     localStorage.setItem('ds.prevAnonUserId', String(state.userId));
+  }
+}
+
+/**
+ * users.session_id 비교로 다른 기기에서 동일 ID 로그인이 발생했는지 감지.
+ *  - localStorage의 sessionId가 비어있다 → 방금 로그인됨 → 새 sessionId 발급해 DB+local 양쪽 저장
+ *  - 두 값 일치 → OK
+ *  - 두 값 불일치 → 다른 기기에서 새 로그인이 발생 → 강제 로그아웃 + 안내
+ */
+async function enforceSingleSession(sb) {
+  if (state.isAnonymous || !state.userId) return;
+  const localSid = localStorage.getItem(SESSION_KEY);
+  try {
+    const { data, error } = await sb.from('users')
+      .select('session_id')
+      .eq('user_id', state.userId)
+      .maybeSingle();
+    if (error) {
+      // session_id 컬럼이 아직 마이그레이션 안 됐을 수도 — 무시하고 진행
+      console.warn('[m] session check skipped:', error.message);
+      return;
+    }
+    const dbSid = data?.session_id || null;
+    if (!localSid) {
+      // 방금 로그인 — 새 sessionId 발급해서 DB와 local 동기화
+      const newSid = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
+      await sb.from('users').update({ session_id: newSid }).eq('user_id', state.userId);
+      localStorage.setItem(SESSION_KEY, newSid);
+      return;
+    }
+    if (dbSid && dbSid !== localSid) {
+      // 다른 기기에서 새 로그인 발생 — 이쪽 세션 종료
+      console.warn('[m] another device took over the session');
+      toast('다른 기기에서 로그인됨. 자동 로그아웃합니다.');
+      localStorage.removeItem(SESSION_KEY);
+      clearRememberedCreds();
+      await sb.auth.signOut();
+      setTimeout(() => location.reload(), 2000);
+    }
+  } catch (err) {
+    console.warn('[m] enforceSingleSession failed:', err);
   }
 }
 
@@ -1462,8 +1505,16 @@ signOutBtn.addEventListener('click', async () => {
     : '로그아웃할까요? 다음 로그인 전까지 익명 세션으로 동작합니다.';
   if (!confirm(msg)) return;
   const sb = await getSupabase();
+  // 로그인 상태였으면 DB의 session_id도 정리 (다른 기기 알림이 잘못 뜨지 않도록)
+  try {
+    if (!state.isAnonymous && state.userId) {
+      await sb.from('users').update({ session_id: null }).eq('user_id', state.userId);
+    }
+  } catch {}
   await sb.auth.signOut();
   localStorage.removeItem('ds.prevAnonUserId');
+  localStorage.removeItem(SESSION_KEY);
+  // 자격증명 기억은 유지 (다음 로그인 편의)
   location.reload();
 });
 
@@ -1502,7 +1553,28 @@ const signinSubmitBtn = $('#signin-submit');
 const signinToggleModeBtn = $('#signin-toggle-mode');
 const signinCancelBtn = $('#signin-cancel');
 const signinErrorEl = $('#signin-error');
+const signinRememberInput = $('#signin-remember');
 let signinMode = 'signin';  // 'signin' | 'signup'
+
+const REMEMBER_KEY = 'ds.rememberCreds';
+const SESSION_KEY = 'ds.sessionId';
+function loadRememberedCreds() {
+  try {
+    const raw = localStorage.getItem(REMEMBER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch {}
+  return null;
+}
+function saveRememberedCreds(id, password) {
+  try {
+    localStorage.setItem(REMEMBER_KEY, JSON.stringify({ id, password, savedAt: Date.now() }));
+  } catch {}
+}
+function clearRememberedCreds() {
+  try { localStorage.removeItem(REMEMBER_KEY); } catch {}
+}
 
 function setSigninMode(mode) {
   signinMode = mode;
@@ -1523,11 +1595,17 @@ function setSigninMode(mode) {
 function openSigninModal() {
   if (!signinModal) return;
   setSigninMode('signin');
-  signinIdInput.value = '';
-  signinPasswordInput.value = '';
+  // 기억된 자격증명 자동 채움
+  const remembered = loadRememberedCreds();
+  signinIdInput.value = remembered?.id || '';
+  signinPasswordInput.value = remembered?.password || '';
+  if (signinRememberInput) signinRememberInput.checked = !!remembered;
   signinErrorEl.style.display = 'none';
   signinModal.style.display = 'flex';
-  setTimeout(() => signinIdInput.focus(), 50);
+  setTimeout(() => {
+    if (remembered?.id) signinPasswordInput.focus();
+    else signinIdInput.focus();
+  }, 50);
 }
 function closeSigninModal() {
   signinModal.style.display = 'none';
@@ -1596,9 +1674,15 @@ async function submitSignin() {
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
     }
+    // 기억하기 옵션 처리
+    if (signinRememberInput?.checked) {
+      saveRememberedCreds(id, password);
+    } else {
+      clearRememberedCreds();
+    }
     toast(signinMode === 'signup' ? '가입 완료' : '로그인 됨');
     closeSigninModal();
-    // 세션이 바뀌었으므로 reload — bootstrapAuth가 새 user 행 만들고 마이그레이션 진행
+    // 세션이 바뀌었으므로 reload — bootstrapAuth가 새 user 행 만들고 마이그레이션 + session_id 발급
     setTimeout(() => location.reload(), 600);
   } catch (err) {
     console.error('[m] signin/up failed:', err);
