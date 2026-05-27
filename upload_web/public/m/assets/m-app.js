@@ -1729,14 +1729,19 @@ signinIdInput?.addEventListener('keydown', (e) => {
 });
 
 function paintAuthIdentity() {
-  // 닉네임은 로그인된 사용자에게만 노출.
-  // 익명 상태에선 'Anonymous' 만 보이고, 가입/로그인 직후 cute nickname 노출됨.
-  const name = state.isAnonymous
-    ? 'Anonymous'
-    : (state.userNickname || state.authName || state.authEmail || 'Signed In');
-  settingsName.textContent = name;
-
-  // EDIT 버튼은 로그인 상태에서만 노출 (익명일 땐 수정 의미 없음)
+  // 닉네임/EDIT 영역은 로그인된 사용자에게만 노출 — 익명 상태에선 통째로 숨김
+  const identityBlock = document.getElementById('settings-identity');
+  const identitySpacer = document.getElementById('settings-identity-spacer');
+  if (state.isAnonymous) {
+    if (identityBlock) identityBlock.style.display = 'none';
+    if (identitySpacer) identitySpacer.style.display = 'none';
+  } else {
+    if (identityBlock) identityBlock.style.display = 'flex';
+    if (identitySpacer) identitySpacer.style.display = '';
+    const name = state.userNickname || state.authName || state.authEmail || 'Signed In';
+    settingsName.textContent = name;
+  }
+  // EDIT 버튼도 로그인 상태에서만
   if (editNicknameBtn) {
     editNicknameBtn.style.display = state.isAnonymous ? 'none' : '';
   }
