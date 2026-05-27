@@ -1411,9 +1411,10 @@ function paintAuthIdentity() {
   settingsName.textContent = name;
 
   // bio 영역에 provider 뱃지 / 이메일
+  // 카카오/구글 로그인은 일단 숨김 (Supabase OAuth 설정 후 다시 노출 예정)
+  if (signinBlock) signinBlock.style.display = 'none';
   if (state.isAnonymous) {
     settingsBio.textContent = '매일 한 장의 명대사로 하루를 시작합니다.';
-    signinBlock.style.display = 'block';
     signOutBtn.textContent = 'Reset Anonymous';
   } else {
     const providerLabel = state.authProvider === 'google' ? 'Google'
@@ -1423,7 +1424,6 @@ function paintAuthIdentity() {
       ? `${providerLabel} · ${state.authEmail}`
       : `${providerLabel} 계정으로 로그인됨`;
     settingsBio.textContent = bio;
-    signinBlock.style.display = 'none';
     signOutBtn.textContent = 'Sign Out';
   }
 }
