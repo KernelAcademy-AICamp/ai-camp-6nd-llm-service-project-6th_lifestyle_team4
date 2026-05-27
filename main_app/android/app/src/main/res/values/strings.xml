@@ -22,6 +22,8 @@
     <string name="push_notifications_desc">Daily digest and breaking insights</string>
     <string name="theme_settings">Theme Settings</string>
     <string name="theme_settings_desc">System default (Light)</string>
+    <string name="theme_light_desc">Light · cream paper</string>
+    <string name="theme_dark_desc">Dark · espresso night</string>
     <string name="legal_about">Legal &amp; About</string>
     <string name="terms_of_service">Terms of Service</string>
     <string name="version_info">Version Info</string>

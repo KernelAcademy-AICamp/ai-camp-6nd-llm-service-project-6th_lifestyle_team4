@@ -61,6 +61,7 @@ fun SettingsScreen(
     val pushEnabled by vm.pushEnabled.collectAsState()
     val tasteEnabled by vm.tasteEnabled.collectAsState()
     val tasteProfile by vm.tasteProfile.collectAsState()
+    val darkTheme by vm.darkTheme.collectAsState()
 
     LaunchedEffect(session.userId) { vm.loadTasteProfile(session.userId) }
 
@@ -148,7 +149,8 @@ fun SettingsScreen(
         )
         SettingRow(
             title = stringResource(R.string.theme_settings),
-            subtitle = stringResource(R.string.theme_settings_desc),
+            subtitle = stringResource(if (darkTheme) R.string.theme_dark_desc else R.string.theme_light_desc),
+            trailing = { EditorialToggle(checked = darkTheme, onChange = vm::setDarkTheme) },
         )
 
         // --- Legal & About ---

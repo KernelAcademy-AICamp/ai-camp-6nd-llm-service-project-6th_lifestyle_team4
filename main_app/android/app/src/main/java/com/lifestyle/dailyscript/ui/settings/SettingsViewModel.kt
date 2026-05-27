@@ -22,11 +22,18 @@ class SettingsViewModel : ViewModel() {
     val tasteEnabled: StateFlow<Boolean> =
         AppPreferences.tasteEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val darkTheme: StateFlow<Boolean> =
+        AppPreferences.darkTheme.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     private val _tasteProfile = MutableStateFlow<String?>(null)
     val tasteProfile: StateFlow<String?> = _tasteProfile.asStateFlow()
 
     fun setPushEnabled(value: Boolean) {
         viewModelScope.launch { AppPreferences.setPushEnabled(value) }
+    }
+
+    fun setDarkTheme(value: Boolean) {
+        viewModelScope.launch { AppPreferences.setDarkTheme(value) }
     }
 
     fun setTasteEnabled(value: Boolean, userId: Long) {

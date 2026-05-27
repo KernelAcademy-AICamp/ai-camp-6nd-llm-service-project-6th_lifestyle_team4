@@ -2,53 +2,76 @@ package com.lifestyle.dailyscript.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val LongBlackLight = lightColorScheme(
-    primary = Espresso,
-    onPrimary = Paper,
-    primaryContainer = Roast,
-    onPrimaryContainer = Paper,
+private fun lightScheme(c: AppColors): ColorScheme = lightColorScheme(
+    primary = c.espresso,
+    onPrimary = c.paper,
+    primaryContainer = c.roast,
+    onPrimaryContainer = c.paper,
+    secondary = c.cta,
+    onSecondary = c.paper,
+    secondaryContainer = c.latte,
+    onSecondaryContainer = c.espresso,
+    tertiary = c.highlight,
+    onTertiary = c.espresso,
+    tertiaryContainer = c.latte,
+    onTertiaryContainer = c.espresso,
+    background = c.paper,
+    onBackground = c.espresso,
+    surface = c.paper,
+    onSurface = c.espresso,
+    surfaceVariant = c.latte,
+    onSurfaceVariant = c.walnut,
+    outline = c.latte,
+    outlineVariant = c.sand,
+    inverseSurface = c.espresso,
+    inverseOnSurface = c.paper,
+    inversePrimary = c.sand,
+)
 
-    secondary = Cta,           // 1차 전환 (코랄)
-    onSecondary = Paper,
-    secondaryContainer = Latte,
-    onSecondaryContainer = Espresso,
-
-    tertiary = Highlight,      // 시그널 (D-day, 별점, LIVE)
-    onTertiary = Espresso,
-    tertiaryContainer = Latte,
-    onTertiaryContainer = Espresso,
-
-    background = Paper,
-    onBackground = Espresso,
-    surface = Paper,
-    onSurface = Espresso,
-
-    surfaceVariant = Latte,
-    onSurfaceVariant = Walnut,
-
-    outline = Latte,
-    outlineVariant = Sand,
-
-    inverseSurface = Espresso,
-    inverseOnSurface = Paper,
-    inversePrimary = Sand,
+private fun darkScheme(c: AppColors): ColorScheme = darkColorScheme(
+    primary = c.espresso,
+    onPrimary = c.paper,
+    primaryContainer = c.roast,
+    onPrimaryContainer = c.paper,
+    secondary = c.cta,
+    onSecondary = c.paper,
+    secondaryContainer = c.latte,
+    onSecondaryContainer = c.espresso,
+    tertiary = c.highlight,
+    onTertiary = c.espresso,
+    tertiaryContainer = c.latte,
+    onTertiaryContainer = c.espresso,
+    background = c.paper,
+    onBackground = c.espresso,
+    surface = c.paper,
+    onSurface = c.espresso,
+    surfaceVariant = c.latte,
+    onSurfaceVariant = c.walnut,
+    outline = c.latte,
+    outlineVariant = c.sand,
+    inverseSurface = c.espresso,
+    inverseOnSurface = c.paper,
+    inversePrimary = c.sand,
 )
 
 @Composable
 fun DailyScriptTheme(
-    @Suppress("UNUSED_PARAMETER") darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit,
 ) {
-    // Light-only MVP — design system is paper-on-cream.
-    val colorScheme = LongBlackLight
+    val appColors = if (darkTheme) DarkAppColors else LightAppColors
+    val colorScheme = if (darkTheme) darkScheme(appColors) else lightScheme(appColors)
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -57,16 +80,18 @@ fun DailyScriptTheme(
             window.statusBarColor = colorScheme.background.toArgb()
             window.navigationBarColor = colorScheme.background.toArgb()
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = true
-                isAppearanceLightNavigationBars = true
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
             }
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = EditorialTypography,
-        shapes = EditorialShapes,
-        content = content,
-    )
+    CompositionLocalProvider(LocalAppColors provides appColors) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = EditorialTypography,
+            shapes = EditorialShapes,
+            content = content,
+        )
+    }
 }

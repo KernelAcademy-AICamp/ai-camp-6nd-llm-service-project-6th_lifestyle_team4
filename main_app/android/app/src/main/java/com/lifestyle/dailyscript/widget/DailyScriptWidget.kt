@@ -60,7 +60,7 @@ internal object DailyScriptWidget : GlanceAppWidget() {
                 Text(
                     text = displayQuote,
                     style = TextStyle(
-                        color = androidx.glance.color.ColorProvider(Espresso),
+                        color = androidx.glance.color.ColorProvider(day = Espresso, night = Espresso),
                         fontSize = 16.sp,
                         // 앱/iOS 위젯과 동일한 NanumMyeongjo (res/font/nanum_myeongjo.ttf)
                         fontFamily = FontFamily("nanum_myeongjo"),
@@ -72,7 +72,7 @@ internal object DailyScriptWidget : GlanceAppWidget() {
                     Text(
                         text = card!!.workTitle.uppercase(),
                         style = TextStyle(
-                            color = androidx.glance.color.ColorProvider(Walnut),
+                            color = androidx.glance.color.ColorProvider(day = Walnut, night = Walnut),
                             fontSize = 10.sp,
                             fontFamily = FontFamily.SansSerif,
                         ),
