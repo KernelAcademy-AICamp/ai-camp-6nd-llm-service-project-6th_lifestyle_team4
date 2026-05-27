@@ -73,6 +73,13 @@ const detailSignificanceBlock = $('#detail-significance-block');
 const detailSignificance = $('#detail-significance');
 const detailCollectBtn = $('#detail-collect-btn');
 const detailEdition = $('#detail-edition');
+const detailCommentsList = $('#detail-comments-list');
+const detailCommentsEmpty = $('#detail-comments-empty');
+const detailCommentLogin = $('#detail-comment-login');
+const detailCommentForm = $('#detail-comment-form');
+const detailCommentInput = $('#detail-comment-input');
+const detailCommentCounter = $('#detail-comment-counter');
+const detailCommentSubmit = $('#detail-comment-submit');
 
 const toastEl = $('#toast');
 
@@ -98,7 +105,11 @@ const state = {
   archiveSearch: '',
   archiveGenre: '',        // '' = all, or 'movie'|'drama'|'musical'|'opera'|'play'
   recentlyShownIds: [],    // 오늘의 명대사 셔플 시 최근 10개 제외용 큐
+  detailComments: [],      // 현재 열린 카드의 댓글 목록
+  detailLikes: new Map(),  // comment_id → Set<user_id>
+  detailCommentSubmitting: false,
 };
+let detailCommentsChannel = null;
 
 // 표시용 제목 정규화 — DB 원본은 그대로 두고 화면에만 적용.
 // 키는 '구분자 제거 + lowercase' 형태로 보관해서 '아,저,씨' '아·저·씨' '아 . 저 . 씨' 등 모든 변형 매칭.
@@ -1816,6 +1827,15 @@ function openDetail(card) {
   const idStr = String(card.card_id).padStart(4, '0');
   detailEdition.textContent = `LIMITED EDITION DIGITAL MANUSCRIPT #${idStr}`;
 
+  // Comments — clear and start loading
+  paintCommentForm();
+  detailCommentsList.innerHTML = '';
+  detailCommentsEmpty.style.display = 'none';
+  state.detailComments = [];
+  state.detailLikes = new Map();
+  loadCommentsForCard(card.card_id).catch((e) => console.warn('[m] loadComments failed:', e));
+  subscribeToDetailComments(card.card_id);
+
   // open the screen — history 에 overlay 상태 push (swipe-back으로 닫히도록)
   history.pushState({ overlay: 'detail', cardId: card.card_id }, '');
   detailScreen.style.display = 'flex';
@@ -1829,10 +1849,13 @@ function paintDetailCollectBtn(isBookmarked) {
 
 function closeDetailInternal() {
   detailScreen.classList.remove('open');
+  unsubscribeFromDetailComments();
   setTimeout(() => {
     detailScreen.style.display = 'none';
     document.body.style.overflow = '';
     state.detailCardId = null;
+    state.detailComments = [];
+    state.detailLikes = new Map();
   }, 250);
 }
 function closeDetail() {
@@ -1850,6 +1873,287 @@ detailBookmark.addEventListener('click', () => {
 detailCollectBtn.addEventListener('click', () => {
   if (state.detailCardId != null) toggleBookmark(state.detailCardId);
 });
+
+// ---------- Comments + Heart Reactions ----------
+function paintCommentForm() {
+  if (state.isAnonymous) {
+    detailCommentLogin.style.display = 'block';
+    detailCommentForm.style.display = 'none';
+  } else {
+    detailCommentLogin.style.display = 'none';
+    detailCommentForm.style.display = 'block';
+  }
+}
+
+function formatRelativeTime(iso) {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const diff = Math.max(0, Date.now() - t);
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return '방금';
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}일 전`;
+  const d = new Date(iso);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}.${m}.${dd}`;
+}
+
+async function loadCommentsForCard(cardId) {
+  if (cardId == null) return;
+  const sb = await getSupabase();
+
+  const { data: comments, error: cErr } = await sb
+    .from('card_comments')
+    .select('comment_id, card_id, user_id, author_nickname, body, created_at')
+    .eq('card_id', cardId)
+    .order('created_at', { ascending: true });
+  if (cErr) {
+    console.warn('[m] comments load error:', cErr.message);
+    return;
+  }
+  state.detailComments = comments || [];
+
+  const commentIds = state.detailComments.map((c) => c.comment_id);
+  if (commentIds.length === 0) {
+    state.detailLikes = new Map();
+    renderComments();
+    return;
+  }
+  const { data: likes, error: lErr } = await sb
+    .from('comment_likes')
+    .select('comment_id, user_id')
+    .in('comment_id', commentIds);
+  if (lErr) {
+    console.warn('[m] likes load error:', lErr.message);
+    state.detailLikes = new Map();
+  } else {
+    const map = new Map();
+    (likes || []).forEach((row) => {
+      if (!map.has(row.comment_id)) map.set(row.comment_id, new Set());
+      map.get(row.comment_id).add(row.user_id);
+    });
+    state.detailLikes = map;
+  }
+  renderComments();
+}
+
+function renderComments() {
+  if (state.detailCardId == null) return;
+  const list = state.detailComments;
+  if (!list || list.length === 0) {
+    detailCommentsList.innerHTML = '';
+    detailCommentsEmpty.style.display = 'block';
+    return;
+  }
+  detailCommentsEmpty.style.display = 'none';
+
+  const myUserId = state.userId;
+  const html = list.map((c) => {
+    const likeSet = state.detailLikes.get(c.comment_id) || new Set();
+    const likeCount = likeSet.size;
+    const likedByMe = myUserId != null && likeSet.has(myUserId);
+    const nickname = c.author_nickname || '익명';
+    const isMine = myUserId != null && c.user_id === myUserId;
+    return `
+      <div class="comment-row" data-comment-id="${c.comment_id}" style="border:0.5px solid var(--latte);padding:12px 14px;background:var(--paper);">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">
+          <span class="t-label-sm c-espresso" style="font-weight:600;">${escapeHtml(nickname)}</span>
+          <span class="t-label-sm c-walnut">${escapeHtml(formatRelativeTime(c.created_at))}</span>
+        </div>
+        <p class="t-body-md c-espresso" style="line-height:1.6;white-space:pre-wrap;margin:0 0 8px 0;text-align:left;">${escapeHtml(c.body)}</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <button class="comment-like-btn" data-comment-id="${c.comment_id}"
+                  style="background:transparent;border:none;cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px;color:${likedByMe ? 'var(--cta)' : 'var(--walnut)'};">
+            <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' ${likedByMe ? 1 : 0};">favorite</span>
+            <span class="t-label-sm" style="color:${likedByMe ? 'var(--cta)' : 'var(--walnut)'};">${likeCount}</span>
+          </button>
+          ${isMine ? `<button class="comment-delete-btn" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Delete</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+  detailCommentsList.innerHTML = html;
+
+  detailCommentsList.querySelectorAll('.comment-like-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (!Number.isNaN(id)) toggleCommentLike(id);
+    });
+  });
+  detailCommentsList.querySelectorAll('.comment-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (!Number.isNaN(id)) deleteComment(id);
+    });
+  });
+}
+
+async function submitComment() {
+  if (state.detailCommentSubmitting) return;
+  if (state.isAnonymous) {
+    toast('로그인이 필요합니다');
+    return;
+  }
+  const cardId = state.detailCardId;
+  if (cardId == null || !state.userId) return;
+  const body = String(detailCommentInput.value || '').trim();
+  if (!body) {
+    toast('내용을 입력해주세요');
+    return;
+  }
+  state.detailCommentSubmitting = true;
+  detailCommentSubmit.disabled = true;
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('card_comments')
+      .insert({
+        card_id: cardId,
+        user_id: state.userId,
+        author_nickname: state.userNickname || null,
+        body,
+      })
+      .select('comment_id, card_id, user_id, author_nickname, body, created_at')
+      .single();
+    if (error) throw error;
+    detailCommentInput.value = '';
+    updateCommentCounter();
+    // optimistic — realtime이 곧 따라잡지만 즉시 표시
+    if (data && !state.detailComments.find((c) => c.comment_id === data.comment_id)) {
+      state.detailComments.push(data);
+      renderComments();
+    }
+  } catch (err) {
+    console.warn('[m] submitComment failed:', err);
+    toast('댓글 작성 실패: ' + (err.message || ''));
+  } finally {
+    state.detailCommentSubmitting = false;
+    detailCommentSubmit.disabled = false;
+  }
+}
+
+async function deleteComment(commentId) {
+  if (state.isAnonymous || !state.userId) return;
+  if (!confirm('이 댓글을 삭제할까요?')) return;
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('card_comments')
+      .delete().eq('comment_id', commentId).eq('user_id', state.userId);
+    if (error) throw error;
+    state.detailComments = state.detailComments.filter((c) => c.comment_id !== commentId);
+    state.detailLikes.delete(commentId);
+    renderComments();
+  } catch (err) {
+    console.warn('[m] deleteComment failed:', err);
+    toast('삭제 실패: ' + (err.message || ''));
+  }
+}
+
+async function toggleCommentLike(commentId) {
+  if (state.isAnonymous || !state.userId) {
+    toast('하트 반응은 로그인 후 가능합니다');
+    return;
+  }
+  const likeSet = state.detailLikes.get(commentId) || new Set();
+  const wasLiked = likeSet.has(state.userId);
+  try {
+    const sb = await getSupabase();
+    // optimistic update
+    if (wasLiked) {
+      likeSet.delete(state.userId);
+    } else {
+      likeSet.add(state.userId);
+    }
+    state.detailLikes.set(commentId, likeSet);
+    renderComments();
+
+    if (wasLiked) {
+      const { error } = await sb.from('comment_likes')
+        .delete()
+        .eq('comment_id', commentId)
+        .eq('user_id', state.userId);
+      if (error) throw error;
+    } else {
+      const { error } = await sb.from('comment_likes')
+        .insert({ comment_id: commentId, user_id: state.userId });
+      if (error) throw error;
+    }
+  } catch (err) {
+    console.warn('[m] toggleCommentLike failed:', err);
+    // revert optimistic
+    if (wasLiked) {
+      (state.detailLikes.get(commentId) || new Set()).add(state.userId);
+    } else {
+      (state.detailLikes.get(commentId) || new Set()).delete(state.userId);
+    }
+    renderComments();
+    toast('반응 처리 실패: ' + (err.message || ''));
+  }
+}
+
+function updateCommentCounter() {
+  const v = String(detailCommentInput.value || '');
+  detailCommentCounter.textContent = `${v.length} / 500`;
+}
+
+detailCommentInput?.addEventListener('input', updateCommentCounter);
+detailCommentSubmit?.addEventListener('click', submitComment);
+detailCommentInput?.addEventListener('keydown', (e) => {
+  // Ctrl/Cmd+Enter 빠른 제출
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    submitComment();
+  }
+});
+
+// ---------- Realtime: comments / likes for currently open card ----------
+async function subscribeToDetailComments(cardId) {
+  unsubscribeFromDetailComments();
+  if (cardId == null) return;
+  try {
+    const sb = await getSupabase();
+    const ch = sb.channel(`ds-card-comments-${cardId}-${Date.now()}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'card_comments', filter: `card_id=eq.${cardId}` },
+        () => {
+          if (state.detailCardId === cardId) {
+            loadCommentsForCard(cardId).catch(() => {});
+          }
+        })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'comment_likes' },
+        (payload) => {
+          if (state.detailCardId !== cardId) return;
+          // 우리 카드에 속한 comment인지 확인
+          const row = payload.new || payload.old;
+          if (!row) return;
+          const knownIds = new Set(state.detailComments.map((c) => c.comment_id));
+          if (knownIds.has(row.comment_id)) {
+            loadCommentsForCard(cardId).catch(() => {});
+          }
+        });
+    ch.subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        // best-effort: 채널 오류는 무시 (메인 realtime이 따로 동작)
+      }
+    });
+    detailCommentsChannel = ch;
+  } catch (err) {
+    console.warn('[m] subscribeToDetailComments failed:', err);
+  }
+}
+async function unsubscribeFromDetailComments() {
+  if (!detailCommentsChannel) return;
+  try {
+    const sb = await getSupabase();
+    await sb.removeChannel(detailCommentsChannel);
+  } catch {}
+  detailCommentsChannel = null;
+}
 
 // ---------- View switching ----------
 function setView(view) {

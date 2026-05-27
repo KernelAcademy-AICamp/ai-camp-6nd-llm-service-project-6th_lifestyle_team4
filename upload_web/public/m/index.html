@@ -981,7 +981,39 @@
 
     <div style="height:16px;"></div>
     <p id="detail-edition" class="t-label-sm c-walnut">LIMITED EDITION DIGITAL MANUSCRIPT</p>
+
+    <!-- ===== Comments section ===== -->
+    <div style="height:40px;"></div>
+    <div class="hairline"></div>
     <div style="height:24px;"></div>
+    <p class="t-label-sm c-walnut" style="letter-spacing:0.2em;">READER NOTES</p>
+    <div style="height:16px;"></div>
+
+    <div id="detail-comments-list" style="display:flex;flex-direction:column;gap:14px;"></div>
+
+    <p id="detail-comments-empty" class="t-body-sm c-walnut" style="display:none;text-align:left;font-style:italic;">
+      아직 댓글이 없어요. 첫 번째 흔적을 남겨보세요.
+    </p>
+
+    <!-- 익명: 로그인 안내 -->
+    <div id="detail-comment-login" style="display:none;margin-top:18px;padding:14px;border:0.5px solid var(--latte);background:var(--paper);">
+      <p class="t-body-sm c-walnut" style="text-align:left;line-height:1.6;">
+        댓글을 남기려면 <strong>로그인</strong>이 필요합니다. (하트 반응도 동일)
+      </p>
+    </div>
+
+    <!-- 로그인 사용자: 입력창 -->
+    <div id="detail-comment-form" style="display:none;margin-top:18px;">
+      <textarea id="detail-comment-input" maxlength="500" rows="3"
+                placeholder="이 명대사에 대한 생각을 남겨보세요…"
+                style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:1.6;outline:none;resize:vertical;min-height:72px;"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <span id="detail-comment-counter" class="t-label-sm c-walnut">0 / 500</span>
+        <button id="detail-comment-submit" class="sharp-btn" style="padding:8px 18px;">남기기</button>
+      </div>
+    </div>
+
+    <div style="height:32px;"></div>
   </div>
 </div>
 
