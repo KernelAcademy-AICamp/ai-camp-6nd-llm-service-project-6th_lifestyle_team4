@@ -3,6 +3,7 @@ import Busboy from 'busboy';
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { runExtract } from '../lib/anthropic.js';
 import { extractText } from '../lib/parse-document.js';
+import { fetchQuoteSeeds, formatSeedBlock } from '../lib/quotes/index.js';
 
 export const config = {
   api: { bodyParser: false },
@@ -58,6 +59,7 @@ export default async function handler(req, res) {
     const { file: fileBuffer, filename, mimetype, fields } = await readMultipart(req);
     const rawCategory = (fields.category || '').trim();
     const category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'screen';
+    const titleHint = (fields.title || '').trim();
 
     const extracted = await extractText(fileBuffer, filename, mimetype);
     const scriptText = (extracted || '').trim();
@@ -65,10 +67,29 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: '파일에서 텍스트를 추출하지 못했습니다. (스캔본 PDF는 OCR이 필요할 수 있습니다)' });
     }
 
-    const result = await runExtract(scriptText, category);
+    // 폼에서 작품명을 받았으면 웹(Wikiquote 다국어 + 나무위키)에서 명대사 시드를 끌어와
+    // LLM 프롬프트에 우선 검토 대상으로 주입한다. 시드가 비면 기존 동작 그대로.
+    let seedBlock = '';
+    let seedDebug = null;
+    if (titleHint) {
+      try {
+        const { quotes, debug } = await fetchQuoteSeeds(titleHint, category);
+        seedBlock = formatSeedBlock(titleHint, quotes);
+        seedDebug = { count: quotes.length, ...debug };
+        if (quotes.length) {
+          console.log(`[extract] quote seeds for "${titleHint}": ${quotes.length}개`, debug);
+        } else {
+          console.log(`[extract] no quote seeds for "${titleHint}"`, debug);
+        }
+      } catch (e) {
+        console.warn('[extract] fetchQuoteSeeds 실패, 시드 없이 진행:', e.message);
+      }
+    }
+
+    const result = await runExtract(scriptText, category, seedBlock);
     // works.full_script_text는 NOT NULL이므로 저장 단계에서 다시 필요.
     // 응답에 함께 실어 클라이언트 state에 보관 → /api/save 호출 시 다시 전송.
-    return res.status(200).json({ ...result, full_script_text: scriptText });
+    return res.status(200).json({ ...result, full_script_text: scriptText, _seed_debug: seedDebug });
   } catch (err) {
     if (err instanceof AuthError) {
       return res.status(err.status || 401).json({ error: err.message });

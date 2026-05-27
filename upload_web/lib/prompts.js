@@ -170,6 +170,7 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
 </example>
 
 
+{{QUOTE_SEED_BLOCK}}
 [04 USER INPUT]
 <input>
 {{SCRIPT_TEXT}}
@@ -502,6 +503,7 @@ quote 또는 script_excerpt에 한국어 욕설·비속어·강한 모욕 표현
 </output>
 </example>
 
+{{QUOTE_SEED_BLOCK}}
 [04 USER INPUT]
 <input>
 {{SCRIPT_TEXT}}
@@ -835,6 +837,7 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
 </example>
 
 
+{{QUOTE_SEED_BLOCK}}
 [04 USER INPUT]
 
 <input>
@@ -1141,6 +1144,7 @@ const EXTRACT_PROMPT_LITERATURE = `[01 ROLE]
 </example>
 
 
+{{QUOTE_SEED_BLOCK}}
 [04 USER INPUT]
 
 <input>

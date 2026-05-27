@@ -180,6 +180,8 @@ async function handleFile(file) {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('category', state.category);
+    const titleHint = document.querySelector('#title-input')?.value?.trim();
+    if (titleHint) fd.append('title', titleHint);
     const json = await apiFetch('/api/extract', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
