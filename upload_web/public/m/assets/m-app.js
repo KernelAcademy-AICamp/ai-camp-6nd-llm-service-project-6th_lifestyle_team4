@@ -1539,10 +1539,23 @@ function showSigninError(msg) {
 }
 
 function idToEmail(id) {
-  // 알파벳/숫자/하이픈/언더스코어/점 외엔 거부 — Supabase email local-part 호환
-  const clean = String(id || '').trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9._-]{2,19}$/.test(clean)) return null;
-  return `${clean}@user.local`;
+  // 어떤 입력이든 안정적인 이메일로 매핑.
+  //  - ASCII-safe (a-z 0-9 . _ - +) 이면 그대로 사용 — Supabase 패널에서 읽기 좋음
+  //  - 한글/공백/특수문자가 있으면 FNV-1a 해시 → 'u_xxxxxxxx@user.local'
+  //  - 같은 입력은 항상 같은 이메일로 매핑되어 재로그인 가능
+  const raw = String(id || '').trim();
+  if (!raw) return null;
+  const cleaned = raw.toLowerCase().replace(/\s+/g, '');
+  if (/^[a-z0-9._+-]+$/.test(cleaned) && cleaned.length >= 1 && cleaned.length <= 50) {
+    return `${cleaned}@user.local`;
+  }
+  let hash = 2166136261;
+  for (let i = 0; i < raw.length; i++) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const slug = ('00000000' + (hash >>> 0).toString(36)).slice(-8);
+  return `u_${slug}@user.local`;
 }
 
 async function submitSignin() {
@@ -1550,11 +1563,11 @@ async function submitSignin() {
   const password = signinPasswordInput.value || '';
   const email = idToEmail(id);
   if (!email) {
-    showSigninError('아이디는 영문/숫자/._- 만, 3~20자');
+    showSigninError('아이디를 입력해주세요.');
     return;
   }
-  if (password.length < 6) {
-    showSigninError('비밀번호는 6자 이상');
+  if (!password) {
+    showSigninError('비밀번호를 입력해주세요.');
     return;
   }
   signinErrorEl.style.display = 'none';
@@ -1569,8 +1582,16 @@ async function submitSignin() {
     localStorage.setItem('ds.carryNickname', carryNickname);
 
     if (signinMode === 'signup') {
-      const { error } = await sb.auth.signUp({ email, password });
-      if (error) throw error;
+      const { data: signUpData, error: signUpError } = await sb.auth.signUp({ email, password });
+      if (signUpError) throw signUpError;
+      // 이메일 확인 비활성이면 signUp이 session도 반환. 활성이면 session=null.
+      // 어느 경우든 즉시 signInWithPassword 시도해 자동 로그인.
+      if (!signUpData?.session) {
+        const { error: autoSignInError } = await sb.auth.signInWithPassword({ email, password });
+        if (autoSignInError) {
+          throw new Error('가입은 됐으나 자동 로그인 실패. 다시 로그인 모드로 시도해주세요.');
+        }
+      }
     } else {
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
