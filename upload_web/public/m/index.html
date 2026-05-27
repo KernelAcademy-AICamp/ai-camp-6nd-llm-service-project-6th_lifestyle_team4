@@ -833,30 +833,17 @@
     <!-- SIGN IN section — visible only when anonymous -->
     <div id="signin-block" style="display:none;">
       <div style="height:40px;"></div>
-      <p class="t-label-sm c-walnut" style="margin-bottom:12px;">SIGN IN</p>
-      <p class="t-body-sm c-walnut" style="margin-bottom:16px;line-height:1.6;">
-        로그인하면 다른 기기에서도 북마크가 동기화됩니다.
+      <p class="t-label-sm c-walnut" style="margin-bottom:12px;">ACCOUNT</p>
+      <p class="t-body-sm c-walnut" style="margin-bottom:14px;line-height:1.6;">
+        아이디와 비밀번호로 로그인하면 다른 기기에서도 북마크가 동기화됩니다.
       </p>
 
-      <button id="signin-google" class="sharp-btn outline" style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;">
-        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-          <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
-          <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-          <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-          <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-        </svg>
-        <span>Google로 로그인</span>
-      </button>
-
-      <button id="signin-kakao" class="sharp-btn" style="background:#FEE500;color:#181600;display:flex;align-items:center;justify-content:center;gap:10px;">
-        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 0C4.03 0 0 3.16 0 7.05c0 2.49 1.65 4.68 4.13 5.93l-.84 3.08c-.07.27.24.49.47.34l3.7-2.45c.51.07 1.03.1 1.55.1 4.97 0 9-3.16 9-7.05S13.97 0 9 0z" fill="#181600"/>
-        </svg>
-        <span>카카오로 로그인</span>
+      <button id="open-signin-modal" class="sharp-btn outline" style="width:100%;">
+        로그인 · 회원가입
       </button>
 
       <p class="t-body-sm c-walnut" style="margin-top:14px;line-height:1.6;font-size:11px;">
-        로그인 시 현재 익명 계정의 북마크는 자동으로 옮겨집니다.
+        가입 시 현재 익명 북마크는 자동으로 새 계정에 옮겨집니다.
       </p>
 
       <div style="height:32px;"></div>
@@ -1039,6 +1026,37 @@
     </div>
     <button id="nickname-cancel" style="width:100%;background:transparent;border:none;margin-top:14px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
       Cancel
+    </button>
+  </div>
+</div>
+
+<!-- ===== Sign in / Sign up modal ===== -->
+<div id="signin-modal" style="position:fixed;inset:0;background:rgba(14,12,10,0.65);display:none;align-items:center;justify-content:center;z-index:130;padding:24px;">
+  <div style="background:var(--paper);width:100%;max-width:420px;padding:28px 24px;border:0.5px solid var(--latte);">
+    <p class="t-label-sm c-walnut" style="margin-bottom:6px;">ACCOUNT</p>
+    <h3 id="signin-modal-title" class="t-headline-md c-espresso" style="margin-bottom:14px;">로그인</h3>
+    <p id="signin-modal-sub" class="t-body-sm c-walnut" style="margin-bottom:18px;line-height:1.6;">
+      아이디와 비밀번호를 입력하세요.
+    </p>
+
+    <label class="t-label-sm c-walnut" style="display:block;margin-bottom:6px;">아이디</label>
+    <input id="signin-id" type="text" maxlength="20" autocomplete="username"
+           placeholder="alphanumeric · 3-20자"
+           style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;margin-bottom:14px;" />
+
+    <label class="t-label-sm c-walnut" style="display:block;margin-bottom:6px;">비밀번호</label>
+    <input id="signin-password" type="password" maxlength="64" autocomplete="current-password"
+           placeholder="6자 이상"
+           style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;" />
+
+    <p id="signin-error" class="t-body-sm c-cta" style="margin-top:12px;display:none;"></p>
+
+    <button id="signin-submit" class="sharp-btn" style="width:100%;margin-top:18px;">로그인</button>
+    <button id="signin-toggle-mode" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
+      계정이 없으신가요? 회원가입
+    </button>
+    <button id="signin-cancel" style="width:100%;background:transparent;border:none;margin-top:6px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);">
+      취소
     </button>
   </div>
 </div>

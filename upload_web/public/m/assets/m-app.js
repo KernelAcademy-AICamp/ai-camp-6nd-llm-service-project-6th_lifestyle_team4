@@ -470,8 +470,9 @@ async function bootstrapAuth() {
     }
     return;
   }
-  // 신규 user — 자동 닉네임 부여
-  const startingNickname = state.authName || randomCuteNickname();
+  // 신규 user — 이전 익명 닉네임(있다면) 또는 OAuth 이름 또는 자동 닉네임
+  const carriedNickname = localStorage.getItem('ds.carryNickname') || '';
+  const startingNickname = carriedNickname || state.authName || randomCuteNickname();
   const { data: inserted, error: insErr } = await sb
     .from('users')
     .insert({
@@ -482,6 +483,8 @@ async function bootstrapAuth() {
   if (insErr) throw insErr;
   state.userId = inserted.user_id;
   state.userNickname = inserted.nickname || startingNickname;
+  // 이전 닉네임 carry over 완료 → 정리
+  if (carriedNickname) localStorage.removeItem('ds.carryNickname');
 
   // 소셜 로그인 직후라면 이전 익명 user_id의 북마크를 옮긴다
   if (!state.isAnonymous) {
@@ -1484,8 +1487,128 @@ async function startOAuth(provider) {
   }
 }
 
-signinGoogle.addEventListener('click', () => startOAuth('google'));
-signinKakao.addEventListener('click', () => startOAuth('kakao'));
+// OAuth 버튼은 현재 HTML에서 제거됨 — 추후 사용시 다시 활성화
+signinGoogle?.addEventListener('click', () => startOAuth('google'));
+signinKakao?.addEventListener('click', () => startOAuth('kakao'));
+
+// ---------- ID + Password 로그인 ----------
+const openSigninModalBtn = $('#open-signin-modal');
+const signinModal = $('#signin-modal');
+const signinModalTitle = $('#signin-modal-title');
+const signinModalSub = $('#signin-modal-sub');
+const signinIdInput = $('#signin-id');
+const signinPasswordInput = $('#signin-password');
+const signinSubmitBtn = $('#signin-submit');
+const signinToggleModeBtn = $('#signin-toggle-mode');
+const signinCancelBtn = $('#signin-cancel');
+const signinErrorEl = $('#signin-error');
+let signinMode = 'signin';  // 'signin' | 'signup'
+
+function setSigninMode(mode) {
+  signinMode = mode;
+  if (mode === 'signup') {
+    signinModalTitle.textContent = '회원가입';
+    signinModalSub.textContent = '아이디와 비밀번호를 정해주세요. 다른 기기에서도 같은 계정으로 로그인 가능합니다.';
+    signinSubmitBtn.textContent = '가입';
+    signinToggleModeBtn.textContent = '이미 계정이 있나요? 로그인';
+  } else {
+    signinModalTitle.textContent = '로그인';
+    signinModalSub.textContent = '아이디와 비밀번호를 입력하세요.';
+    signinSubmitBtn.textContent = '로그인';
+    signinToggleModeBtn.textContent = '계정이 없으신가요? 회원가입';
+  }
+  signinErrorEl.style.display = 'none';
+}
+
+function openSigninModal() {
+  if (!signinModal) return;
+  setSigninMode('signin');
+  signinIdInput.value = '';
+  signinPasswordInput.value = '';
+  signinErrorEl.style.display = 'none';
+  signinModal.style.display = 'flex';
+  setTimeout(() => signinIdInput.focus(), 50);
+}
+function closeSigninModal() {
+  signinModal.style.display = 'none';
+}
+
+function showSigninError(msg) {
+  signinErrorEl.textContent = msg;
+  signinErrorEl.style.display = 'block';
+}
+
+function idToEmail(id) {
+  // 알파벳/숫자/하이픈/언더스코어/점 외엔 거부 — Supabase email local-part 호환
+  const clean = String(id || '').trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._-]{2,19}$/.test(clean)) return null;
+  return `${clean}@user.local`;
+}
+
+async function submitSignin() {
+  const id = (signinIdInput.value || '').trim();
+  const password = signinPasswordInput.value || '';
+  const email = idToEmail(id);
+  if (!email) {
+    showSigninError('아이디는 영문/숫자/._- 만, 3~20자');
+    return;
+  }
+  if (password.length < 6) {
+    showSigninError('비밀번호는 6자 이상');
+    return;
+  }
+  signinErrorEl.style.display = 'none';
+  signinSubmitBtn.disabled = true;
+  signinSubmitBtn.textContent = '⋯';
+  try {
+    const sb = await getSupabase();
+    // 익명 사용자의 user_id 백업 (가입/로그인 직후 북마크 이전용)
+    if (state.userId) localStorage.setItem('ds.prevAnonUserId', String(state.userId));
+    // 현재 익명 닉네임도 보존
+    const carryNickname = state.userNickname || '';
+    localStorage.setItem('ds.carryNickname', carryNickname);
+
+    if (signinMode === 'signup') {
+      const { error } = await sb.auth.signUp({ email, password });
+      if (error) throw error;
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    }
+    toast(signinMode === 'signup' ? '가입 완료' : '로그인 됨');
+    closeSigninModal();
+    // 세션이 바뀌었으므로 reload — bootstrapAuth가 새 user 행 만들고 마이그레이션 진행
+    setTimeout(() => location.reload(), 600);
+  } catch (err) {
+    console.error('[m] signin/up failed:', err);
+    const msg = String(err?.message || err);
+    // 흔한 에러 한글화
+    let friendly = msg;
+    if (/Invalid login credentials/i.test(msg)) friendly = '아이디 또는 비밀번호가 맞지 않습니다.';
+    else if (/User already registered/i.test(msg)) friendly = '이미 가입된 아이디입니다. 로그인해주세요.';
+    else if (/Password should be/i.test(msg)) friendly = '비밀번호가 너무 짧거나 약합니다.';
+    else if (/rate limit/i.test(msg)) friendly = '잠시 후 다시 시도해주세요.';
+    showSigninError(friendly);
+  } finally {
+    signinSubmitBtn.disabled = false;
+    signinSubmitBtn.textContent = signinMode === 'signup' ? '가입' : '로그인';
+  }
+}
+
+openSigninModalBtn?.addEventListener('click', openSigninModal);
+signinCancelBtn?.addEventListener('click', closeSigninModal);
+signinModal?.addEventListener('click', (e) => { if (e.target === signinModal) closeSigninModal(); });
+signinToggleModeBtn?.addEventListener('click', () => {
+  setSigninMode(signinMode === 'signin' ? 'signup' : 'signin');
+  signinIdInput.focus();
+});
+signinSubmitBtn?.addEventListener('click', submitSignin);
+signinPasswordInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); submitSignin(); }
+});
+signinIdInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); signinPasswordInput.focus(); }
+});
 
 function paintAuthIdentity() {
   // 닉네임/이름 헤더 — users.nickname(사용자 수정 가능) 우선
@@ -1496,12 +1619,13 @@ function paintAuthIdentity() {
   settingsName.textContent = name;
 
   // bio 영역에 provider 뱃지 / 이메일
-  // 카카오/구글 로그인은 일단 숨김 (Supabase OAuth 설정 후 다시 노출 예정)
-  if (signinBlock) signinBlock.style.display = 'none';
+  // 익명일 때만 SIGN IN 섹션 (ID + 비밀번호 모달 열기) 노출
   if (state.isAnonymous) {
     settingsBio.textContent = '매일 한 장의 명대사로 하루를 시작합니다.';
+    if (signinBlock) signinBlock.style.display = 'block';
     signOutBtn.textContent = 'Reset Anonymous';
   } else {
+    if (signinBlock) signinBlock.style.display = 'none';
     const providerLabel = state.authProvider === 'google' ? 'Google'
       : state.authProvider === 'kakao' ? 'Kakao'
       : (state.authProvider || 'Account');
