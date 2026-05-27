@@ -54,6 +54,12 @@ const tasteToggle = $('#taste-toggle');
 const tasteProfileEl = $('#taste-profile');
 const themeToggle = $('#theme-toggle');
 const themeSubtitle = $('#theme-subtitle');
+const editNicknameBtn = $('#edit-nickname-btn');
+const nicknameModal = $('#nickname-modal');
+const nicknameInput = $('#nickname-input');
+const nicknameSaveBtn = $('#nickname-save');
+const nicknameCancelBtn = $('#nickname-cancel');
+const nicknameRandomizeBtn = $('#nickname-randomize');
 
 const detailScreen = $('#detail-screen');
 const detailBack = $('#detail-back');
@@ -79,6 +85,7 @@ const state = {
   authEmail: null,
   authName: null,
   authAvatarUrl: null,
+  userNickname: '',         // public.users.nickname — 사용자가 수정 가능한 표시 이름
   todayCard: null,
   todayBookmarked: false,
   allCards: [],
@@ -95,6 +102,26 @@ const state = {
 
 // 표시용 제목 정규화 — DB 원본은 그대로 두고 화면에만 적용.
 // 키는 '구분자 제거 + lowercase' 형태로 보관해서 '아,저,씨' '아·저·씨' '아 . 저 . 씨' 등 모든 변형 매칭.
+// ===== 귀여운 익명 닉네임 생성기 =====
+// 형용사구 + 동물/별명 조합. 예: '책 읽는 토끼', '서점에 간 안경잡이'
+const NICKNAME_ADJECTIVES = [
+  '서점에 간', '책 좋아하는', '연극에 빠진', '희곡에 매료된', '책 읽는',
+  '도서관 가는', '글 쓰는', '시 쓰는', '각본 쓰는', '무대 위의',
+  '책장 사이의', '독서하는', '대본 외우는', '극장 가는', '명대사 모으는',
+  '소설 좋아하는', '문장 모으는', '활자에 빠진', '책 향기 맡는', '편지 쓰는',
+];
+const NICKNAME_NOUNS = [
+  '안경잡이', '부끄럼쟁이', '매력쟁이', '호랑이', '토끼',
+  '여우', '고양이', '기린', '곰', '사슴',
+  '두루미', '독수리', '늑대', '판다', '코알라',
+  '돌고래', '학자', '낭만가', '몽상가', '여행자',
+];
+function randomCuteNickname() {
+  const adj = NICKNAME_ADJECTIVES[Math.floor(Math.random() * NICKNAME_ADJECTIVES.length)];
+  const noun = NICKNAME_NOUNS[Math.floor(Math.random() * NICKNAME_NOUNS.length)];
+  return `${adj} ${noun}`;
+}
+
 const TITLE_DISPLAY_ALIASES = {
   'titanic': '타이타닉',
   '아저씨': '아저씨',
@@ -431,17 +458,30 @@ async function bootstrapAuth() {
   if (selErr) throw selErr;
   if (existingUser) {
     state.userId = existingUser.user_id;
+    state.userNickname = existingUser.nickname || '';
+    // 닉네임이 비어있는 익명 유저는 backfill — 귀여운 이름 자동 부여
+    if (!state.userNickname && state.isAnonymous) {
+      const generated = randomCuteNickname();
+      const { data: upd } = await sb.from('users')
+        .update({ nickname: generated })
+        .eq('user_id', state.userId)
+        .select('nickname').single();
+      state.userNickname = upd?.nickname || generated;
+    }
     return;
   }
+  // 신규 user — 자동 닉네임 부여
+  const startingNickname = state.authName || randomCuteNickname();
   const { data: inserted, error: insErr } = await sb
     .from('users')
     .insert({
       anonymous_id: state.authUid,
-      nickname: state.authName || null,
+      nickname: startingNickname,
     })
-    .select('user_id').single();
+    .select('user_id, nickname').single();
   if (insErr) throw insErr;
   state.userId = inserted.user_id;
+  state.userNickname = inserted.nickname || startingNickname;
 
   // 소셜 로그인 직후라면 이전 익명 user_id의 북마크를 옮긴다
   if (!state.isAnonymous) {
@@ -1369,6 +1409,50 @@ themeToggle.addEventListener('keydown', (e) => {
   }
 });
 
+// ---------- Nickname edit ----------
+function openNicknameModal() {
+  if (!nicknameModal) return;
+  nicknameInput.value = state.userNickname || '';
+  nicknameModal.style.display = 'flex';
+  setTimeout(() => nicknameInput.focus(), 50);
+}
+function closeNicknameModal() {
+  nicknameModal.style.display = 'none';
+}
+async function saveNickname() {
+  const newName = (nicknameInput.value || '').trim();
+  if (!newName) { toast('이름을 입력해주세요'); return; }
+  if (newName.length > 24) { toast('24자 이하로 입력해주세요'); return; }
+  if (!state.userId) { toast('사용자 정보 없음'); return; }
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('users')
+      .update({ nickname: newName })
+      .eq('user_id', state.userId);
+    if (error) throw error;
+    state.userNickname = newName;
+    paintAuthIdentity();
+    closeNicknameModal();
+    toast('이름이 변경됐어요');
+  } catch (err) {
+    console.error('[m] save nickname failed:', err);
+    toast(`저장 실패: ${err.message || err}`);
+  }
+}
+
+editNicknameBtn?.addEventListener('click', openNicknameModal);
+nicknameCancelBtn?.addEventListener('click', closeNicknameModal);
+nicknameModal?.addEventListener('click', (e) => { if (e.target === nicknameModal) closeNicknameModal(); });
+nicknameRandomizeBtn?.addEventListener('click', () => {
+  nicknameInput.value = randomCuteNickname();
+  nicknameInput.focus();
+});
+nicknameSaveBtn?.addEventListener('click', saveNickname);
+nicknameInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); saveNickname(); }
+  if (e.key === 'Escape') closeNicknameModal();
+});
+
 signOutBtn.addEventListener('click', async () => {
   const msg = state.isAnonymous
     ? '익명 세션을 종료할까요? 다시 입장하면 새 익명 ID가 생성됩니다.'
@@ -1404,8 +1488,9 @@ signinGoogle.addEventListener('click', () => startOAuth('google'));
 signinKakao.addEventListener('click', () => startOAuth('kakao'));
 
 function paintAuthIdentity() {
-  // 닉네임/이름 헤더
-  const name = state.authName
+  // 닉네임/이름 헤더 — users.nickname(사용자 수정 가능) 우선
+  const name = state.userNickname
+    || state.authName
     || state.authEmail
     || (state.isAnonymous ? 'Anonymous' : 'Signed In');
   settingsName.textContent = name;
