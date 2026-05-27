@@ -8,3 +8,6 @@ xcuserdata/
 # Xcode — local build output
 build/
 DerivedData/
+.DS_Store
+.DS_Store
+**/.DS_Store
