@@ -126,9 +126,11 @@
         <div class="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mb-4">
           <span class="material-symbols-outlined text-primary text-3xl">upload_file</span>
         </div>
-        <h3 id="dropzone-title" class="text-xl font-semibold mb-2">Drop your PDF here</h3>
-        <p id="dropzone-sub" class="text-base text-on-surface-variant">스크립트 파일을 여기에 드래그하거나 클릭하여 업로드하세요 (PDF)</p>
-        <input id="pdf-input" type="file" accept="application/pdf" class="hidden" />
+        <h3 id="dropzone-title" class="text-xl font-semibold mb-2">대본 파일을 여기에 올리세요</h3>
+        <p id="dropzone-sub" class="text-base text-on-surface-variant">스크립트 파일을 여기에 드래그하거나 클릭하여 업로드하세요 (PDF · TXT · DOCX · HWP · HWPX)</p>
+        <input id="pdf-input" type="file"
+               accept=".pdf,.txt,.docx,.hwp,.hwpx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+               class="hidden" />
       </label>
     </section>
 

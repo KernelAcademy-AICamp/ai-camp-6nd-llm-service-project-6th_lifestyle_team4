@@ -142,9 +142,12 @@ paintCategory();
 // ---------------------------------------------------------------------------
 // Upload flow
 // ---------------------------------------------------------------------------
+// 업로드 허용 형식
+const ALLOWED_EXTENSIONS = ['pdf', 'txt', 'docx', 'hwp', 'hwpx'];
+
 pdfInput.addEventListener('change', (e) => {
   const file = e.target.files?.[0];
-  if (file) handlePdf(file);
+  if (file) handleFile(file);
 });
 
 ['dragenter', 'dragover'].forEach((ev) => {
@@ -161,19 +164,20 @@ pdfInput.addEventListener('change', (e) => {
 });
 dropzone.addEventListener('drop', (e) => {
   const file = e.dataTransfer?.files?.[0];
-  if (file) handlePdf(file);
+  if (file) handleFile(file);
 });
 
-async function handlePdf(file) {
-  if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
-    toast('PDF 파일만 업로드할 수 있습니다.', 'error');
+async function handleFile(file) {
+  const ext = (file.name.toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || '';
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    toast('PDF · TXT · DOCX · HWP · HWPX 파일만 업로드할 수 있습니다.', 'error');
     return;
   }
   setDropzoneBusy(`업로드 중: ${file.name}`, '대본을 LLM이 분석하고 있습니다. 최대 1분 소요됩니다.');
   try {
     const token = await getAccessToken();
     const fd = new FormData();
-    fd.append('pdf', file);
+    fd.append('file', file);
     fd.append('category', state.category);
     const json = await apiFetch('/api/extract', {
       method: 'POST',
@@ -196,8 +200,8 @@ function setDropzoneBusy(title, sub) {
   dropzone.classList.add('pointer-events-none', 'opacity-70');
 }
 function resetDropzone() {
-  dropzoneTitle.textContent = 'Drop your PDF here';
-  dropzoneSub.textContent = '스크립트 파일을 여기에 드래그하거나 클릭하여 업로드하세요 (PDF)';
+  dropzoneTitle.textContent = '대본 파일을 여기에 올리세요';
+  dropzoneSub.textContent = '스크립트 파일을 여기에 드래그하거나 클릭하여 업로드하세요 (PDF · TXT · DOCX · HWP · HWPX)';
   dropzone.classList.remove('pointer-events-none', 'opacity-70');
   pdfInput.value = '';
 }

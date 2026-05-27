@@ -1,10 +1,8 @@
 import Busboy from 'busboy';
-// pdf-parse의 index.js는 import 시 디버그용 테스트 PDF를 읽으려고 시도하므로
-// 서버리스에서는 내부 모듈을 직접 import 합니다.
-import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { runExtract } from '../lib/anthropic.js';
+import { extractText } from '../lib/parse-document.js';
 
 export const config = {
   api: { bodyParser: false },
@@ -13,7 +11,9 @@ export const config = {
 function readMultipart(req) {
   return new Promise((resolve, reject) => {
     const bb = Busboy({ headers: req.headers, limits: { files: 1, fileSize: 25 * 1024 * 1024 } });
-    let pdfBuffer = null;
+    let fileBuffer = null;
+    let filename = '';
+    let mimetype = '';
     let tooLarge = false;
     const fields = {};
 
@@ -22,6 +22,8 @@ function readMultipart(req) {
     });
 
     bb.on('file', (_name, stream, info) => {
+      filename = info?.filename || '';
+      mimetype = info?.mimeType || '';
       const chunks = [];
       stream.on('data', (chunk) => chunks.push(chunk));
       stream.on('limit', () => {
@@ -29,15 +31,15 @@ function readMultipart(req) {
         stream.resume();
       });
       stream.on('end', () => {
-        if (!tooLarge) pdfBuffer = Buffer.concat(chunks);
+        if (!tooLarge) fileBuffer = Buffer.concat(chunks);
       });
     });
 
     bb.on('error', reject);
     bb.on('finish', () => {
-      if (tooLarge) return reject(new Error('PDF exceeds 25MB limit'));
-      if (!pdfBuffer) return reject(new Error('No PDF file in request'));
-      resolve({ pdf: pdfBuffer, fields });
+      if (tooLarge) return reject(new Error('파일 크기가 25MB를 초과합니다.'));
+      if (!fileBuffer) return reject(new Error('업로드된 파일이 없습니다.'));
+      resolve({ file: fileBuffer, filename, mimetype, fields });
     });
 
     req.pipe(bb);
@@ -53,14 +55,14 @@ export default async function handler(req, res) {
   try {
     await requireAdmin(req);
 
-    const { pdf: pdfBuffer, fields } = await readMultipart(req);
+    const { file: fileBuffer, filename, mimetype, fields } = await readMultipart(req);
     const rawCategory = (fields.category || '').trim();
     const category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'screen';
 
-    const parsed = await pdfParse(pdfBuffer);
-    const scriptText = (parsed.text || '').trim();
+    const extracted = await extractText(fileBuffer, filename, mimetype);
+    const scriptText = (extracted || '').trim();
     if (!scriptText) {
-      return res.status(400).json({ error: 'Empty PDF or text could not be extracted' });
+      return res.status(400).json({ error: '파일에서 텍스트를 추출하지 못했습니다. (스캔본 PDF는 OCR이 필요할 수 있습니다)' });
     }
 
     const result = await runExtract(scriptText, category);
@@ -79,7 +81,7 @@ export default async function handler(req, res) {
     }
     if (err?.code === 'ETIMEDOUT' || /timeout/i.test(err?.message || '')) {
       return res.status(504).json({
-        error: 'LLM 응답 대기 시간이 너무 깁니다. PDF가 너무 길거나 모델이 느려진 상태일 수 있습니다. 잠시 후 다시 시도해주세요.',
+        error: 'LLM 응답 대기 시간이 너무 깁니다. 파일이 너무 길거나 모델이 느려진 상태일 수 있습니다. 잠시 후 다시 시도해주세요.',
       });
     }
     return res.status(500).json({ error: err.message || 'Internal error' });
