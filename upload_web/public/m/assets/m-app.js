@@ -966,25 +966,38 @@ function leatherColorFor(title) {
   return LEATHER_PALETTE[Math.abs(h) % LEATHER_PALETTE.length];
 }
 
-// 시리즈 패턴 감지 — '셜록' '홈즈' 'sherlock' 'holmes' 중 하나만 들어가도 셜록홈즈로 통합.
-// 부제는 시리즈 키워드 + 흔한 조사/구분자를 제거하고 남는 부분.
+// 시리즈 패턴 감지 — 제목 키워드 또는 작가 매칭.
+// 작가가 '코난 도일' 이면 제목에 '셜록/홈즈' 없어도 셜록홈즈 시리즈로 분류.
 const SERIES_PATTERNS = [
   {
     name: '셜록홈즈',
     detect: /(?:셜록|홈즈|sherlock|holmes)/i,
+    authorDetect: /(?:코난\s*도일|conan\s*doyle|아서\s*코난|arthur\s*conan)/i,
     strip: [
       /셜록\s*홈즈/gi, /sherlock\s*holmes/gi,
       /셜록/g, /홈즈/g, /sherlock/gi, /holmes/gi,
     ],
   },
 ];
-function extractSeries(title) {
-  const t = String(title || '').trim();
-  if (!t) return { series: '', subtitle: '', full: '' };
+function extractSeries(workOrTitle) {
+  let title = '', author = '';
+  if (workOrTitle && typeof workOrTitle === 'object') {
+    title = workOrTitle.title || '';
+    author = workOrTitle.author || '';
+  } else {
+    title = String(workOrTitle || '');
+  }
+  const t = title.trim();
+  const a = author.trim();
+  if (!t && !a) return { series: '', subtitle: '', full: '' };
   for (const sp of SERIES_PATTERNS) {
-    if (sp.detect.test(t)) {
+    const titleMatch = sp.detect && sp.detect.test(t);
+    const authorMatch = sp.authorDetect && a && sp.authorDetect.test(a);
+    if (titleMatch || authorMatch) {
       let subtitle = t;
-      for (const re of sp.strip) subtitle = subtitle.replace(re, '');
+      if (titleMatch) {
+        for (const re of sp.strip) subtitle = subtitle.replace(re, '');
+      }
       subtitle = subtitle
         .replace(/^[\s\-:·,—–의와과]+|[\s\-:·,—–의와과]+$/g, '')
         .replace(/\s+/g, ' ')
@@ -998,9 +1011,10 @@ function extractSeries(title) {
 // displayTitle alias 적용 후 series + subtitle + author 로 그룹 키 생성.
 // 같은 series지만 subtitle이 다르면 별도 책으로 유지 (책꽂이에 시리즈가 여러 권으로 늘어섬).
 function workGroupKey(work) {
-  const { series, subtitle } = extractSeries(displayTitle(work?.title || ''));
+  // displayTitle 적용된 title + author 로 시리즈 감지
+  const ext = extractSeries({ title: displayTitle(work?.title || ''), author: work?.author || '' });
   const a = (work?.author || '').toLowerCase().trim();
-  return `${series.toLowerCase()}__${subtitle.toLowerCase()}__${a}`;
+  return `${ext.series.toLowerCase()}__${ext.subtitle.toLowerCase()}__${a}`;
 }
 
 function groupBookmarksByWork() {
@@ -1011,7 +1025,10 @@ function groupBookmarksByWork() {
     const work = card.works || {};
     const key = workGroupKey(work);
     if (!byWork.has(key)) {
-      const { series, subtitle } = extractSeries(displayTitle(work.title || ''));
+      const { series, subtitle } = extractSeries({
+        title: displayTitle(work.title || ''),
+        author: work.author || '',
+      });
       byWork.set(key, {
         key,
         series,

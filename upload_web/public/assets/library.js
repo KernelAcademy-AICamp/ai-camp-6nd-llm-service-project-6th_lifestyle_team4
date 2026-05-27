@@ -48,24 +48,38 @@ const state = {
 };
 
 // 작품 그룹 키 — 제목+작가가 같으면 같은 그룹
-// 시리즈 패턴 감지 — '셜록' '홈즈' 'sherlock' 'holmes' 중 하나만 들어가도 셜록홈즈로 통합.
+// 시리즈 패턴 감지 — 제목 키워드 OR 작가명으로 매칭.
+// 코난 도일이 작가면 제목에 셜록/홈즈가 없어도 셜록홈즈 시리즈로 분류 (빨간 머리 연맹 등).
 const SERIES_PATTERNS = [
   {
     name: '셜록홈즈',
     detect: /(?:셜록|홈즈|sherlock|holmes)/i,
+    authorDetect: /(?:코난\s*도일|conan\s*doyle|아서\s*코난|arthur\s*conan)/i,
     strip: [
       /셜록\s*홈즈/gi, /sherlock\s*holmes/gi,
       /셜록/g, /홈즈/g, /sherlock/gi, /holmes/gi,
     ],
   },
 ];
-function extractSeries(title) {
-  const t = String(title || '').trim();
-  if (!t) return { series: '', subtitle: '', full: '' };
+function extractSeries(workOrTitle) {
+  let title = '', author = '';
+  if (workOrTitle && typeof workOrTitle === 'object') {
+    title = workOrTitle.title || '';
+    author = workOrTitle.author || '';
+  } else {
+    title = String(workOrTitle || '');
+  }
+  const t = title.trim();
+  const a = author.trim();
+  if (!t && !a) return { series: '', subtitle: '', full: '' };
   for (const sp of SERIES_PATTERNS) {
-    if (sp.detect.test(t)) {
+    const titleMatch = sp.detect && sp.detect.test(t);
+    const authorMatch = sp.authorDetect && a && sp.authorDetect.test(a);
+    if (titleMatch || authorMatch) {
       let subtitle = t;
-      for (const re of sp.strip) subtitle = subtitle.replace(re, '');
+      if (titleMatch) {
+        for (const re of sp.strip) subtitle = subtitle.replace(re, '');
+      }
       subtitle = subtitle
         .replace(/^[\s\-:·,—–의와과]+|[\s\-:·,—–의와과]+$/g, '')
         .replace(/\s+/g, ' ')
@@ -79,8 +93,8 @@ function extractSeries(title) {
 function makeGroupKey(work) {
   if (!work) return '__';
   // series 기반으로 그룹화 — 같은 시리즈는 1 section. 부제는 section 내부에서
-  // 카드 색상으로 구분 (셜록홈즈 - 주홍색 연구 / 셜록홈즈 - 네 사람의 서명 → 같은 section, 다른 색)
-  const { series } = extractSeries(work.title || '');
+  // 카드 색상으로 구분. 작가도 같이 넘겨 author 매칭(코난 도일 등)으로 시리즈 인식.
+  const { series } = extractSeries(work);
   return `${series}__${(work.author || '').trim()}`;
 }
 
@@ -152,7 +166,7 @@ function refreshWorkFilterOptions() {
   // 둘 다 '셜록홈즈' 한 옵션으로 통합됨
   const seriesSet = new Set();
   state.rows.forEach((c) => {
-    const series = extractSeries((c.works?.title || '').trim()).series;
+    const series = extractSeries(c.works || {}).series;
     if (series) seriesSet.add(series);
   });
 
@@ -178,7 +192,7 @@ function filteredRows() {
   const q = state.searchText.trim().toLowerCase();
   return state.rows.filter((c) => {
     if (state.workFilter) {
-      const cSeries = extractSeries((c.works?.title || '').trim()).series;
+      const cSeries = extractSeries(c.works || {}).series;
       if (cSeries !== state.workFilter) return false;
     }
     if (q) {
@@ -312,7 +326,7 @@ function buildShelfSection(group) {
     const yearLabel = work.release_year ? `· ${work.release_year}` : '';
     const authorLabel = work.author ? `· ${work.author}` : '';
     header.innerHTML = `
-      <h3 class="text-lg font-bold text-on-surface">${escapeHtml(extractSeries(work.title).series || displayTitle(work.title) || '제목 없음')}</h3>
+      <h3 class="text-lg font-bold text-on-surface">${escapeHtml(extractSeries(work).series || displayTitle(work.title) || '제목 없음')}</h3>
       <span class="text-xs text-on-surface-variant flex-1">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}${mergedHint}`.trim())}</span>
       <button type="button" class="shelf-start-delete-btn p-1.5 rounded hover:bg-primary/10 text-primary transition-colors flex items-center gap-1 text-sm font-semibold" title="카드 골라 삭제">
         <span class="material-symbols-outlined text-base">checklist</span>
