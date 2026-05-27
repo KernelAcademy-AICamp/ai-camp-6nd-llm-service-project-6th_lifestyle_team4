@@ -125,6 +125,15 @@
         <span id="category-hint" class="text-xs text-on-surface-variant"></span>
       </div>
 
+      <!-- Title hint (선택) — 입력하면 웹 명대사 데이터를 시드로 사용 -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-semibold text-on-surface-variant whitespace-nowrap">작품명:</span>
+        <input id="title-input" type="text"
+               placeholder="예: 기생충 / Inception / 햄릿 (비워두면 기존 방식으로 추출)"
+               class="flex-1 min-w-[240px] px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary" />
+        <span class="text-xs text-on-surface-variant">(웹에서 명대사를 끌어와 카드 우선순위에 반영)</span>
+      </div>
+
       <label id="dropzone" for="pdf-input"
              class="bg-surface-container-lowest border-2 border-dashed border-primary/30 rounded-xl p-10 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-all duration-300 cursor-pointer shadow-sm block">
         <div class="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mb-4">

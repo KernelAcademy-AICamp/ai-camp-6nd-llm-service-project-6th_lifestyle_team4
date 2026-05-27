@@ -7,3 +7,6 @@ node_modules/
 
 # 로컬 미리보기용 static config (실제 /api/config 는 Vercel serverless 함수)
 public/api/config
+
+# 명대사 시드 fetcher 개발자 미리보기 도구 (운영 배포 대상 아님)
+preview-quotes.js

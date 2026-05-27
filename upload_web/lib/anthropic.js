@@ -156,9 +156,11 @@ function parseJson(text) {
   throw new Error('LLM did not return valid JSON (all repair attempts failed)');
 }
 
-export async function runExtract(scriptText, category = 'screen') {
+export async function runExtract(scriptText, category = 'screen', seedBlock = '') {
   const tpl = EXTRACT_PROMPTS[category] || EXTRACT_PROMPTS.screen;
-  const prompt = tpl.replace('{{SCRIPT_TEXT}}', scriptText);
+  const prompt = tpl
+    .replace('{{QUOTE_SEED_BLOCK}}', seedBlock || '')
+    .replace('{{SCRIPT_TEXT}}', scriptText);
   return callClaude(prompt, { maxTokens: 16000 });
 }
 
