@@ -9,13 +9,13 @@ async function readJsonBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
-const ALLOWED_FORMATS = new Set(['movie', 'drama', 'play', 'musical', 'opera']);
+const ALLOWED_FORMATS = new Set(['movie', 'drama', 'play', 'musical', 'opera', 'novel', 'poem', 'essay']);
 
 function normalizeWork(work, fullScriptText) {
   if (!work || typeof work !== 'object') throw new Error('work is required');
   if (!work.title) throw new Error('work.title is required');
   if (!ALLOWED_FORMATS.has(work.format)) {
-    throw new Error('work.format must be one of movie | drama | play | musical | opera');
+    throw new Error('work.format must be one of movie | drama | play | musical | opera | novel | poem | essay');
   }
   if (!fullScriptText) throw new Error('full_script_text is required');
   return {

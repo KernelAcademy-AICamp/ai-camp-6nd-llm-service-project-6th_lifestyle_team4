@@ -24,7 +24,7 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
 {
   "work": {
     "title": "작품 제목",
-    "format": "movie | drama | play | musical 중 하나",
+    "format": "movie | drama | play | musical | opera | novel | poem | essay 중 하나",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
     "genres": ["장르1", "장르2"],
@@ -44,7 +44,11 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
 }
 
 [필드 규칙]
-- format: "movie", "drama", "play", "musical" 중 정확히 하나
+- format: "movie", "drama", "play", "musical", "opera", "novel", "poem", "essay" 중 정확히 하나
+  · 대본/시나리오 형식: movie(영화), drama(TV 드라마), play(희곡/연극), musical(뮤지컬), opera(오페라)
+  · 문학 형식: novel(소설), poem(시), essay(에세이/수필)
+  · 소설·시·에세이의 경우, script_excerpt는 "원문 단락(들)"을 그대로 발췌(turn 개념 적용 X). 화자명·지문이 없는 산문 형태 그대로 둘 것.
+  · characters는 등장인물이 명시되어 있으면 작성, 시·에세이처럼 없으면 빈 배열 []로.
 - genres: 아래 13개 중 1~3개 선택
   로맨스, 코미디, 스릴러/서스펜스, 드라마, 비극, 미스터리,
   판타지, 역사극/시대극, 가족극, 액션, 호러, 느와르, SF
@@ -171,7 +175,7 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 {
   "work": {
     "title": "작품 제목",
-    "format": "movie | drama | play | musical | opera 중 하나",
+    "format": "movie | drama | play | musical | opera | novel | poem | essay 중 하나",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
     "genres": ["장르1", "장르2"],
@@ -233,12 +237,17 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 ## 필드별 규칙
 
 ### \`work.format\`
-"movie" | "drama" | "play" | "musical" | "opera" 중 정확히 하나.
+"movie" | "drama" | "play" | "musical" | "opera" | "novel" | "poem" | "essay" 중 정확히 하나.
 - **오페라 → "opera"** (반드시. 절대 "musical"이 아님)
 - 뮤지컬 → "musical"
 - 희곡/연극 → "play"
 - 영화 → "movie"
 - TV 드라마 → "drama"
+- 소설 → "novel"
+- 시 → "poem"
+- 에세이/수필 → "essay"
+
+소설·시·에세이의 경우 script_excerpt는 원문 단락 그대로(turn/화자명 강제 X). characters는 등장인물이 명시돼있을 때만 채우고, 시·에세이처럼 없으면 빈 배열 [].
 
 ### \`work.genres\`
 다음 13개 중 1~3개 선택:
@@ -794,7 +803,7 @@ Rules:
 4. Preserve the original JSON structure exactly.
 5. Preserve the order of all fields and array items.
 6. Do not add, remove, rename, or reorder any fields.
-7. Translate \`quote\` and \`script_excerpt\` into natural, performable Korean suitable for the work's format: movie, drama, play, or musical.
+7. Translate \`quote\` and \`script_excerpt\` into natural, performable/readable Korean suitable for the work's format: movie, drama, play, musical, opera, novel, poem, or essay. For novels/essays preserve the prose voice and paragraph flow; for poems preserve line breaks, imagery, and rhythm rather than forcing performable dialogue.
 8. Preserve the original meaning, character voice, emotional subtext, rhythm, dramatic tension, humor, and tone.
 9. For \`script_excerpt\`, preserve line breaks, speaker labels, stage directions, scene directions, parentheticals, and formatting as much as possible.
 10. For musicals, preserve lyrical intent, emotional progression, rhythm, repetition, rhyme, and singability where relevant.
