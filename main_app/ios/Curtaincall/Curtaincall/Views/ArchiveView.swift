@@ -1,33 +1,36 @@
 import SwiftUI
 
 struct ArchiveView: View {
-    @State private var cards: [Card] = []
-    @State private var hasLoaded = false
-    @State private var fetchFailed = false
+    @EnvironmentObject private var bookmarks: BookmarkStore
+    @EnvironmentObject private var session: AuthSession
 
     var body: some View {
         VStack(spacing: 0) {
             archiveTopBar
             Hairline()
-            if fetchFailed {
-                FetchErrorBanner { Task { await reload() } }
-            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 40)
-                    Text("지난 기록")
+                    Text("수집한 대본")
                         .font(.displaySerif(32))
                         .foregroundStyle(.espresso)
+                    if !bookmarks.bookmarks.isEmpty {
+                        Spacer().frame(height: 6)
+                        Text("소장 \(bookmarks.bookmarks.count)편").labelCaps()
+                    }
                     Spacer().frame(height: 32)
                     Hairline()
-                    if !cards.isEmpty {
-                        ForEach(Array(cards.enumerated()), id: \.element.id) { idx, card in
-                            NavigationLink(value: card) {
-                                ArchiveRow(card: card, daysAgo: idx + 1)
+
+                    if !bookmarks.bookmarks.isEmpty {
+                        ForEach(bookmarks.bookmarks) { row in
+                            if let card = row.card {
+                                NavigationLink(value: card) {
+                                    ArchiveRow(card: card, daysAgo: 1)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
-                    } else if !fetchFailed {
+                    } else {
                         Text("아직 북마크한 카드가 없습니다.")
                             .font(.bodySans(14))
                             .foregroundStyle(.walnut)
@@ -42,7 +45,7 @@ struct ArchiveView: View {
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
-        .task { await loadOnce() }
+        .task { await bookmarks.load(userId: session.userId) }
     }
 
     private var archiveTopBar: some View {
@@ -53,7 +56,8 @@ struct ArchiveView: View {
             Spacer()
             ZStack {
                 Rectangle().stroke(Color.walnut, lineWidth: 0.5)
-                Text("박").labelCaps(color: .espresso)
+                Text(String(session.nickname.prefix(1)).uppercased().ifEmpty("D"))
+                    .labelCaps(color: .espresso)
             }
             .frame(width: 36, height: 36)
         }
@@ -61,23 +65,8 @@ struct ArchiveView: View {
         .frame(height: 64)
         .background(Color.paper)
     }
-
-    private func loadOnce() async {
-        if hasLoaded { return }
-        await reload()
-    }
-
-    private func reload() async {
-        do {
-            cards = try await SupabaseClient.shared.fetchCards()
-            hasLoaded = true
-            fetchFailed = false
-        } catch {
-            fetchFailed = true
-        }
-    }
 }
 
-#Preview {
-    NavigationStack { ArchiveView() }
+private extension String {
+    func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }
 }

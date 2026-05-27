@@ -12,6 +12,20 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
     let work: Work
 
     var id: Int { cardId }
+
+    // Explicit snake_case keys so decoding is independent of any global
+    // key-decoding strategy (supabase-swift's decoder does not convert keys).
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case quote
+        case scriptExcerpt = "script_excerpt"
+        case excerptDescription = "excerpt_description"
+        case significance
+        case keywords
+        case temperature
+        case intensity
+        case work
+    }
 }
 
 #if DEBUG

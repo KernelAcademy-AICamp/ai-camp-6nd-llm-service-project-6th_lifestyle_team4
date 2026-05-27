@@ -1,0 +1,270 @@
+import SwiftUI
+
+@MainActor
+final class CommentsModel: ObservableObject {
+    @Published var comments: [Comment] = []
+    @Published var likes: [Int: Set<Int>] = [:]
+    @Published var submitting = false
+    @Published var errorMessage: String?
+    @Published var replyingTo: Comment?
+
+    private let cardId: Int
+    init(cardId: Int) { self.cardId = cardId }
+
+    func load() async {
+        do {
+            let cs = try await Supa.shared.loadComments(cardId: cardId)
+            comments = cs
+            let rows = try await Supa.shared.loadLikes(commentIds: cs.map { $0.commentId })
+            var map: [Int: Set<Int>] = [:]
+            for r in rows { map[r.commentId, default: []].insert(r.userId) }
+            likes = map
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func submit(userId: Int, nickname: String, body: String) async {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !submitting else { return }
+        submitting = true
+        do {
+            let added = try await Supa.shared.addComment(
+                cardId: cardId,
+                userId: userId,
+                body: trimmed,
+                authorNickname: nickname.isEmpty ? nil : nickname,
+                parentCommentId: replyingTo?.commentId
+            )
+            if !comments.contains(where: { $0.commentId == added.commentId }) {
+                comments.append(added)
+            }
+            replyingTo = nil
+        } catch {
+            errorMessage = "댓글 작성 실패: \(error.localizedDescription)"
+        }
+        submitting = false
+    }
+
+    func toggleLike(userId: Int, commentId: Int) async {
+        let original = likes[commentId] ?? []
+        let wasLiked = original.contains(userId)
+        var updated = original
+        if wasLiked { updated.remove(userId) } else { updated.insert(userId) }
+        likes[commentId] = updated
+        do {
+            try await Supa.shared.setLike(commentId: commentId, userId: userId, liked: !wasLiked)
+        } catch {
+            likes[commentId] = original
+            errorMessage = "반응 처리 실패: \(error.localizedDescription)"
+        }
+    }
+
+    func delete(userId: Int, commentId: Int) async {
+        do {
+            try await Supa.shared.deleteComment(commentId: commentId, userId: userId)
+            comments.removeAll { $0.commentId == commentId || $0.parentCommentId == commentId }
+            if replyingTo?.commentId == commentId { replyingTo = nil }
+        } catch {
+            errorMessage = "삭제 실패: \(error.localizedDescription)"
+        }
+    }
+
+    /// Top-level comments paired with their replies (1 level deep, normalized).
+    var grouped: [(top: Comment, replies: [Comment])] {
+        let byId = Dictionary(comments.map { ($0.commentId, $0) }, uniquingKeysWith: { a, _ in a })
+        func rootOf(_ c: Comment) -> Int {
+            guard let pid = c.parentCommentId else { return c.commentId }
+            if let parent = byId[pid], let gp = parent.parentCommentId { return gp }
+            return pid
+        }
+        let repliesByRoot = Dictionary(grouping: comments.filter { $0.parentCommentId != nil }, by: rootOf)
+        return comments.filter { $0.parentCommentId == nil }
+            .map { (top: $0, replies: repliesByRoot[$0.commentId] ?? []) }
+    }
+}
+
+struct CommentsSection: View {
+    @ObservedObject var model: CommentsModel
+    let userId: Int?
+    let isAnonymous: Bool
+    let nickname: String
+
+    @State private var draft = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("댓글 \(model.comments.count)").labelCaps()
+            Spacer().frame(height: 16)
+
+            if isAnonymous {
+                Text("로그인 후 댓글과 하트를 남길 수 있어요.")
+                    .font(.bodySans(14))
+                    .foregroundStyle(.walnut)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+            } else {
+                composer
+            }
+
+            if let err = model.errorMessage {
+                Spacer().frame(height: 8)
+                Text(err).font(.bodySans(12)).foregroundStyle(.cta)
+            }
+
+            Spacer().frame(height: 20)
+
+            if model.comments.isEmpty {
+                Text("아직 댓글이 없어요. 첫 감상을 남겨보세요.")
+                    .font(.bodySans(14))
+                    .foregroundStyle(.walnut)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(model.grouped, id: \.top.id) { group in
+                    commentRow(group.top, isReply: false)
+                    ForEach(group.replies) { reply in
+                        commentRow(reply, isReply: true)
+                    }
+                }
+            }
+        }
+        .task { await model.load() }
+    }
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let target = model.replyingTo {
+                HStack {
+                    Text("↳ \(target.authorNickname ?? "익명")에게 답글").labelCaps(color: .cta)
+                    Spacer()
+                    Button { model.replyingTo = nil } label: {
+                        Text("취소").font(.bodySans(12)).foregroundStyle(.walnut)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            ZStack(alignment: .topLeading) {
+                if draft.isEmpty {
+                    Text(model.replyingTo == nil ? "이 명대사에 대한 생각을 남겨보세요…" : "답글을 남기세요…")
+                        .font(.bodySans(14))
+                        .foregroundStyle(.walnut)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
+                }
+                TextEditor(text: $draft)
+                    .font(.bodySans(14))
+                    .foregroundStyle(.espresso)
+                    .frame(minHeight: 64)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .scrollContentBackground(.hidden)
+                    .onChange(of: draft) { _, newValue in
+                        if newValue.count > 500 { draft = String(newValue.prefix(500)) }
+                    }
+            }
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
+
+            HStack {
+                Text("\(draft.count) / 500").labelCaps()
+                Spacer()
+                Button {
+                    let body = draft
+                    draft = ""
+                    if let uid = userId {
+                        Task { await model.submit(userId: uid, nickname: nickname, body: body) }
+                    }
+                } label: {
+                    Text("등록").editorialButton(style: .filled).frame(width: 96)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.submitting || draft.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+
+    private func commentRow(_ c: Comment, isReply: Bool) -> some View {
+        let likeUsers = model.likes[c.commentId] ?? []
+        let likedByMe = userId != nil && likeUsers.contains(userId!)
+        let isMine = userId != nil && c.userId == userId!
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text((isReply ? "↳ " : "") + (c.authorNickname ?? "익명"))
+                    .font(.titleSerif(15))
+                    .foregroundStyle(.espresso)
+                Spacer()
+                Text(Self.relativeTime(c.createdAt)).labelCaps()
+            }
+            Text(c.body)
+                .font(.bodySans(14))
+                .foregroundStyle(.espresso)
+                .bookLeading(size: 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 16) {
+                Button {
+                    if let uid = userId, !isAnonymous {
+                        Task { await model.toggleLike(userId: uid, commentId: c.commentId) }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: likedByMe ? "heart.fill" : "heart").font(.system(size: 14))
+                        Text("\(likeUsers.count)").font(.bodySans(12))
+                    }
+                    .foregroundStyle(likedByMe ? Color.cta : .walnut)
+                }
+                .buttonStyle(.plain)
+                if !isReply && !isAnonymous {
+                    Button { model.replyingTo = c } label: { Text("REPLY").labelCaps() }
+                        .buttonStyle(.plain)
+                }
+                Spacer()
+                if isMine {
+                    Button {
+                        if let uid = userId {
+                            Task { await model.delete(userId: uid, commentId: c.commentId) }
+                        }
+                    } label: { Text("DELETE").labelCaps() }
+                        .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 2)
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.paper))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.latte, lineWidth: 0.5))
+        .padding(.leading, isReply ? 24 : 0)
+        .padding(.bottom, 10)
+    }
+
+    static func relativeTime(_ iso: String) -> String {
+        guard let date = parseDate(iso) else { return "" }
+        let diff = max(0, Date.now.timeIntervalSince(date))
+        let minutes = Int(diff / 60)
+        if minutes < 1 { return "방금" }
+        if minutes < 60 { return "\(minutes)분 전" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours)시간 전" }
+        let days = hours / 24
+        if days < 7 { return "\(days)일 전" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy.MM.dd"
+        return f.string(from: date)
+    }
+
+    private static func parseDate(_ iso: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = withFraction.date(from: iso) { return d }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        if let d = plain.date(from: iso) { return d }
+        let fallback = DateFormatter()
+        fallback.locale = Locale(identifier: "en_US_POSIX")
+        fallback.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return fallback.date(from: String(iso.prefix(19)))
+    }
+}

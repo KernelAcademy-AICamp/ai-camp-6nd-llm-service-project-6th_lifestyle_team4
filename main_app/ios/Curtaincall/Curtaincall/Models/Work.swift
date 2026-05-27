@@ -24,23 +24,29 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
     let author: String?
     let releaseYear: Int?
     let genres: [String]
+    let characters: [String]
 
     init(
         title: String,
         format: WorkFormat,
         author: String?,
         releaseYear: Int?,
-        genres: [String] = []
+        genres: [String] = [],
+        characters: [String] = []
     ) {
         self.title = title
         self.format = format
         self.author = author
         self.releaseYear = releaseYear
         self.genres = genres
+        self.characters = characters
     }
 
+    // Explicit snake_case keys (supabase-swift's decoder does not convert keys).
     enum CodingKeys: String, CodingKey {
-        case title, format, author, releaseYear, workGenres
+        case title, format, author, characters
+        case releaseYear = "release_year"
+        case workGenres = "work_genres"
     }
 
     private struct WorkGenreLink: Decodable {
@@ -58,5 +64,7 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         self.releaseYear = try c.decodeIfPresent(Int.self, forKey: .releaseYear)
         let links = try c.decodeIfPresent([WorkGenreLink].self, forKey: .workGenres) ?? []
         self.genres = links.map(\.genres.name)
+        // characters is a jsonb array of strings; be lenient on null/odd shapes.
+        self.characters = (try? c.decodeIfPresent([String].self, forKey: .characters)) ?? []
     }
 }

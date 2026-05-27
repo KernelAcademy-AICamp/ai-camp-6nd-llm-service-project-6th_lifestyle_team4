@@ -3,7 +3,16 @@ import SwiftUI
 struct CardDetailView: View {
     let card: Card
     @Environment(\.dismiss) private var dismiss
-    @State private var bookmarked = false
+    @EnvironmentObject private var session: AuthSession
+    @EnvironmentObject private var bookmarks: BookmarkStore
+    @StateObject private var comments: CommentsModel
+
+    init(card: Card) {
+        self.card = card
+        _comments = StateObject(wrappedValue: CommentsModel(cardId: card.cardId))
+    }
+
+    private var bookmarked: Bool { bookmarks.isBookmarked(card.cardId) }
 
     private var showSignificance: Bool {
         let f = card.work.format.rawValue.lowercased()
@@ -30,9 +39,7 @@ struct CardDetailView: View {
                         Spacer().frame(height: 24)
                     }
 
-                    Text(card.scriptExcerpt)
-                        .font(.system(size: 14, design: .monospaced))
-                        .foregroundStyle(.espresso)
+                    scriptText
                         .tracking(0.28)
                         .lineSpacing(8)
                         .fixedSize(horizontal: false, vertical: true)
@@ -56,7 +63,9 @@ struct CardDetailView: View {
                     Hairline()
                     Spacer().frame(height: 32)
 
-                    Button { bookmarked.toggle() } label: {
+                    Button {
+                        Task { await bookmarks.toggle(userId: session.userId, cardId: card.cardId) }
+                    } label: {
                         Text(bookmarked ? "Collected" : "Collect Script Artifact")
                             .editorialButton(style: .outlined)
                     }
@@ -65,6 +74,17 @@ struct CardDetailView: View {
                     Spacer().frame(height: 16)
                     Text("Limited Edition Digital Manuscript #\(String(format: "%04d", card.cardId))")
                         .labelCaps()
+
+                    Spacer().frame(height: 40)
+                    Hairline()
+                    Spacer().frame(height: 28)
+                    CommentsSection(
+                        model: comments,
+                        userId: session.userId,
+                        isAnonymous: session.isAnonymous,
+                        nickname: session.nickname
+                    )
+
                     Spacer().frame(height: 24)
                 }
                 .padding(.horizontal, 20)
@@ -72,6 +92,25 @@ struct CardDetailView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    /// Script excerpt with speaker lines (matching work.characters) bolded.
+    private var scriptText: Text {
+        let names = Set(card.work.characters.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+        let lines = card.scriptExcerpt.components(separatedBy: "\n")
+        var result = Text("")
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let namePart = trimmed.components(separatedBy: "(").first?.trimmingCharacters(in: .whitespaces) ?? trimmed
+            let isSpeaker = !trimmed.isEmpty && (names.contains(trimmed) || names.contains(namePart))
+            var segment = Text(line)
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundColor(.espresso)
+            if isSpeaker { segment = segment.fontWeight(.bold) }
+            result = result + segment
+            if i < lines.count - 1 { result = result + Text("\n") }
+        }
+        return result
     }
 
     private var detailTopBar: some View {
@@ -94,7 +133,9 @@ struct CardDetailView: View {
             }
             Spacer()
 
-            Button { bookmarked.toggle() } label: {
+            Button {
+                Task { await bookmarks.toggle(userId: session.userId, cardId: card.cardId) }
+            } label: {
                 Image(systemName: bookmarked ? "bookmark.fill" : "bookmark")
                     .font(.system(size: 18, weight: .regular))
                     .foregroundStyle(bookmarked ? Color.cta : .walnut)
@@ -118,11 +159,5 @@ struct CardDetailView: View {
                 Text(v).labelCaps()
             }
         }
-    }
-}
-
-#Preview {
-    NavigationStack {
-        CardDetailView(card: .sample)
     }
 }

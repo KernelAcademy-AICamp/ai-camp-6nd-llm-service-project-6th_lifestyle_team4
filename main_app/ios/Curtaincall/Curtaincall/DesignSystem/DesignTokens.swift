@@ -1,14 +1,35 @@
 import SwiftUI
+import UIKit
+
+// Adaptive palette. Light is the original cream/ink editorial look; dark inverts
+// paper↔espresso so existing call sites (`.paper` surfaces, `.espresso` ink and
+// filled buttons) flip correctly. Driven by the app's preferredColorScheme.
+private extension UIColor {
+    convenience init(rgb: UInt32) {
+        self.init(
+            red: CGFloat((rgb >> 16) & 0xFF) / 255,
+            green: CGFloat((rgb >> 8) & 0xFF) / 255,
+            blue: CGFloat(rgb & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+}
+
+private func adaptive(light: UInt32, dark: UInt32) -> Color {
+    Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor(rgb: dark) : UIColor(rgb: light)
+    })
+}
 
 extension Color {
-    static let espresso = Color(hex: 0x0E0C0A)
-    static let roast = Color(hex: 0x2C2620)
-    static let walnut = Color(hex: 0x6B5D4F)
-    static let paper = Color(hex: 0xFAF8F2)
-    static let latte = Color(hex: 0xE8E1D3)
-    static let sand = Color(hex: 0xC9B89A)
-    static let highlight = Color(hex: 0xF4C20D)
-    static let cta = Color(hex: 0xD85A30)
+    static let espresso = adaptive(light: 0x0E0C0A, dark: 0xFAF8F2)
+    static let roast = adaptive(light: 0x2C2620, dark: 0xE6DFD1)
+    static let walnut = adaptive(light: 0x6B5D4F, dark: 0xB0A290)
+    static let paper = adaptive(light: 0xFAF8F2, dark: 0x0E0C0A)
+    static let latte = adaptive(light: 0xE8E1D3, dark: 0x2A2620)
+    static let sand = adaptive(light: 0xC9B89A, dark: 0x7A6B57)
+    static let highlight = adaptive(light: 0xF4C20D, dark: 0xF4C20D)
+    static let cta = adaptive(light: 0xD85A30, dark: 0xE0683E)
 
     init(hex: UInt32) {
         let r = Double((hex >> 16) & 0xFF) / 255

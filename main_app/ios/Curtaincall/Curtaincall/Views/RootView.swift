@@ -22,11 +22,40 @@ enum Tab: Hashable, CaseIterable {
 
 struct RootView: View {
     @Binding var pendingCardId: Int?
+    @EnvironmentObject private var session: AuthSession
+    @EnvironmentObject private var bookmarks: BookmarkStore
+
     @State private var selectedTab: Tab = .home
     @State private var homePath = NavigationPath()
     @State private var archivePath = NavigationPath()
 
     var body: some View {
+        Group {
+            if session.ready {
+                tabs
+            } else {
+                ZStack {
+                    Color.paper.ignoresSafeArea()
+                    Text("Loading⋯")
+                        .font(.bodySans(15))
+                        .foregroundStyle(.walnut)
+                }
+            }
+        }
+        .onChange(of: session.userId) { _, newValue in
+            Task { await bookmarks.load(userId: newValue) }
+        }
+        .task {
+            if let id = pendingCardId { await resolveAndPush(id: id) }
+        }
+        .onChange(of: pendingCardId) { _, newValue in
+            if let id = newValue {
+                Task { await resolveAndPush(id: id) }
+            }
+        }
+    }
+
+    private var tabs: some View {
         TabView(selection: $selectedTab) {
             NavigationStack(path: $homePath) {
                 HomeView(selectedTab: $selectedTab)
@@ -43,34 +72,18 @@ struct RootView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             EditorialTabBar(selection: $selectedTab)
         }
-        .task {
-            if let id = pendingCardId {
-                await resolveAndPush(id: id)
-            }
-        }
-        .onChange(of: pendingCardId) { _, newValue in
-            if let id = newValue {
-                Task { await resolveAndPush(id: id) }
-            }
-        }
     }
 
     /// Looks up the card by id and pushes it onto the Home stack.
-    /// Silent on errors/missing card — widget tap should never crash the app.
+    /// Silent on errors/missing card — a widget tap should never crash the app.
     private func resolveAndPush(id: Int) async {
         defer { pendingCardId = nil }
         do {
-            let cards = try await SupabaseClient.shared.fetchCards()
-            guard let card = cards.first(where: { $0.cardId == id }) else { return }
+            guard let card = try await Supa.shared.fetchCard(id: id) else { return }
             selectedTab = .home
             homePath.append(card)
         } catch {
             // graceful fallback: stay where we are
         }
     }
-}
-
-#Preview {
-    @Previewable @State var pending: Int? = nil
-    RootView(pendingCardId: $pending)
 }

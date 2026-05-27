@@ -10,6 +10,9 @@ import SwiftUI
 @main
 struct CurtaincallApp: App {
     @State private var pendingCardId: Int?
+    @StateObject private var session = AuthSession()
+    @StateObject private var bookmarks = BookmarkStore()
+    @StateObject private var prefs = PrefsStore()
 
     init() {
         FontRegistration.register()
@@ -18,6 +21,14 @@ struct CurtaincallApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(pendingCardId: $pendingCardId)
+                .environmentObject(session)
+                .environmentObject(bookmarks)
+                .environmentObject(prefs)
+                .preferredColorScheme(prefs.darkTheme ? .dark : .light)
+                .task {
+                    await session.start()
+                    await bookmarks.load(userId: session.userId)
+                }
                 .onOpenURL { url in
                     if let id = Self.parseCardId(from: url) {
                         pendingCardId = id
