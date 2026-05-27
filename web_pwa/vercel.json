@@ -1,4 +1,8 @@
 {
+  "redirects": [
+    { "source": "/", "destination": "/m/", "permanent": false },
+    { "source": "/index.html", "destination": "/m/", "permanent": false }
+  ],
   "headers": [
     {
       "source": "/manifest.webmanifest",
