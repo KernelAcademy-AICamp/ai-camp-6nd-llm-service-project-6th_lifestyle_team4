@@ -24,7 +24,7 @@ async function apiFetch(url, options = {}) {
 const state = {
   work: null,
   fullScriptText: '',   // works.full_script_text 컬럼이 NOT NULL이라 저장 시 함께 전송
-  category: 'screen',   // 'screen' = 영화/드라마, 'stage' = 연극/뮤지컬
+  category: 'screen',   // 'screen' 영화/드라마, 'opera' 오페라/뮤지컬, 'play' 연극, 'literature' 소설/시/에세이
   // each card: { ...llmCard, selected, translated?: { quote_translated, ... }, showingTranslation }
   cards: [],
 };
@@ -107,7 +107,7 @@ backfillBtn?.addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Category toggle (영화/드라마 ↔ 연극/뮤지컬)
+// Category toggle (영화/드라마 · 오페라/뮤지컬 · 연극 · 소설/시/에세이)
 // ---------------------------------------------------------------------------
 function paintCategory() {
   $$('#category-toggle .cat-btn').forEach((btn) => {
@@ -127,6 +127,7 @@ function paintCategory() {
       screen: '기본 프롬프트로 분석됩니다 (영화·드라마용).',
       opera: '오페라·뮤지컬 전용 프롬프트로 분석됩니다 (libretto 화자 표기 보존).',
       play: '연극 전용 프롬프트로 분석됩니다 (speaker_label·상황 단서 포함).',
+      literature: '소설·시·에세이 전용 프롬프트로 분석됩니다 (산문/운문 형식 보존).',
     };
     categoryHint.textContent = hints[state.category] || '';
   }
