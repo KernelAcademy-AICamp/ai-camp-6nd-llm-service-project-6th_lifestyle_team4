@@ -1603,12 +1603,25 @@ async function submitSignin() {
   } catch (err) {
     console.error('[m] signin/up failed:', err);
     const msg = String(err?.message || err);
-    // 흔한 에러 한글화
+    console.warn('[m] signin/up raw error:', err);
     let friendly = msg;
     if (/Invalid login credentials/i.test(msg)) friendly = '아이디 또는 비밀번호가 맞지 않습니다.';
     else if (/User already registered/i.test(msg)) friendly = '이미 가입된 아이디입니다. 로그인해주세요.';
+    else if (/Password should be at least/i.test(msg)) friendly = '비밀번호가 너무 짧습니다. (보통 6자 이상)';
     else if (/Password should be/i.test(msg)) friendly = '비밀번호가 너무 짧거나 약합니다.';
-    else if (/rate limit/i.test(msg)) friendly = '잠시 후 다시 시도해주세요.';
+    else if (/Email rate limit/i.test(msg) || /email_send_rate_limit/i.test(msg)) {
+      friendly = '이메일 발송 제한 초과 — Supabase Auth에서 "Confirm email" 옵션을 OFF로 바꾸고 다시 시도해주세요. (1시간 후 자동 풀림)';
+    }
+    else if (/For security purposes/i.test(msg) || /you can only request/i.test(msg)) {
+      friendly = '잠시 (약 1분) 후 다시 시도해주세요.';
+    }
+    else if (/rate limit/i.test(msg)) friendly = 'Auth rate limit — 1시간 후 다시 시도하거나, Supabase Dashboard에서 Auth 설정 확인.';
+    else if (/signups not allowed/i.test(msg) || /not enabled/i.test(msg)) {
+      friendly = '회원가입이 비활성화됨 — Supabase Authentication > Providers > Email > "Enable sign ups" 체크.';
+    }
+    else if (/email.*not.*valid/i.test(msg) || /unable to validate email/i.test(msg)) {
+      friendly = '이 아이디는 사용 불가 — 다른 아이디를 시도해주세요.';
+    }
     showSigninError(friendly);
   } finally {
     signinSubmitBtn.disabled = false;
