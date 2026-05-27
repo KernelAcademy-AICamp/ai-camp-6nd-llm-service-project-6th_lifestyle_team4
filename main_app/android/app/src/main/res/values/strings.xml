@@ -35,4 +35,27 @@
     <string name="widget_label">Daily Script</string>
     <string name="widget_description">매일의 한 줄을 홈 화면에서</string>
     <string name="widget_loading">오늘의 한 줄을 불러오는 중⋯</string>
+
+    <!-- Home -->
+    <string name="home_recent_empty">새로고침하면 이전 카드가 여기에 쌓입니다.</string>
+
+    <!-- Settings: recommendation -->
+    <string name="taste_recommendation">취향 추천</string>
+    <string name="taste_recommendation_desc">북마크 기반 맞춤 추천</string>
+
+    <!-- Settings: sign-in -->
+    <string name="sign_in">Sign In</string>
+    <string name="sign_in_desc">아이디와 비밀번호로 로그인하면 다른 기기에서도 같은 계정을 쓸 수 있어요.</string>
+    <string name="sign_in_id">아이디</string>
+    <string name="sign_in_password">비밀번호</string>
+    <string name="sign_in_action">로그인</string>
+    <string name="sign_up_action">가입</string>
+    <string name="have_account_sign_in">이미 계정이 있나요? 로그인</string>
+    <string name="no_account_sign_up">계정이 없으신가요? 회원가입</string>
+    <string name="reset_anonymous">Reset Anonymous</string>
+
+    <!-- Settings: nickname -->
+    <string name="edit_nickname">이름 변경</string>
+    <string name="nickname_placeholder">표시할 이름</string>
+    <string name="randomize">랜덤 이름 생성</string>
 </resources>

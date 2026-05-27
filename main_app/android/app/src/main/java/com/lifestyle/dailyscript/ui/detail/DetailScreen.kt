@@ -20,7 +20,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,6 +45,8 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 fun DetailScreen(
     cardId: Long,
     userId: Long,
+    isAnonymous: Boolean,
+    myNickname: String,
     onBack: () -> Unit,
 ) {
     val vm: DetailViewModel = viewModel()
@@ -91,7 +98,7 @@ fun DetailScreen(
                 }
 
                 Text(
-                    text = card.scriptExcerpt,
+                    text = boldSpeakerLines(card.scriptExcerpt, card.works?.characterList().orEmpty()),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontFamily = ScreenplayMono,
                         letterSpacing = 0.02.em,
@@ -146,6 +153,26 @@ fun DetailScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = Walnut,
                 )
+
+                // ---------- Comments ----------
+                Box(modifier = Modifier.height(40.dp))
+                Hairline()
+                Box(modifier = Modifier.height(28.dp))
+                CommentsSection(
+                    comments = state.comments,
+                    likes = state.likes,
+                    myUserId = userId,
+                    isAnonymous = isAnonymous,
+                    submitting = state.commentSubmitting,
+                    replyingTo = state.replyingTo,
+                    commentsError = state.commentsError,
+                    onSubmit = { vm.submitComment(userId, myNickname, it) },
+                    onToggleLike = { vm.toggleLike(userId, it) },
+                    onDelete = { vm.deleteComment(userId, it) },
+                    onStartReply = { vm.setReplyTarget(it) },
+                    onCancelReply = { vm.setReplyTarget(null) },
+                )
+
                 Box(modifier = Modifier.height(24.dp))
             }
         }
@@ -167,6 +194,27 @@ private val SignificanceFormats = setOf("opera", "play")
 private fun shouldShowSignificance(card: CardDto): Boolean {
     val format = card.works?.format?.trim()?.lowercase().orEmpty()
     return !card.significance.isNullOrBlank() && format in SignificanceFormats
+}
+
+/** Bold any line that exactly matches a character name (mirrors the PWA's boldSpeakerLines). */
+private fun boldSpeakerLines(text: String, characterNames: List<String>): AnnotatedString {
+    if (characterNames.isEmpty()) return AnnotatedString(text)
+    val nameSet = characterNames.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    if (nameSet.isEmpty()) return AnnotatedString(text)
+    return buildAnnotatedString {
+        val lines = text.split("\n")
+        lines.forEachIndexed { index, line ->
+            val trimmed = line.trim()
+            val namePart = trimmed.substringBefore("(").trim()
+            val isSpeaker = trimmed.isNotEmpty() && (trimmed in nameSet || namePart in nameSet)
+            if (isSpeaker) {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(line) }
+            } else {
+                append(line)
+            }
+            if (index < lines.lastIndex) append("\n")
+        }
+    }
 }
 
 @Composable

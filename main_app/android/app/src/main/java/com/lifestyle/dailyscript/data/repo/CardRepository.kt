@@ -4,6 +4,7 @@ import com.lifestyle.dailyscript.data.SupabaseProvider
 import com.lifestyle.dailyscript.data.model.CardDto
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
 
 class CardRepository {
 
@@ -20,7 +21,7 @@ class CardRepository {
         keywords,
         temperature,
         intensity,
-        works ( work_id, title, format, author, release_year )
+        works ( work_id, title, format, author, release_year, characters )
         """.trimIndent()
     )
 
@@ -33,6 +34,15 @@ class CardRepository {
             .decodeList<CardDto>()
         return cards.randomOrNull()
     }
+
+    /** Pull a large page used for seed/taste-based recommendation (mirrors the PWA's 500). */
+    suspend fun fetchAllCards(): List<CardDto> =
+        client.postgrest["cards"]
+            .select(cardSelect) {
+                order("card_id", Order.DESCENDING)
+                limit(500)
+            }
+            .decodeList()
 
     suspend fun fetchCardById(cardId: Long): CardDto? {
         return client.postgrest["cards"]

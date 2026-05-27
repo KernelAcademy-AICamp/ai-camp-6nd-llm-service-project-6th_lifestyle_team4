@@ -30,7 +30,7 @@ class BookmarkRepository {
             keywords,
             temperature,
             intensity,
-            works ( work_id, title, format, author, release_year )
+            works ( work_id, title, format, author, release_year, characters )
         )
         """.trimIndent()
     )

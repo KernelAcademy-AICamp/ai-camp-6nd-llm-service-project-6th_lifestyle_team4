@@ -22,3 +22,8 @@ data class BookmarkInsert(
     @SerialName("user_id") val userId: Long,
     @SerialName("card_id") val cardId: Long,
 )
+
+@Serializable
+data class CardIdRow(
+    @SerialName("card_id") val cardId: Long,
+)

@@ -34,7 +34,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
-import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.ChipTag
 import com.lifestyle.dailyscript.ui.components.SharpButton
@@ -56,7 +55,7 @@ fun HomeScreen(
     val vm: HomeViewModel = viewModel()
     val state by vm.state.collectAsState()
 
-    LaunchedEffect(userId) { vm.refresh(userId) }
+    LaunchedEffect(userId) { vm.load(userId) }
 
     Column(
         modifier = Modifier
@@ -131,18 +130,16 @@ fun HomeScreen(
             )
         }
 
-        if (state.bookmarks.isEmpty() && !state.loading) {
+        if (state.recent.isEmpty()) {
             Text(
-                text = stringResource(R.string.empty_bookmarks),
+                text = stringResource(R.string.home_recent_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Walnut,
                 modifier = Modifier.padding(vertical = 16.dp),
             )
         } else {
-            state.bookmarks.forEach { bookmark ->
-                BookmarkRowItem(bookmark = bookmark, onClick = {
-                    bookmark.cards?.cardId?.let(onOpenCard)
-                })
+            state.recent.forEach { card ->
+                RecentRowItem(card = card, onClick = { onOpenCard(card.cardId) })
             }
         }
         Box(modifier = Modifier.height(40.dp))
@@ -220,21 +217,17 @@ private fun TodayCard(
 }
 
 @Composable
-private fun BookmarkRowItem(bookmark: BookmarkRow, onClick: () -> Unit) {
-    val card = bookmark.cards
+private fun RecentRowItem(card: CardDto, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = card != null, onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(vertical = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            val meta = listOfNotNull(
-                formatBookmarkDate(bookmark.createdAt),
-                card?.works?.format,
-            ).joinToString("  —  ")
-            if (meta.isNotBlank()) {
+            val meta = card.works?.format
+            if (!meta.isNullOrBlank()) {
                 Text(
                     text = meta.uppercase(),
                     style = MaterialTheme.typography.labelSmall,
@@ -243,13 +236,14 @@ private fun BookmarkRowItem(bookmark: BookmarkRow, onClick: () -> Unit) {
                 Box(modifier = Modifier.height(6.dp))
             }
             Text(
-                text = card?.works?.title ?: "—",
+                text = card.works?.title ?: "—",
                 style = MaterialTheme.typography.titleLarge,
                 color = Espresso,
+                maxLines = 1,
             )
             Box(modifier = Modifier.height(4.dp))
             Text(
-                text = card?.quote.orEmpty(),
+                text = card.quote,
                 style = MaterialTheme.typography.bodyMedium,
                 color = Walnut,
                 maxLines = 1,
@@ -280,13 +274,4 @@ private fun todayString(): String {
     val date = LocalDate.now()
     val fmt = DateTimeFormatter.ofPattern("yyyy년 M월 d일", Locale.KOREAN)
     return date.format(fmt)
-}
-
-private fun formatBookmarkDate(iso: String?): String? {
-    if (iso.isNullOrBlank()) return null
-    return runCatching {
-        val datePart = iso.substring(0, 10)
-        val d = LocalDate.parse(datePart)
-        "${d.monthValue}. ${d.dayOfMonth}"
-    }.getOrNull()
 }

@@ -25,6 +25,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.lifestyle.dailyscript.data.repo.UserSession
 import com.lifestyle.dailyscript.ui.archive.ArchiveScreen
 import com.lifestyle.dailyscript.ui.components.BottomNavBar
 import com.lifestyle.dailyscript.ui.components.HomeTopBar
@@ -35,7 +36,6 @@ import com.lifestyle.dailyscript.ui.home.HomeScreen
 import com.lifestyle.dailyscript.ui.nav.Routes
 import com.lifestyle.dailyscript.ui.settings.SettingsScreen
 import com.lifestyle.dailyscript.ui.theme.Cta
-import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Walnut
 
 @Composable
@@ -46,7 +46,7 @@ fun DailyScriptRoot() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Paper)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
@@ -59,22 +59,26 @@ fun DailyScriptRoot() {
                 onAction = sessionVm::bootstrap,
             )
             is SessionState.Ready -> ScaffoldWithNav(
-                userId = s.userId,
-                onSignOut = sessionVm::signOutAndReauth,
+                session = s.session,
+                sessionVm = sessionVm,
             )
         }
     }
 }
 
 @Composable
-private fun ScaffoldWithNav(userId: Long, onSignOut: () -> Unit) {
+private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
 
+    val authMessage by sessionVm.authMessage.collectAsState()
+    val authInProgress by sessionVm.authInProgress.collectAsState()
+
     val isDetail = currentRoute?.startsWith("detail/") == true || currentRoute == Routes.DETAIL
     val showTopBar = !isDetail
     val showBottomBar = !isDetail && currentRoute in setOf(Routes.HOME, Routes.ARCHIVE, Routes.SETTINGS)
+    val initials = session.nickname.trim().take(2).ifBlank { "DS" }
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (showTopBar) {
@@ -82,8 +86,8 @@ private fun ScaffoldWithNav(userId: Long, onSignOut: () -> Unit) {
                 Routes.HOME -> HomeTopBar(onMyPageClick = {
                     navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
                 })
-                Routes.SETTINGS -> SettingsTopBar(initials = "DS")
-                Routes.ARCHIVE -> SettingsTopBar(initials = "DS")
+                Routes.SETTINGS -> SettingsTopBar(initials = initials)
+                Routes.ARCHIVE -> SettingsTopBar(initials = initials)
                 else -> Unit
             }
         }
@@ -91,18 +95,26 @@ private fun ScaffoldWithNav(userId: Long, onSignOut: () -> Unit) {
             NavHost(navController = navController, startDestination = Routes.HOME) {
                 composable(Routes.HOME) {
                     HomeScreen(
-                        userId = userId,
+                        userId = session.userId,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
                 composable(Routes.ARCHIVE) {
                     ArchiveScreen(
-                        userId = userId,
+                        userId = session.userId,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
                 composable(Routes.SETTINGS) {
-                    SettingsScreen(nickname = null, onSignOut = onSignOut)
+                    SettingsScreen(
+                        session = session,
+                        authMessage = authMessage,
+                        authInProgress = authInProgress,
+                        onSignIn = { id, pw, signUp -> sessionVm.signIn(id, pw, signUp) },
+                        onSignOut = sessionVm::signOutAndReauth,
+                        onUpdateNickname = sessionVm::updateNickname,
+                        onConsumeMessage = sessionVm::consumeAuthMessage,
+                    )
                 }
                 composable(
                     route = Routes.DETAIL,
@@ -111,7 +123,9 @@ private fun ScaffoldWithNav(userId: Long, onSignOut: () -> Unit) {
                     val cardId = entry.arguments?.getLong("cardId") ?: -1L
                     DetailScreen(
                         cardId = cardId,
-                        userId = userId,
+                        userId = session.userId,
+                        isAnonymous = session.isAnonymous,
+                        myNickname = session.nickname,
                         onBack = { navController.popBackStack() },
                     )
                 }
