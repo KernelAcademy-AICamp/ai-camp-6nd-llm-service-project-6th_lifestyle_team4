@@ -80,6 +80,9 @@ const detailCommentForm = $('#detail-comment-form');
 const detailCommentInput = $('#detail-comment-input');
 const detailCommentCounter = $('#detail-comment-counter');
 const detailCommentSubmit = $('#detail-comment-submit');
+const detailReplyTarget = $('#detail-reply-target');
+const detailReplyTargetName = $('#detail-reply-target-name');
+const detailReplyCancel = $('#detail-reply-cancel');
 
 const toastEl = $('#toast');
 
@@ -105,9 +108,11 @@ const state = {
   archiveSearch: '',
   archiveGenre: '',        // '' = all, or 'movie'|'drama'|'musical'|'opera'|'play'
   recentlyShownIds: [],    // 오늘의 명대사 셔플 시 최근 10개 제외용 큐
-  detailComments: [],      // 현재 열린 카드의 댓글 목록
+  detailComments: [],      // 현재 열린 카드의 댓글 목록 (top-level + 답글 섞임)
   detailLikes: new Map(),  // comment_id → Set<user_id>
   detailCommentSubmitting: false,
+  replyingToCommentId: null,   // 현재 답글 작성 대상 comment_id (null = 최상위 댓글)
+  replyingToNickname: '',
 };
 let detailCommentsChannel = null;
 
@@ -1850,6 +1855,7 @@ function paintDetailCollectBtn(isBookmarked) {
 function closeDetailInternal() {
   detailScreen.classList.remove('open');
   unsubscribeFromDetailComments();
+  cancelReply();
   setTimeout(() => {
     detailScreen.style.display = 'none';
     document.body.style.overflow = '';
@@ -1908,7 +1914,7 @@ async function loadCommentsForCard(cardId) {
 
   const { data: comments, error: cErr } = await sb
     .from('card_comments')
-    .select('comment_id, card_id, user_id, author_nickname, body, created_at')
+    .select('comment_id, card_id, user_id, parent_comment_id, author_nickname, body, created_at')
     .eq('card_id', cardId)
     .order('created_at', { ascending: true });
   if (cErr) {
@@ -1952,29 +1958,56 @@ function renderComments() {
   detailCommentsEmpty.style.display = 'none';
 
   const myUserId = state.userId;
-  const html = list.map((c) => {
+  // 트리 구성: top-level은 parent_comment_id == null
+  // 그 외는 부모 아래 묶음. 깊이 1단계만 허용 — 답글의 답글은 자동으로 부모의 부모 아래로 평탄화.
+  const byParent = new Map();
+  byParent.set(null, []);
+  list.forEach((c) => {
+    let parentKey = c.parent_comment_id ?? null;
+    // 부모가 또 답글이면 그 부모의 부모(즉 root)로 정규화
+    if (parentKey != null) {
+      const parent = list.find((x) => x.comment_id === parentKey);
+      if (parent && parent.parent_comment_id != null) {
+        parentKey = parent.parent_comment_id;
+      }
+    }
+    if (!byParent.has(parentKey)) byParent.set(parentKey, []);
+    byParent.get(parentKey).push(c);
+  });
+
+  const renderOne = (c, isReply) => {
     const likeSet = state.detailLikes.get(c.comment_id) || new Set();
     const likeCount = likeSet.size;
     const likedByMe = myUserId != null && likeSet.has(myUserId);
     const nickname = c.author_nickname || '익명';
     const isMine = myUserId != null && c.user_id === myUserId;
     return `
-      <div class="comment-row" data-comment-id="${c.comment_id}" style="border:0.5px solid var(--latte);padding:12px 14px;background:var(--paper);">
+      <div class="comment-row${isReply ? ' is-reply' : ''}" data-comment-id="${c.comment_id}"
+           style="border:0.5px solid var(--latte);padding:12px 14px;background:var(--paper);${isReply ? 'margin-left:24px;border-left:2px solid var(--cta);' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">
-          <span class="t-label-sm c-espresso" style="font-weight:600;">${escapeHtml(nickname)}</span>
+          <span class="t-label-sm c-espresso" style="font-weight:600;">${isReply ? '↳ ' : ''}${escapeHtml(nickname)}</span>
           <span class="t-label-sm c-walnut">${escapeHtml(formatRelativeTime(c.created_at))}</span>
         </div>
         <p class="t-body-md c-espresso" style="line-height:1.6;white-space:pre-wrap;margin:0 0 8px 0;text-align:left;">${escapeHtml(c.body)}</p>
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <button class="comment-like-btn" data-comment-id="${c.comment_id}"
-                  style="background:transparent;border:none;cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px;color:${likedByMe ? 'var(--cta)' : 'var(--walnut)'};">
-            <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' ${likedByMe ? 1 : 0};">favorite</span>
-            <span class="t-label-sm" style="color:${likedByMe ? 'var(--cta)' : 'var(--walnut)'};">${likeCount}</span>
-          </button>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <button class="comment-like-btn" data-comment-id="${c.comment_id}"
+                    style="background:transparent;border:none;cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px;color:${likedByMe ? 'var(--cta)' : 'var(--walnut)'};">
+              <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' ${likedByMe ? 1 : 0};">favorite</span>
+              <span class="t-label-sm" style="color:${likedByMe ? 'var(--cta)' : 'var(--walnut)'};">${likeCount}</span>
+            </button>
+            ${!isReply ? `<button class="comment-reply-btn" data-comment-id="${c.comment_id}" data-nickname="${escapeHtml(nickname)}" style="background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Reply</button>` : ''}
+          </div>
           ${isMine ? `<button class="comment-delete-btn" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Delete</button>` : ''}
         </div>
       </div>
     `;
+  };
+
+  const tops = byParent.get(null) || [];
+  const html = tops.map((top) => {
+    const replies = byParent.get(top.comment_id) || [];
+    return renderOne(top, false) + replies.map((r) => renderOne(r, true)).join('');
   }).join('');
   detailCommentsList.innerHTML = html;
 
@@ -1990,6 +2023,35 @@ function renderComments() {
       if (!Number.isNaN(id)) deleteComment(id);
     });
   });
+  detailCommentsList.querySelectorAll('.comment-reply-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      const nick = btn.dataset.nickname || '';
+      if (!Number.isNaN(id)) startReply(id, nick);
+    });
+  });
+}
+
+function startReply(commentId, nickname) {
+  if (state.isAnonymous) {
+    toast('답글은 로그인 후 가능합니다');
+    return;
+  }
+  state.replyingToCommentId = commentId;
+  state.replyingToNickname = nickname || '';
+  detailReplyTargetName.textContent = nickname || '익명';
+  detailReplyTarget.style.display = 'flex';
+  detailCommentInput.placeholder = `${nickname || '익명'}에게 답글을 남기세요…`;
+  detailCommentInput.focus();
+  // 입력창으로 스크롤
+  detailCommentInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelReply() {
+  state.replyingToCommentId = null;
+  state.replyingToNickname = '';
+  detailReplyTarget.style.display = 'none';
+  detailCommentInput.placeholder = '이 명대사에 대한 생각을 남겨보세요…';
 }
 
 async function submitComment() {
@@ -2009,18 +2071,23 @@ async function submitComment() {
   detailCommentSubmit.disabled = true;
   try {
     const sb = await getSupabase();
+    const payload = {
+      card_id: cardId,
+      user_id: state.userId,
+      author_nickname: state.userNickname || null,
+      body,
+    };
+    if (state.replyingToCommentId != null) {
+      payload.parent_comment_id = state.replyingToCommentId;
+    }
     const { data, error } = await sb
       .from('card_comments')
-      .insert({
-        card_id: cardId,
-        user_id: state.userId,
-        author_nickname: state.userNickname || null,
-        body,
-      })
-      .select('comment_id, card_id, user_id, author_nickname, body, created_at')
+      .insert(payload)
+      .select('comment_id, card_id, user_id, parent_comment_id, author_nickname, body, created_at')
       .single();
     if (error) throw error;
     detailCommentInput.value = '';
+    cancelReply();
     updateCommentCounter();
     // optimistic — realtime이 곧 따라잡지만 즉시 표시
     if (data && !state.detailComments.find((c) => c.comment_id === data.comment_id)) {
@@ -2102,11 +2169,17 @@ function updateCommentCounter() {
 
 detailCommentInput?.addEventListener('input', updateCommentCounter);
 detailCommentSubmit?.addEventListener('click', submitComment);
+detailReplyCancel?.addEventListener('click', cancelReply);
 detailCommentInput?.addEventListener('keydown', (e) => {
   // Ctrl/Cmd+Enter 빠른 제출
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
     e.preventDefault();
     submitComment();
+  }
+  // Escape로 답글 취소
+  if (e.key === 'Escape' && state.replyingToCommentId != null) {
+    e.preventDefault();
+    cancelReply();
   }
 });
 

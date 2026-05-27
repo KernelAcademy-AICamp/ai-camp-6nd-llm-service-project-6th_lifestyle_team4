@@ -1004,6 +1004,10 @@
 
     <!-- 로그인 사용자: 입력창 -->
     <div id="detail-comment-form" style="display:none;margin-top:18px;">
+      <div id="detail-reply-target" style="display:none;padding:8px 12px;background:var(--latte);border-left:2px solid var(--cta);margin-bottom:8px;justify-content:space-between;align-items:center;">
+        <span class="t-label-sm c-walnut"><span id="detail-reply-target-name" style="color:var(--espresso);font-weight:600;"></span>에게 답글</span>
+        <button id="detail-reply-cancel" style="background:transparent;border:none;cursor:pointer;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Cancel</button>
+      </div>
       <textarea id="detail-comment-input" maxlength="500" rows="3"
                 placeholder="이 명대사에 대한 생각을 남겨보세요…"
                 style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:1.6;outline:none;resize:vertical;min-height:72px;"></textarea>
