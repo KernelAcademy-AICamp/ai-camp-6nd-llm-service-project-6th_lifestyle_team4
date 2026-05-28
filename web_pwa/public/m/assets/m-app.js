@@ -772,14 +772,18 @@ function pickByTasteRandom() {
     return p;
   }
 
-  // 거리 역수 가중 — 최근 제외
+  // 거리 역수 가중 — 최근 + 북마크 제외
+  const bookmarked = state.bookmarkedIds || new Set();
   let candidates = state.allCards.filter(
-    (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number') && !exclude.has(c.card_id)
+    (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number')
+        && !exclude.has(c.card_id)
+        && !bookmarked.has(c.card_id)
   );
   if (candidates.length === 0) {
-    // 폴백 — 전체에서 가중 랜덤
+    // 폴백 — 북마크는 계속 제외, 최근만 허용
     candidates = state.allCards.filter(
-      (c) => typeof c.temperature === 'number' || typeof c.intensity === 'number'
+      (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number')
+          && !bookmarked.has(c.card_id)
     );
   }
   if (candidates.length === 0) {
@@ -843,17 +847,29 @@ document.addEventListener('visibilitychange', () => {
 
 function candidatesExcludingRecent() {
   const exclude = new Set(state.recentlyShownIds);
-  const pool = state.allCards.filter((c) => !exclude.has(c.card_id));
-  // 풀이 너무 작으면 (전체가 10개 이하) 폴백
+  const bookmarked = state.bookmarkedIds || new Set();
+  // 1차: 최근 본 것 + 북마크된 것 모두 제외 (정상 동작 — 새로고침 시 북마크는 안 떠야 함)
+  let pool = state.allCards.filter((c) => !exclude.has(c.card_id) && !bookmarked.has(c.card_id));
+  if (pool.length > 0) return pool;
+  // 2차 폴백: 북마크만 빼고 최근 본 것은 다시 허용 (북마크 안 한 카드 우선)
+  pool = state.allCards.filter((c) => !bookmarked.has(c.card_id));
+  if (pool.length > 0) return pool;
+  // 3차 폴백: 전체가 북마크된 상황 — 최근만 빼서라도 보여줌
+  pool = state.allCards.filter((c) => !exclude.has(c.card_id));
   return pool.length > 0 ? pool : state.allCards;
 }
 
-// 직전에 보던 카드(큐의 마지막) 복원 — 없거나 카드가 삭제됐으면 null
+// 직전에 보던 카드(큐의 마지막) 복원 — 없거나 카드가 삭제·북마크됐으면 건너뜀
 function restoreLastShownCard() {
   const ids = state.recentlyShownIds;
   if (!ids || ids.length === 0) return null;
-  const lastId = ids[ids.length - 1];
-  return state.allCards.find((c) => c.card_id === lastId) || null;
+  const bookmarked = state.bookmarkedIds || new Set();
+  // 가장 최근부터 거꾸로 — 북마크된 카드는 새로고침 시 부활시키지 않음
+  for (let i = ids.length - 1; i >= 0; i--) {
+    const card = state.allCards.find((c) => c.card_id === ids[i]);
+    if (card && !bookmarked.has(card.card_id)) return card;
+  }
+  return null;
 }
 
 function rememberShown(cardId) {
@@ -996,7 +1012,7 @@ function applyTodayCard(card) {
   const format = card.works?.format;
   if (format) {
     const chip = document.createElement('span');
-    chip.className = 'chip filled';
+    chip.className = `chip filled g-${String(format).toLowerCase()}`;
     chip.textContent = format;
     todayChips.appendChild(chip);
   }
@@ -2613,7 +2629,9 @@ function escapeHtml(s) {
 
 // 발췌문 표시용 정리. admin library.js와 동일 로직 — 화자/대사 라인 재조립.
 // 산문(novel/essay)은 추출 당시 절(쉼표)마다 줄바꿈이 들어가 토막나 보인다.
-// 절 단위 줄바꿈은 공백으로 펴고, 문장 끝(. ! ? …)에서만 줄을 끊어 '한 문장 = 한 줄'로 만든다.
+// 절 단위 줄바꿈은 공백으로 펴고, 따옴표로 감싸 문장부호(. ! ? …)로 끝나는 대사는
+// 위·아래 빈 줄을 넣어 별도 단락으로 분리한다. 그 외 서술은 문장 끝(. ! ? …)마다
+// 줄을 끊어 '한 문장 = 한 줄'로 만든다. (강조용 짧은 따옴표 "정의"처럼 끝에 문장부호가 없으면 분리 안 함.)
 // 단락(빈 줄) 구분은 보존. (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로.)
 const PROSE_FORMATS = new Set(['novel', 'essay']);
 function isProseFormat(fmt) {
@@ -2626,11 +2644,21 @@ function flowProseScript(text) {
     .replace(/[—–―─━‐‑‒ㅡー﹘﹣－]+/g, ' ')
     .replace(/-{2,}/g, ' ')
     .split(/\n{2,}/)
-    .map((p) => p
-      .replace(/[ \t]*\n[ \t]*/g, ' ')
-      .replace(/[ \t]{2,}/g, ' ')
-      .trim()
-      .replace(/([.!?…])\s+/g, '$1\n'))
+    .map((p) => {
+      // 절 줄바꿈을 공백으로 편 뒤, 따옴표 대사(문장부호로 끝남)를 별도 단락으로 분리.
+      const flowed = p
+        .replace(/[ \t]*\n[ \t]*/g, ' ')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim()
+        .replace(/\s*([“"][^”"]*[.!?…][”"])\s*/g, '\n\n$1\n\n');
+      // 각 조각(서술/대사)을 문장 끝마다 줄바꿈 → 한 문장 = 한 줄.
+      return flowed
+        .split('\n')
+        .map((line) => line.trim().replace(/([.!?…])\s+/g, '$1\n'))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/^\n+|\n+$/g, '');
+    })
     .filter(Boolean)
     .join('\n\n');
 }
