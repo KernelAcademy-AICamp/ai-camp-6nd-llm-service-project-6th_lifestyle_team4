@@ -1072,7 +1072,7 @@
 
 <!-- ===== Sign in / Sign up modal ===== -->
 <div id="signin-modal" style="position:fixed;inset:0;background:rgba(14,12,10,0.65);display:none;align-items:center;justify-content:center;z-index:130;padding:24px;">
-  <div style="background:var(--paper);width:100%;max-width:420px;padding:28px 24px;border:0.5px solid var(--latte);">
+  <div style="background:var(--paper);width:100%;max-width:420px;max-height:90vh;overflow-y:auto;padding:28px 24px;border:0.5px solid var(--latte);">
     <p class="t-label-sm c-walnut" style="margin-bottom:6px;">ACCOUNT</p>
     <h3 id="signin-modal-title" class="t-headline-md c-espresso" style="margin-bottom:14px;">로그인</h3>
     <p id="signin-modal-sub" class="t-body-sm c-walnut" style="margin-bottom:18px;line-height:1.6;">
@@ -1080,14 +1080,49 @@
     </p>
 
     <label class="t-label-sm c-walnut" style="display:block;margin-bottom:6px;">아이디</label>
-    <input id="signin-id" type="text" maxlength="50" autocomplete="username"
-           placeholder="아무 아이디"
-           style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;margin-bottom:14px;" />
+    <div style="display:flex;gap:8px;">
+      <input id="signin-id" type="text" maxlength="50" autocomplete="username"
+             placeholder="아이디"
+             style="flex:1;min-width:0;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;" />
+      <button id="signup-idcheck-btn" type="button" class="sharp-btn outline"
+              style="display:none;white-space:nowrap;padding:0 14px;font-size:12px;">중복확인</button>
+    </div>
+    <p id="signup-idcheck-result" class="t-body-sm" style="display:none;margin-top:6px;"></p>
 
-    <label class="t-label-sm c-walnut" style="display:block;margin-bottom:6px;">비밀번호</label>
+    <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">비밀번호</label>
     <input id="signin-password" type="password" maxlength="64" autocomplete="current-password"
            placeholder="비밀번호"
            style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;" />
+
+    <div id="signup-extra" style="display:none;">
+      <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">성별 · 선택</label>
+      <select id="signup-gender"
+              style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">
+        <option value="">선택 안 함</option>
+        <option value="male">남성</option>
+        <option value="female">여성</option>
+        <option value="other">기타</option>
+      </select>
+
+      <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">나이대 · 선택</label>
+      <select id="signup-age"
+              style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">
+        <option value="">선택 안 함</option>
+        <option value="10s">10대</option>
+        <option value="20s">20대</option>
+        <option value="30s">30대</option>
+        <option value="40s">40대</option>
+        <option value="50s">50대</option>
+        <option value="60s">60대</option>
+        <option value="70s">70대</option>
+        <option value="80s">80대</option>
+        <option value="90s">90대</option>
+      </select>
+
+      <p class="t-body-sm c-walnut" style="margin-top:10px;line-height:1.6;">
+        성별·나이대를 알려주시면 취향에 맞는 명대사를 추천해드려요. (선택 입력)
+      </p>
+    </div>
 
     <label style="display:flex;align-items:center;gap:8px;margin-top:14px;cursor:pointer;user-select:none;">
       <input id="signin-remember" type="checkbox" style="width:16px;height:16px;accent-color:var(--espresso);cursor:pointer;" />

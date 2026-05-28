@@ -550,6 +550,8 @@ async function bootstrapAuth() {
 
   // 소셜 로그인 직후라면 이전 익명 user_id의 북마크를 옮긴다
   if (!state.isAnonymous) {
+    // 회원가입 직후라면 저장해둔 프로필(로그인 ID·성별·나이대)을 새 행에 기록
+    await applySignupProfile(sb, state.userId);
     const prevAnonUserId = localStorage.getItem('ds.prevAnonUserId');
     if (prevAnonUserId && prevAnonUserId !== String(state.userId)) {
       await migrateAnonymousBookmarks(parseInt(prevAnonUserId, 10), state.userId);
@@ -622,6 +624,24 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
   } catch (err) {
     console.warn('[m] migration failed:', err);
   }
+}
+
+// 회원가입 시 보존해둔 프로필(로그인 ID·성별·나이대)을 users 행에 기록.
+// 핵심 행 생성과 분리해 별도 update — 실패해도 앱 동작에는 지장 없게 처리.
+async function applySignupProfile(sb, userId) {
+  let profile = null;
+  try { profile = JSON.parse(localStorage.getItem('ds.signupProfile') || 'null'); } catch {}
+  if (!profile) return;
+  try {
+    await sb.from('users').update({
+      login_id: profile.login_id || null,
+      gender: profile.gender || null,
+      age_group: profile.age_group || null,
+    }).eq('user_id', userId);
+  } catch (e) {
+    console.warn('[m] signup profile write failed:', e);
+  }
+  localStorage.removeItem('ds.signupProfile');
 }
 
 // ---------- Data ----------
@@ -1625,7 +1645,13 @@ const signinToggleModeBtn = $('#signin-toggle-mode');
 const signinCancelBtn = $('#signin-cancel');
 const signinErrorEl = $('#signin-error');
 const signinRememberInput = $('#signin-remember');
+const signupIdCheckBtn = $('#signup-idcheck-btn');
+const signupIdCheckResult = $('#signup-idcheck-result');
+const signupExtra = $('#signup-extra');
+const signupGender = $('#signup-gender');
+const signupAge = $('#signup-age');
 let signinMode = 'signin';  // 'signin' | 'signup'
+let signupIdAvailable = false;  // 회원가입 모드에서 아이디 중복확인 통과 여부
 
 // ---------- 공용 안내/유도 모달 (랜딩 + 회원전용 게이트) ----------
 const promptModal = $('#prompt-modal');
@@ -1736,6 +1762,12 @@ function setSigninMode(mode) {
     signinSubmitBtn.textContent = '로그인';
     signinToggleModeBtn.textContent = '계정이 없으신가요? 회원가입';
   }
+  // 회원가입 전용 UI(중복확인 버튼·성별·나이대) 토글 + 중복확인 상태 초기화
+  const isSignup = (mode === 'signup');
+  if (signupIdCheckBtn) signupIdCheckBtn.style.display = isSignup ? '' : 'none';
+  if (signupExtra) signupExtra.style.display = isSignup ? 'block' : 'none';
+  signupIdAvailable = false;
+  if (signupIdCheckResult) signupIdCheckResult.style.display = 'none';
   signinErrorEl.style.display = 'none';
 }
 
@@ -1761,6 +1793,43 @@ function closeSigninModal() {
 function showSigninError(msg) {
   signinErrorEl.textContent = msg;
   signinErrorEl.style.display = 'block';
+}
+
+function showIdCheckResult(msg, ok) {
+  if (!signupIdCheckResult) return;
+  signupIdCheckResult.textContent = msg;
+  signupIdCheckResult.style.color = ok ? '#1A7F37' : 'var(--cta)';
+  signupIdCheckResult.style.display = 'block';
+}
+
+// 아이디 중복확인 — RLS가 타인 행 조회를 막으므로 SECURITY DEFINER RPC(email_available) 사용.
+async function checkSignupId() {
+  const id = (signinIdInput.value || '').trim();
+  const email = idToEmail(id);
+  if (!email) { signupIdAvailable = false; showIdCheckResult('아이디를 입력해주세요.', false); return; }
+  signupIdCheckBtn.disabled = true;
+  const prev = signupIdCheckBtn.textContent;
+  signupIdCheckBtn.textContent = '⋯';
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb.rpc('email_available', { p_email: email });
+    if (error) throw error;
+    if (data === true) {
+      signupIdAvailable = true;
+      showIdCheckResult('사용 가능한 아이디입니다.', true);
+    } else {
+      signupIdAvailable = false;
+      showIdCheckResult('이미 사용 중인 아이디입니다.', false);
+    }
+  } catch (err) {
+    // RPC 미설치(마이그레이션 전) 등 — 가입 단계에서 중복이면 거부되므로 진행은 허용
+    console.warn('[m] email_available rpc failed:', err);
+    signupIdAvailable = true;
+    showIdCheckResult('중복확인을 건너뜁니다 — 중복이면 가입 단계에서 안내됩니다.', true);
+  } finally {
+    signupIdCheckBtn.disabled = false;
+    signupIdCheckBtn.textContent = prev;
+  }
 }
 
 function idToEmail(id) {
@@ -1795,6 +1864,10 @@ async function submitSignin() {
     showSigninError('비밀번호를 입력해주세요.');
     return;
   }
+  if (signinMode === 'signup' && !signupIdAvailable) {
+    showSigninError('아이디 중복확인을 해주세요.');
+    return;
+  }
   signinErrorEl.style.display = 'none';
   signinSubmitBtn.disabled = true;
   signinSubmitBtn.textContent = '⋯';
@@ -1817,6 +1890,12 @@ async function submitSignin() {
           throw new Error('가입은 됐으나 자동 로그인 실패. 다시 로그인 모드로 시도해주세요.');
         }
       }
+      // 가입 프로필 보존 — reload 후 bootstrapAuth가 새 user 행에 기록
+      localStorage.setItem('ds.signupProfile', JSON.stringify({
+        login_id: id,
+        gender: signupGender?.value || null,
+        age_group: signupAge?.value || null,
+      }));
     } else {
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
@@ -1873,6 +1952,12 @@ signinPasswordInput?.addEventListener('keydown', (e) => {
 });
 signinIdInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); signinPasswordInput.focus(); }
+});
+signupIdCheckBtn?.addEventListener('click', checkSignupId);
+// 아이디가 바뀌면 다시 중복확인하도록 통과 상태 리셋
+signinIdInput?.addEventListener('input', () => {
+  signupIdAvailable = false;
+  if (signupIdCheckResult) signupIdCheckResult.style.display = 'none';
 });
 
 function paintAuthIdentity() {
