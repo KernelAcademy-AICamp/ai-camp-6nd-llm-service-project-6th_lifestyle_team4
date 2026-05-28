@@ -988,7 +988,7 @@ function applyTodayCard(card) {
   const format = card.works?.format;
   if (format) {
     const chip = document.createElement('span');
-    chip.className = 'chip filled';
+    chip.className = `chip filled g-${String(format).toLowerCase()}`;
     chip.textContent = format;
     todayChips.appendChild(chip);
   }
@@ -2577,7 +2577,9 @@ function escapeHtml(s) {
 
 // 발췌문 표시용 정리. admin library.js와 동일 로직 — 화자/대사 라인 재조립.
 // 산문(novel/essay)은 추출 당시 절(쉼표)마다 줄바꿈이 들어가 토막나 보인다.
-// 절 단위 줄바꿈은 공백으로 펴고, 문장 끝(. ! ? …)에서만 줄을 끊어 '한 문장 = 한 줄'로 만든다.
+// 절·문장 단위 줄바꿈은 공백으로 펴서 서술을 한 단락처럼 흐르게 하고,
+// 따옴표로 감싸 문장부호(. ! ? …)로 끝나는 대사만 위·아래 빈 줄을 넣어 별도 단락으로 분리한다.
+// (강조용 짧은 따옴표 "정의" 처럼 끝에 문장부호가 없으면 분리하지 않음.)
 // 단락(빈 줄) 구분은 보존. (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로.)
 const PROSE_FORMATS = new Set(['novel', 'essay']);
 function isProseFormat(fmt) {
@@ -2594,7 +2596,10 @@ function flowProseScript(text) {
       .replace(/[ \t]*\n[ \t]*/g, ' ')
       .replace(/[ \t]{2,}/g, ' ')
       .trim()
-      .replace(/([.!?…])\s+/g, '$1\n'))
+      .replace(/\s*([“"][^”"]*[.!?…][”"])\s*/g, '\n\n$1\n\n')
+      .replace(/[ \t]*\n[ \t]*/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/^\n+|\n+$/g, ''))
     .filter(Boolean)
     .join('\n\n');
 }
