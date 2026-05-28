@@ -1210,13 +1210,28 @@ function extractSeries(workOrTitle) {
   return { series: t, subtitle: '', full: t };
 }
 
-// displayTitle alias 적용 후 series + subtitle + author 로 그룹 키 생성.
+// works.subtitle (DB) 우선, 없으면 extractSeries 휴리스틱 fallback.
 // 같은 series지만 subtitle이 다르면 별도 책으로 유지 (책꽂이에 시리즈가 여러 권으로 늘어섬).
+function resolveSeriesSubtitle(work) {
+  const dbSubtitle = work?.subtitle ? String(work.subtitle).trim() : '';
+  if (dbSubtitle) {
+    return {
+      series: displayTitle(work?.title || ''),
+      subtitle: dbSubtitle,
+    };
+  }
+  // legacy: 부제가 분리되지 않은 채 title에 통째로 들어있는 경우 — 패턴으로 추출 시도
+  const ext = extractSeries({
+    title: displayTitle(work?.title || ''),
+    author: work?.author || '',
+  });
+  return { series: ext.series, subtitle: ext.subtitle };
+}
+
 function workGroupKey(work) {
-  // displayTitle 적용된 title + author 로 시리즈 감지
-  const ext = extractSeries({ title: displayTitle(work?.title || ''), author: work?.author || '' });
+  const { series, subtitle } = resolveSeriesSubtitle(work);
   const a = (work?.author || '').toLowerCase().trim();
-  return `${ext.series.toLowerCase()}__${ext.subtitle.toLowerCase()}__${a}`;
+  return `${series.toLowerCase()}__${subtitle.toLowerCase()}__${a}`;
 }
 
 function groupBookmarksByWork() {
@@ -1227,15 +1242,12 @@ function groupBookmarksByWork() {
     const work = card.works || {};
     const key = workGroupKey(work);
     if (!byWork.has(key)) {
-      const { series, subtitle } = extractSeries({
-        title: displayTitle(work.title || ''),
-        author: work.author || '',
-      });
+      const { series, subtitle } = resolveSeriesSubtitle(work);
       byWork.set(key, {
         key,
         series,
         subtitle,
-        // spine 표시용 — subtitle 있으면 부제, 없으면 시리즈명
+        // spine 표시용 — subtitle 있으면 부제(개별 편), 없으면 시리즈명
         title: subtitle || series || displayTitle(work.title) || '제목 없음',
         rawTitle: work.title || '',
         format: (work.format || '').toLowerCase(),
