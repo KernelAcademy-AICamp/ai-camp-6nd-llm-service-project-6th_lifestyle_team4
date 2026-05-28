@@ -40,6 +40,20 @@ SUPABASE_ANON_KEY=<public anon key>
 > anon 키는 공개값이므로, 서버리스 함수 없이 순수 정적 배포를 원하면
 > `public/assets/supabase-client.js`에서 `/api/config` fetch 대신 값을 직접 인라인해도 된다.
 
+## 분석 (Amplitude · Microsoft Clarity)
+
+`public/assets/analytics.js`가 `/api/config`에서 아래 공개 키를 받아 두 도구를 초기화한다.
+키를 설정하지 않으면 모든 추적 호출이 조용히 no-op 처리되어 앱은 그대로 동작한다.
+
+```
+AMPLITUDE_API_KEY=<Amplitude 프로젝트 API 키>
+CLARITY_PROJECT_ID=<Clarity 프로젝트 ID>
+```
+
+전송 이벤트: `nav`, `today_refreshed`, `script_opened`, `bookmark_added`/`bookmark_removed`,
+`comment_submitted`, `archive_genre_filtered`, `archive_searched`.
+Amplitude는 페이지뷰·세션을 자동 수집하고, 로그인 시 익명 `user_id`로 사용자를 식별한다.
+
 ## 백엔드 / DB
 
 같은 Supabase 프로젝트를 admin 웹·Android·iOS 네이티브 앱과 공유한다.

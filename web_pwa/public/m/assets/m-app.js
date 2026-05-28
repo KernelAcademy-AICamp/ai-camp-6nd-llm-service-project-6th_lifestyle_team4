@@ -1,5 +1,6 @@
 // Daily Script SPA — Android HomeScreen/ArchiveScreen/SettingsScreen/DetailScreen port
 import { getSupabase } from '/assets/supabase-client.js';
+import { initAnalytics, track, identify } from '/assets/analytics.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -191,12 +192,14 @@ function extractSpeaker(scriptExcerpt, characters) {
 // ---------- Init ----------
 (async () => {
   try {
+    initAnalytics();  // 설정 fetch + SDK 로드를 백그라운드로 시작 (앱 부팅 막지 않음)
     state.pushEnabled = localStorage.getItem('ds.push') === '1';
     paintPushToggle();
     paintTasteToggle();
     paintThemeToggle();
     loadRecentlyShownFromStorage();
     await bootstrapAuth();
+    identify(state.userId);
     paintAuthIdentity();
     await Promise.all([loadAllCards(), loadBookmarks()]);
     paintTasteProfile();
@@ -819,6 +822,7 @@ async function toggleBookmark(cardId) {
         .eq('user_id', state.userId).eq('card_id', cardId);
       if (error) throw error;
       state.bookmarks = state.bookmarks.filter((b) => b.card_id !== cardId);
+      track('bookmark_removed', { card_id: cardId });
       toast('해제됨');
     } else {
       const { data, error } = await sb.from('user_bookmarks')
@@ -827,6 +831,7 @@ async function toggleBookmark(cardId) {
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
+      track('bookmark_added', { card_id: cardId, work_title: data?.cards?.works?.title || null, format: data?.cards?.works?.format || null });
       toast('수집됨');
     }
   } catch (err) {
@@ -1041,6 +1046,7 @@ todayRead.addEventListener('click', (e) => {
   if (state.todayCard) openDetail(state.todayCard);
 });
 homeRefresh.addEventListener('click', () => {
+  track('today_refreshed');
   applyTodayCard(pickRandomCard());
   renderHomeBookmarks();  // '지난 기록' 갱신 (직전 카드가 추가됨)
 });
@@ -1326,9 +1332,16 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && bookModal.classList.contains('open')) closeBookModal();
 });
 
+let archiveSearchTrackTimer = null;
 archiveSearchInput.addEventListener('input', (e) => {
   state.archiveSearch = e.target.value;
   renderArchive();
+  // 디바운스 — 입력이 멎고 700ms 뒤 비어있지 않은 질의만 1회 전송
+  clearTimeout(archiveSearchTrackTimer);
+  archiveSearchTrackTimer = setTimeout(() => {
+    const q = (state.archiveSearch || '').trim();
+    if (q) track('archive_searched', { query: q });
+  }, 700);
 });
 
 // ===== Genre chips =====
@@ -1360,6 +1373,7 @@ function renderArchiveChips() {
   archiveChips.querySelectorAll('.a-chip').forEach((c) => {
     c.addEventListener('click', () => {
       state.archiveGenre = c.dataset.genre;
+      track('archive_genre_filtered', { genre: c.dataset.genre || 'all' });
       renderArchiveChips();
       renderArchive();
     });
@@ -1846,6 +1860,8 @@ function openDetail(card) {
   detailScreen.style.display = 'flex';
   requestAnimationFrame(() => detailScreen.classList.add('open'));
   document.body.style.overflow = 'hidden';
+
+  track('script_opened', { card_id: card.card_id, work_title: w.title || null, format: w.format || null });
 }
 
 function paintDetailCollectBtn(isBookmarked) {
@@ -2086,6 +2102,7 @@ async function submitComment() {
       .select('comment_id, card_id, user_id, parent_comment_id, author_nickname, body, created_at')
       .single();
     if (error) throw error;
+    track('comment_submitted', { card_id: cardId, is_reply: state.replyingToCommentId != null });
     detailCommentInput.value = '';
     cancelReply();
     updateCommentCounter();
@@ -2262,7 +2279,10 @@ function setView(view) {
 let suppressPushState = false;
 
 $$('[data-nav]').forEach((btn) => {
-  btn.addEventListener('click', () => setView(btn.dataset.nav));
+  btn.addEventListener('click', () => {
+    track('nav', { to: btn.dataset.nav });
+    setView(btn.dataset.nav);
+  });
 });
 
 // ---------- Utils ----------
