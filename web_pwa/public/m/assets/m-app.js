@@ -157,37 +157,76 @@ function displayTitle(rawTitle) {
   return t;
 }
 
-// script_excerpt 첫 부분에서 화자명 추출.
-// 1순위: works.characters 배열과 라인 시작 매칭 (가장 정확)
-// 2순위: "이름: 대사" / "이름 - 대사" 콜론·대시 패턴 — 콜론 앞 20자 미만
-function extractSpeaker(scriptExcerpt, characters) {
+// script_excerpt에서 'quote를 말한 화자'를 추출.
+// 발췌문을 화자 블록으로 나눈 뒤, quote가 들어있는 블록의 화자를 반환한다.
+// (예전엔 발췌문 '첫 화자'만 봐서, 발췌문이 다른 인물 대사로 시작하면 화자가 틀어졌다)
+//   화자 줄 판별 1순위: works.characters 배열과 라인 시작 매칭
+//                2순위: "이름: 대사" 콜론 패턴 (콜론 앞 20자 미만)
+// quote를 못 찾으면: 화자가 한 명뿐인 발췌문이면 그 화자, 여럿이면 ''(틀린 추측 대신 미표시).
+function extractSpeaker(scriptExcerpt, characters, quote) {
   if (!scriptExcerpt) return '';
-  const lines = String(scriptExcerpt).split('\n');
   // 긴 이름 우선 정렬 — "줄리엣의 유모"가 "줄리엣"보다 먼저 매칭되도록
   const names = (Array.isArray(characters) ? characters : [])
     .map((c) => String(c).trim())
     .filter(Boolean)
     .sort((a, b) => b.length - a.length);
 
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-    // 1) characters 매칭 — 라인 시작이 등장인물 이름 + 비-식별자 문자
+  // 한 줄이 화자 줄이면 { name, rest(같은 줄에 붙은 대사) } 반환, 아니면 null
+  function speakerOf(raw) {
+    const t = raw.trim();
+    if (!t) return null;
+    // 1) characters 매칭 — 이름 + (한글/영문/숫자가 아닌 문자), 콜론은 있어도 됨
     for (const name of names) {
       const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // 한글에는 \b가 동작 안 함 → lookahead로 다음 문자가 한글/영문/숫자가 아닌지 확인
-      const re = new RegExp(`^${escaped}(?![가-힣A-Za-z0-9])`);
-      if (re.test(line)) return name;
+      const re = new RegExp(`^${escaped}(?![가-힣A-Za-z0-9])\\s*[:：]?\\s*(.*)$`);
+      const m = t.match(re);
+      if (m) return { name, rest: m[1] || '' };
     }
-    // 2) 콜론·세미콜론·대시 패턴 폴백
-    const m = line.match(/^([^\n:：—\-]{1,20})\s*[:：]\s*\S/);
+    // 2) 콜론 패턴 폴백 — "이름: 대사"
+    const m = t.match(/^([^\n:：—\-]{1,20})[:：]\s*(.*)$/);
     if (m) {
-      return m[1].replace(/\s*[(（].*?[)）]\s*$/, '').trim();
+      const nm = m[1].replace(/\s*[(（].*?[)）]\s*$/, '').trim();
+      if (nm) return { name: nm, rest: m[2] || '' };
     }
-    // 첫 비어있지 않은 줄에서 매칭 실패 시 지문일 가능성이 높음 — 종료
-    break;
+    return null;
   }
-  return '';
+
+  // 공백·따옴표 차이를 무시하고 비교 — quote의 \n 위치와 발췌문의 \n 위치가 달라도 매칭
+  const norm = (s) => String(s || '').replace(/\s+/g, '').replace(/["“”'`']/g, '');
+
+  // 발췌문을 화자 블록으로 분할
+  const blocks = [];
+  let cur = null;
+  for (const raw of String(scriptExcerpt).split('\n')) {
+    const sp = speakerOf(raw);
+    if (sp) {
+      cur = { speaker: sp.name, text: sp.rest };
+      blocks.push(cur);
+    } else if (cur) {
+      cur.text += '\n' + raw;
+    }
+  }
+  if (blocks.length === 0) return '';
+
+  // quote가 들어있는 블록 찾기
+  const qn = norm(quote);
+  if (qn) {
+    for (const b of blocks) {
+      if (norm(b.text).includes(qn)) return b.speaker;
+    }
+    // quote 첫 문장만으로 재시도 (발췌문엔 quote 일부만 있을 때)
+    const firstLine = String(quote).split('\n').map((s) => s.trim()).find(Boolean) || '';
+    const fln = norm(firstLine);
+    if (fln.length >= 4) {
+      for (const b of blocks) {
+        if (norm(b.text).includes(fln)) return b.speaker;
+      }
+    }
+  }
+
+  // 못 찾음 — 화자 한 명뿐(독백 등)이면 그 화자, 여럿이면 틀린 추측 대신 미표시
+  const distinct = new Set(blocks.map((b) => b.speaker));
+  return distinct.size === 1 ? blocks[0].speaker : '';
 }
 
 // ---------- Init ----------
@@ -921,7 +960,7 @@ function applyTodayCard(card) {
 
   // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
   const workTitle = displayTitle(card.works?.title || '');
-  const speaker = extractSpeaker(card.script_excerpt, card.works?.characters);
+  const speaker = extractSpeaker(card.script_excerpt, card.works?.characters, card.quote);
   if (speaker) {
     todaySpeaker.textContent = speaker;
     todaySpeaker.style.display = 'block';
