@@ -1052,19 +1052,46 @@
 
 <!-- ===== Nickname edit modal ===== -->
 <div id="nickname-modal" style="position:fixed;inset:0;background:rgba(14,12,10,0.65);display:none;align-items:center;justify-content:center;z-index:120;padding:24px;">
-  <div style="background:var(--paper);width:100%;max-width:420px;padding:28px 24px;border:0.5px solid var(--latte);">
+  <div style="background:var(--paper);width:100%;max-width:420px;max-height:90vh;overflow-y:auto;padding:28px 24px;border:0.5px solid var(--latte);">
     <p class="t-label-sm c-walnut" style="margin-bottom:6px;">PROFILE</p>
-    <h3 class="t-headline-md c-espresso" style="margin-bottom:14px;">이름 바꾸기</h3>
+    <h3 class="t-headline-md c-espresso" style="margin-bottom:14px;">프로필 수정</h3>
     <p class="t-body-sm c-walnut" style="margin-bottom:18px;line-height:1.6;">
-      앱에서 사용할 이름을 자유롭게 입력하세요. 기본값은 무작위 닉네임이지만 원하는 이름으로 바꿀 수 있어요.
+      앱에서 사용할 이름과 성별·나이대를 수정할 수 있어요. 성별·나이대는 선택 입력이며, 입력하시면 취향에 맞는 명대사를 추천해드려요.
     </p>
-    <input id="nickname-input" type="text" maxlength="24"
-           style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:18px;outline:none;" />
-    <div style="display:flex;gap:8px;margin-top:16px;">
-      <button id="nickname-randomize" class="sharp-btn outline" style="flex:1;">랜덤</button>
-      <button id="nickname-save" class="sharp-btn" style="flex:2;">저장</button>
+
+    <label class="t-label-sm c-walnut" style="display:block;margin-bottom:6px;">닉네임</label>
+    <div style="display:flex;gap:8px;">
+      <input id="nickname-input" type="text" maxlength="24"
+             style="flex:1;min-width:0;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:18px;outline:none;" />
+      <button id="nickname-randomize" type="button" class="sharp-btn outline" style="flex:0 0 auto;width:auto;white-space:nowrap;padding:0 14px;font-size:12px;letter-spacing:0;">랜덤</button>
     </div>
-    <button id="nickname-cancel" style="width:100%;background:transparent;border:none;margin-top:14px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
+
+    <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">성별 · 선택</label>
+    <select id="profile-gender"
+            style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">
+      <option value="">선택 안 함</option>
+      <option value="male">남성</option>
+      <option value="female">여성</option>
+      <option value="other">기타</option>
+    </select>
+
+    <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">나이대 · 선택</label>
+    <select id="profile-age"
+            style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">
+      <option value="">선택 안 함</option>
+      <option value="10s">10대</option>
+      <option value="20s">20대</option>
+      <option value="30s">30대</option>
+      <option value="40s">40대</option>
+      <option value="50s">50대</option>
+      <option value="60s">60대</option>
+      <option value="70s">70대</option>
+      <option value="80s">80대</option>
+      <option value="90s">90대</option>
+    </select>
+
+    <button id="nickname-save" class="sharp-btn" style="width:100%;margin-top:18px;">저장</button>
+    <button id="nickname-cancel" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
       Cancel
     </button>
   </div>

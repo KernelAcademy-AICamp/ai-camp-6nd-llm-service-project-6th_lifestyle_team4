@@ -61,6 +61,8 @@ const nicknameInput = $('#nickname-input');
 const nicknameSaveBtn = $('#nickname-save');
 const nicknameCancelBtn = $('#nickname-cancel');
 const nicknameRandomizeBtn = $('#nickname-randomize');
+const profileGender = $('#profile-gender');
+const profileAge = $('#profile-age');
 
 const detailScreen = $('#detail-screen');
 const detailBody = detailScreen?.querySelector('.detail-body');
@@ -98,6 +100,9 @@ const state = {
   authName: null,
   authAvatarUrl: null,
   userNickname: '',         // public.users.nickname — 사용자가 수정 가능한 표시 이름
+  userLoginId: '',          // public.users.login_id — 로그인 아이디 (이메일 대신 표시)
+  userGender: '',           // public.users.gender — '' | male | female | other
+  userAgeGroup: '',         // public.users.age_group — '' | 10s..90s
   todayCard: null,
   todayBookmarked: false,
   allCards: [],
@@ -514,13 +519,28 @@ async function bootstrapAuth() {
   state.authAvatarUrl = meta.avatar_url || meta.picture || null;
 
   // users 행 조회/생성
-  const { data: existingUser, error: selErr } = await sb
-    .from('users').select('user_id, nickname')
-    .eq('anonymous_id', state.authUid).maybeSingle();
-  if (selErr) throw selErr;
+  // login_id/gender/age_group는 마이그레이션(015) 후에 생기는 컬럼 — 없으면 기본 컬럼만으로 폴백
+  let existingUser = null;
+  {
+    const ext = await sb.from('users')
+      .select('user_id, nickname, login_id, gender, age_group')
+      .eq('anonymous_id', state.authUid).maybeSingle();
+    if (ext.error) {
+      console.warn('[m] users extended select failed, fallback to basic:', ext.error.message);
+      const basic = await sb.from('users').select('user_id, nickname')
+        .eq('anonymous_id', state.authUid).maybeSingle();
+      if (basic.error) throw basic.error;
+      existingUser = basic.data;
+    } else {
+      existingUser = ext.data;
+    }
+  }
   if (existingUser) {
     state.userId = existingUser.user_id;
     state.userNickname = existingUser.nickname || '';
+    state.userLoginId = existingUser.login_id || '';
+    state.userGender = existingUser.gender || '';
+    state.userAgeGroup = existingUser.age_group || '';
     // 닉네임이 비어있는 익명 유저는 backfill — 귀여운 이름 자동 부여
     if (!state.userNickname && state.isAnonymous) {
       const generated = randomCuteNickname();
@@ -638,6 +658,9 @@ async function applySignupProfile(sb, userId) {
       gender: profile.gender || null,
       age_group: profile.age_group || null,
     }).eq('user_id', userId);
+    state.userLoginId = profile.login_id || '';
+    state.userGender = profile.gender || '';
+    state.userAgeGroup = profile.age_group || '';
   } catch (e) {
     console.warn('[m] signup profile write failed:', e);
   }
@@ -1550,6 +1573,8 @@ themeToggle.addEventListener('keydown', (e) => {
 function openNicknameModal() {
   if (!nicknameModal) return;
   nicknameInput.value = state.userNickname || '';
+  if (profileGender) profileGender.value = state.userGender || '';
+  if (profileAge) profileAge.value = state.userAgeGroup || '';
   nicknameModal.style.display = 'flex';
   setTimeout(() => nicknameInput.focus(), 50);
 }
@@ -1561,18 +1586,22 @@ async function saveNickname() {
   if (!newName) { toast('이름을 입력해주세요'); return; }
   if (newName.length > 24) { toast('24자 이하로 입력해주세요'); return; }
   if (!state.userId) { toast('사용자 정보 없음'); return; }
+  const gender = profileGender?.value || null;
+  const ageGroup = profileAge?.value || null;
   try {
     const sb = await getSupabase();
     const { error } = await sb.from('users')
-      .update({ nickname: newName })
+      .update({ nickname: newName, gender, age_group: ageGroup })
       .eq('user_id', state.userId);
     if (error) throw error;
     state.userNickname = newName;
+    state.userGender = gender || '';
+    state.userAgeGroup = ageGroup || '';
     paintAuthIdentity();
     closeNicknameModal();
-    toast('이름이 변경됐어요');
+    toast('프로필이 저장됐어요');
   } catch (err) {
-    console.error('[m] save nickname failed:', err);
+    console.error('[m] save profile failed:', err);
     toast(`저장 실패: ${err.message || err}`);
   }
 }
@@ -1970,7 +1999,7 @@ function paintAuthIdentity() {
   } else {
     if (identityBlock) identityBlock.style.display = 'flex';
     if (identitySpacer) identitySpacer.style.display = '';
-    const name = state.userNickname || state.authName || state.authEmail || 'Signed In';
+    const name = state.userNickname || state.authName || state.userLoginId || 'Signed In';
     settingsName.textContent = name;
   }
   // EDIT 버튼도 로그인 상태에서만
@@ -1986,12 +2015,21 @@ function paintAuthIdentity() {
     signOutBtn.textContent = 'Reset Anonymous';
   } else {
     if (signinBlock) signinBlock.style.display = 'none';
-    const providerLabel = state.authProvider === 'google' ? 'Google'
-      : state.authProvider === 'kakao' ? 'Kakao'
-      : (state.authProvider || 'Account');
-    const bio = state.authEmail
-      ? `${providerLabel} · ${state.authEmail}`
-      : `${providerLabel} 계정으로 로그인됨`;
+    // ID+비밀번호 계정은 합성 이메일(@user.local) 대신 아이디만 노출
+    const isLocalAccount = (state.authEmail || '').endsWith('@user.local');
+    let bio;
+    if (isLocalAccount) {
+      const loginId = state.userLoginId
+        || state.authEmail.slice(0, -'@user.local'.length);
+      bio = loginId ? `아이디 · ${loginId}` : '로그인됨';
+    } else {
+      const providerLabel = state.authProvider === 'google' ? 'Google'
+        : state.authProvider === 'kakao' ? 'Kakao'
+        : (state.authProvider || 'Account');
+      bio = state.authEmail
+        ? `${providerLabel} · ${state.authEmail}`
+        : `${providerLabel} 계정으로 로그인됨`;
+    }
     settingsBio.textContent = bio;
     signOutBtn.textContent = 'Sign Out';
   }
