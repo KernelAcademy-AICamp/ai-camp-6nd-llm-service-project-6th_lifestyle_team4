@@ -199,7 +199,9 @@ export async function runTranslate(card) {
   };
 
   const prompt = TRANSLATE_PROMPT.replace('{{INPUT_JSON}}', JSON.stringify(envelope, null, 2));
-  const result = await callClaude(prompt, { maxTokens: 4096 });
+  // script_excerpt가 2000자 이상으로 길어, 영문→한국어 번역 출력이 4096 토큰을 넘어
+  // JSON이 중간에 잘리는 문제(=valid JSON 실패)를 막기 위해 넉넉히 16000으로.
+  const result = await callClaude(prompt, { maxTokens: 16000 });
 
   const translated = result?.cards?.[0];
   if (!translated || typeof translated.quote !== 'string') {
