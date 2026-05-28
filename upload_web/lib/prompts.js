@@ -23,7 +23,8 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
 아래 JSON 형식으로만 응답하세요. 다른 설명이나 마크다운 없이 JSON 한 덩어리만 출력합니다.
 {
   "work": {
-    "title": "작품 제목",
+    "title": "작품 제목 (시리즈물이면 시리즈명만)",
+    "subtitle": "부제 또는 null",
     "format": "movie | drama | play | musical | opera | novel | poem | essay 중 하나",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
@@ -44,6 +45,10 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
 }
 
 [필드 규칙]
+- title / subtitle: 시리즈물 분리 규칙
+  · **단행본/단편/단일 작품**(예: 영화 "베테랑", 소설 "데미안") → title="작품명", subtitle=null
+  · **시리즈물·연작·옴니버스의 개별 편**(예: 셜록홈즈의 "보헤미아 왕국의 스캔들", 해리포터의 "마법사의 돌", TV 드라마의 개별 에피소드) → title="시리즈/작품명"(셜록홈즈/해리포터), subtitle="개별 편 이름"(보헤미아 왕국의 스캔들/마법사의 돌)
+  · 부제가 분명히 별도로 존재하지 않으면 subtitle=null. **억지로 분리하지 말 것.**
 - format: "movie", "drama", "play", "musical", "opera", "novel", "poem", "essay" 중 정확히 하나
   · 대본/시나리오 형식: movie(영화), drama(TV 드라마), play(희곡/연극), musical(뮤지컬), opera(오페라)
   · 문학 형식: novel(소설), poem(시), essay(에세이/수필)
@@ -215,7 +220,8 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 \`\`\`json
 {
   "work": {
-    "title": "작품 제목",
+    "title": "작품 제목 (시리즈물이면 시리즈명만)",
+    "subtitle": "부제 또는 null",
     "format": "movie | drama | play | musical | opera | novel | poem | essay 중 하나",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
@@ -275,6 +281,12 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 ---
 
 ## 필드별 규칙
+
+### \`work.title\` / \`work.subtitle\`
+시리즈물의 시리즈명과 개별 편 이름을 분리한다.
+- **단행본/단편/단일 작품**(예: 영화 "베테랑", 오페라 "리골레토") → \`title\`="작품명", \`subtitle\`=null
+- **시리즈물·연작의 개별 편**(예: 셜록홈즈의 "보헤미아 왕국의 스캔들", 해리포터의 "마법사의 돌") → \`title\`="시리즈명"(셜록홈즈), \`subtitle\`="개별 편 이름"(보헤미아 왕국의 스캔들)
+- 부제가 분명히 별도로 존재하지 않으면 \`subtitle\`=null. **억지로 분리하지 말 것.**
 
 ### \`work.format\`
 "movie" | "drama" | "play" | "musical" | "opera" | "novel" | "poem" | "essay" 중 정확히 하나.
@@ -539,7 +551,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
 
 {
   "work": {
-    "title": "작품 제목",
+    "title": "작품 제목 (시리즈물이면 시리즈명만)",
+    "subtitle": "부제 또는 null",
     "format": "play",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
@@ -561,6 +574,11 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
 }
 
 [필드 규칙]
+
+- title / subtitle: 시리즈물 분리 규칙
+  · **단행본/단일 작품**(예: "햄릿", "갈매기") → title="작품명", subtitle=null
+  · **시리즈물·연작의 개별 편**(예: 한 작가의 연작 희곡) → title="시리즈/작품명", subtitle="개별 편 이름"
+  · 부제가 분명히 별도로 존재하지 않으면 subtitle=null. **억지로 분리하지 말 것.**
 
 - format
   · "play" 고정
@@ -878,7 +896,8 @@ const EXTRACT_PROMPT_LITERATURE = `[01 ROLE]
 
 {
   "work": {
-    "title": "작품 제목",
+    "title": "작품 제목 (시리즈물이면 시리즈명만)",
+    "subtitle": "부제 또는 null",
     "format": "novel | poem | essay 중 하나",
     "author": "작가명 또는 null",
     "release_year": 연도(정수) 또는 null,
@@ -899,6 +918,11 @@ const EXTRACT_PROMPT_LITERATURE = `[01 ROLE]
 }
 
 [필드 규칙]
+
+- title / subtitle: 시리즈물 분리 규칙
+  · **단행본/단일 작품**(예: 소설 "데미안", 시 "님의 침묵") → title="작품명", subtitle=null
+  · **시리즈물·연작·옴니버스의 개별 편**(예: 셜록홈즈의 "보헤미아 왕국의 스캔들", 해리포터의 "마법사의 돌") → title="시리즈/작품명"(셜록홈즈), subtitle="개별 편 이름"(보헤미아 왕국의 스캔들)
+  · 부제가 분명히 별도로 존재하지 않으면 subtitle=null. **억지로 분리하지 말 것.**
 
 - format
   · "novel"(소설) | "poem"(시) | "essay"(에세이/수필) 중 정확히 하나

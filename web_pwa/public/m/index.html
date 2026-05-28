@@ -62,7 +62,7 @@
   /* Editorial type scale — mirrors Android Type.kt */
   .t-display-lg { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 40px; line-height: 52px; }
   .t-display-md { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 42px; }
-  .t-headline-lg { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 34px; }
+  .t-headline-lg { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 34px; word-break: keep-all; overflow-wrap: break-word; }
   .t-headline-md { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 31px; }
   .t-headline-sm { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 18px; line-height: 26px; }
   .t-title-lg { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif; font-weight: 400; font-size: 16px; line-height: 24px; }
@@ -748,7 +748,7 @@
         <p id="today-quote" class="quote-22"></p>
 
         <div id="today-work-spacer" style="height:0;"></div>
-        <p id="today-work" class="c-walnut" style="margin:0;display:none;font-size:16px;line-height:24px;"></p>
+        <p id="today-work" class="c-walnut" style="margin:0;display:none;font-size:16px;line-height:24px;word-break:keep-all;overflow-wrap:break-word;"></p>
 
         <div style="height:24px;"></div>
         <div class="hairline"></div>
@@ -949,9 +949,10 @@
     <button id="detail-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
       <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
     </button>
-    <div style="display:flex;flex-direction:column;align-items:center;">
+    <div style="display:flex;flex-direction:column;align-items:center;min-width:0;max-width:calc(100% - 100px);">
       <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">DAILY SCRIPT</span>
-      <span id="detail-work-title" class="t-headline-lg c-espresso"></span>
+      <span id="detail-work-title" class="t-headline-lg c-espresso" style="text-align:center;"></span>
+      <span id="detail-work-subtitle" class="t-label-sm c-walnut" style="display:none;text-align:center;margin-top:2px;"></span>
     </div>
     <button id="detail-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:8px;">
       <span class="material-symbols-outlined c-walnut" style="font-size:24px;">bookmark</span>
