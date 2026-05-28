@@ -650,8 +650,14 @@ function buildViewNode(card) {
   const node = libraryCardTemplate.content.firstElementChild.cloneNode(true);
   const work = card.works || {};
 
-  const workLine = [displayTitle(work.title) || `Work #${card.work_id}`, work.format, work.release_year, work.author]
-    .filter(Boolean).join(' · ');
+  // 셜록홈즈 시리즈처럼 부제가 있으면 제목 바로 뒤에 끼워 — 어느 편 카드인지 한눈에.
+  const workLine = [
+    displayTitle(work.title) || `Work #${card.work_id}`,
+    work.subtitle || null,
+    work.format,
+    work.release_year,
+    work.author,
+  ].filter(Boolean).join(' · ');
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
   node.querySelector('.lib-quote').textContent = card.quote ? `"${cleanForDisplay(card.quote)}"` : '';
