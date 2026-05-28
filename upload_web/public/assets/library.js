@@ -895,7 +895,7 @@ function cleanForDisplay(s) {
   // (b) 줄 머리 첫 단어 빈도 — "이름" 단독 또는 "이름 + 공백 + 내용" 패턴
   //     2회 이상 등장하면 화자 후보
   //     단, 명사+조사로 끝나는 narrative 주어는 제외 (강재가/강재의/강재에게…)
-  const PARTICLE_END = /(가|이|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  const PARTICLE_END = /(가|이|은|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
   const headCounts = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();

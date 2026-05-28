@@ -306,7 +306,7 @@ function cleanForDisplay(s) {
   }
 
   // (b) 줄 머리 첫 단어 빈도 (조사 끝 narrative 주어 제외)
-  const PARTICLE_END = /(가|이|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  const PARTICLE_END = /(가|이|은|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
   const headCounts = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
@@ -314,7 +314,8 @@ function cleanForDisplay(s) {
     const headM = line.match(/^([가-힣A-Za-z]{2,7}[0-9]?)(?=\s|$)/);
     if (headM) {
       const word = headM[1];
-      if (word.length > 2 && PARTICLE_END.test(word)) continue;
+      // 2글자 대명사+조사 "나는/그는/너는" 등도 narrative 주어로 제외 (길이 제한 없음)
+      if (PARTICLE_END.test(word)) continue;
       headCounts[word] = (headCounts[word] || 0) + 1;
     }
   }

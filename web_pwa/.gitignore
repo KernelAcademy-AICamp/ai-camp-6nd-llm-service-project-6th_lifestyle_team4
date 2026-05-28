@@ -4,3 +4,6 @@ node_modules/
 .vercel/
 *.log
 .DS_Store
+
+# 로컬 미리보기용 static config (실제 /api/config 는 Vercel serverless 함수)
+public/api/config

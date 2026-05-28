@@ -63,6 +63,7 @@ const nicknameCancelBtn = $('#nickname-cancel');
 const nicknameRandomizeBtn = $('#nickname-randomize');
 
 const detailScreen = $('#detail-screen');
+const detailBody = detailScreen?.querySelector('.detail-body');
 const detailBack = $('#detail-back');
 const detailWorkTitle = $('#detail-work-title');
 const detailBookmark = $('#detail-bookmark');
@@ -1865,6 +1866,8 @@ function openDetail(card) {
   // open the screen — history 에 overlay 상태 push (swipe-back으로 닫히도록)
   history.pushState({ overlay: 'detail', cardId: card.card_id }, '');
   detailScreen.style.display = 'flex';
+  // detail-body 는 재사용되는 단일 요소라 이전 카드의 스크롤 위치를 기억함 → 항상 맨 위에서 시작하도록 리셋
+  if (detailBody) detailBody.scrollTop = 0;
   requestAnimationFrame(() => detailScreen.classList.add('open'));
   document.body.style.overflow = 'hidden';
 
@@ -2318,7 +2321,7 @@ function cleanForDisplay(s) {
     const name = m[1].trim();
     if (name) speakers.add(name);
   }
-  const PARTICLE_END = /(가|이|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  const PARTICLE_END = /(가|이|은|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
   const headCounts = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
