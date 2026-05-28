@@ -246,10 +246,12 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
     loadRecentlyShownFromStorage();
     await bootstrapAuth();
     identify(state.userId);
-    // 회원이면 성별·나이대를 Amplitude User Property로 전송 (타겟층 분석용)
-    if (!state.isAnonymous) {
-      setUserProps({ gender: state.userGender, ageGroup: state.userAgeGroup });
-    }
+    // 회원/익명 구분 + (회원이면) 성별·나이대를 Amplitude User Property로 전송 (타겟층 분석용)
+    setUserProps({
+      accountType: state.isAnonymous ? 'anonymous' : 'member',
+      gender: state.isAnonymous ? null : state.userGender,
+      ageGroup: state.isAnonymous ? null : state.userAgeGroup,
+    });
     paintAuthIdentity();
     await Promise.all([loadAllCards(), loadBookmarks()]);
     paintTasteProfile();
@@ -676,7 +678,7 @@ async function loadAllCards() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('cards')
-    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year, characters)')
+    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, subtitle, format, author, release_year, characters)')
     .order('card_id', { ascending: false }).limit(500);
   if (error) throw error;
   state.allCards = Array.isArray(data) ? data : [];
@@ -687,7 +689,7 @@ async function loadBookmarks() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('user_bookmarks')
-    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
+    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false });
   if (error) { console.warn('[m] bookmarks load failed:', error); return; }
@@ -897,7 +899,7 @@ async function toggleBookmark(cardId) {
     } else {
       const { data, error } = await sb.from('user_bookmarks')
         .insert({ user_id: state.userId, card_id: cardId })
-        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
+        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
@@ -1008,7 +1010,10 @@ function applyTodayCard(card) {
   if (workTitle) {
     const fmt = card.works?.format || '';
     const genreLabel = GENRE_LABEL[fmt] || '';
-    todayWork.textContent = genreLabel ? `— ${genreLabel} <${workTitle}>` : `— <${workTitle}>`;
+    // 시리즈물(예: 셜록홈즈 — 보헤미아 왕국의 스캔들)이면 subtitle을 제목 뒤에 붙임.
+    const subtitle = card.works?.subtitle ? String(card.works.subtitle).trim() : '';
+    const titleBlock = subtitle ? `<${workTitle}> ${subtitle}` : `<${workTitle}>`;
+    todayWork.textContent = genreLabel ? `— ${genreLabel} ${titleBlock}` : `— ${titleBlock}`;
     todayWork.style.display = 'block';
     todayWorkSpacer.style.height = '20px';
   } else {
@@ -1205,13 +1210,28 @@ function extractSeries(workOrTitle) {
   return { series: t, subtitle: '', full: t };
 }
 
-// displayTitle alias 적용 후 series + subtitle + author 로 그룹 키 생성.
+// works.subtitle (DB) 우선, 없으면 extractSeries 휴리스틱 fallback.
 // 같은 series지만 subtitle이 다르면 별도 책으로 유지 (책꽂이에 시리즈가 여러 권으로 늘어섬).
+function resolveSeriesSubtitle(work) {
+  const dbSubtitle = work?.subtitle ? String(work.subtitle).trim() : '';
+  if (dbSubtitle) {
+    return {
+      series: displayTitle(work?.title || ''),
+      subtitle: dbSubtitle,
+    };
+  }
+  // legacy: 부제가 분리되지 않은 채 title에 통째로 들어있는 경우 — 패턴으로 추출 시도
+  const ext = extractSeries({
+    title: displayTitle(work?.title || ''),
+    author: work?.author || '',
+  });
+  return { series: ext.series, subtitle: ext.subtitle };
+}
+
 function workGroupKey(work) {
-  // displayTitle 적용된 title + author 로 시리즈 감지
-  const ext = extractSeries({ title: displayTitle(work?.title || ''), author: work?.author || '' });
+  const { series, subtitle } = resolveSeriesSubtitle(work);
   const a = (work?.author || '').toLowerCase().trim();
-  return `${ext.series.toLowerCase()}__${ext.subtitle.toLowerCase()}__${a}`;
+  return `${series.toLowerCase()}__${subtitle.toLowerCase()}__${a}`;
 }
 
 function groupBookmarksByWork() {
@@ -1222,15 +1242,12 @@ function groupBookmarksByWork() {
     const work = card.works || {};
     const key = workGroupKey(work);
     if (!byWork.has(key)) {
-      const { series, subtitle } = extractSeries({
-        title: displayTitle(work.title || ''),
-        author: work.author || '',
-      });
+      const { series, subtitle } = resolveSeriesSubtitle(work);
       byWork.set(key, {
         key,
         series,
         subtitle,
-        // spine 표시용 — subtitle 있으면 부제, 없으면 시리즈명
+        // spine 표시용 — subtitle 있으면 부제(개별 편), 없으면 시리즈명
         title: subtitle || series || displayTitle(work.title) || '제목 없음',
         rawTitle: work.title || '',
         format: (work.format || '').toLowerCase(),
@@ -1602,7 +1619,7 @@ async function saveNickname() {
     state.userGender = gender || '';
     state.userAgeGroup = ageGroup || '';
     // 변경된 성별·나이대를 Amplitude에 반영
-    setUserProps({ gender: state.userGender, ageGroup: state.userAgeGroup });
+    setUserProps({ accountType: 'member', gender: state.userGender, ageGroup: state.userAgeGroup });
     paintAuthIdentity();
     closeNicknameModal();
     toast('프로필이 저장됐어요');
@@ -1942,6 +1959,8 @@ async function submitSignin() {
     } else {
       clearRememberedCreds();
     }
+    // 명시적 로그인/가입 이벤트 (Amplitude) — reload 전에 발생, SDK가 저장 후 전송
+    track(signinMode === 'signup' ? 'sign_up' : 'login', { method: 'id_password' });
     toast(signinMode === 'signup' ? '가입 완료' : '로그인 됨');
     closeSigninModal();
     // 세션이 바뀌었으므로 reload — bootstrapAuth가 새 user 행 만들고 마이그레이션 + session_id 발급
@@ -2052,8 +2071,19 @@ function openDetail(card) {
   state.detailCardId = card.card_id;
   const w = card.works || {};
   const title = displayTitle(w.title) || '';
+  const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
 
   detailWorkTitle.textContent = title;
+  // 시리즈물 부제 — 있으면 작은 글자로 타이틀 아래 표시
+  const detailWorkSubtitle = document.getElementById('detail-work-subtitle');
+  if (detailWorkSubtitle) {
+    if (subtitle) {
+      detailWorkSubtitle.textContent = subtitle;
+      detailWorkSubtitle.style.display = 'block';
+    } else {
+      detailWorkSubtitle.style.display = 'none';
+    }
+  }
 
   // metadata chips row (FORMAT / AUTHOR / YEAR — uppercase labels)
   const items = [

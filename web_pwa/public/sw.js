@@ -5,7 +5,7 @@
 //  - 정적 자산 (JS/CSS/이미지) → stale-while-revalidate
 //  - API/Supabase/Anthropic → 항상 네트워크 패스스루
 //  - 업데이트는 즉시 활성화 (skipWaiting + clients.claim)
-const CACHE_VERSION = 'pwa-v10-genre-badge-colors';
+const CACHE_VERSION = 'pwa-v13-prose-lines-genre-colors';
 const STATIC_ASSETS = [
   '/assets/supabase-client.js',
   '/assets/pwa.js',
