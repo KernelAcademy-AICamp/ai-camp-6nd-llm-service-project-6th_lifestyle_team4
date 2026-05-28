@@ -250,6 +250,8 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
     setView(getInitialView());
     suppressPushState = false;
     history.replaceState({ tab: state.currentView }, '', '#' + state.currentView);
+    // 비회원이면 랜딩 로그인 유도 (최초 1회) — 홈이 렌더된 위에 띄움
+    maybeShowLanding();
     // 데이터 변경을 실시간으로 받아 즉시 반영
     subscribeToChanges();
     // 앱이 포그라운드로 돌아올 때마다 최신화 (실시간 누락 안전망)
@@ -822,6 +824,13 @@ function pickRandomCard() {
 
 // ---------- Bookmark API ----------
 async function toggleBookmark(cardId) {
+  if (state.isAnonymous) {
+    openPromptModal({
+      title: '북마크는 회원 전용',
+      message: '마음에 든 명대사를 보관하려면 로그인이 필요해요.',
+    });
+    return;
+  }
   if (!state.userId || state.bookmarkActionInFlight) return;
   state.bookmarkActionInFlight = true;
   const sb = await getSupabase();
@@ -1066,6 +1075,16 @@ todayRead.addEventListener('click', (e) => {
   if (state.todayCard) openDetail(state.todayCard);
 });
 homeRefresh.addEventListener('click', () => {
+  if (state.isAnonymous) {
+    if (getRefreshState().count >= REFRESH_LIMIT) {
+      openPromptModal({
+        title: '새 명대사는 3번까지',
+        message: '오늘 새 명대사를 3번 받아보셨어요. 로그인하면 무제한으로 즐길 수 있어요.',
+      });
+      return;
+    }
+    bumpRefreshCount();
+  }
   track('today_refreshed');
   applyTodayCard(pickRandomCard());
   renderHomeBookmarks();  // '지난 기록' 갱신 (직전 카드가 추가됨)
@@ -1607,6 +1626,82 @@ const signinCancelBtn = $('#signin-cancel');
 const signinErrorEl = $('#signin-error');
 const signinRememberInput = $('#signin-remember');
 let signinMode = 'signin';  // 'signin' | 'signup'
+
+// ---------- 공용 안내/유도 모달 (랜딩 + 회원전용 게이트) ----------
+const promptModal = $('#prompt-modal');
+const promptModalTitle = $('#prompt-modal-title');
+const promptModalMsg = $('#prompt-modal-msg');
+const promptModalConfirm = $('#prompt-modal-confirm');
+const promptModalDismiss = $('#prompt-modal-dismiss');
+let _promptOnDismiss = null;
+
+function openPromptModal({ title, message, confirmLabel = '로그인', dismissLabel = '닫기', onConfirm = null, onDismiss = null }) {
+  if (!promptModal) return;
+  promptModalTitle.textContent = title;
+  promptModalMsg.textContent = message;
+  promptModalConfirm.textContent = confirmLabel;
+  promptModalDismiss.textContent = dismissLabel;
+  promptModal._onConfirm = onConfirm;
+  _promptOnDismiss = onDismiss;
+  promptModal.style.display = 'flex';
+}
+function closePromptModal() {
+  if (promptModal) promptModal.style.display = 'none';
+}
+promptModalConfirm?.addEventListener('click', () => {
+  const cb = promptModal?._onConfirm;
+  closePromptModal();
+  cb?.();
+  openSigninModal();
+});
+promptModalDismiss?.addEventListener('click', () => {
+  const cb = _promptOnDismiss;
+  closePromptModal();
+  cb?.();
+});
+promptModal?.addEventListener('click', (e) => {
+  if (e.target === promptModal) {
+    const cb = _promptOnDismiss;
+    closePromptModal();
+    cb?.();
+  }
+});
+
+// ---------- 비회원 카드 새로고침 일일 제한 ----------
+const REFRESH_LIMIT = 3;
+const REFRESH_COUNT_KEY = 'ds.refreshCount';
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function getRefreshState() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(REFRESH_COUNT_KEY) || 'null');
+    if (raw && raw.date === todayStr() && Number.isInteger(raw.count)) return raw;
+  } catch {}
+  return { date: todayStr(), count: 0 };
+}
+function bumpRefreshCount() {
+  const next = { date: todayStr(), count: getRefreshState().count + 1 };
+  try { localStorage.setItem(REFRESH_COUNT_KEY, JSON.stringify(next)); } catch {}
+  return next.count;
+}
+
+// ---------- 랜딩 로그인 유도 (최초 1회) ----------
+const LANDING_SEEN_KEY = 'ds.landingSeen';
+function maybeShowLanding() {
+  if (!state.isAnonymous) return;
+  if (localStorage.getItem(LANDING_SEEN_KEY) === '1') return;
+  const markSeen = () => { try { localStorage.setItem(LANDING_SEEN_KEY, '1'); } catch {} };
+  openPromptModal({
+    title: '오늘의 명대사',
+    message: '로그인하면 마음에 든 명대사를 보관하고 다른 기기에서도 이어볼 수 있어요. 먼저 둘러보셔도 좋아요.',
+    confirmLabel: '로그인 / 회원가입',
+    dismissLabel: '둘러보기',
+    onConfirm: markSeen,
+    onDismiss: markSeen,
+  });
+}
 
 const REMEMBER_KEY = 'ds.rememberCreds';
 const SESSION_KEY = 'ds.sessionId';
@@ -2275,6 +2370,14 @@ async function unsubscribeFromDetailComments() {
 
 // ---------- View switching ----------
 function setView(view) {
+  // 익명 사용자는 보관함 진입 차단 — 안내 후 home으로 보정 (재귀 없이 1패스)
+  if (view === 'archive' && state.isAnonymous) {
+    openPromptModal({
+      title: '북마크 보관함은 회원 전용',
+      message: '보관한 명대사를 모아보려면 로그인이 필요해요.',
+    });
+    view = 'home';
+  }
   state.currentView = view;
   viewHome.style.display = (view === 'home') ? 'block' : 'none';
   viewArchive.style.display = (view === 'archive') ? 'block' : 'none';
