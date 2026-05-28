@@ -905,7 +905,8 @@ function cleanForDisplay(s) {
     if (headM) {
       const word = headM[1];
       // 조사로 끝나는 단어는 narrative 주어로 보고 카운트 안 함
-      if (word.length > 2 && PARTICLE_END.test(word)) continue;
+      // (2글자 대명사+조사 "나는/그는/너는" 등도 제외해야 하므로 길이 제한 없음)
+      if (PARTICLE_END.test(word)) continue;
       headCounts[word] = (headCounts[word] || 0) + 1;
     }
   }
@@ -978,12 +979,18 @@ function boldSpeakerLines(cleanedText, characterNames) {
   if (names.length === 0) return escapeHtml(text);
 
   const nameSet = new Set(names.map((n) => String(n).trim()).filter(Boolean));
-  return text.split('\n').map((line) => {
+  // 화자명은 항상 "블록 첫 줄"(빈 줄 다음 또는 맨 첫 줄)에 온다 — 대사 중간에 인물
+  // 이름이 한 줄로 나와도(부르거나 외치는 경우) 화자로 오인해 볼드하지 않도록 위치를 함께 본다.
+  const lines = text.split('\n');
+  return lines.map((line, i) => {
     const safe = escapeHtml(line);
     const t = line.trim();
+    if (!t) return safe;
+    const isBlockStart = i === 0 || lines[i - 1].trim() === '';
+    if (!isBlockStart) return safe;
     // 괄호 지문 단서가 붙은 경우 이름 부분만 떼서 비교 ("카르멘 (살짝)" → "카르멘")
     const namePart = t.split('(')[0].trim();
-    const isSpeaker = !!t && (nameSet.has(t) || nameSet.has(namePart));
+    const isSpeaker = nameSet.has(t) || nameSet.has(namePart);
     return isSpeaker ? `<strong>${safe}</strong>` : safe;
   }).join('\n');
 }

@@ -2326,7 +2326,8 @@ function cleanForDisplay(s) {
     const headM = line.match(/^([가-힣A-Za-z]{2,7}[0-9]?)(?=\s|$)/);
     if (headM) {
       const word = headM[1];
-      if (word.length > 2 && PARTICLE_END.test(word)) continue;
+      // 2글자 대명사+조사 "나는/그는/너는" 등도 narrative 주어로 제외 (길이 제한 없음)
+      if (PARTICLE_END.test(word)) continue;
       headCounts[word] = (headCounts[word] || 0) + 1;
     }
   }
@@ -2376,18 +2377,24 @@ function cleanForDisplay(s) {
     .trim();
 }
 
-// works.characters에 있는 이름과 정확히 일치하는 라인만 <strong>으로 감싸 볼드.
+// works.characters에 있는 이름과 정확히 일치하면서 "블록 첫 줄"인 라인만 볼드.
+// 화자명은 항상 빈 줄 다음 첫 줄(또는 맨 첫 줄)에 온다 — 대사 중간에 인물 이름이
+// 한 줄로 나와도(부르거나 외치는 경우) 화자로 오인해 볼드하지 않도록 위치를 함께 본다.
 // 목록 없으면 볼드 없이 escape만.
 function boldSpeakerLines(cleanedText, characterNames) {
   const text = String(cleanedText ?? '');
   const names = Array.isArray(characterNames) ? characterNames : [];
   if (names.length === 0) return escapeHtml(text);
   const nameSet = new Set(names.map((n) => String(n).trim()).filter(Boolean));
-  return text.split('\n').map((line) => {
+  const lines = text.split('\n');
+  return lines.map((line, i) => {
     const safe = escapeHtml(line);
     const t = line.trim();
+    if (!t) return safe;
+    const isBlockStart = i === 0 || lines[i - 1].trim() === '';
+    if (!isBlockStart) return safe;
     const namePart = t.split('(')[0].trim();
-    const isSpeaker = !!t && (nameSet.has(t) || nameSet.has(namePart));
+    const isSpeaker = nameSet.has(t) || nameSet.has(namePart);
     return isSpeaker ? `<strong>${safe}</strong>` : safe;
   }).join('\n');
 }
