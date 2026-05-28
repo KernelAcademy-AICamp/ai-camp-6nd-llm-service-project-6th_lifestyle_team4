@@ -52,6 +52,7 @@ const cardTemplate = $('#card-template');
 const cardEditTemplate = $('#card-edit-template');
 const selectAllBtn = $('#select-all-btn');
 const selectAllLabel = $('#select-all-label');
+const translateAllBtn = $('#translate-all-btn');
 
 // ---------------------------------------------------------------------------
 // Init: auth gate
@@ -535,8 +536,10 @@ function renderSaveBar() {
     const total = state.cards.length;
     if (total === 0) {
       selectAllBtn.classList.add('hidden');
+      translateAllBtn?.classList.add('hidden');
     } else {
       selectAllBtn.classList.remove('hidden');
+      translateAllBtn?.classList.remove('hidden');
       selectAllLabel.textContent = (count === total) ? '전체 해제' : '전체 선택';
     }
   }
@@ -557,6 +560,24 @@ if (selectAllBtn) {
 // ---------------------------------------------------------------------------
 // Translate
 // ---------------------------------------------------------------------------
+// 단일 카드 번역 요청 (개별/전체 번역 공용)
+async function requestTranslation(token, card) {
+  return apiFetch('/api/translate', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      card: {
+        quote: card.quote,
+        script_excerpt: card.script_excerpt,
+        excerpt_description: card.excerpt_description,
+      },
+    }),
+  });
+}
+
 async function onTranslateClick(idx) {
   const card = state.cards[idx];
 
@@ -570,20 +591,7 @@ async function onTranslateClick(idx) {
   try {
     toast('번역 중⋯', 'info');
     const token = await getAccessToken();
-    const json = await apiFetch('/api/translate', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        card: {
-          quote: card.quote,
-          script_excerpt: card.script_excerpt,
-          excerpt_description: card.excerpt_description,
-        },
-      }),
-    });
+    const json = await requestTranslation(token, card);
     state.cards[idx].translated = json;
     state.cards[idx].showingTranslation = true;
     render();
@@ -593,6 +601,61 @@ async function onTranslateClick(idx) {
     toast(err.message || '번역 실패', 'error');
   }
 }
+
+// 전체 번역하기 — 아직 번역 안 된 카드를 카드별로 순차 번역.
+// (모든 카드를 한 번에 LLM에 보내면 응답 JSON이 너무 길어 잘리므로 카드별로 호출)
+async function onTranslateAll() {
+  if (!state.cards.length) return;
+
+  const targets = state.cards
+    .map((c, i) => i)
+    .filter((i) => !state.cards[i].translated);
+
+  // 이미 전부 번역돼 있으면 → 모두 번역본 보기로 전환
+  if (!targets.length) {
+    state.cards.forEach((c) => { if (c.translated) c.showingTranslation = true; });
+    render();
+    toast('이미 모든 카드가 번역되어 있습니다.', 'info');
+    return;
+  }
+
+  translateAllBtn.disabled = true;
+  const orig = translateAllBtn.innerHTML;
+  let done = 0;
+  let failed = 0;
+  try {
+    const token = await getAccessToken();
+    for (const i of targets) {
+      translateAllBtn.innerHTML =
+        `<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>` +
+        `<span>번역 중⋯ (${done + failed}/${targets.length})</span>`;
+      try {
+        const json = await requestTranslation(token, state.cards[i]);
+        state.cards[i].translated = json;
+        state.cards[i].showingTranslation = true;
+        done += 1;
+      } catch (err) {
+        console.error('[translate-all] card', i, err);
+        failed += 1;
+      }
+      render(); // 진행 상황을 카드에 즉시 반영 (translate-all 버튼은 render가 건드리지 않음)
+    }
+    if (failed === 0) {
+      toast(`전체 번역 완료 (${done}장)`, 'success');
+    } else {
+      toast(`전체 번역 종료 · 성공 ${done} / 실패 ${failed}`, done ? 'info' : 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    toast(err.message || '전체 번역 실패', 'error');
+  } finally {
+    translateAllBtn.disabled = false;
+    translateAllBtn.innerHTML = orig;
+    render();
+  }
+}
+
+translateAllBtn?.addEventListener('click', onTranslateAll);
 
 // ---------------------------------------------------------------------------
 // Save
