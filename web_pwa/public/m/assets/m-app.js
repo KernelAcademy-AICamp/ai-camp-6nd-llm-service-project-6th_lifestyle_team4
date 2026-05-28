@@ -766,14 +766,18 @@ function pickByTasteRandom() {
     return p;
   }
 
-  // 거리 역수 가중 — 최근 제외
+  // 거리 역수 가중 — 최근 + 북마크 제외
+  const bookmarked = state.bookmarkedIds || new Set();
   let candidates = state.allCards.filter(
-    (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number') && !exclude.has(c.card_id)
+    (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number')
+        && !exclude.has(c.card_id)
+        && !bookmarked.has(c.card_id)
   );
   if (candidates.length === 0) {
-    // 폴백 — 전체에서 가중 랜덤
+    // 폴백 — 북마크는 계속 제외, 최근만 허용
     candidates = state.allCards.filter(
-      (c) => typeof c.temperature === 'number' || typeof c.intensity === 'number'
+      (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number')
+          && !bookmarked.has(c.card_id)
     );
   }
   if (candidates.length === 0) {
@@ -837,17 +841,29 @@ document.addEventListener('visibilitychange', () => {
 
 function candidatesExcludingRecent() {
   const exclude = new Set(state.recentlyShownIds);
-  const pool = state.allCards.filter((c) => !exclude.has(c.card_id));
-  // 풀이 너무 작으면 (전체가 10개 이하) 폴백
+  const bookmarked = state.bookmarkedIds || new Set();
+  // 1차: 최근 본 것 + 북마크된 것 모두 제외 (정상 동작 — 새로고침 시 북마크는 안 떠야 함)
+  let pool = state.allCards.filter((c) => !exclude.has(c.card_id) && !bookmarked.has(c.card_id));
+  if (pool.length > 0) return pool;
+  // 2차 폴백: 북마크만 빼고 최근 본 것은 다시 허용 (북마크 안 한 카드 우선)
+  pool = state.allCards.filter((c) => !bookmarked.has(c.card_id));
+  if (pool.length > 0) return pool;
+  // 3차 폴백: 전체가 북마크된 상황 — 최근만 빼서라도 보여줌
+  pool = state.allCards.filter((c) => !exclude.has(c.card_id));
   return pool.length > 0 ? pool : state.allCards;
 }
 
-// 직전에 보던 카드(큐의 마지막) 복원 — 없거나 카드가 삭제됐으면 null
+// 직전에 보던 카드(큐의 마지막) 복원 — 없거나 카드가 삭제·북마크됐으면 건너뜀
 function restoreLastShownCard() {
   const ids = state.recentlyShownIds;
   if (!ids || ids.length === 0) return null;
-  const lastId = ids[ids.length - 1];
-  return state.allCards.find((c) => c.card_id === lastId) || null;
+  const bookmarked = state.bookmarkedIds || new Set();
+  // 가장 최근부터 거꾸로 — 북마크된 카드는 새로고침 시 부활시키지 않음
+  for (let i = ids.length - 1; i >= 0; i--) {
+    const card = state.allCards.find((c) => c.card_id === ids[i]);
+    if (card && !bookmarked.has(card.card_id)) return card;
+  }
+  return null;
 }
 
 function rememberShown(cardId) {
