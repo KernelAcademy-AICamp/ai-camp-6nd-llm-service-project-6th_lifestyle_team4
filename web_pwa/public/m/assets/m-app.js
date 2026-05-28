@@ -61,6 +61,8 @@ const nicknameInput = $('#nickname-input');
 const nicknameSaveBtn = $('#nickname-save');
 const nicknameCancelBtn = $('#nickname-cancel');
 const nicknameRandomizeBtn = $('#nickname-randomize');
+const profileGender = $('#profile-gender');
+const profileAge = $('#profile-age');
 
 const detailScreen = $('#detail-screen');
 const detailBody = detailScreen?.querySelector('.detail-body');
@@ -98,6 +100,9 @@ const state = {
   authName: null,
   authAvatarUrl: null,
   userNickname: '',         // public.users.nickname — 사용자가 수정 가능한 표시 이름
+  userLoginId: '',          // public.users.login_id — 로그인 아이디 (이메일 대신 표시)
+  userGender: '',           // public.users.gender — '' | male | female | other
+  userAgeGroup: '',         // public.users.age_group — '' | 10s..90s
   todayCard: null,
   todayBookmarked: false,
   allCards: [],
@@ -250,6 +255,8 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
     setView(getInitialView());
     suppressPushState = false;
     history.replaceState({ tab: state.currentView }, '', '#' + state.currentView);
+    // 비회원이면 랜딩 로그인 유도 (최초 1회) — 홈이 렌더된 위에 띄움
+    maybeShowLanding();
     // 데이터 변경을 실시간으로 받아 즉시 반영
     subscribeToChanges();
     // 앱이 포그라운드로 돌아올 때마다 최신화 (실시간 누락 안전망)
@@ -394,7 +401,7 @@ function setRealtimeStatus(status) {
 
 function rerenderActiveView() {
   if (state.currentView === 'home') {
-    // 오늘의 카드 다시 뽑되, 사용자가 셔플 중이면 그대로 두기 — 단순화: 항상 today 재계산
+    // renderHome 이 state.todayCard 를 유지하므로 재렌더해도 보던 카드가 바뀌지 않음
     renderHome();
   } else if (state.currentView === 'archive') {
     renderArchive();
@@ -512,13 +519,28 @@ async function bootstrapAuth() {
   state.authAvatarUrl = meta.avatar_url || meta.picture || null;
 
   // users 행 조회/생성
-  const { data: existingUser, error: selErr } = await sb
-    .from('users').select('user_id, nickname')
-    .eq('anonymous_id', state.authUid).maybeSingle();
-  if (selErr) throw selErr;
+  // login_id/gender/age_group는 마이그레이션(015) 후에 생기는 컬럼 — 없으면 기본 컬럼만으로 폴백
+  let existingUser = null;
+  {
+    const ext = await sb.from('users')
+      .select('user_id, nickname, login_id, gender, age_group')
+      .eq('anonymous_id', state.authUid).maybeSingle();
+    if (ext.error) {
+      console.warn('[m] users extended select failed, fallback to basic:', ext.error.message);
+      const basic = await sb.from('users').select('user_id, nickname')
+        .eq('anonymous_id', state.authUid).maybeSingle();
+      if (basic.error) throw basic.error;
+      existingUser = basic.data;
+    } else {
+      existingUser = ext.data;
+    }
+  }
   if (existingUser) {
     state.userId = existingUser.user_id;
     state.userNickname = existingUser.nickname || '';
+    state.userLoginId = existingUser.login_id || '';
+    state.userGender = existingUser.gender || '';
+    state.userAgeGroup = existingUser.age_group || '';
     // 닉네임이 비어있는 익명 유저는 backfill — 귀여운 이름 자동 부여
     if (!state.userNickname && state.isAnonymous) {
       const generated = randomCuteNickname();
@@ -548,6 +570,8 @@ async function bootstrapAuth() {
 
   // 소셜 로그인 직후라면 이전 익명 user_id의 북마크를 옮긴다
   if (!state.isAnonymous) {
+    // 회원가입 직후라면 저장해둔 프로필(로그인 ID·성별·나이대)을 새 행에 기록
+    await applySignupProfile(sb, state.userId);
     const prevAnonUserId = localStorage.getItem('ds.prevAnonUserId');
     if (prevAnonUserId && prevAnonUserId !== String(state.userId)) {
       await migrateAnonymousBookmarks(parseInt(prevAnonUserId, 10), state.userId);
@@ -622,6 +646,27 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
   }
 }
 
+// 회원가입 시 보존해둔 프로필(로그인 ID·성별·나이대)을 users 행에 기록.
+// 핵심 행 생성과 분리해 별도 update — 실패해도 앱 동작에는 지장 없게 처리.
+async function applySignupProfile(sb, userId) {
+  let profile = null;
+  try { profile = JSON.parse(localStorage.getItem('ds.signupProfile') || 'null'); } catch {}
+  if (!profile) return;
+  try {
+    await sb.from('users').update({
+      login_id: profile.login_id || null,
+      gender: profile.gender || null,
+      age_group: profile.age_group || null,
+    }).eq('user_id', userId);
+    state.userLoginId = profile.login_id || '';
+    state.userGender = profile.gender || '';
+    state.userAgeGroup = profile.age_group || '';
+  } catch (e) {
+    console.warn('[m] signup profile write failed:', e);
+  }
+  localStorage.removeItem('ds.signupProfile');
+}
+
 // ---------- Data ----------
 async function loadAllCards() {
   const sb = await getSupabase();
@@ -647,10 +692,6 @@ async function loadBookmarks() {
 }
 
 // ---------- Today's card / 추천 ----------
-function getTodaySeed() {
-  const d = new Date();
-  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
-}
 
 function isTasteEnabled() {
   return localStorage.getItem('ds.taste') === '1';
@@ -694,31 +735,7 @@ function tasteDistance(card, taste) {
 }
 
 /**
- * 시드 기반 결정론적 + taste 가중 선택.
- *  - taste 프로파일 없거나 candidate 없으면 시드 모듈로 폴백
- *  - seed % 10 === 0 인 날(10%)엔 variety로 먼 카드도 허용
- *  - 그 외 90% 는 상위 30% 유사 카드 풀에서 시드 모듈로 선택
- */
-function pickByTasteSeeded(seed) {
-  if (state.allCards.length === 0) return null;
-  const taste = computeTasteProfile();
-  if (!taste) return state.allCards[Math.abs(seed) % state.allCards.length];
-
-  const candidates = state.allCards.filter(
-    (c) => typeof c.temperature === 'number' || typeof c.intensity === 'number'
-  );
-  if (candidates.length === 0) return state.allCards[Math.abs(seed) % state.allCards.length];
-
-  const sorted = candidates.slice().sort((a, b) => tasteDistance(a, taste) - tasteDistance(b, taste));
-  const variety = (Math.abs(seed) % 10) === 0;
-  const pool = variety
-    ? sorted.slice(Math.floor(sorted.length * 0.3))   // 멀리 있는 70%에서 (가끔 변형)
-    : sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.3)));  // 가까운 30%만
-  return pool[Math.abs(seed) % pool.length];
-}
-
-/**
- * 비시드 (refresh) — 매번 다른 카드를 보여주되 taste 가중.
+ * refresh / 진입 — 매번 다른 카드를 보여주되 taste 가중.
  *  - 10% 확률로 pure random (variety)
  *  - 그 외 90%는 거리 역수로 가중 랜덤
  */
@@ -772,13 +789,6 @@ function pickByTasteRandom() {
   return picked;
 }
 
-function pickTodayCard() {
-  if (state.allCards.length === 0) return null;
-  const seed = getTodaySeed();
-  if (isTasteEnabled()) return pickByTasteSeeded(seed);
-  return state.allCards[seed % state.allCards.length];
-}
-
 // 셔플 시 최근 10개에 있는 카드는 제외 + localStorage 영구 저장
 const RECENT_EXCLUDE_SIZE = 10;
 const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
@@ -826,6 +836,14 @@ function candidatesExcludingRecent() {
   return pool.length > 0 ? pool : state.allCards;
 }
 
+// 직전에 보던 카드(큐의 마지막) 복원 — 없거나 카드가 삭제됐으면 null
+function restoreLastShownCard() {
+  const ids = state.recentlyShownIds;
+  if (!ids || ids.length === 0) return null;
+  const lastId = ids[ids.length - 1];
+  return state.allCards.find((c) => c.card_id === lastId) || null;
+}
+
 function rememberShown(cardId) {
   if (cardId == null) return;
   // dedupe: 이미 큐에 있으면 제거 후 맨 뒤에 다시 추가 (가장 최근 위치)
@@ -849,6 +867,13 @@ function pickRandomCard() {
 
 // ---------- Bookmark API ----------
 async function toggleBookmark(cardId) {
+  if (state.isAnonymous) {
+    openPromptModal({
+      title: '북마크는 회원 전용',
+      message: '마음에 든 명대사를 보관하려면 로그인이 필요해요.',
+    });
+    return;
+  }
   if (!state.userId || state.bookmarkActionInFlight) return;
   state.bookmarkActionInFlight = true;
   const sb = await getSupabase();
@@ -929,12 +954,18 @@ function renderHome() {
     year: 'numeric', month: 'long', day: 'numeric'
   }).toUpperCase();
 
-  state.todayCard = pickTodayCard();
-  if (!state.todayCard) {
+  // 표시 카드 결정:
+  //  1) 세션 중 이미 보던 카드가 있으면 유지 (realtime/폴링/포그라운드 재렌더 시 카드 고정)
+  //  2) 부팅 직후엔 직전에 보던 카드를 복원
+  //  3) 둘 다 없으면 새 랜덤 카드
+  const card = state.todayCard || restoreLastShownCard() || pickRandomCard();
+  state.todayCard = card;
+  if (!card) {
     todayCard.style.display = 'none';
     return;
   }
-  applyTodayCard(state.todayCard);
+  todayCard.style.display = '';
+  applyTodayCard(card);
   renderHomeBookmarks();
 }
 
@@ -1087,6 +1118,16 @@ todayRead.addEventListener('click', (e) => {
   if (state.todayCard) openDetail(state.todayCard);
 });
 homeRefresh.addEventListener('click', () => {
+  if (state.isAnonymous) {
+    if (getRefreshState().count >= REFRESH_LIMIT) {
+      openPromptModal({
+        title: '새 명대사는 3번까지',
+        message: '오늘 새 명대사를 3번 받아보셨어요. 로그인하면 무제한으로 즐길 수 있어요.',
+      });
+      return;
+    }
+    bumpRefreshCount();
+  }
   track('today_refreshed');
   applyTodayCard(pickRandomCard());
   renderHomeBookmarks();  // '지난 기록' 갱신 (직전 카드가 추가됨)
@@ -1471,10 +1512,9 @@ tasteToggle.addEventListener('click', () => {
   const newEnabled = !isTasteEnabled();
   localStorage.setItem('ds.taste', newEnabled ? '1' : '0');
   paintTasteToggle();
-  // 즉시 효과 — 오늘의 카드 다시 뽑기
+  // 즉시 효과 — 새 추천 카드 한 장 뽑기
   if (state.currentView === 'home') {
-    state.todayCard = pickTodayCard();
-    if (state.todayCard) applyTodayCard(state.todayCard);
+    applyTodayCard(pickRandomCard());
   }
   toast(newEnabled ? 'Personalized recommendations on' : 'Switched to fully random');
 });
@@ -1533,6 +1573,8 @@ themeToggle.addEventListener('keydown', (e) => {
 function openNicknameModal() {
   if (!nicknameModal) return;
   nicknameInput.value = state.userNickname || '';
+  if (profileGender) profileGender.value = state.userGender || '';
+  if (profileAge) profileAge.value = state.userAgeGroup || '';
   nicknameModal.style.display = 'flex';
   setTimeout(() => nicknameInput.focus(), 50);
 }
@@ -1544,18 +1586,22 @@ async function saveNickname() {
   if (!newName) { toast('이름을 입력해주세요'); return; }
   if (newName.length > 24) { toast('24자 이하로 입력해주세요'); return; }
   if (!state.userId) { toast('사용자 정보 없음'); return; }
+  const gender = profileGender?.value || null;
+  const ageGroup = profileAge?.value || null;
   try {
     const sb = await getSupabase();
     const { error } = await sb.from('users')
-      .update({ nickname: newName })
+      .update({ nickname: newName, gender, age_group: ageGroup })
       .eq('user_id', state.userId);
     if (error) throw error;
     state.userNickname = newName;
+    state.userGender = gender || '';
+    state.userAgeGroup = ageGroup || '';
     paintAuthIdentity();
     closeNicknameModal();
-    toast('이름이 변경됐어요');
+    toast('프로필이 저장됐어요');
   } catch (err) {
-    console.error('[m] save nickname failed:', err);
+    console.error('[m] save profile failed:', err);
     toast(`저장 실패: ${err.message || err}`);
   }
 }
@@ -1628,7 +1674,89 @@ const signinToggleModeBtn = $('#signin-toggle-mode');
 const signinCancelBtn = $('#signin-cancel');
 const signinErrorEl = $('#signin-error');
 const signinRememberInput = $('#signin-remember');
+const signupIdCheckBtn = $('#signup-idcheck-btn');
+const signupIdCheckResult = $('#signup-idcheck-result');
+const signupExtra = $('#signup-extra');
+const signupGender = $('#signup-gender');
+const signupAge = $('#signup-age');
 let signinMode = 'signin';  // 'signin' | 'signup'
+let signupIdAvailable = false;  // 회원가입 모드에서 아이디 중복확인 통과 여부
+
+// ---------- 공용 안내/유도 모달 (랜딩 + 회원전용 게이트) ----------
+const promptModal = $('#prompt-modal');
+const promptModalTitle = $('#prompt-modal-title');
+const promptModalMsg = $('#prompt-modal-msg');
+const promptModalConfirm = $('#prompt-modal-confirm');
+const promptModalDismiss = $('#prompt-modal-dismiss');
+let _promptOnDismiss = null;
+
+function openPromptModal({ title, message, confirmLabel = '로그인', dismissLabel = '닫기', onConfirm = null, onDismiss = null }) {
+  if (!promptModal) return;
+  promptModalTitle.textContent = title;
+  promptModalMsg.textContent = message;
+  promptModalConfirm.textContent = confirmLabel;
+  promptModalDismiss.textContent = dismissLabel;
+  promptModal._onConfirm = onConfirm;
+  _promptOnDismiss = onDismiss;
+  promptModal.style.display = 'flex';
+}
+function closePromptModal() {
+  if (promptModal) promptModal.style.display = 'none';
+}
+promptModalConfirm?.addEventListener('click', () => {
+  const cb = promptModal?._onConfirm;
+  closePromptModal();
+  cb?.();
+  openSigninModal();
+});
+promptModalDismiss?.addEventListener('click', () => {
+  const cb = _promptOnDismiss;
+  closePromptModal();
+  cb?.();
+});
+promptModal?.addEventListener('click', (e) => {
+  if (e.target === promptModal) {
+    const cb = _promptOnDismiss;
+    closePromptModal();
+    cb?.();
+  }
+});
+
+// ---------- 비회원 카드 새로고침 일일 제한 ----------
+const REFRESH_LIMIT = 3;
+const REFRESH_COUNT_KEY = 'ds.refreshCount';
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function getRefreshState() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(REFRESH_COUNT_KEY) || 'null');
+    if (raw && raw.date === todayStr() && Number.isInteger(raw.count)) return raw;
+  } catch {}
+  return { date: todayStr(), count: 0 };
+}
+function bumpRefreshCount() {
+  const next = { date: todayStr(), count: getRefreshState().count + 1 };
+  try { localStorage.setItem(REFRESH_COUNT_KEY, JSON.stringify(next)); } catch {}
+  return next.count;
+}
+
+// ---------- 랜딩 로그인 유도 (최초 1회) ----------
+const LANDING_SEEN_KEY = 'ds.landingSeen';
+function maybeShowLanding() {
+  if (!state.isAnonymous) return;
+  if (localStorage.getItem(LANDING_SEEN_KEY) === '1') return;
+  const markSeen = () => { try { localStorage.setItem(LANDING_SEEN_KEY, '1'); } catch {} };
+  openPromptModal({
+    title: '오늘의 명대사',
+    message: '로그인하면 마음에 든 명대사를 보관하고 다른 기기에서도 이어볼 수 있어요. 먼저 둘러보셔도 좋아요.',
+    confirmLabel: '로그인 / 회원가입',
+    dismissLabel: '둘러보기',
+    onConfirm: markSeen,
+    onDismiss: markSeen,
+  });
+}
 
 const REMEMBER_KEY = 'ds.rememberCreds';
 const SESSION_KEY = 'ds.sessionId';
@@ -1663,6 +1791,12 @@ function setSigninMode(mode) {
     signinSubmitBtn.textContent = '로그인';
     signinToggleModeBtn.textContent = '계정이 없으신가요? 회원가입';
   }
+  // 회원가입 전용 UI(중복확인 버튼·성별·나이대) 토글 + 중복확인 상태 초기화
+  const isSignup = (mode === 'signup');
+  if (signupIdCheckBtn) signupIdCheckBtn.style.display = isSignup ? '' : 'none';
+  if (signupExtra) signupExtra.style.display = isSignup ? 'block' : 'none';
+  signupIdAvailable = false;
+  if (signupIdCheckResult) signupIdCheckResult.style.display = 'none';
   signinErrorEl.style.display = 'none';
 }
 
@@ -1688,6 +1822,43 @@ function closeSigninModal() {
 function showSigninError(msg) {
   signinErrorEl.textContent = msg;
   signinErrorEl.style.display = 'block';
+}
+
+function showIdCheckResult(msg, ok) {
+  if (!signupIdCheckResult) return;
+  signupIdCheckResult.textContent = msg;
+  signupIdCheckResult.style.color = ok ? '#1A7F37' : 'var(--cta)';
+  signupIdCheckResult.style.display = 'block';
+}
+
+// 아이디 중복확인 — RLS가 타인 행 조회를 막으므로 SECURITY DEFINER RPC(email_available) 사용.
+async function checkSignupId() {
+  const id = (signinIdInput.value || '').trim();
+  const email = idToEmail(id);
+  if (!email) { signupIdAvailable = false; showIdCheckResult('아이디를 입력해주세요.', false); return; }
+  signupIdCheckBtn.disabled = true;
+  const prev = signupIdCheckBtn.textContent;
+  signupIdCheckBtn.textContent = '⋯';
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb.rpc('email_available', { p_email: email });
+    if (error) throw error;
+    if (data === true) {
+      signupIdAvailable = true;
+      showIdCheckResult('사용 가능한 아이디입니다.', true);
+    } else {
+      signupIdAvailable = false;
+      showIdCheckResult('이미 사용 중인 아이디입니다.', false);
+    }
+  } catch (err) {
+    // RPC 미설치(마이그레이션 전) 등 — 가입 단계에서 중복이면 거부되므로 진행은 허용
+    console.warn('[m] email_available rpc failed:', err);
+    signupIdAvailable = true;
+    showIdCheckResult('중복확인을 건너뜁니다 — 중복이면 가입 단계에서 안내됩니다.', true);
+  } finally {
+    signupIdCheckBtn.disabled = false;
+    signupIdCheckBtn.textContent = prev;
+  }
 }
 
 function idToEmail(id) {
@@ -1722,6 +1893,10 @@ async function submitSignin() {
     showSigninError('비밀번호를 입력해주세요.');
     return;
   }
+  if (signinMode === 'signup' && !signupIdAvailable) {
+    showSigninError('아이디 중복확인을 해주세요.');
+    return;
+  }
   signinErrorEl.style.display = 'none';
   signinSubmitBtn.disabled = true;
   signinSubmitBtn.textContent = '⋯';
@@ -1744,6 +1919,12 @@ async function submitSignin() {
           throw new Error('가입은 됐으나 자동 로그인 실패. 다시 로그인 모드로 시도해주세요.');
         }
       }
+      // 가입 프로필 보존 — reload 후 bootstrapAuth가 새 user 행에 기록
+      localStorage.setItem('ds.signupProfile', JSON.stringify({
+        login_id: id,
+        gender: signupGender?.value || null,
+        age_group: signupAge?.value || null,
+      }));
     } else {
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
@@ -1801,6 +1982,12 @@ signinPasswordInput?.addEventListener('keydown', (e) => {
 signinIdInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); signinPasswordInput.focus(); }
 });
+signupIdCheckBtn?.addEventListener('click', checkSignupId);
+// 아이디가 바뀌면 다시 중복확인하도록 통과 상태 리셋
+signinIdInput?.addEventListener('input', () => {
+  signupIdAvailable = false;
+  if (signupIdCheckResult) signupIdCheckResult.style.display = 'none';
+});
 
 function paintAuthIdentity() {
   // 닉네임/EDIT 영역은 로그인된 사용자에게만 노출 — 익명 상태에선 통째로 숨김
@@ -1812,7 +1999,7 @@ function paintAuthIdentity() {
   } else {
     if (identityBlock) identityBlock.style.display = 'flex';
     if (identitySpacer) identitySpacer.style.display = '';
-    const name = state.userNickname || state.authName || state.authEmail || 'Signed In';
+    const name = state.userNickname || state.authName || state.userLoginId || 'Signed In';
     settingsName.textContent = name;
   }
   // EDIT 버튼도 로그인 상태에서만
@@ -1828,15 +2015,28 @@ function paintAuthIdentity() {
     signOutBtn.textContent = 'Reset Anonymous';
   } else {
     if (signinBlock) signinBlock.style.display = 'none';
-    const providerLabel = state.authProvider === 'google' ? 'Google'
-      : state.authProvider === 'kakao' ? 'Kakao'
-      : (state.authProvider || 'Account');
-    const bio = state.authEmail
-      ? `${providerLabel} · ${state.authEmail}`
-      : `${providerLabel} 계정으로 로그인됨`;
+    // ID+비밀번호 계정은 합성 이메일(@user.local) 대신 아이디만 노출
+    const isLocalAccount = (state.authEmail || '').endsWith('@user.local');
+    let bio;
+    if (isLocalAccount) {
+      const loginId = state.userLoginId
+        || state.authEmail.slice(0, -'@user.local'.length);
+      bio = loginId ? `아이디 · ${loginId}` : '로그인됨';
+    } else {
+      const providerLabel = state.authProvider === 'google' ? 'Google'
+        : state.authProvider === 'kakao' ? 'Kakao'
+        : (state.authProvider || 'Account');
+      bio = state.authEmail
+        ? `${providerLabel} · ${state.authEmail}`
+        : `${providerLabel} 계정으로 로그인됨`;
+    }
     settingsBio.textContent = bio;
     signOutBtn.textContent = 'Sign Out';
   }
+
+  // 홈 우상단 버튼: 익명이면 '로그인', 로그인 상태면 'MY PAGE'
+  const myPageBtn = document.getElementById('my-page-btn');
+  if (myPageBtn) myPageBtn.textContent = state.isAnonymous ? '로그인' : 'MY PAGE';
 }
 
 // ---------- Detail (full-screen) ----------
@@ -2297,6 +2497,14 @@ async function unsubscribeFromDetailComments() {
 
 // ---------- View switching ----------
 function setView(view) {
+  // 익명 사용자는 보관함 진입 차단 — 안내 후 home으로 보정 (재귀 없이 1패스)
+  if (view === 'archive' && state.isAnonymous) {
+    openPromptModal({
+      title: '북마크 보관함은 회원 전용',
+      message: '보관한 명대사를 모아보려면 로그인이 필요해요.',
+    });
+    view = 'home';
+  }
   state.currentView = view;
   viewHome.style.display = (view === 'home') ? 'block' : 'none';
   viewArchive.style.display = (view === 'archive') ? 'block' : 'none';
@@ -2333,6 +2541,16 @@ $$('[data-nav]').forEach((btn) => {
     track('nav', { to: btn.dataset.nav });
     setView(btn.dataset.nav);
   });
+});
+
+// 홈 우상단 버튼: 익명이면 로그인 모달, 로그인 상태면 마이페이지(설정)로
+$('#my-page-btn')?.addEventListener('click', () => {
+  if (state.isAnonymous) {
+    openSigninModal();
+  } else {
+    track('nav', { to: 'settings' });
+    setView('settings');
+  }
 });
 
 // ---------- Utils ----------
