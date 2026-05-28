@@ -1835,9 +1835,9 @@ function openDetail(card) {
     w.characters
   );
 
-  // significance — only for opera/play
-  const fmt = String(w.format || '').toLowerCase();
-  if (card.significance && (fmt === 'opera' || fmt === 'play')) {
+  // significance — 네 프롬프트(screen/opera/play/literature) 모두 생성하므로
+  // format 게이팅 없이 값이 있으면 표시.
+  if (card.significance && String(card.significance).trim()) {
     detailSignificance.textContent = flowProse(card.significance);
     detailSignificanceBlock.style.display = 'block';
   } else {
