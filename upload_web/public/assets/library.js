@@ -145,7 +145,7 @@ async function loadLibrary() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year, characters)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, subtitle, format, author, release_year, characters)')
       .order('card_id', { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -360,16 +360,21 @@ function buildShelfSection(group) {
   if (isDeleteMode) bookshelf.classList.add('bookshelf-delete-mode');
   const shelfRow = document.createElement('div');
   shelfRow.className = 'shelf-row';
-  // 같은 그룹(시리즈) 내에서도 work.title이 다르면(부제별) 색상이 다름.
-  // 정렬: title 기준 — 같은 부제 카드는 인접해서 표시됨
+  // 같은 그룹(시리즈) 내에서도 부제(subtitle)별로 색상이 다름.
+  // 정렬: subtitle → title 순 — 같은 부제 카드는 인접해서 묶여 보임.
   const sortedCards = [...cards].sort((a, b) => {
+    const sa = (a.works?.subtitle || '').toLowerCase();
+    const sb = (b.works?.subtitle || '').toLowerCase();
+    if (sa !== sb) return sa.localeCompare(sb);
     const ta = a.works?.title || '';
     const tb = b.works?.title || '';
     return ta.localeCompare(tb);
   });
   sortedCards.forEach((card, idx) => {
-    // 카드별 base color — work.title 기반 (부제가 다르면 다른 hue)
-    const baseColor = colorForTitle(card.works?.title || group.key);
+    // 카드별 base color — subtitle(부제) 우선, 없으면 title.
+    // 같은 부제 카드들은 동일 hue, 부제가 다르면 다른 hue.
+    const colorKey = card.works?.subtitle || card.works?.title || group.key;
+    const baseColor = colorForTitle(colorKey);
     shelfRow.appendChild(buildSpine(card, baseColor, idx, isDeleteMode));
   });
   bookshelf.appendChild(shelfRow);
