@@ -2579,6 +2579,9 @@ function isProseFormat(fmt) {
 function flowProseScript(text) {
   return String(text ?? '')
     .replace(/\r\n?/g, '\n')
+    // em-dash 변형·연속 하이픈(--)은 산문에서 끊김 표기 잔여물 → 공백으로
+    .replace(/[—–―─━‐‑‒ㅡー﹘﹣－]+/g, ' ')
+    .replace(/-{2,}/g, ' ')
     .split(/\n{2,}/)
     .map((p) => p
       .replace(/[ \t]*\n[ \t]*/g, ' ')
