@@ -2640,6 +2640,8 @@ function isProseFormat(fmt) {
 function flowProseScript(text) {
   return String(text ?? '')
     .replace(/\r\n?/g, '\n')
+    // 소설 대사 표기 「」 → 큰따옴표 “”. 아래 대사 단락 분리 로직이 “” 기준이라 변환 후 동일 처리됨.
+    .replace(/「/g, '“').replace(/」/g, '”')
     // em-dash 변형·연속 하이픈(--)은 산문에서 끊김 표기 잔여물 → 공백으로
     .replace(/[—–―─━‐‑‒ㅡー﹘﹣－]+/g, ' ')
     .replace(/-{2,}/g, ' ')
