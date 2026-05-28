@@ -175,10 +175,11 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
   function speakerOf(raw) {
     const t = raw.trim();
     if (!t) return null;
-    // 1) characters 매칭 — 이름 + (한글/영문/숫자가 아닌 문자), 콜론은 있어도 됨
+    // 1) characters 매칭 — 이름 뒤가 공백/콜론/괄호/줄끝일 때만 화자로 인정.
+    //    이름 뒤에 마침표·쉼표 등 문장부호가 바로 붙으면 호격(부름말, 예: "노라.")이라 제외.
     for (const name of names) {
       const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(`^${escaped}(?![가-힣A-Za-z0-9])\\s*[:：]?\\s*(.*)$`);
+      const re = new RegExp(`^${escaped}(?=[\\s:：(（]|$)\\s*[:：]?\\s*(.*)$`);
       const m = t.match(re);
       if (m) return { name, rest: m[1] || '' };
     }
@@ -1869,11 +1870,11 @@ function openDetail(card) {
     detailDescSpacer.style.height = '0';
   }
 
-  // script_excerpt (left aligned, mono) — 화자 라인 볼드 (admin library.js와 동일 처리)
-  detailScript.innerHTML = boldSpeakerLines(
-    cleanForDisplay(card.script_excerpt || ''),
-    w.characters
-  );
+  // script_excerpt — 산문(novel/essay)은 단락으로 흘려보내고(화자 볼드 없음),
+  // 그 외(대본/시)는 기존 화자 라인 볼드 처리 (admin library.js와 동일).
+  detailScript.innerHTML = isProseFormat(w.format)
+    ? escapeHtml(flowProseScript(card.script_excerpt || ''))
+    : boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), w.characters);
 
   // significance — 네 프롬프트(screen/opera/play/literature) 모두 생성하므로
   // format 게이팅 없이 값이 있으면 표시.
@@ -2350,6 +2351,22 @@ function escapeHtml(s) {
 }
 
 // 발췌문 표시용 정리. admin library.js와 동일 로직 — 화자/대사 라인 재조립.
+// 산문(novel/essay)은 추출 당시 문장마다 줄바꿈이 들어가 토막나 보인다.
+// 단락(빈 줄) 구분은 보존하고, 단락 안의 줄바꿈은 공백으로 펴서 한 단락처럼 흐르게 한다.
+// (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로를 탄다.)
+const PROSE_FORMATS = new Set(['novel', 'essay']);
+function isProseFormat(fmt) {
+  return PROSE_FORMATS.has(String(fmt || '').toLowerCase());
+}
+function flowProseScript(text) {
+  return String(text ?? '')
+    .replace(/\r\n?/g, '\n')
+    .split(/\n{2,}/)
+    .map((p) => p.replace(/[ \t]*\n[ \t]*/g, ' ').replace(/[ \t]{2,}/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 function cleanForDisplay(s) {
   let text = String(s ?? '');
   text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
