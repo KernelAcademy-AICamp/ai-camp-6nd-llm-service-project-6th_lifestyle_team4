@@ -42,6 +42,9 @@ async function bootAmplitude(apiKey) {
   try {
     amplitude = await import('https://esm.sh/@amplitude/analytics-browser@2');
     amplitude.init(apiKey, {
+      // DB 내부 user_id(예: '42')는 짧음 — 기본 최소길이(5) 검증에 걸려
+      // "Invalid id length for user_id" 에러로 식별·전송이 실패하므로 1로 완화.
+      minIdLength: 1,
       autocapture: {
         pageViews: true,
         sessions: true,
