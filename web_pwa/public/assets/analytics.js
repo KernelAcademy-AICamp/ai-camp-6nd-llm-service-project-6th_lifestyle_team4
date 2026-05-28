@@ -106,13 +106,19 @@ export function setUserProps(props = {}) {
 }
 
 function applyUserProps(props) {
-  if (!amplitude) return;
+  if (!amplitude) {
+    console.warn('[analytics] setUserProps 무시 — Amplitude 미초기화(키 없음/로드 실패)', props);
+    return;
+  }
   try {
     const id = new amplitude.Identify();
     if (props.gender) id.set('gender', props.gender); else id.unset('gender');
     if (props.ageGroup) id.set('age_group', props.ageGroup); else id.unset('age_group');
     amplitude.identify(id);
-  } catch { /* noop */ }
+    console.log('[analytics] user props 전송 →', { gender: props.gender || null, age_group: props.ageGroup || null });
+  } catch (e) {
+    console.warn('[analytics] setUserProps 실패:', e);
+  }
 }
 
 // 로그아웃 시 사용자/디바이스 식별 초기화
