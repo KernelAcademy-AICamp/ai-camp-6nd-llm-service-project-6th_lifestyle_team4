@@ -597,7 +597,7 @@ async function loadBookmarks() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('user_bookmarks')
-    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year))')
+    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false });
   if (error) { console.warn('[m] bookmarks load failed:', error); return; }
@@ -827,7 +827,7 @@ async function toggleBookmark(cardId) {
     } else {
       const { data, error } = await sb.from('user_bookmarks')
         .insert({ user_id: state.userId, card_id: cardId })
-        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year))')
+        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
@@ -1812,9 +1812,13 @@ function openDetail(card) {
   ].filter(Boolean);
   detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('');
 
+  // 좁은 폰 화면에서 LLM이 끼워 넣은 \n이 어색하게 wrap되는 걸 막기 위해
+  // 산문 필드(설명·의의)는 줄바꿈을 공백으로 펴서 한 단락처럼 흐르게 한다.
+  const flowProse = (s) => String(s ?? '').replace(/\s*\n+\s*/g, ' ').trim();
+
   // excerpt description (centered)
   if (card.excerpt_description) {
-    detailDescription.textContent = card.excerpt_description;
+    detailDescription.textContent = flowProse(card.excerpt_description);
     detailDescription.style.display = 'block';
     detailDescSpacer.style.height = '24px';
   } else {
@@ -1831,7 +1835,7 @@ function openDetail(card) {
   // significance — only for opera/play
   const fmt = String(w.format || '').toLowerCase();
   if (card.significance && (fmt === 'opera' || fmt === 'play')) {
-    detailSignificance.textContent = card.significance;
+    detailSignificance.textContent = flowProse(card.significance);
     detailSignificanceBlock.style.display = 'block';
   } else {
     detailSignificanceBlock.style.display = 'none';
