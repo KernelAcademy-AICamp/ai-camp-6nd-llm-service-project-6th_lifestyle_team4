@@ -650,7 +650,9 @@ function buildViewNode(card) {
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
   node.querySelector('.lib-quote').textContent = card.quote ? `"${cleanForDisplay(card.quote)}"` : '';
-  node.querySelector('.lib-excerpt').innerHTML = boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters);
+  node.querySelector('.lib-excerpt').innerHTML = isProseFormat(work.format)
+    ? escapeHtml(flowProseScript(card.script_excerpt || ''))
+    : boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters);
   node.querySelector('.lib-description').textContent = cleanForDisplay(card.excerpt_description || '');
 
   const kwEl = node.querySelector('.lib-keywords');
@@ -875,6 +877,26 @@ function escapeHtml(s) {
 //   (빈 줄)
 //   화자B
 //   대사B
+// 산문(novel/essay)은 추출 당시 절(쉼표)마다 줄바꿈이 들어가 토막나 보인다.
+// 절 단위 줄바꿈은 공백으로 펴고, 문장 끝(. ! ? …)에서만 줄을 끊어 '한 문장 = 한 줄'로 만든다.
+// 단락(빈 줄) 구분은 보존. (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로.)
+const PROSE_FORMATS = new Set(['novel', 'essay']);
+function isProseFormat(fmt) {
+  return PROSE_FORMATS.has(String(fmt || '').toLowerCase());
+}
+function flowProseScript(text) {
+  return String(text ?? '')
+    .replace(/\r\n?/g, '\n')
+    .split(/\n{2,}/)
+    .map((p) => p
+      .replace(/[ \t]*\n[ \t]*/g, ' ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim()
+      .replace(/([.!?…])\s+/g, '$1\n'))
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 function cleanForDisplay(s) {
   let text = String(s ?? '');
 
@@ -1075,7 +1097,7 @@ function renderAppCardHtml(card) {
         <p class="app-work-title">${escapeHtml(workLine)}</p>
         <p class="app-quote">${escapeHtml(cleanQuote)}</p>
         ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(cleanForDisplay(card.excerpt_description))}</p>` : ''}
-        <div class="app-excerpt">${boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters)}</div>
+        <div class="app-excerpt">${isProseFormat(work.format) ? escapeHtml(flowProseScript(card.script_excerpt || '')) : boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters)}</div>
         ${keywords ? `<div class="app-keywords">${keywords}</div>` : ''}
         <div class="app-meters">
           <div class="app-meter">

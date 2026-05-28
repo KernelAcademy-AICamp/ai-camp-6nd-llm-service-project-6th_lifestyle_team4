@@ -2351,9 +2351,9 @@ function escapeHtml(s) {
 }
 
 // 발췌문 표시용 정리. admin library.js와 동일 로직 — 화자/대사 라인 재조립.
-// 산문(novel/essay)은 추출 당시 문장마다 줄바꿈이 들어가 토막나 보인다.
-// 단락(빈 줄) 구분은 보존하고, 단락 안의 줄바꿈은 공백으로 펴서 한 단락처럼 흐르게 한다.
-// (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로를 탄다.)
+// 산문(novel/essay)은 추출 당시 절(쉼표)마다 줄바꿈이 들어가 토막나 보인다.
+// 절 단위 줄바꿈은 공백으로 펴고, 문장 끝(. ! ? …)에서만 줄을 끊어 '한 문장 = 한 줄'로 만든다.
+// 단락(빈 줄) 구분은 보존. (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로.)
 const PROSE_FORMATS = new Set(['novel', 'essay']);
 function isProseFormat(fmt) {
   return PROSE_FORMATS.has(String(fmt || '').toLowerCase());
@@ -2362,7 +2362,11 @@ function flowProseScript(text) {
   return String(text ?? '')
     .replace(/\r\n?/g, '\n')
     .split(/\n{2,}/)
-    .map((p) => p.replace(/[ \t]*\n[ \t]*/g, ' ').replace(/[ \t]{2,}/g, ' ').trim())
+    .map((p) => p
+      .replace(/[ \t]*\n[ \t]*/g, ' ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim()
+      .replace(/([.!?…])\s+/g, '$1\n'))
     .filter(Boolean)
     .join('\n\n');
 }
