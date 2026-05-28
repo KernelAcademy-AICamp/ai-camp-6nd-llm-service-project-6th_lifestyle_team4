@@ -93,13 +93,18 @@ export function identify(userId) {
 
 function applyUserId(userId) {
   const id = String(userId);
-  try { if (amplitude) amplitude.setUserId(id); } catch { /* noop */ }
+  try {
+    if (amplitude) { amplitude.setUserId(id); console.log('[analytics] user id 설정 →', id); }
+    else console.warn('[analytics] setUserId 무시 — Amplitude 미초기화(키 없음/로드 실패)');
+  } catch (e) { console.warn('[analytics] setUserId 실패:', e); }
   try { if (clarityReady && window.clarity) window.clarity('identify', id); } catch { /* noop */ }
 }
 
-// 회원 속성(성별·나이대)을 Amplitude User Property로 전송.
+// 사용자 속성을 Amplitude User Property로 전송.
 // 로그인 직후 / 프로필 변경 시 호출. 값이 비면 해당 속성을 unset.
-// props: { gender?: string, ageGroup?: string }  — 값은 영문 코드(male/female/other, 10s..90s)
+// props: { accountType?: 'member'|'anonymous', gender?: string, ageGroup?: string }
+//   - accountType: 회원/익명 구분용 (모든 사용자에게 전송 → 회원만 필터 가능)
+//   - gender/age_group: 값은 영문 코드(male/female/other, 10s..90s) — 회원만
 export function setUserProps(props = {}) {
   if (!booted) { pendingUserProps = props; return; }
   applyUserProps(props);
@@ -112,10 +117,15 @@ function applyUserProps(props) {
   }
   try {
     const id = new amplitude.Identify();
+    if (props.accountType) id.set('account_type', props.accountType);
     if (props.gender) id.set('gender', props.gender); else id.unset('gender');
     if (props.ageGroup) id.set('age_group', props.ageGroup); else id.unset('age_group');
     amplitude.identify(id);
-    console.log('[analytics] user props 전송 →', { gender: props.gender || null, age_group: props.ageGroup || null });
+    console.log('[analytics] user props 전송 →', {
+      account_type: props.accountType || null,
+      gender: props.gender || null,
+      age_group: props.ageGroup || null,
+    });
   } catch (e) {
     console.warn('[analytics] setUserProps 실패:', e);
   }

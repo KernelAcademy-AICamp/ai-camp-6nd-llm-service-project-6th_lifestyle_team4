@@ -246,10 +246,12 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
     loadRecentlyShownFromStorage();
     await bootstrapAuth();
     identify(state.userId);
-    // 회원이면 성별·나이대를 Amplitude User Property로 전송 (타겟층 분석용)
-    if (!state.isAnonymous) {
-      setUserProps({ gender: state.userGender, ageGroup: state.userAgeGroup });
-    }
+    // 회원/익명 구분 + (회원이면) 성별·나이대를 Amplitude User Property로 전송 (타겟층 분석용)
+    setUserProps({
+      accountType: state.isAnonymous ? 'anonymous' : 'member',
+      gender: state.isAnonymous ? null : state.userGender,
+      ageGroup: state.isAnonymous ? null : state.userAgeGroup,
+    });
     paintAuthIdentity();
     await Promise.all([loadAllCards(), loadBookmarks()]);
     paintTasteProfile();
@@ -1602,7 +1604,7 @@ async function saveNickname() {
     state.userGender = gender || '';
     state.userAgeGroup = ageGroup || '';
     // 변경된 성별·나이대를 Amplitude에 반영
-    setUserProps({ gender: state.userGender, ageGroup: state.userAgeGroup });
+    setUserProps({ accountType: 'member', gender: state.userGender, ageGroup: state.userAgeGroup });
     paintAuthIdentity();
     closeNicknameModal();
     toast('프로필이 저장됐어요');
