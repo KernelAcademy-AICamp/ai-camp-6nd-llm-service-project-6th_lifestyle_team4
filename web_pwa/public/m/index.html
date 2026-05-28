@@ -113,6 +113,15 @@
     background: var(--espresso); color: var(--paper);
     border-color: var(--espresso);
   }
+  /* 장르별 배지 — 책장 프레임 색과 매칭. 어두운 우드톤이라 다크모드에서도 크림 글자 고정 */
+  .chip.filled.g-movie   { background:#4A2A18; border-color:#4A2A18; color:#FAF8F2; }
+  .chip.filled.g-drama   { background:#6B4A2A; border-color:#6B4A2A; color:#FAF8F2; }
+  .chip.filled.g-musical { background:#5A2818; border-color:#5A2818; color:#FAF8F2; }
+  .chip.filled.g-opera   { background:#26180E; border-color:#26180E; color:#FAF8F2; }
+  .chip.filled.g-play    { background:#3F2818; border-color:#3F2818; color:#FAF8F2; }
+  .chip.filled.g-novel   { background:#4A4036; border-color:#4A4036; color:#FAF8F2; }
+  .chip.filled.g-poem    { background:#27393B; border-color:#27393B; color:#FAF8F2; }
+  .chip.filled.g-essay   { background:#3A4030; border-color:#3A4030; color:#FAF8F2; }
 
   /* SharpButton mirror */
   .sharp-btn {
@@ -454,6 +463,9 @@
   .bookshelf.g-musical { --frame:#5A2818; --frame-light:#7E3A28; --back:#321008; }
   .bookshelf.g-opera   { --frame:#26180E; --frame-light:#3F2A1A; --back:#140A05; }
   .bookshelf.g-play    { --frame:#3F2818; --frame-light:#5C3A24; --back:#241408; }
+  .bookshelf.g-novel   { --frame:#4A4036; --frame-light:#6B5E50; --back:#2C2620; }
+  .bookshelf.g-poem    { --frame:#27393B; --frame-light:#3E585A; --back:#142021; }
+  .bookshelf.g-essay   { --frame:#3A4030; --frame-light:#58604A; --back:#20241A; }
 
   /* Spine v4 — gold 가죽 밴드 + 풀텍스트 제목 */
   .spine {
@@ -972,7 +984,7 @@
       <div style="height:32px;"></div>
       <div class="hairline"></div>
       <div style="height:24px;"></div>
-      <p class="t-label-sm c-walnut">작품의 의의</p>
+      <p class="t-label-sm c-walnut" style="text-align:center;">작품의 의의</p>
       <div style="height:12px;"></div>
       <p id="detail-significance" class="t-body-lg c-espresso" style="text-align:left;white-space:pre-wrap;"></p>
     </div>
