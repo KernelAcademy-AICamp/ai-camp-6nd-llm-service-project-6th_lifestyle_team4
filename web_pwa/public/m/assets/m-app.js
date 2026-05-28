@@ -1910,6 +1910,10 @@ function paintAuthIdentity() {
     settingsBio.textContent = bio;
     signOutBtn.textContent = 'Sign Out';
   }
+
+  // 홈 우상단 버튼: 익명이면 '로그인', 로그인 상태면 'MY PAGE'
+  const myPageBtn = document.getElementById('my-page-btn');
+  if (myPageBtn) myPageBtn.textContent = state.isAnonymous ? '로그인' : 'MY PAGE';
 }
 
 // ---------- Detail (full-screen) ----------
@@ -2414,6 +2418,16 @@ $$('[data-nav]').forEach((btn) => {
     track('nav', { to: btn.dataset.nav });
     setView(btn.dataset.nav);
   });
+});
+
+// 홈 우상단 버튼: 익명이면 로그인 모달, 로그인 상태면 마이페이지(설정)로
+$('#my-page-btn')?.addEventListener('click', () => {
+  if (state.isAnonymous) {
+    openSigninModal();
+  } else {
+    track('nav', { to: 'settings' });
+    setView('settings');
+  }
 });
 
 // ---------- Utils ----------
