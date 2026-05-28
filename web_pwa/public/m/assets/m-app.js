@@ -678,7 +678,7 @@ async function loadAllCards() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('cards')
-    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year, characters)')
+    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, subtitle, format, author, release_year, characters)')
     .order('card_id', { ascending: false }).limit(500);
   if (error) throw error;
   state.allCards = Array.isArray(data) ? data : [];
@@ -689,7 +689,7 @@ async function loadBookmarks() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('user_bookmarks')
-    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
+    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false });
   if (error) { console.warn('[m] bookmarks load failed:', error); return; }
@@ -899,7 +899,7 @@ async function toggleBookmark(cardId) {
     } else {
       const { data, error } = await sb.from('user_bookmarks')
         .insert({ user_id: state.userId, card_id: cardId })
-        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
+        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
@@ -1010,7 +1010,10 @@ function applyTodayCard(card) {
   if (workTitle) {
     const fmt = card.works?.format || '';
     const genreLabel = GENRE_LABEL[fmt] || '';
-    todayWork.textContent = genreLabel ? `— ${genreLabel} <${workTitle}>` : `— <${workTitle}>`;
+    // 시리즈물(예: 셜록홈즈 — 보헤미아 왕국의 스캔들)이면 subtitle을 제목 뒤에 붙임.
+    const subtitle = card.works?.subtitle ? String(card.works.subtitle).trim() : '';
+    const titleBlock = subtitle ? `<${workTitle}> ${subtitle}` : `<${workTitle}>`;
+    todayWork.textContent = genreLabel ? `— ${genreLabel} ${titleBlock}` : `— ${titleBlock}`;
     todayWork.style.display = 'block';
     todayWorkSpacer.style.height = '20px';
   } else {
@@ -2054,8 +2057,19 @@ function openDetail(card) {
   state.detailCardId = card.card_id;
   const w = card.works || {};
   const title = displayTitle(w.title) || '';
+  const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
 
   detailWorkTitle.textContent = title;
+  // 시리즈물 부제 — 있으면 작은 글자로 타이틀 아래 표시
+  const detailWorkSubtitle = document.getElementById('detail-work-subtitle');
+  if (detailWorkSubtitle) {
+    if (subtitle) {
+      detailWorkSubtitle.textContent = subtitle;
+      detailWorkSubtitle.style.display = 'block';
+    } else {
+      detailWorkSubtitle.style.display = 'none';
+    }
+  }
 
   // metadata chips row (FORMAT / AUTHOR / YEAR — uppercase labels)
   const items = [
