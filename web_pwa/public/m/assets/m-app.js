@@ -245,12 +245,18 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
     paintThemeToggle();
     loadRecentlyShownFromStorage();
     await bootstrapAuth();
-    identify(state.userId);
+    // Amplitude 사용자 ID: 회원이면 실제 아이디(login_id), 없으면(익명·구계정) 내부 숫자 user_id
+    const amplitudeUserId = (!state.isAnonymous && state.userLoginId)
+      ? state.userLoginId
+      : String(state.userId);
+    identify(amplitudeUserId);
     // 회원/익명 구분 + (회원이면) 성별·나이대를 Amplitude User Property로 전송 (타겟층 분석용)
+    // user_pk: login_id로 식별해도 DB 내부 user_id로 역추적할 수 있게 보존
     setUserProps({
       accountType: state.isAnonymous ? 'anonymous' : 'member',
       gender: state.isAnonymous ? null : state.userGender,
       ageGroup: state.isAnonymous ? null : state.userAgeGroup,
+      userPk: state.userId != null ? String(state.userId) : null,
     });
     paintAuthIdentity();
     await Promise.all([loadAllCards(), loadBookmarks()]);

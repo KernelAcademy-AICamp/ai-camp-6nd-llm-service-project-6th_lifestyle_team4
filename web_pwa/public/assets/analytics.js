@@ -105,9 +105,10 @@ function applyUserId(userId) {
 
 // 사용자 속성을 Amplitude User Property로 전송.
 // 로그인 직후 / 프로필 변경 시 호출. 값이 비면 해당 속성을 unset.
-// props: { accountType?: 'member'|'anonymous', gender?: string, ageGroup?: string }
+// props: { accountType?: 'member'|'anonymous', gender?: string, ageGroup?: string, userPk?: string }
 //   - accountType: 회원/익명 구분용 (모든 사용자에게 전송 → 회원만 필터 가능)
 //   - gender/age_group: 값은 영문 코드(male/female/other, 10s..90s) — 회원만
+//   - user_pk: DB 내부 user_id (식별자를 login_id로 써도 역추적 가능하게 보존)
 export function setUserProps(props = {}) {
   if (!booted) { pendingUserProps = props; return; }
   applyUserProps(props);
@@ -121,11 +122,13 @@ function applyUserProps(props) {
   try {
     const id = new amplitude.Identify();
     if (props.accountType) id.set('account_type', props.accountType);
+    if (props.userPk) id.set('user_pk', props.userPk);
     if (props.gender) id.set('gender', props.gender); else id.unset('gender');
     if (props.ageGroup) id.set('age_group', props.ageGroup); else id.unset('age_group');
     amplitude.identify(id);
     console.log('[analytics] user props 전송 →', {
       account_type: props.accountType || null,
+      user_pk: props.userPk || null,
       gender: props.gender || null,
       age_group: props.ageGroup || null,
     });
