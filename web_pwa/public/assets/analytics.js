@@ -10,6 +10,7 @@ let bootPromise = null;
 const MAX_BUFFER = 100;
 const buffer = [];           // boot 완료 전 들어온 track 호출 버퍼
 let pendingUserId = null;    // boot 완료 전 들어온 identify 대상
+let pendingUserProps = null; // boot 완료 전 들어온 setUserProps 대상
 
 export function initAnalytics() {
   if (!bootPromise) bootPromise = boot();
@@ -32,6 +33,7 @@ async function boot() {
 
   booted = true;
   if (pendingUserId != null) applyUserId(pendingUserId);
+  if (pendingUserProps != null) { applyUserProps(pendingUserProps); pendingUserProps = null; }
   for (const ev of buffer.splice(0)) emit(ev.name, ev.props);
 }
 
@@ -93,4 +95,27 @@ function applyUserId(userId) {
   const id = String(userId);
   try { if (amplitude) amplitude.setUserId(id); } catch { /* noop */ }
   try { if (clarityReady && window.clarity) window.clarity('identify', id); } catch { /* noop */ }
+}
+
+// 회원 속성(성별·나이대)을 Amplitude User Property로 전송.
+// 로그인 직후 / 프로필 변경 시 호출. 값이 비면 해당 속성을 unset.
+// props: { gender?: string, ageGroup?: string }  — 값은 영문 코드(male/female/other, 10s..90s)
+export function setUserProps(props = {}) {
+  if (!booted) { pendingUserProps = props; return; }
+  applyUserProps(props);
+}
+
+function applyUserProps(props) {
+  if (!amplitude) return;
+  try {
+    const id = new amplitude.Identify();
+    if (props.gender) id.set('gender', props.gender); else id.unset('gender');
+    if (props.ageGroup) id.set('age_group', props.ageGroup); else id.unset('age_group');
+    amplitude.identify(id);
+  } catch { /* noop */ }
+}
+
+// 로그아웃 시 사용자/디바이스 식별 초기화
+export function resetUser() {
+  try { if (amplitude) amplitude.reset(); } catch { /* noop */ }
 }

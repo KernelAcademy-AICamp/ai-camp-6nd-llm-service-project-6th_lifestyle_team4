@@ -1,6 +1,6 @@
 // Daily Script SPA — Android HomeScreen/ArchiveScreen/SettingsScreen/DetailScreen port
 import { getSupabase } from '/assets/supabase-client.js';
-import { initAnalytics, track, identify } from '/assets/analytics.js';
+import { initAnalytics, track, identify, setUserProps, resetUser } from '/assets/analytics.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -246,6 +246,10 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
     loadRecentlyShownFromStorage();
     await bootstrapAuth();
     identify(state.userId);
+    // 회원이면 성별·나이대를 Amplitude User Property로 전송 (타겟층 분석용)
+    if (!state.isAnonymous) {
+      setUserProps({ gender: state.userGender, ageGroup: state.userAgeGroup });
+    }
     paintAuthIdentity();
     await Promise.all([loadAllCards(), loadBookmarks()]);
     paintTasteProfile();
@@ -1597,6 +1601,8 @@ async function saveNickname() {
     state.userNickname = newName;
     state.userGender = gender || '';
     state.userAgeGroup = ageGroup || '';
+    // 변경된 성별·나이대를 Amplitude에 반영
+    setUserProps({ gender: state.userGender, ageGroup: state.userAgeGroup });
     paintAuthIdentity();
     closeNicknameModal();
     toast('프로필이 저장됐어요');
@@ -1632,6 +1638,7 @@ signOutBtn.addEventListener('click', async () => {
     }
   } catch {}
   await sb.auth.signOut();
+  resetUser();  // Amplitude userId/deviceId 초기화 (회원 분석 깔끔하게 분리)
   localStorage.removeItem('ds.prevAnonUserId');
   localStorage.removeItem(SESSION_KEY);
   // 자격증명 기억은 유지 (다음 로그인 편의)
