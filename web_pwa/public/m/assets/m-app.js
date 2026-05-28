@@ -394,7 +394,7 @@ function setRealtimeStatus(status) {
 
 function rerenderActiveView() {
   if (state.currentView === 'home') {
-    // 오늘의 카드 다시 뽑되, 사용자가 셔플 중이면 그대로 두기 — 단순화: 항상 today 재계산
+    // renderHome 이 state.todayCard 를 유지하므로 재렌더해도 보던 카드가 바뀌지 않음
     renderHome();
   } else if (state.currentView === 'archive') {
     renderArchive();
@@ -647,10 +647,6 @@ async function loadBookmarks() {
 }
 
 // ---------- Today's card / 추천 ----------
-function getTodaySeed() {
-  const d = new Date();
-  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
-}
 
 function isTasteEnabled() {
   return localStorage.getItem('ds.taste') === '1';
@@ -694,31 +690,7 @@ function tasteDistance(card, taste) {
 }
 
 /**
- * 시드 기반 결정론적 + taste 가중 선택.
- *  - taste 프로파일 없거나 candidate 없으면 시드 모듈로 폴백
- *  - seed % 10 === 0 인 날(10%)엔 variety로 먼 카드도 허용
- *  - 그 외 90% 는 상위 30% 유사 카드 풀에서 시드 모듈로 선택
- */
-function pickByTasteSeeded(seed) {
-  if (state.allCards.length === 0) return null;
-  const taste = computeTasteProfile();
-  if (!taste) return state.allCards[Math.abs(seed) % state.allCards.length];
-
-  const candidates = state.allCards.filter(
-    (c) => typeof c.temperature === 'number' || typeof c.intensity === 'number'
-  );
-  if (candidates.length === 0) return state.allCards[Math.abs(seed) % state.allCards.length];
-
-  const sorted = candidates.slice().sort((a, b) => tasteDistance(a, taste) - tasteDistance(b, taste));
-  const variety = (Math.abs(seed) % 10) === 0;
-  const pool = variety
-    ? sorted.slice(Math.floor(sorted.length * 0.3))   // 멀리 있는 70%에서 (가끔 변형)
-    : sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.3)));  // 가까운 30%만
-  return pool[Math.abs(seed) % pool.length];
-}
-
-/**
- * 비시드 (refresh) — 매번 다른 카드를 보여주되 taste 가중.
+ * refresh / 진입 — 매번 다른 카드를 보여주되 taste 가중.
  *  - 10% 확률로 pure random (variety)
  *  - 그 외 90%는 거리 역수로 가중 랜덤
  */
@@ -772,13 +744,6 @@ function pickByTasteRandom() {
   return picked;
 }
 
-function pickTodayCard() {
-  if (state.allCards.length === 0) return null;
-  const seed = getTodaySeed();
-  if (isTasteEnabled()) return pickByTasteSeeded(seed);
-  return state.allCards[seed % state.allCards.length];
-}
-
 // 셔플 시 최근 10개에 있는 카드는 제외 + localStorage 영구 저장
 const RECENT_EXCLUDE_SIZE = 10;
 const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
@@ -824,6 +789,14 @@ function candidatesExcludingRecent() {
   const pool = state.allCards.filter((c) => !exclude.has(c.card_id));
   // 풀이 너무 작으면 (전체가 10개 이하) 폴백
   return pool.length > 0 ? pool : state.allCards;
+}
+
+// 직전에 보던 카드(큐의 마지막) 복원 — 없거나 카드가 삭제됐으면 null
+function restoreLastShownCard() {
+  const ids = state.recentlyShownIds;
+  if (!ids || ids.length === 0) return null;
+  const lastId = ids[ids.length - 1];
+  return state.allCards.find((c) => c.card_id === lastId) || null;
 }
 
 function rememberShown(cardId) {
@@ -929,12 +902,18 @@ function renderHome() {
     year: 'numeric', month: 'long', day: 'numeric'
   }).toUpperCase();
 
-  state.todayCard = pickTodayCard();
-  if (!state.todayCard) {
+  // 표시 카드 결정:
+  //  1) 세션 중 이미 보던 카드가 있으면 유지 (realtime/폴링/포그라운드 재렌더 시 카드 고정)
+  //  2) 부팅 직후엔 직전에 보던 카드를 복원
+  //  3) 둘 다 없으면 새 랜덤 카드
+  const card = state.todayCard || restoreLastShownCard() || pickRandomCard();
+  state.todayCard = card;
+  if (!card) {
     todayCard.style.display = 'none';
     return;
   }
-  applyTodayCard(state.todayCard);
+  todayCard.style.display = '';
+  applyTodayCard(card);
   renderHomeBookmarks();
 }
 
@@ -1471,10 +1450,9 @@ tasteToggle.addEventListener('click', () => {
   const newEnabled = !isTasteEnabled();
   localStorage.setItem('ds.taste', newEnabled ? '1' : '0');
   paintTasteToggle();
-  // 즉시 효과 — 오늘의 카드 다시 뽑기
+  // 즉시 효과 — 새 추천 카드 한 장 뽑기
   if (state.currentView === 'home') {
-    state.todayCard = pickTodayCard();
-    if (state.todayCard) applyTodayCard(state.todayCard);
+    applyTodayCard(pickRandomCard());
   }
   toast(newEnabled ? 'Personalized recommendations on' : 'Switched to fully random');
 });
