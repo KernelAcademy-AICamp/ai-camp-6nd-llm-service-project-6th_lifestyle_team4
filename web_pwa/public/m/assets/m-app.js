@@ -1947,6 +1947,8 @@ async function submitSignin() {
     } else {
       clearRememberedCreds();
     }
+    // 명시적 로그인/가입 이벤트 (Amplitude) — reload 전에 발생, SDK가 저장 후 전송
+    track(signinMode === 'signup' ? 'sign_up' : 'login', { method: 'id_password' });
     toast(signinMode === 'signup' ? '가입 완료' : '로그인 됨');
     closeSigninModal();
     // 세션이 바뀌었으므로 reload — bootstrapAuth가 새 user 행 만들고 마이그레이션 + session_id 발급
