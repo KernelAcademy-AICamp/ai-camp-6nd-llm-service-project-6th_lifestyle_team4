@@ -108,43 +108,6 @@ backfillBtn?.addEventListener('click', async () => {
   }
 });
 
-// 작가명에 라틴 문자가 남아 있는 작품을 LLM 으로 한국어 표기로 일괄 변환.
-// /api/backfill-authors 를 remaining 이 0 또는 더 이상 변경이 없을 때까지 반복 호출.
-const backfillAuthorsBtn = $('#backfill-authors-btn');
-backfillAuthorsBtn?.addEventListener('click', async () => {
-  if (!confirm('영문으로 저장된 작가명을 한국어 통용 표기로 일괄 변환합니다.\nLLM 호출이라 작품 수에 따라 몇 분 걸릴 수 있어요. 진행할까요?')) return;
-  backfillAuthorsBtn.disabled = true;
-  const orig = backfillAuthorsBtn.innerHTML;
-  let totalProcessed = 0;
-  let totalChanged = 0;
-  try {
-    let remaining = Infinity;
-    let guard = 0;
-    while (remaining > 0 && guard < 300) {
-      guard += 1;
-      backfillAuthorsBtn.innerHTML =
-        `<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>` +
-        `<span class="text-sm">변환 중⋯ (${totalProcessed})</span>`;
-      const token = await getAccessToken();
-      const json = await apiFetch('/api/backfill-authors?limit=5', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      totalProcessed += json.processed || 0;
-      totalChanged += json.changed || 0;
-      remaining = json.remaining ?? 0;
-      if ((json.processed || 0) === 0) break;
-      toast(`작가명 변환 · 누적 ${totalChanged}/${totalProcessed} · 남음 ${remaining}`, 'info');
-    }
-    toast(`작가명 한국어화 완료 — 변환 ${totalChanged}, 처리 ${totalProcessed}`, 'success');
-  } catch (err) {
-    toast(err.message || '작가명 변환 실패', 'error');
-  } finally {
-    backfillAuthorsBtn.disabled = false;
-    backfillAuthorsBtn.innerHTML = orig;
-  }
-});
-
 // ---------------------------------------------------------------------------
 // Category toggle (영화/드라마 · 오페라/뮤지컬 · 연극 · 소설/시/에세이)
 // ---------------------------------------------------------------------------

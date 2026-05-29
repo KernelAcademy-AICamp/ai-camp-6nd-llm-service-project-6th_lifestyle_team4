@@ -4,7 +4,6 @@
     "api/translate.js": { "maxDuration": 120 },
     "api/save.js": { "maxDuration": 60 },
     "api/backfill-characters.js": { "maxDuration": 300 },
-    "api/backfill-authors.js": { "maxDuration": 300 },
     "api/classify-keywords.js": { "maxDuration": 60 }
   },
   "headers": [
