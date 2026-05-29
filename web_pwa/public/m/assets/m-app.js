@@ -54,10 +54,8 @@ const signinGoogle = $('#signin-google');
 const signinKakao = $('#signin-kakao');
 const tasteToggle = $('#taste-toggle');
 const tasteProfileEl = $('#taste-profile');
-const mypageBookmarksBlock = $('#mypage-bookmarks-block');
-const mypageBookmarksList = $('#mypage-bookmarks-list');
-const mypageRepliesBlock = $('#mypage-replies-block');
-const mypageRepliesList = $('#mypage-replies-list');
+const mypageChatsBlock = $('#mypage-chats-block');
+const mypageChatsList = $('#mypage-chats-list');
 const themeToggle = $('#theme-toggle');
 const themeSubtitle = $('#theme-subtitle');
 const editNicknameBtn = $('#edit-nickname-btn');
@@ -1549,54 +1547,41 @@ function paintTasteToggle() {
   paintTasteProfile();
 }
 
-function renderMyBookmarks() {
-  if (!mypageBookmarksBlock || !mypageBookmarksList) return;
-  const rows = (state.bookmarks || []).filter((r) => r && r.cards);
-  if (rows.length === 0) {
-    mypageBookmarksBlock.style.display = 'none';
-    mypageBookmarksList.innerHTML = '';
-    return;
-  }
-  mypageBookmarksList.innerHTML = '';
-  for (const row of rows) {
-    mypageBookmarksList.appendChild(buildBookmarkRow(row));
-  }
-  mypageBookmarksBlock.style.display = 'block';
-}
-
-async function renderMyReplies() {
-  if (!mypageRepliesBlock || !mypageRepliesList) return;
+// MY CHATS — 내가 단 댓글·답글 모두 (parent_comment_id 필터 없음)
+async function renderMyChats() {
+  if (!mypageChatsBlock || !mypageChatsList) return;
   if (!state.userId) {
-    mypageRepliesBlock.style.display = 'none';
-    mypageRepliesList.innerHTML = '';
+    mypageChatsBlock.style.display = 'none';
+    mypageChatsList.innerHTML = '';
     return;
   }
   try {
     const sb = getSupabase();
     if (!sb) {
-      mypageRepliesBlock.style.display = 'none';
+      mypageChatsBlock.style.display = 'none';
       return;
     }
     const { data, error } = await sb
       .from('card_comments')
       .select('comment_id, card_id, body, created_at, parent_comment_id')
       .eq('user_id', state.userId)
-      .not('parent_comment_id', 'is', null)
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) throw error;
     const rows = Array.isArray(data) ? data : [];
     if (rows.length === 0) {
-      mypageRepliesBlock.style.display = 'none';
-      mypageRepliesList.innerHTML = '';
+      mypageChatsBlock.style.display = 'none';
+      mypageChatsList.innerHTML = '';
       return;
     }
-    mypageRepliesList.innerHTML = '';
+    mypageChatsList.innerHTML = '';
     for (const r of rows) {
       const card = (state.allCards || []).find((c) => c.card_id === r.card_id);
       const w = card?.works || {};
       const title = displayTitle(w.title) || '—';
-      const metaParts = [formatBookmarkDate(r.created_at), title].filter(Boolean);
+      // 답글이면 ↳ 표시로 구분
+      const kindLabel = r.parent_comment_id != null ? '↳ 답글' : '댓글';
+      const metaParts = [formatBookmarkDate(r.created_at), title, kindLabel].filter(Boolean);
       const meta = metaParts.join('  —  ').toUpperCase();
 
       const wrap = document.createElement('div');
@@ -1616,13 +1601,13 @@ async function renderMyReplies() {
       const hr = document.createElement('div');
       hr.className = 'hairline';
       wrap.appendChild(hr);
-      mypageRepliesList.appendChild(wrap);
+      mypageChatsList.appendChild(wrap);
     }
-    mypageRepliesBlock.style.display = 'block';
+    mypageChatsBlock.style.display = 'block';
   } catch (err) {
-    console.warn('[m] renderMyReplies failed', err);
-    mypageRepliesBlock.style.display = 'none';
-    mypageRepliesList.innerHTML = '';
+    console.warn('[m] renderMyChats failed', err);
+    mypageChatsBlock.style.display = 'none';
+    mypageChatsList.innerHTML = '';
   }
 }
 
@@ -2778,7 +2763,7 @@ function setView(view) {
 
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
   if (view === 'feed') renderFeed();
-  if (view === 'settings') { paintTasteProfile(); renderMyBookmarks(); renderMyReplies(); }
+  if (view === 'settings') { paintTasteProfile(); renderMyChats(); }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
   if (!suppressPushState) {
