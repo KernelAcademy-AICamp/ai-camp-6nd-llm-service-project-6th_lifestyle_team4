@@ -53,6 +53,10 @@ const signinGoogle = $('#signin-google');
 const signinKakao = $('#signin-kakao');
 const tasteToggle = $('#taste-toggle');
 const tasteProfileEl = $('#taste-profile');
+const mypageBookmarksBlock = $('#mypage-bookmarks-block');
+const mypageBookmarksList = $('#mypage-bookmarks-list');
+const mypageRepliesBlock = $('#mypage-replies-block');
+const mypageRepliesList = $('#mypage-replies-list');
 const themeToggle = $('#theme-toggle');
 const themeSubtitle = $('#theme-subtitle');
 const editNicknameBtn = $('#edit-nickname-btn');
@@ -1099,9 +1103,16 @@ function buildBookmarkRow(row) {
 function formatBookmarkDate(iso) {
   if (!iso) return '';
   try {
-    const datePart = String(iso).slice(0, 10);
-    const [, m, d] = datePart.split('-');
-    return `${parseInt(m, 10)}. ${parseInt(d, 10)}`;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const mo = parseInt(String(d.getMonth() + 1), 10);
+    const day = parseInt(String(d.getDate()), 10);
+    let h = d.getHours();
+    const min = String(d.getMinutes()).padStart(2, '0');
+    const ampm = h < 12 ? '오전' : '오후';
+    h = h % 12;
+    if (h === 0) h = 12;
+    return `${mo}. ${day}  ${ampm} ${h}:${min}`;
   } catch { return ''; }
 }
 
@@ -1235,7 +1246,7 @@ function groupBookmarksByWork() {
         cards: [],
       });
     }
-    byWork.get(key).cards.push(card);
+    byWork.get(key).cards.push({ ...card, _bookmarkedAt: b.created_at });
   }
   // series 가 같은 책들은 책꽂이에서 인접해서 표시되도록 정렬
   return Array.from(byWork.values()).sort((a, b) => {
@@ -1375,7 +1386,9 @@ function openBookModal(work) {
     const meta = card.excerpt_description
       ? truncateText(cleanQuote(card.excerpt_description), 60)
       : '';
+    const bookmarkedAt = formatBookmarkDate(card._bookmarkedAt);
     item.innerHTML = `
+      ${bookmarkedAt ? `<span class="book-quote-date">${escapeHtml(bookmarkedAt)}</span>` : ''}
       <p class="book-quote-text">"${escapeHtml(cleanQuote(card.quote))}"</p>
       ${meta ? `<p class="book-quote-meta">${escapeHtml(meta)}</p>` : ''}
     `;
@@ -1488,6 +1501,83 @@ function paintTasteToggle() {
   tasteToggle.classList.toggle('on', enabled);
   tasteToggle.setAttribute('aria-checked', enabled ? 'true' : 'false');
   paintTasteProfile();
+}
+
+function renderMyBookmarks() {
+  if (!mypageBookmarksBlock || !mypageBookmarksList) return;
+  const rows = (state.bookmarks || []).filter((r) => r && r.cards);
+  if (rows.length === 0) {
+    mypageBookmarksBlock.style.display = 'none';
+    mypageBookmarksList.innerHTML = '';
+    return;
+  }
+  mypageBookmarksList.innerHTML = '';
+  for (const row of rows) {
+    mypageBookmarksList.appendChild(buildBookmarkRow(row));
+  }
+  mypageBookmarksBlock.style.display = 'block';
+}
+
+async function renderMyReplies() {
+  if (!mypageRepliesBlock || !mypageRepliesList) return;
+  if (!state.userId) {
+    mypageRepliesBlock.style.display = 'none';
+    mypageRepliesList.innerHTML = '';
+    return;
+  }
+  try {
+    const sb = getSupabase();
+    if (!sb) {
+      mypageRepliesBlock.style.display = 'none';
+      return;
+    }
+    const { data, error } = await sb
+      .from('card_comments')
+      .select('comment_id, card_id, body, created_at, parent_comment_id')
+      .eq('user_id', state.userId)
+      .not('parent_comment_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    const rows = Array.isArray(data) ? data : [];
+    if (rows.length === 0) {
+      mypageRepliesBlock.style.display = 'none';
+      mypageRepliesList.innerHTML = '';
+      return;
+    }
+    mypageRepliesList.innerHTML = '';
+    for (const r of rows) {
+      const card = (state.allCards || []).find((c) => c.card_id === r.card_id);
+      const w = card?.works || {};
+      const title = displayTitle(w.title) || '—';
+      const metaParts = [formatBookmarkDate(r.created_at), title].filter(Boolean);
+      const meta = metaParts.join('  —  ').toUpperCase();
+
+      const wrap = document.createElement('div');
+      const node = document.createElement('div');
+      node.className = 'bookmark-row';
+      node.innerHTML = `
+        <div style="flex:1;min-width:0;">
+          ${meta ? `<p class="t-label-sm c-walnut">${escapeHtml(meta)}</p><div style="height:6px;"></div>` : ''}
+          <p class="t-body-md c-espresso single-line">${escapeHtml(r.body || '')}</p>
+        </div>
+        <span class="material-symbols-outlined arrow">arrow_forward_ios</span>
+      `;
+      if (card) {
+        node.addEventListener('click', () => openDetail(card));
+      }
+      wrap.appendChild(node);
+      const hr = document.createElement('div');
+      hr.className = 'hairline';
+      wrap.appendChild(hr);
+      mypageRepliesList.appendChild(wrap);
+    }
+    mypageRepliesBlock.style.display = 'block';
+  } catch (err) {
+    console.warn('[m] renderMyReplies failed', err);
+    mypageRepliesBlock.style.display = 'none';
+    mypageRepliesList.innerHTML = '';
+  }
 }
 
 function paintTasteProfile() {
@@ -2519,7 +2609,7 @@ function setView(view) {
   });
 
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
-  if (view === 'settings') paintTasteProfile();
+  if (view === 'settings') { paintTasteProfile(); renderMyBookmarks(); renderMyReplies(); }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
   if (!suppressPushState) {

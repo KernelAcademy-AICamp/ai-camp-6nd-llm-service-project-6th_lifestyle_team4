@@ -660,6 +660,13 @@
     font-size: 9px; letter-spacing: 0.25em;
     color: var(--sand); font-weight: 700;
   }
+  .book .book-quote-date {
+    position: absolute;
+    top: 8px; left: 18px;
+    font-size: 9px; letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--walnut); font-weight: 600;
+  }
   .book .book-quote-text {
     font-family: 'Nanum Myeongjo', Georgia, serif;
     font-size: 16px; line-height: 26px;
@@ -833,6 +840,24 @@
     <p id="settings-bio" class="t-body-lg c-walnut">매일 한 장의 명대사로 하루를 시작합니다.</p>
     <div style="height:32px;"></div>
     <div class="hairline"></div>
+
+    <!-- MY BOOKMARKS section -->
+    <div id="mypage-bookmarks-block" style="display:none;">
+      <div style="height:40px;"></div>
+      <p class="t-label-sm c-walnut" style="margin-bottom:12px;">MY BOOKMARKS</p>
+      <div id="mypage-bookmarks-list"></div>
+      <div style="height:32px;"></div>
+      <div class="hairline"></div>
+    </div>
+
+    <!-- MY REPLIES section -->
+    <div id="mypage-replies-block" style="display:none;">
+      <div style="height:40px;"></div>
+      <p class="t-label-sm c-walnut" style="margin-bottom:12px;">MY REPLIES</p>
+      <div id="mypage-replies-list"></div>
+      <div style="height:32px;"></div>
+      <div class="hairline"></div>
+    </div>
 
     <!-- SIGN IN section — visible only when anonymous -->
     <div id="signin-block" style="display:none;">
