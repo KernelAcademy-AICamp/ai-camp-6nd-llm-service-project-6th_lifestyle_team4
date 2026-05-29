@@ -812,8 +812,9 @@
      책은 컨테이너에 꽉 차지 않고 사방 여백을 두고 인셋(목업 기준). */
   .feed-item {
     background: var(--feed-card);
-    padding: 16px 16px 18px;    /* 사방 여백 → 책이 좌우로 안 꽉 차고 인셋 */
+    padding: 16px 16px 0;       /* 좌우만 여백 — 책은 컨테이너 하단에 붙음 */
     margin-bottom: 24px;
+    overflow: hidden;
   }
   .feed-item-head {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
@@ -845,21 +846,20 @@
   .feed-book {
     position: relative; z-index: 2;
     margin-top: -22px;          /* 종이 하단을 덮어 '꽂힌' 느낌 */
-    padding: 0 16px 12px;       /* 높이 낮게: 하단 패딩 축소 */
+    padding: 0 16px 14px;       /* 컨테이너 하단에 붙음 */
     box-shadow:
-      inset 7px 0 9px -6px rgba(0,0,0,0.45),     /* 왼쪽 책등 그림자 */
-      inset -5px 0 8px -6px rgba(0,0,0,0.30),    /* 오른쪽 페이지 단면 */
-      inset 0 -13px 16px -12px rgba(0,0,0,0.30), /* 아래쪽 입체 음영 */
-      0 5px 12px rgba(14,12,10,0.26);            /* 바닥 드롭 섀도 */
+      inset 7px 0 9px -6px rgba(0,0,0,0.42),     /* 왼쪽 책등 그림자 */
+      inset -5px 0 8px -6px rgba(0,0,0,0.28),    /* 오른쪽 단면 */
+      inset 0 -10px 14px -10px rgba(0,0,0,0.32); /* 아래쪽 입체 음영 */
     /* background: leatherColorFor(title) — 인라인 */
   }
-  /* 금박 페이지 단면 띠 — 얇은 줄 반복으로 책장 단면(gilt edge) 느낌, 종이가 꽂히는 입구 */
+  /* 금색 가죽 밴드 — 아카이브 책등(.spine)의 띠와 동일 스타일(가운데 금색, 위아래 음영 양각) */
   .feed-book-band {
-    height: 13px; margin: 5px -16px 9px;   /* 위 5px 가죽 lip + 낮은 띠 */
-    background: repeating-linear-gradient(180deg,
-      #F2DCA0 0px, #D8B468 1.5px, #A9823A 3px, #806128 3.4px);
-    border-top: 1px solid rgba(0,0,0,0.28);
-    border-bottom: 2px solid rgba(0,0,0,0.42);
+    height: 14px; margin: 7px -16px 11px;   /* 위 가죽 lip + 띠 */
+    background: linear-gradient(180deg,
+      transparent 0%, rgba(0,0,0,0.5) 26%, #C9A24B 50%, rgba(0,0,0,0.5) 74%, transparent 100%);
+    border-top: 0.5px solid rgba(255,230,180,0.4);
+    border-bottom: 0.5px solid rgba(0,0,0,0.7);
   }
   .feed-book .fb-title {
     font-family: 'Nanum Myeongjo', Georgia, serif;
