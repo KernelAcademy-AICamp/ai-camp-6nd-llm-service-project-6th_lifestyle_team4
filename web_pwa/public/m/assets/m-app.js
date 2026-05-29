@@ -61,6 +61,20 @@ const chatsBack = $('#chats-back');
 const chatsList = $('#chats-list');
 const chatsEmpty = $('#chats-empty');
 const chatsBody = $('#chats-body');
+// Highlight 기능
+const hlAddBtn = $('#hl-add-btn');
+const hlComposeScreen = $('#hl-compose-screen');
+const hlComposeBack = $('#hl-compose-back');
+const hlComposeSave = $('#hl-compose-save');
+const hlCoverFallback = $('#hl-cover-fallback');
+const hlTitleEl = $('#hl-title');
+const hlSubtitleEl = $('#hl-subtitle');
+const hlAuthorYearEl = $('#hl-author-year');
+const hlCardIdEl = $('#hl-card-id');
+const hlSelectedTextEl = $('#hl-selected-text');
+const hlUserNoteEl = $('#hl-user-note');
+const highlightsList = $('#highlights-list');
+const highlightsEmpty = $('#highlights-empty');
 const themeToggle = $('#theme-toggle');
 const themeSubtitle = $('#theme-subtitle');
 const editNicknameBtn = $('#edit-nickname-btn');
@@ -145,10 +159,12 @@ const state = {
   replyingToNickname: '',
   editingCommentId: null,      // 현재 인라인 수정 중인 comment_id (null = 수정 모드 아님)
   feedCategory: 'today',       // 피드 내부 카테고리: 'today' | 'highlight'
-  feedPosts: [],               // feed_posts 조인 rows (없으면 FEED_SAMPLES로 대체 표시)
+  feedPosts: [],               // (오늘의 한줄) feed_posts 조인 rows. 없으면 FEED_SAMPLES 폴백.
   feedLoaded: false,           // loadFeedPosts 1회 호출 여부
-  composeCard: null,           // 작성 오버레이 대상 카드
+  composeCard: null,           // 오늘의 한줄 작성 모달 대상 카드
   feedSubmitting: false,
+  draftHighlight: null,        // (하이라이트) { card, selectedText } — compose 화면 채움용
+  highlights: [],              // (하이라이트) card_highlights 조회 rows (cards/works join)
 };
 let detailCommentsChannel = null;
 
@@ -327,6 +343,10 @@ window.addEventListener('hashchange', () => setView(getInitialView()));
 // ===== Hardware/swipe back (Android edge swipe, iOS swipe-from-edge) =====
 // 우선순위: detail screen 닫기 → book modal 닫기 → tab 이동
 window.addEventListener('popstate', () => {
+  if (hlComposeScreen && hlComposeScreen.classList.contains('open')) {
+    closeHlComposeInternal();
+    return;
+  }
   if (detailScreen && detailScreen.classList.contains('open')) {
     closeDetailInternal();
     return;
@@ -2912,6 +2932,7 @@ function renderFeed() {
   if (today) today.style.display = (cat === 'today') ? 'block' : 'none';
   if (highlight) highlight.style.display = (cat === 'highlight') ? 'block' : 'none';
   if (cat === 'today') renderFeedList();
+  if (cat === 'highlight') loadAndRenderHighlights().catch((e) => console.warn('[hl] load failed', e));
 }
 
 // 실제 글이 있으면 그것을, 없으면(로컬·빈 DB) 더미를 보여준다.
@@ -3090,6 +3111,202 @@ if (feedPickerModal) feedPickerModal.addEventListener('click', (e) => { if (e.ta
 if (feedComposeModal) feedComposeModal.addEventListener('click', (e) => { if (e.target === feedComposeModal) closeFeedCompose(); });
 if (fcInput) fcInput.addEventListener('input', updateFcCounter);
 if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
+
+// ============================================================================
+// HIGHLIGHT 기능
+// ============================================================================
+
+// 상세화면 본문에서 텍스트가 선택되면 + HL 버튼 노출
+function updateHlButtonForSelection() {
+  if (!hlAddBtn) return;
+  // 상세화면이 닫혀 있으면 숨김
+  if (!detailScreen || !detailScreen.classList.contains('open')) {
+    hlAddBtn.style.display = 'none';
+    return;
+  }
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed) { hlAddBtn.style.display = 'none'; return; }
+  const text = String(sel.toString() || '').trim();
+  if (!text) { hlAddBtn.style.display = 'none'; return; }
+  // 선택 범위가 #detail-script 안에 있는지 확인
+  const scriptEl = document.getElementById('detail-script');
+  if (!scriptEl) { hlAddBtn.style.display = 'none'; return; }
+  const range = sel.getRangeAt(0);
+  if (!scriptEl.contains(range.commonAncestorContainer)) {
+    hlAddBtn.style.display = 'none';
+    return;
+  }
+  hlAddBtn.style.display = 'block';
+}
+
+document.addEventListener('selectionchange', updateHlButtonForSelection);
+// touchend 직후엔 selectionchange 가 늦게 올 수 있어 한 번 더 체크
+document.addEventListener('touchend', () => setTimeout(updateHlButtonForSelection, 60));
+document.addEventListener('mouseup', () => setTimeout(updateHlButtonForSelection, 30));
+
+hlAddBtn?.addEventListener('click', () => {
+  const sel = window.getSelection();
+  const text = sel ? String(sel.toString() || '').trim() : '';
+  if (!text) { toast('본문에서 텍스트를 선택해주세요'); return; }
+  // 현재 열려 있는 상세화면의 카드 정보
+  const cardId = state.detailCardId;
+  const card = (state.allCards || []).find((c) => c.card_id === cardId);
+  if (!card) { toast('카드 정보를 찾을 수 없어요'); return; }
+  if (state.isAnonymous || !state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
+
+  state.draftHighlight = { card, selectedText: text };
+  // 선택 해제 + 버튼 숨김
+  if (sel) sel.removeAllRanges();
+  hlAddBtn.style.display = 'none';
+  openHlCompose();
+});
+
+function openHlCompose() {
+  if (!hlComposeScreen || !state.draftHighlight) return;
+  const { card, selectedText } = state.draftHighlight;
+  const w = card.works || {};
+  const title = displayTitle(w.title) || '';
+  const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
+  const author = w.author || '';
+  const year = w.release_year ? String(w.release_year) : '';
+
+  if (hlTitleEl) hlTitleEl.textContent = title || '제목 없음';
+  if (hlSubtitleEl) {
+    if (subtitle) { hlSubtitleEl.textContent = subtitle; hlSubtitleEl.style.display = 'block'; }
+    else hlSubtitleEl.style.display = 'none';
+  }
+  if (hlAuthorYearEl) {
+    hlAuthorYearEl.textContent = [author, year].filter(Boolean).join(' · ');
+  }
+  if (hlCardIdEl) hlCardIdEl.textContent = `#${String(card.card_id).padStart(5, '0')}`;
+  if (hlCoverFallback) {
+    // 표지 fallback — 작품 제목 일부를 박스 안에
+    hlCoverFallback.textContent = subtitle || title || '';
+  }
+  if (hlSelectedTextEl) hlSelectedTextEl.textContent = selectedText;
+  if (hlUserNoteEl) hlUserNoteEl.value = '';
+
+  history.pushState({ overlay: 'hl-compose' }, '');
+  hlComposeScreen.style.display = 'flex';
+  requestAnimationFrame(() => hlComposeScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+}
+
+function closeHlComposeInternal() {
+  if (!hlComposeScreen) return;
+  hlComposeScreen.classList.remove('open');
+  setTimeout(() => {
+    hlComposeScreen.style.display = 'none';
+    document.body.style.overflow = '';
+    state.draftHighlight = null;
+  }, 250);
+}
+
+function closeHlCompose() {
+  if (history.state && history.state.overlay === 'hl-compose') {
+    history.back();
+  } else {
+    closeHlComposeInternal();
+  }
+}
+
+hlComposeBack?.addEventListener('click', closeHlCompose);
+
+hlComposeSave?.addEventListener('click', async () => {
+  if (!state.draftHighlight) { closeHlComposeInternal(); return; }
+  if (state.isAnonymous || !state.userId) { toast('로그인이 필요합니다'); return; }
+  const { card, selectedText } = state.draftHighlight;
+  const note = hlUserNoteEl ? String(hlUserNoteEl.value || '').trim() : '';
+  if (!selectedText) { toast('본문 선택이 비어있어요'); return; }
+  try {
+    hlComposeSave.disabled = true;
+    const sb = await getSupabase();
+    const { error } = await sb.from('card_highlights').insert({
+      card_id: card.card_id,
+      user_id: state.userId,
+      selected_text: selectedText,
+      user_note: note || null,
+    });
+    if (error) throw error;
+    toast('하이라이트 추가됨');
+    closeHlComposeInternal();
+    // 상세화면도 함께 닫고 피드 > 하이라이트로 이동
+    if (detailScreen && detailScreen.classList.contains('open')) closeDetailInternal();
+    setTimeout(() => {
+      state.feedCategory = 'highlight';
+      setView('feed');
+    }, 280);
+  } catch (err) {
+    console.warn('[hl] save failed', err);
+    toast('저장 실패: ' + (err.message || ''));
+  } finally {
+    hlComposeSave.disabled = false;
+  }
+});
+
+// 피드 > 하이라이트 로드 + 렌더
+async function loadAndRenderHighlights() {
+  if (!highlightsList || !highlightsEmpty) return;
+  highlightsEmpty.style.display = 'none';
+  highlightsList.innerHTML = '<p class="t-body-md c-walnut" style="padding:8px 0;text-align:center;">불러오는 중⋯</p>';
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('card_highlights')
+      .select('highlight_id, card_id, user_id, selected_text, user_note, created_at, cards(card_id, works(work_id, title, subtitle, author, release_year))')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    state.highlights = Array.isArray(data) ? data : [];
+    renderHighlights();
+  } catch (err) {
+    console.warn('[hl] load failed', err);
+    highlightsList.innerHTML = '';
+    highlightsEmpty.style.display = 'block';
+  }
+}
+
+function renderHighlights() {
+  if (!highlightsList || !highlightsEmpty) return;
+  const rows = state.highlights || [];
+  if (rows.length === 0) {
+    highlightsList.innerHTML = '';
+    highlightsEmpty.style.display = 'block';
+    return;
+  }
+  highlightsEmpty.style.display = 'none';
+  highlightsList.innerHTML = '';
+  for (const h of rows) {
+    const w = h.cards?.works || {};
+    const title = displayTitle(w.title) || '';
+    const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
+    const author = w.author || '';
+    const year = w.release_year || '';
+    const coverText = subtitle || title;
+
+    const item = document.createElement('div');
+    item.style.cssText = 'display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px 8px;border:0.5px solid var(--latte);background:var(--card-warm);';
+    item.innerHTML = `
+      <div style="width:120px;height:170px;background:linear-gradient(160deg,#B33A2E 0%,#7A1F15 100%);border-radius:6px;display:flex;align-items:center;justify-content:center;padding:14px;text-align:center;color:#fff;font-family:'Nanum Myeongjo',Georgia,serif;font-weight:700;line-height:1.4;font-size:13px;box-shadow:0 4px 14px rgba(14,12,10,0.18);word-break:keep-all;">
+        ${escapeHtml(coverText)}
+      </div>
+      <h3 class="t-headline-md c-espresso" style="margin-top:18px;word-break:keep-all;">${escapeHtml(title)}</h3>
+      ${subtitle ? `<p class="t-body-md c-walnut" style="margin-top:2px;">${escapeHtml(subtitle)}</p>` : ''}
+      ${author ? `<p class="t-label-sm c-walnut" style="margin-top:6px;">${escapeHtml(author)}${year ? '  ·  ' + escapeHtml(String(year)) : ''}</p>` : ''}
+      <div style="position:relative;margin-top:18px;padding:0 32px;max-width:520px;">
+        <span style="position:absolute;left:0;top:-4px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:22px;color:var(--sand);">❝</span>
+        <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;text-align:center;">${escapeHtml(h.selected_text || '')}</p>
+        <span style="position:absolute;right:0;bottom:-10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:22px;color:var(--sand);">❞</span>
+      </div>
+      ${h.user_note ? `<p class="t-body-sm c-walnut" style="margin-top:14px;font-style:italic;">${escapeHtml(h.user_note)}</p>` : ''}
+      <p class="t-label-sm c-sand" style="margin-top:14px;">#${String(h.card_id).padStart(5,'0')}  ·  ${escapeHtml(formatBookmarkDate(h.created_at))}</p>
+    `;
+    highlightsList.appendChild(item);
+  }
+}
+
+// popstate 처리 — hl-compose 도 우선순위에 포함
+// (기존 popstate 핸들러는 별도로 detail/chats/book modal 처리. 여기서 보완)
 
 // ---------- View switching ----------
 function setView(view) {

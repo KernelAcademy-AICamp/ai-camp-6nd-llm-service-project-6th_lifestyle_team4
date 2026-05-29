@@ -948,10 +948,11 @@
     </div>
 
     <div id="feed-highlight" style="margin-top:24px;display:none;">
-      <div style="padding:60px 0;text-align:center;">
+      <div id="highlights-list" style="display:flex;flex-direction:column;gap:36px;"></div>
+      <div id="highlights-empty" style="display:none;padding:60px 0;text-align:center;">
         <span class="material-symbols-outlined c-sand" style="font-size:56px;">auto_awesome</span>
-        <p class="t-headline-sm c-espresso" style="margin-top:14px;">하이라이트</p>
-        <p class="t-body-md c-walnut" style="margin-top:6px;">준비 중입니다.</p>
+        <p class="t-headline-sm c-espresso" style="margin-top:14px;">아직 하이라이트가 없어요</p>
+        <p class="t-body-md c-walnut" style="margin-top:6px;">명대사 본문을 길게 눌러 한 구절을 하이라이트해보세요.</p>
       </div>
     </div>
 
@@ -1210,6 +1211,52 @@
     </div>
 
     <div style="height:32px;"></div>
+  </div>
+
+  <!-- + HL 플로팅 버튼: 본문(#detail-script)에서 텍스트를 선택하면 등장 -->
+  <button id="hl-add-btn" type="button"
+          style="display:none;position:fixed;right:18px;bottom:24px;z-index:60;background:var(--cta);color:#fff;border:none;border-radius:999px;padding:12px 18px;font-size:13px;font-weight:600;letter-spacing:0.12em;box-shadow:0 6px 16px rgba(216,90,48,0.35);cursor:pointer;">
+    + HL
+  </button>
+</div>
+
+<!-- ===== Highlight Compose Screen (full screen overlay) ===== -->
+<div id="hl-compose-screen" class="detail-screen">
+  <header class="top-bar">
+    <button id="hl-compose-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
+    </button>
+    <div style="display:flex;flex-direction:column;align-items:center;">
+      <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">NEW HIGHLIGHT</span>
+    </div>
+    <button id="hl-compose-save"
+            style="background:transparent;border:none;cursor:pointer;padding:8px 4px;color:var(--cta);font-size:12px;font-weight:700;letter-spacing:0.18em;">SAVE</button>
+  </header>
+  <div class="hairline"></div>
+  <div class="detail-body" style="text-align:left;padding:24px 20px 80px;">
+    <!-- 자동 채워지는 카드 메타 (제목/부제/작가/연도/시간/#card_id) -->
+    <div id="hl-meta-block" style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:24px;">
+      <div id="hl-cover-fallback" style="width:120px;height:170px;background:linear-gradient(160deg,#B33A2E 0%,#7A1F15 100%);border-radius:6px;display:flex;align-items:center;justify-content:center;padding:14px;text-align:center;color:#fff;font-family:'Nanum Myeongjo',Georgia,serif;font-weight:700;line-height:1.4;font-size:13px;box-shadow:0 4px 14px rgba(14,12,10,0.18);"></div>
+      <h2 id="hl-title" class="t-headline-md c-espresso" style="margin-top:14px;text-align:center;word-break:keep-all;"></h2>
+      <p id="hl-subtitle" class="t-body-md c-walnut" style="text-align:center;display:none;"></p>
+      <p id="hl-author-year" class="t-label-sm c-walnut" style="margin-top:4px;"></p>
+      <p id="hl-card-id" class="t-label-sm c-sand" style="margin-top:2px;"></p>
+    </div>
+
+    <!-- 선택된 본문 -->
+    <div style="background:var(--card-warm);border:0.5px solid var(--latte);border-left:3px solid var(--cta);padding:18px 18px;position:relative;">
+      <span style="position:absolute;top:6px;left:10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:24px;color:var(--sand);">❝</span>
+      <span style="position:absolute;bottom:0px;right:10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:24px;color:var(--sand);">❞</span>
+      <p id="hl-selected-text" style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:16px;line-height:30px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;text-align:center;padding:0 20px;"></p>
+    </div>
+
+    <!-- (선택) 사용자 코멘트 -->
+    <div style="margin-top:20px;">
+      <p class="t-label-sm c-walnut" style="margin-bottom:8px;">한 줄 코멘트 (선택)</p>
+      <textarea id="hl-user-note" maxlength="500"
+                placeholder="이 구절에 대한 생각을 더해보세요…"
+                style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:inherit;font-size:14px;line-height:1.6;outline:none;resize:vertical;min-height:72px;"></textarea>
+    </div>
   </div>
 </div>
 
