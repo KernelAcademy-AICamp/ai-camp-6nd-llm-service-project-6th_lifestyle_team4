@@ -132,6 +132,9 @@ const fcInput = $('#fc-input');
 const fcCounter = $('#fc-counter');
 const fcSubmit = $('#fc-submit');
 const feedComposeClose = $('#feed-compose-close');
+const feedQuoteModal = $('#feed-quote-modal');
+const fqQuote = $('#fq-quote');
+const fqSource = $('#fq-source');
 
 const toastEl = $('#toast');
 
@@ -3305,6 +3308,9 @@ function buildFeedItem(post) {
       </div>
     </div>
   `;
+  // 카드 탭 → 해당 명대사 한 줄 팝업 (홈 한 줄과 동일, 전문 아님)
+  wrap.style.cursor = 'pointer';
+  wrap.addEventListener('click', () => openFeedQuote(card));
   return wrap;
 }
 
@@ -3460,11 +3466,27 @@ async function submitFeedPost() {
   }
 }
 
+// 피드 카드 탭 시 뜨는 명대사 한 줄 팝업 (홈에서 보여지는 한 줄과 동일)
+function openFeedQuote(card) {
+  if (!card) return;
+  const w = card.works || {};
+  fqQuote.textContent = cleanQuote(card.quote) || '명대사 준비 중';
+  const src = [displayTitle(w.title), w.author].filter(Boolean).join(' · ');
+  fqSource.textContent = src ? `— ${src}` : '';
+  feedQuoteModal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeFeedQuote() {
+  feedQuoteModal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
 if (feedFab) feedFab.addEventListener('click', openFeedPicker);
 if (feedPickerClose) feedPickerClose.addEventListener('click', closeFeedPicker);
 if (feedComposeClose) feedComposeClose.addEventListener('click', closeFeedCompose);
 if (feedPickerModal) feedPickerModal.addEventListener('click', (e) => { if (e.target === feedPickerModal) closeFeedPicker(); });
 if (feedComposeModal) feedComposeModal.addEventListener('click', (e) => { if (e.target === feedComposeModal) closeFeedCompose(); });
+if (feedQuoteModal) feedQuoteModal.addEventListener('click', closeFeedQuote);  // 아무 곳이나 탭하면 닫힘
 if (fcInput) fcInput.addEventListener('input', updateFcCounter);
 if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
 
