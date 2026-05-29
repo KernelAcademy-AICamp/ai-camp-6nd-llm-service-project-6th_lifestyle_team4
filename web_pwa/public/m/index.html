@@ -1120,6 +1120,19 @@
       <div class="hairline"></div>
     </div>
 
+    <!-- MY FEED entry — 클릭 시 풀스크린 myfeed-screen 으로 이동 -->
+    <div id="mypage-feed-block" style="display:none;">
+      <button id="mypage-feed-entry"
+              style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
+        <div style="flex:1;min-width:0;">
+          <p class="t-label-sm c-walnut" style="margin-bottom:6px;">MY FEED</p>
+          <p class="t-body-sm c-walnut">View one-liners and highlights you've shared</p>
+        </div>
+        <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+      </button>
+      <div class="hairline"></div>
+    </div>
+
     <!-- SIGN IN section — visible only when anonymous -->
     <div id="signin-block" style="display:none;">
       <div style="height:40px;"></div>
@@ -1235,6 +1248,33 @@
 </nav>
 
 <!-- ===== My Chats Screen (full screen overlay) ===== -->
+<!-- ===== My Feed Screen (full screen overlay) — MY COMMENT / MY HIGHLIGHT 토글 ===== -->
+<div id="myfeed-screen" class="detail-screen">
+  <header class="top-bar">
+    <button id="myfeed-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
+    </button>
+    <div style="display:flex;flex-direction:column;align-items:center;">
+      <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">MY FEED</span>
+    </div>
+    <span style="width:40px;"></span>
+  </header>
+  <div class="hairline"></div>
+  <!-- 카테고리 칩 (archive-chips 스타일 재활용) -->
+  <div id="myfeed-chips" class="archive-chips" role="tablist" style="margin:18px 20px 0;">
+    <button class="a-chip active" data-myfeed-cat="comment" role="tab">MY COMMENT</button>
+    <button class="a-chip"        data-myfeed-cat="highlight" role="tab">MY HIGHLIGHT</button>
+  </div>
+  <div class="detail-body" id="myfeed-body" style="text-align:left;padding:18px 20px 80px;">
+    <div id="myfeed-list"></div>
+    <div id="myfeed-empty" style="display:none;padding:80px 0;text-align:center;">
+      <span id="myfeed-empty-icon" class="material-symbols-outlined c-sand" style="font-size:56px;">edit_note</span>
+      <p id="myfeed-empty-title" class="t-headline-sm c-espresso" style="margin-top:14px;">아직 작성한 글이 없어요</p>
+      <p id="myfeed-empty-sub" class="t-body-md c-walnut" style="margin-top:6px;">피드 탭에서 첫 글을 남겨보세요.</p>
+    </div>
+  </div>
+</div>
+
 <div id="chats-screen" class="detail-screen">
   <header class="top-bar">
     <button id="chats-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
