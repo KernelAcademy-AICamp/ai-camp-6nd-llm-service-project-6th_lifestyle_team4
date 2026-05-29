@@ -249,6 +249,59 @@
       user-select: none;
     }
   }
+  /* === 피드 > 하이라이트 카드 === */
+  .hl-card {
+    display:flex; flex-direction:column; align-items:center; text-align:center;
+    padding: 28px 18px 24px;
+    border: 0.5px solid var(--latte);
+    background: var(--card-warm);
+  }
+  .hl-card-head { width:100%; display:flex; flex-direction:column; align-items:center; margin-bottom: 22px; }
+  .hl-card-head .nickname { font-size:14px; font-weight:600; color: var(--espresso); }
+  .hl-card-head .meta { font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color: var(--walnut); margin-top:6px; }
+  /* 책 표지 — 아카이브의 leather 색상으로 통일, 제목·작가를 표지 위에 새김 */
+  .hl-bookcover {
+    width: 132px; height: 188px;
+    border-radius: 4px;
+    display:flex; flex-direction:column; justify-content:center;
+    padding: 18px 14px;
+    color: #FAF8F2;
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    box-shadow: 0 8px 22px rgba(14,12,10,0.22), inset 0 1px 0 rgba(255,255,255,0.05);
+    position:relative;
+    overflow:hidden;
+  }
+  .hl-bookcover::before {
+    content:''; position:absolute; inset:7px;
+    border: 0.5px solid rgba(255,255,255,0.20);
+    border-radius: 2px;
+    pointer-events:none;
+  }
+  /* 책등 같은 좌측 라인 */
+  .hl-bookcover::after {
+    content:''; position:absolute; left:0; top:0; bottom:0;
+    width: 5px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.10) 50%, rgba(0,0,0,0.35) 100%);
+  }
+  .hl-bookcover .bc-title    { font-size:17px; font-weight:700; line-height:1.32; word-break:keep-all; }
+  .hl-bookcover .bc-subtitle { font-size:12px; line-height:1.45; margin-top:10px; opacity:0.90; word-break:keep-all; }
+  .hl-bookcover .bc-author   { font-size:10px; letter-spacing:0.08em; margin-top:14px; opacity:0.78; }
+  .hl-quote {
+    margin-top: 22px;
+    padding: 0 28px;
+    position:relative;
+    max-width: 520px;
+  }
+  .hl-quote .open-q  { position:absolute; left:0;  top:-6px;    font:22px 'Nanum Myeongjo', Georgia, serif; color: var(--sand); }
+  .hl-quote .close-q { position:absolute; right:0; bottom:-12px; font:22px 'Nanum Myeongjo', Georgia, serif; color: var(--sand); }
+  .hl-quote p {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 15px; line-height: 28px;
+    color: var(--espresso);
+    white-space: pre-wrap; word-break: keep-all;
+  }
+  .hl-card-foot { margin-top: 18px; font-size:11px; letter-spacing:0.18em; color: var(--sand); }
+
   /* 커스텀 selection 오버레이 — body 직속 fixed 컨테이너.
      viewport 좌표를 그대로 써서 #detail-script 의 innerHTML 재할당과 무관하게 살아남고
      텍스트 위(z-index 55)에 노란 형광펜으로 명확히 보이게. */
@@ -1399,7 +1452,7 @@
     <div class="feed-sheet-head">
       <div style="flex:1;min-width:0;">
         <p class="t-label-sm c-walnut" style="margin-bottom:6px;">MY BOOKMARKS</p>
-        <h3 class="t-headline-md c-espresso">어떤 명대사에 한줄을 남길까요?</h3>
+        <h3 id="feed-picker-title" class="t-headline-md c-espresso">어떤 명대사에 한줄을 남길까요?</h3>
       </div>
       <button id="feed-picker-close" class="feed-sheet-close" aria-label="close">
         <span class="material-symbols-outlined">close</span>

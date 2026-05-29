@@ -2993,9 +2993,18 @@ function openFeedPicker() {
   if (state.isAnonymous) {
     openPromptModal({
       title: '로그인이 필요해요',
-      message: '북마크한 명대사에 한줄을 남기려면 로그인이 필요해요.',
+      message: state.feedCategory === 'highlight'
+        ? '북마크한 카드에 하이라이트를 남기려면 로그인이 필요해요.'
+        : '북마크한 명대사에 한줄을 남기려면 로그인이 필요해요.',
     });
     return;
+  }
+  // 피커 제목을 현재 피드 카테고리에 맞춰 변경
+  const titleEl = document.getElementById('feed-picker-title');
+  if (titleEl) {
+    titleEl.textContent = (state.feedCategory === 'highlight')
+      ? '어떤 카드에 하이라이트를 남길까요?'
+      : '어떤 명대사에 한줄을 남길까요?';
   }
   renderFeedPicker();
   feedPickerModal.style.display = 'flex';
@@ -3035,7 +3044,17 @@ function buildFeedPickerRow(row) {
     </div>
     <span class="material-symbols-outlined arrow">arrow_forward_ios</span>
   `;
-  node.addEventListener('click', () => openFeedCompose(card));
+  node.addEventListener('click', () => {
+    // 카테고리에 따라 라우팅: 오늘의 한줄=compose, 하이라이트=상세화면 열고 본문 길게 누르기
+    if (state.feedCategory === 'highlight') {
+      closeFeedPicker();
+      // bookmark.cards 의 card 는 일부 컬럼만 join 돼 있을 수 있어 allCards 에서 풀로 다시 찾는다
+      const full = (state.allCards || []).find((c) => c.card_id === card.card_id) || card;
+      setTimeout(() => openDetail(full), 200);
+    } else {
+      openFeedCompose(card);
+    }
+  });
   return node;
 }
 
@@ -3445,6 +3464,7 @@ hlComposeSave?.addEventListener('click', async () => {
       card_id: card.card_id,
       user_id: state.userId,
       selected_text: selectedText,
+      author_nickname: state.userNickname || null,
     });
     if (error) throw error;
     toast('하이라이트 추가됨');
@@ -3472,7 +3492,7 @@ async function loadAndRenderHighlights() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('card_highlights')
-      .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, author, release_year))')
+      .select('highlight_id, card_id, user_id, selected_text, author_nickname, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) throw error;
@@ -3501,23 +3521,30 @@ function renderHighlights() {
     const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
     const author = w.author || '';
     const year = w.release_year || '';
-    const coverText = subtitle || title;
+    const nickname = h.author_nickname || '익명';
+    const formatLabel = GENRE_LABEL[w.format] || w.format || '';
+    const when = formatBookmarkDate(h.created_at) || '';
+    const metaLine = [formatLabel, when].filter(Boolean).join(' · ');
+    const coverColor = leatherColorFor(w.title || title);
 
     const item = document.createElement('div');
-    item.style.cssText = 'display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px 8px;border:0.5px solid var(--latte);background:var(--card-warm);';
+    item.className = 'hl-card';
     item.innerHTML = `
-      <div style="width:120px;height:170px;background:linear-gradient(160deg,#B33A2E 0%,#7A1F15 100%);border-radius:6px;display:flex;align-items:center;justify-content:center;padding:14px;text-align:center;color:#fff;font-family:'Nanum Myeongjo',Georgia,serif;font-weight:700;line-height:1.4;font-size:13px;box-shadow:0 4px 14px rgba(14,12,10,0.18);word-break:keep-all;">
-        ${escapeHtml(coverText)}
+      <div class="hl-card-head">
+        <p class="nickname">${escapeHtml(nickname)}</p>
+        ${metaLine ? `<p class="meta">${escapeHtml(metaLine)}</p>` : ''}
       </div>
-      <h3 class="t-headline-md c-espresso" style="margin-top:18px;word-break:keep-all;">${escapeHtml(title)}</h3>
-      ${subtitle ? `<p class="t-body-md c-walnut" style="margin-top:2px;">${escapeHtml(subtitle)}</p>` : ''}
-      ${author ? `<p class="t-label-sm c-walnut" style="margin-top:6px;">${escapeHtml(author)}${year ? '  ·  ' + escapeHtml(String(year)) : ''}</p>` : ''}
-      <div style="position:relative;margin-top:18px;padding:0 32px;max-width:520px;">
-        <span style="position:absolute;left:0;top:-4px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:22px;color:var(--sand);">❝</span>
-        <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;text-align:center;">${escapeHtml(h.selected_text || '')}</p>
-        <span style="position:absolute;right:0;bottom:-10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:22px;color:var(--sand);">❞</span>
+      <div class="hl-bookcover" style="background:${coverColor};">
+        <p class="bc-title">${escapeHtml(title)}</p>
+        ${subtitle ? `<p class="bc-subtitle">${escapeHtml(subtitle)}</p>` : ''}
+        ${author ? `<p class="bc-author">${escapeHtml(author)}</p>` : ''}
       </div>
-      <p class="t-label-sm c-sand" style="margin-top:14px;">#${String(h.card_id).padStart(5,'0')}  ·  ${escapeHtml(formatBookmarkDate(h.created_at))}</p>
+      <div class="hl-quote">
+        <span class="open-q">❝</span>
+        <p>${escapeHtml(h.selected_text || '')}</p>
+        <span class="close-q">❞</span>
+      </div>
+      <p class="hl-card-foot">#${String(h.card_id).padStart(5,'0')}</p>
     `;
     highlightsList.appendChild(item);
   }
