@@ -1646,7 +1646,7 @@ async function loadAndRenderMyChats() {
   chatsEmpty.style.display = 'none';
   chatsList.innerHTML = '<p class="t-body-md c-walnut" style="padding:8px 0;">불러오는 중⋯</p>';
   try {
-    const sb = getSupabase();
+    const sb = await getSupabase();
     if (!sb) { chatsList.innerHTML = ''; chatsEmpty.style.display = 'block'; return; }
     const { data, error } = await sb
       .from('card_comments')
