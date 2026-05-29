@@ -134,6 +134,26 @@
         <span class="text-xs text-on-surface-variant">(웹에서 명대사를 끌어와 카드 우선순위에 반영)</span>
       </div>
 
+      <!-- AI 모델 선택 -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-semibold text-on-surface-variant whitespace-nowrap">AI 성능:</span>
+        <div id="model-toggle" class="flex gap-2 flex-wrap">
+          <button type="button" data-model="haiku"
+                  class="model-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
+            Haiku <span class="text-xs font-normal opacity-70">(빠름 · 기본)</span>
+          </button>
+          <button type="button" data-model="sonnet"
+                  class="model-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
+            Sonnet <span class="text-xs font-normal opacity-70">(균형)</span>
+          </button>
+          <button type="button" data-model="opus"
+                  class="model-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
+            Opus <span class="text-xs font-normal opacity-70">(최고 품질 · 느림)</span>
+          </button>
+        </div>
+        <span id="model-hint" class="text-xs text-on-surface-variant"></span>
+      </div>
+
       <label id="dropzone" for="pdf-input"
              class="bg-surface-container-lowest border-2 border-dashed border-primary/30 rounded-xl p-10 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-all duration-300 cursor-pointer shadow-sm block">
         <div class="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mb-4">

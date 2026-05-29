@@ -9,6 +9,21 @@ const client = new Anthropic({
 });
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
+// 짧은 키('haiku'|'sonnet'|'opus') → 실제 Claude 모델 ID
+const MODEL_ALIASES = {
+  haiku:  'claude-haiku-4-5-20251001',
+  sonnet: 'claude-sonnet-4-6',
+  opus:   'claude-opus-4-7',
+};
+function resolveModel(key) {
+  if (!key) return MODEL;
+  const k = String(key).trim().toLowerCase();
+  if (MODEL_ALIASES[k]) return MODEL_ALIASES[k];
+  // 풀 ID 형태(예: 'claude-sonnet-4-6')도 그대로 허용
+  if (/^claude-[a-z0-9-]+$/i.test(k)) return k;
+  return MODEL;
+}
+
 const SYSTEM_JSON_ONLY =
   'You must respond with a single JSON object only. ' +
   'No prose, no markdown fences, no explanations — JSON only.';
@@ -18,15 +33,16 @@ function isRetryable(err) {
   return s === 408 || s === 409 || s === 429 || s === 529 || (s >= 500 && s < 600);
 }
 
-async function callClaude(prompt, { maxTokens = 8192 } = {}) {
+async function callClaude(prompt, { maxTokens = 8192, model = null } = {}) {
   // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper는 1회 추가 시도까지만 (총 ≤2회).
   // 외부 재시도 횟수가 많으면 Vercel 함수 timeout(300s)을 잡아먹어 전체 실패.
+  const useModel = resolveModel(model);
   const MAX_OUTER_ATTEMPTS = 2;
   let lastErr;
   for (let attempt = 0; attempt < MAX_OUTER_ATTEMPTS; attempt++) {
     try {
       const res = await client.messages.create({
-        model: MODEL,
+        model: useModel,
         max_tokens: maxTokens,
         system: SYSTEM_JSON_ONLY,
         messages: [{ role: 'user', content: prompt }],
@@ -156,12 +172,12 @@ function parseJson(text) {
   throw new Error('LLM did not return valid JSON (all repair attempts failed)');
 }
 
-export async function runExtract(scriptText, category = 'screen', seedBlock = '') {
+export async function runExtract(scriptText, category = 'screen', seedBlock = '', model = null) {
   const tpl = EXTRACT_PROMPTS[category] || EXTRACT_PROMPTS.screen;
   const prompt = tpl
     .replace('{{QUOTE_SEED_BLOCK}}', seedBlock || '')
     .replace('{{SCRIPT_TEXT}}', scriptText);
-  return callClaude(prompt, { maxTokens: 16000 });
+  return callClaude(prompt, { maxTokens: 16000, model });
 }
 
 // 대본 전문에서 등장인물 이름 목록만 추출. (works.characters 백필용)

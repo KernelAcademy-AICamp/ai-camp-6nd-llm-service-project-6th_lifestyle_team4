@@ -26,6 +26,7 @@ const state = {
   work: null,
   fullScriptText: '',   // works.full_script_text 컬럼이 NOT NULL이라 저장 시 함께 전송
   category: 'screen',   // 'screen' 영화/드라마, 'opera' 오페라/뮤지컬, 'play' 연극, 'literature' 소설/시/에세이
+  model: 'haiku',       // AI 모델: 'haiku' | 'sonnet' | 'opus' (extract 시 전송)
   // each card: { ...llmCard, selected, translated?: { quote_translated, ... }, showingTranslation }
   cards: [],
 };
@@ -142,6 +143,36 @@ $$('#category-toggle .cat-btn').forEach((btn) => {
 });
 paintCategory();
 
+// AI 모델 토글 (Haiku / Sonnet / Opus) — 카테고리 토글과 동일한 스타일
+function paintModel() {
+  $$('#model-toggle .model-btn').forEach((btn) => {
+    const active = btn.dataset.model === state.model;
+    btn.classList.toggle('bg-primary', active);
+    btn.classList.toggle('text-on-primary', active);
+    btn.classList.toggle('border-primary', active);
+    btn.classList.toggle('shadow-md', active);
+    btn.classList.toggle('bg-surface-container-lowest', !active);
+    btn.classList.toggle('text-on-surface', !active);
+    btn.classList.toggle('border-outline-variant', !active);
+  });
+  const hintEl = $('#model-hint');
+  if (hintEl) {
+    const hints = {
+      haiku:  'Claude Haiku 4.5 — 빠르고 저렴. 대부분의 추출에 충분.',
+      sonnet: 'Claude Sonnet 4.6 — 중간 속도, 더 정교한 판단.',
+      opus:   'Claude Opus 4.7 — 가장 정교하지만 느리고 비용이 가장 큼.',
+    };
+    hintEl.textContent = hints[state.model] || '';
+  }
+}
+$$('#model-toggle .model-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.model = btn.dataset.model;
+    paintModel();
+  });
+});
+paintModel();
+
 // ---------------------------------------------------------------------------
 // Upload flow
 // ---------------------------------------------------------------------------
@@ -182,6 +213,7 @@ async function handleFile(file) {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('category', state.category);
+    fd.append('model', state.model);
     const titleHint = document.querySelector('#title-input')?.value?.trim();
     if (titleHint) fd.append('title', titleHint);
     const json = await apiFetch('/api/extract', {

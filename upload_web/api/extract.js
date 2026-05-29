@@ -60,6 +60,8 @@ export default async function handler(req, res) {
     const rawCategory = (fields.category || '').trim();
     const category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'screen';
     const titleHint = (fields.title || '').trim();
+    // AI 모델 ('haiku' | 'sonnet' | 'opus'). 잘못된 값은 anthropic.js 에서 fallback.
+    const modelKey = (fields.model || '').trim().toLowerCase();
 
     const extracted = await extractText(fileBuffer, filename, mimetype);
     const scriptText = (extracted || '').trim();
@@ -86,7 +88,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const result = await runExtract(scriptText, category, seedBlock);
+    const result = await runExtract(scriptText, category, seedBlock, modelKey);
     // works.full_script_text는 NOT NULL이므로 저장 단계에서 다시 필요.
     // 응답에 함께 실어 클라이언트 state에 보관 → /api/save 호출 시 다시 전송.
     return res.status(200).json({ ...result, full_script_text: scriptText, _seed_debug: seedDebug });
