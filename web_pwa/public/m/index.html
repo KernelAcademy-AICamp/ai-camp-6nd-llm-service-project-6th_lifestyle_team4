@@ -117,9 +117,9 @@
   .chip.filled.g-movie   { background:#4A2A18; border-color:#4A2A18; color:#FAF8F2; }
   .chip.filled.g-drama   { background:#6B4A2A; border-color:#6B4A2A; color:#FAF8F2; }
   .chip.filled.g-musical { background:#5A2818; border-color:#5A2818; color:#FAF8F2; }
-  .chip.filled.g-opera   { background:#26180E; border-color:#26180E; color:#FAF8F2; }
-  .chip.filled.g-play    { background:#3F2818; border-color:#3F2818; color:#FAF8F2; }
-  .chip.filled.g-novel   { background:#4A4036; border-color:#4A4036; color:#FAF8F2; }
+  .chip.filled.g-opera   { background:#4A2B1A; border-color:#4A2B1A; color:#FAF8F2; }
+  .chip.filled.g-play    { background:#5A2A24; border-color:#5A2A24; color:#FAF8F2; }
+  .chip.filled.g-novel   { background:#3E585A; border-color:#3E585A; color:#FAF8F2; }
   .chip.filled.g-poem    { background:#27393B; border-color:#27393B; color:#FAF8F2; }
   .chip.filled.g-essay   { background:#3A4030; border-color:#3A4030; color:#FAF8F2; }
 
@@ -152,6 +152,13 @@
   }
   .top-bar-brand {
     display: flex; align-items: center; gap: 10px;
+  }
+  /* 상세 화면 헤더는 제목이 세로로 3줄(DAILY SCRIPT/작품명/부제) 쌓이므로 높이를 늘려 잘림 방지 */
+  #detail-screen .top-bar {
+    height: auto;
+    min-height: 64px;
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
 
   /* Bottom nav (mirror BottomNavBar.kt) */
@@ -988,7 +995,7 @@
     </button>
     <div style="display:flex;flex-direction:column;align-items:center;min-width:0;max-width:calc(100% - 100px);">
       <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">DAILY SCRIPT</span>
-      <span id="detail-work-title" class="t-headline-lg c-espresso" style="text-align:center;"></span>
+      <span id="detail-work-title" class="t-headline-lg c-espresso" style="text-align:center;margin-top:6px;"></span>
       <span id="detail-work-subtitle" class="t-label-sm c-walnut" style="display:none;text-align:center;margin-top:2px;"></span>
     </div>
     <button id="detail-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:8px;">
