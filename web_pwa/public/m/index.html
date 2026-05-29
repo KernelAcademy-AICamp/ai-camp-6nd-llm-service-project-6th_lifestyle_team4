@@ -827,7 +827,9 @@
     font-size: 15px; font-weight: 400; color: var(--walnut);   /* 더 얇고 덜 진하게 */
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .feed-item-head .feed-nick::after { content: ' 님'; }          /* 닉네임 + 님 */
+  .feed-item-head .feed-nick::after {                            /* "님"만 더 작고 연하게 */
+    content: ' 님'; font-size: 11px; color: var(--sand);
+  }
   .feed-item-head .feed-time {
     flex: 0 0 auto; font-size: 12px; letter-spacing: 0.04em; color: var(--roast);
   }
