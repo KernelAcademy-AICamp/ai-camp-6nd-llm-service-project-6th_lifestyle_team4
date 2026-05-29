@@ -1,5 +1,6 @@
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase-admin.js';
+import { runKoreanizeAuthor } from '../lib/anthropic.js';
 
 async function readJsonBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -124,6 +125,20 @@ export default async function handler(req, res) {
 
     const body = await readJsonBody(req);
     const workInput = normalizeWork(body.work, body.full_script_text);
+
+    // 저장 직전 가드: LLM이 영문 작가명을 보냈으면 한국어로 변환 후 저장.
+    // (프롬프트가 1차로 한국어를 강제하지만 실수로 영문이 들어오는 경우 자동 보정)
+    if (workInput.author && /[A-Za-z]/.test(workInput.author)) {
+      try {
+        const ko = await runKoreanizeAuthor(workInput.author);
+        if (ko && ko.trim()) {
+          console.log(`[save] author koreanized: "${workInput.author}" → "${ko}"`);
+          workInput.author = ko.trim();
+        }
+      } catch (e) {
+        console.warn('[save] runKoreanizeAuthor failed, keeping original:', e?.message || e);
+      }
+    }
 
     if (!Array.isArray(body.cards) || body.cards.length === 0) {
       return res.status(400).json({ error: 'cards array is required and non-empty' });

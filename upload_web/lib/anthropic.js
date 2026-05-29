@@ -187,6 +187,29 @@ export async function runClassifyKeywords(keywords) {
   return assignments;
 }
 
+// 영문 작가명을 통용 한국어 표기로 변환. (저장 직전 가드 + 백필용)
+// - 입력이 비어있거나 이미 한글만 있으면 그대로 반환 (LLM 호출 안 함).
+// - 매핑 모호 시 음역. 작품 제목·역할 설명은 빼고 사람 이름만.
+export async function runKoreanizeAuthor(rawAuthor) {
+  const s = String(rawAuthor ?? '').trim();
+  if (!s) return null;
+  if (!/[A-Za-z]/.test(s)) return s;
+  const prompt = `다음 작가 이름을 한국에서 통용되는 한국어 표기로 변환하라. 반드시 JSON 한 줄로만 응답.
+규칙:
+- 통용 표기가 있으면 그것을 사용 (예: "Arthur Conan Doyle" → "아서 코난 도일", "Giuseppe Verdi" → "주세페 베르디", "Shakespeare" → "윌리엄 셰익스피어").
+- 모호하면 한국어 음역. 영문이나 한자 그대로 두지 말 것.
+- 작품 제목·역할 설명·괄호 주석은 제거. 순수 인명만.
+- 작가가 둘 이상이면 "/" 로 구분 ("주세페 베르디 / 프란체스코 마리아 피아베").
+
+입력: "${s.replace(/"/g, '\\"')}"
+
+응답 형식 (한 줄):
+{"author":"한국어 이름"}`;
+  const result = await callClaude(prompt, { maxTokens: 256 });
+  const out = String(result?.author ?? '').trim();
+  return out || s;
+}
+
 export async function runTranslate(card) {
   // TRANSLATE_PROMPT는 {work, cards:[...]} 봉투를 기대합니다.
   // 단일 카드 번역 요청을 그 형식에 맞춰 감싸고, 응답의 cards[0]에서 번역된 quote/script_excerpt를 꺼냅니다.
