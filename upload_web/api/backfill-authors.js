@@ -23,13 +23,13 @@ export default async function handler(req, res) {
 
     const limit = clampInt(req.query?.limit, 1, 15, 5);
 
-    // author 가 라틴 문자를 포함하는 행만 대상
-    // (Postgres 정규식: ~ 는 case-sensitive match. [A-Za-z] 어느 하나라도 있으면 매칭)
+    // author 가 라틴 문자를 포함하는 행만 대상.
+    // PostgREST 의 정규식 매치 연산자는 'match' (Postgres `~` 와 동일, case-sensitive).
     const { data: works, error: selErr } = await supabaseAdmin
       .from('works')
       .select('work_id, title, author')
-      .filter('author', 'not.is', null)
-      .filter('author', '~', '[A-Za-z]')
+      .not('author', 'is', null)
+      .filter('author', 'match', '[A-Za-z]')
       .order('work_id', { ascending: true })
       .limit(limit);
     if (selErr) throw selErr;
@@ -59,8 +59,8 @@ export default async function handler(req, res) {
     const { count: remaining, error: cntErr } = await supabaseAdmin
       .from('works')
       .select('work_id', { count: 'exact', head: true })
-      .filter('author', 'not.is', null)
-      .filter('author', '~', '[A-Za-z]');
+      .not('author', 'is', null)
+      .filter('author', 'match', '[A-Za-z]');
     if (cntErr) throw cntErr;
 
     return res.status(200).json({
