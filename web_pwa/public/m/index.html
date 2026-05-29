@@ -818,13 +818,16 @@
   }
   .feed-item-head {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    margin-bottom: 10px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.13);   /* 섹션 구분선 */
+    margin-bottom: 14px;
   }
   .feed-item-head .feed-nick {
     font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 16px; font-weight: 700; color: var(--espresso);
+    font-size: 15px; font-weight: 400; color: var(--walnut);   /* 더 얇고 덜 진하게 */
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .feed-item-head .feed-nick::after { content: ' 님'; }          /* 닉네임 + 님 */
   .feed-item-head .feed-time {
     flex: 0 0 auto; font-size: 12px; letter-spacing: 0.04em; color: var(--roast);
   }
