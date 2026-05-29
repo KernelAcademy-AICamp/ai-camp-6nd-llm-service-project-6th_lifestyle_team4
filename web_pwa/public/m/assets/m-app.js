@@ -72,7 +72,6 @@ const hlSubtitleEl = $('#hl-subtitle');
 const hlAuthorYearEl = $('#hl-author-year');
 const hlCardIdEl = $('#hl-card-id');
 const hlSelectedTextEl = $('#hl-selected-text');
-const hlUserNoteEl = $('#hl-user-note');
 const highlightsList = $('#highlights-list');
 const highlightsEmpty = $('#highlights-empty');
 const themeToggle = $('#theme-toggle');
@@ -3399,7 +3398,6 @@ function openHlCompose() {
     hlCoverFallback.textContent = subtitle || title || '';
   }
   if (hlSelectedTextEl) hlSelectedTextEl.textContent = selectedText;
-  if (hlUserNoteEl) hlUserNoteEl.value = '';
 
   history.pushState({ overlay: 'hl-compose' }, '');
   hlComposeScreen.style.display = 'flex';
@@ -3431,7 +3429,6 @@ hlComposeSave?.addEventListener('click', async () => {
   if (!state.draftHighlight) { closeHlComposeInternal(); return; }
   if (state.isAnonymous || !state.userId) { toast('로그인이 필요합니다'); return; }
   const { card, selectedText } = state.draftHighlight;
-  const note = hlUserNoteEl ? String(hlUserNoteEl.value || '').trim() : '';
   if (!selectedText) { toast('본문 선택이 비어있어요'); return; }
   try {
     hlComposeSave.disabled = true;
@@ -3440,7 +3437,6 @@ hlComposeSave?.addEventListener('click', async () => {
       card_id: card.card_id,
       user_id: state.userId,
       selected_text: selectedText,
-      user_note: note || null,
     });
     if (error) throw error;
     toast('하이라이트 추가됨');
@@ -3468,7 +3464,7 @@ async function loadAndRenderHighlights() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('card_highlights')
-      .select('highlight_id, card_id, user_id, selected_text, user_note, created_at, cards(card_id, works(work_id, title, subtitle, author, release_year))')
+      .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, author, release_year))')
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) throw error;
@@ -3513,7 +3509,6 @@ function renderHighlights() {
         <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;text-align:center;">${escapeHtml(h.selected_text || '')}</p>
         <span style="position:absolute;right:0;bottom:-10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:22px;color:var(--sand);">❞</span>
       </div>
-      ${h.user_note ? `<p class="t-body-sm c-walnut" style="margin-top:14px;font-style:italic;">${escapeHtml(h.user_note)}</p>` : ''}
       <p class="t-label-sm c-sand" style="margin-top:14px;">#${String(h.card_id).padStart(5,'0')}  ·  ${escapeHtml(formatBookmarkDate(h.created_at))}</p>
     `;
     highlightsList.appendChild(item);
