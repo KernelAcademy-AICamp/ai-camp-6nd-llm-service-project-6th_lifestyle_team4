@@ -167,7 +167,10 @@ const state = {
   replyingToCommentId: null,   // 현재 답글 작성 대상 comment_id (null = 최상위 댓글)
   replyingToNickname: '',
   editingCommentId: null,      // 현재 인라인 수정 중인 comment_id (null = 수정 모드 아님)
-  feedCategory: 'today',       // 피드 내부 카테고리: 'today' | 'highlight'
+  feedCategory: (() => {
+    try { const v = localStorage.getItem('ds.feedCategory'); return v === 'highlight' ? 'highlight' : 'today'; }
+    catch { return 'today'; }
+  })(),                          // 피드 내부 카테고리 (새로고침에도 유지): 'today' | 'highlight'
   feedPosts: [],               // (오늘의 한줄) feed_posts 조인 rows. 없으면 FEED_SAMPLES 폴백.
   feedLoaded: false,           // loadFeedPosts 1회 호출 여부
   composeCard: null,           // 오늘의 한줄 작성 모달 대상 카드
@@ -175,6 +178,13 @@ const state = {
   draftHighlight: null,        // (하이라이트) { card, selectedText } — compose 화면 채움용
   highlights: [],              // (하이라이트) card_highlights 조회 rows (cards/works join)
   myfeedCategory: 'comment',   // MY FEED 내부 카테고리: 'comment' | 'highlight'
+  // MY CHATS / MY FEED 인라인 편집 상태
+  myChats: [],                 // card_comments WHERE user_id=me
+  editingMyChatId: null,
+  myFeedComments: [],          // feed_posts WHERE user_id=me
+  myFeedHighlights: [],        // card_highlights WHERE user_id=me
+  editingMyFeedId: null,
+  editingMyFeedKind: null,     // 'comment' | 'highlight'
 };
 let detailCommentsChannel = null;
 
@@ -1692,9 +1702,11 @@ function closeChatsScreen() {
   }
 }
 
+// 공용 inline 버튼 스타일
+const LINK_BTN_CSS = 'background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;';
+
 async function loadAndRenderMyChats() {
   if (!chatsList || !chatsEmpty) return;
-  // 우선 빈 상태 숨기고 로딩 표시
   chatsEmpty.style.display = 'none';
   chatsList.innerHTML = '<p class="t-body-md c-walnut" style="padding:8px 0;">불러오는 중⋯</p>';
   try {
@@ -1707,52 +1719,120 @@ async function loadAndRenderMyChats() {
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) throw error;
-    const rows = Array.isArray(data) ? data : [];
-    if (rows.length === 0) {
-      chatsList.innerHTML = '';
-      chatsEmpty.style.display = 'block';
-      return;
-    }
-    chatsEmpty.style.display = 'none';
-    chatsList.innerHTML = '';
-    for (const r of rows) {
-      const card = (state.allCards || []).find((c) => c.card_id === r.card_id);
-      const w = card?.works || {};
-      const title = displayTitle(w.title) || '—';
-      const kindLabel = r.parent_comment_id != null ? '↳ 답글' : '댓글';
-      // 작성 시각 (월/일 + 시:분)
-      const when = formatBookmarkDate(r.created_at) || '';
-      const metaParts = [when, title, kindLabel].filter(Boolean);
-      const meta = metaParts.join('  —  ').toUpperCase();
-
-      const wrap = document.createElement('div');
-      const node = document.createElement('div');
-      node.className = 'bookmark-row';
-      node.innerHTML = `
-        <div style="flex:1;min-width:0;">
-          ${meta ? `<p class="t-label-sm c-walnut">${escapeHtml(meta)}</p><div style="height:6px;"></div>` : ''}
-          <p class="t-body-md c-espresso" style="line-height:1.55;white-space:pre-wrap;">${escapeHtml(r.body || '')}</p>
-        </div>
-        <span class="material-symbols-outlined arrow">arrow_forward_ios</span>
-      `;
-      if (card) {
-        node.addEventListener('click', () => {
-          closeChatsScreenInternal();
-          // 살짝 지연 후 상세 열기 — 다중 overlay 충돌 방지
-          setTimeout(() => openDetail(card), 280);
-        });
-      }
-      wrap.appendChild(node);
-      const hr = document.createElement('div');
-      hr.className = 'hairline';
-      wrap.appendChild(hr);
-      chatsList.appendChild(wrap);
-    }
+    state.myChats = Array.isArray(data) ? data : [];
+    state.editingMyChatId = null;
+    renderMyChatsList();
   } catch (err) {
     console.warn('[m] loadAndRenderMyChats failed', err);
     chatsList.innerHTML = '';
     chatsEmpty.style.display = 'block';
   }
+}
+
+function renderMyChatsList() {
+  if (!chatsList || !chatsEmpty) return;
+  const rows = state.myChats || [];
+  if (rows.length === 0) {
+    chatsList.innerHTML = '';
+    chatsEmpty.style.display = 'block';
+    return;
+  }
+  chatsEmpty.style.display = 'none';
+  chatsList.innerHTML = '';
+  for (const r of rows) chatsList.appendChild(buildMyChatRow(r));
+  chatsList.querySelectorAll('.mc-edit-btn').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    state.editingMyChatId = parseInt(b.dataset.id, 10);
+    renderMyChatsList();
+    const ta = chatsList.querySelector(`textarea.mc-edit-input[data-id="${b.dataset.id}"]`);
+    if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch {} }
+  }));
+  chatsList.querySelectorAll('.mc-cancel-btn').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation(); state.editingMyChatId = null; renderMyChatsList();
+  }));
+  chatsList.querySelectorAll('.mc-save-btn').forEach((b) => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const id = parseInt(b.dataset.id, 10);
+    const ta = chatsList.querySelector(`textarea.mc-edit-input[data-id="${id}"]`);
+    if (!ta) return;
+    const body = String(ta.value || '').trim();
+    if (!body) { toast('내용을 입력해주세요'); return; }
+    if (body.length > 500) { toast('500자 이내로 작성해주세요'); return; }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from('card_comments').update({ body }).eq('comment_id', id).eq('user_id', state.userId);
+      if (error) throw error;
+      const row = state.myChats.find((x) => x.comment_id === id);
+      if (row) row.body = body;
+      state.editingMyChatId = null;
+      renderMyChatsList();
+      toast('수정됨');
+    } catch (err) { console.warn(err); toast('수정 실패: ' + (err.message || '')); }
+  }));
+  chatsList.querySelectorAll('.mc-delete-btn').forEach((b) => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!confirm('이 댓글을 삭제할까요?')) return;
+    const id = parseInt(b.dataset.id, 10);
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from('card_comments').delete().eq('comment_id', id).eq('user_id', state.userId);
+      if (error) throw error;
+      state.myChats = state.myChats.filter((x) => x.comment_id !== id);
+      renderMyChatsList();
+      toast('삭제됨');
+    } catch (err) { console.warn(err); toast('삭제 실패: ' + (err.message || '')); }
+  }));
+}
+
+function buildMyChatRow(r) {
+  const card = (state.allCards || []).find((c) => c.card_id === r.card_id);
+  const w = card?.works || {};
+  const title = displayTitle(w.title) || '—';
+  const kindLabel = r.parent_comment_id != null ? '↳ 답글' : '댓글';
+  const when = formatBookmarkDate(r.created_at) || '';
+  const meta = [when, title, kindLabel].filter(Boolean).join('  —  ').toUpperCase();
+  const isEditing = state.editingMyChatId === r.comment_id;
+
+  const wrap = document.createElement('div');
+  const node = document.createElement('div');
+  node.className = 'bookmark-row';
+  if (isEditing) {
+    node.innerHTML = `
+      <div style="flex:1;min-width:0;">
+        ${meta ? `<p class="t-label-sm c-walnut">${escapeHtml(meta)}</p><div style="height:6px;"></div>` : ''}
+        <textarea class="mc-edit-input" data-id="${r.comment_id}" maxlength="500"
+                  style="width:100%;min-height:60px;padding:8px;border:0.5px solid var(--latte);background:var(--paper);font-family:inherit;font-size:14px;line-height:1.6;color:var(--espresso);resize:vertical;box-sizing:border-box;margin-bottom:8px;">${escapeHtml(r.body || '')}</textarea>
+        <div style="display:flex;justify-content:flex-end;gap:12px;">
+          <button class="mc-cancel-btn" data-id="${r.comment_id}" style="${LINK_BTN_CSS}">Cancel</button>
+          <button class="mc-save-btn"   data-id="${r.comment_id}" style="${LINK_BTN_CSS}color:var(--cta);">Save</button>
+        </div>
+      </div>
+    `;
+  } else {
+    node.innerHTML = `
+      <div class="mc-body-area" style="flex:1;min-width:0;cursor:${card ? 'pointer' : 'default'};">
+        ${meta ? `<p class="t-label-sm c-walnut">${escapeHtml(meta)}</p><div style="height:6px;"></div>` : ''}
+        <p class="t-body-md c-espresso" style="line-height:1.55;white-space:pre-wrap;">${escapeHtml(r.body || '')}</p>
+        <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:10px;">
+          <button class="mc-edit-btn"   data-id="${r.comment_id}" style="${LINK_BTN_CSS}">Edit</button>
+          <button class="mc-delete-btn" data-id="${r.comment_id}" style="${LINK_BTN_CSS}color:var(--cta);">Delete</button>
+        </div>
+      </div>
+    `;
+    if (card) {
+      const bodyArea = node.querySelector('.mc-body-area');
+      bodyArea?.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        closeChatsScreenInternal();
+        setTimeout(() => openDetail(card), 280);
+      });
+    }
+  }
+  wrap.appendChild(node);
+  const hr = document.createElement('div');
+  hr.className = 'hairline';
+  wrap.appendChild(hr);
+  return wrap;
 }
 
 // 이벤트 바인딩
@@ -1838,68 +1918,208 @@ function showEmpty(cat) {
 
 async function renderMyComments() {
   const sb = await getSupabase();
-  let { data, error } = await sb
+  const { data, error } = await sb
     .from('feed_posts')
     .select('post_id, card_id, user_id, body, created_at, cards(card_id, quote, works(title, subtitle, format, author, release_year))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) throw error;
-  const rows = Array.isArray(data) ? data : [];
+  state.myFeedComments = Array.isArray(data) ? data : [];
+  if (state.editingMyFeedKind === 'comment') state.editingMyFeedId = null;
+  renderMyCommentsList();
+}
+
+function renderMyCommentsList() {
+  if (!myfeedList || !myfeedEmpty) return;
+  const rows = state.myFeedComments || [];
   if (rows.length === 0) { myfeedList.innerHTML = ''; showEmpty('comment'); return; }
   myfeedEmpty.style.display = 'none';
   myfeedList.innerHTML = '';
-  for (const p of rows) {
-    const w = p.cards?.works || {};
-    const title = displayTitle(w.title) || '—';
-    const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
-    const fmt = GENRE_LABEL[w.format] || w.format || '';
-    const when = formatBookmarkDate(p.created_at) || '';
-    const meta = [fmt, when].filter(Boolean).join('  ·  ').toUpperCase();
+  for (const p of rows) myfeedList.appendChild(buildMyFeedCommentRow(p));
+  // 이벤트 바인딩
+  myfeedList.querySelectorAll('.mfc-edit-btn').forEach((b) => b.addEventListener('click', () => {
+    state.editingMyFeedId = parseInt(b.dataset.id, 10);
+    state.editingMyFeedKind = 'comment';
+    renderMyCommentsList();
+    const ta = myfeedList.querySelector(`textarea.mfc-edit-input[data-id="${b.dataset.id}"]`);
+    if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch {} }
+  }));
+  myfeedList.querySelectorAll('.mfc-cancel-btn').forEach((b) => b.addEventListener('click', () => {
+    state.editingMyFeedId = null; state.editingMyFeedKind = null; renderMyCommentsList();
+  }));
+  myfeedList.querySelectorAll('.mfc-save-btn').forEach((b) => b.addEventListener('click', async () => {
+    const id = parseInt(b.dataset.id, 10);
+    const ta = myfeedList.querySelector(`textarea.mfc-edit-input[data-id="${id}"]`);
+    if (!ta) return;
+    const body = String(ta.value || '').trim();
+    if (!body) { toast('내용을 입력해주세요'); return; }
+    if (body.length > 500) { toast('500자 이내로 작성해주세요'); return; }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from('feed_posts').update({ body }).eq('post_id', id).eq('user_id', state.userId);
+      if (error) throw error;
+      const row = state.myFeedComments.find((x) => x.post_id === id);
+      if (row) row.body = body;
+      state.editingMyFeedId = null; state.editingMyFeedKind = null;
+      renderMyCommentsList();
+      toast('수정됨');
+    } catch (err) { console.warn(err); toast('수정 실패: ' + (err.message || '')); }
+  }));
+  myfeedList.querySelectorAll('.mfc-delete-btn').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('이 한줄을 삭제할까요?')) return;
+    const id = parseInt(b.dataset.id, 10);
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from('feed_posts').delete().eq('post_id', id).eq('user_id', state.userId);
+      if (error) throw error;
+      state.myFeedComments = state.myFeedComments.filter((x) => x.post_id !== id);
+      renderMyCommentsList();
+      toast('삭제됨');
+    } catch (err) { console.warn(err); toast('삭제 실패: ' + (err.message || '')); }
+  }));
+}
 
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);';
+function buildMyFeedCommentRow(p) {
+  const w = p.cards?.works || {};
+  const title = displayTitle(w.title) || '—';
+  const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
+  const fmt = GENRE_LABEL[w.format] || w.format || '';
+  const when = formatBookmarkDate(p.created_at) || '';
+  const meta = [fmt, when].filter(Boolean).join('  ·  ').toUpperCase();
+  const isEditing = state.editingMyFeedKind === 'comment' && state.editingMyFeedId === p.post_id;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);';
+  if (isEditing) {
+    wrap.innerHTML = `
+      <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
+      <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
+      <textarea class="mfc-edit-input" data-id="${p.post_id}" maxlength="500"
+                style="width:100%;min-height:60px;padding:8px;border:0.5px solid var(--latte);background:var(--paper);font-family:inherit;font-size:14px;line-height:1.6;color:var(--espresso);resize:vertical;box-sizing:border-box;margin-bottom:8px;">${escapeHtml(p.body || '')}</textarea>
+      <div style="display:flex;justify-content:flex-end;gap:12px;">
+        <button class="mfc-cancel-btn" style="${LINK_BTN_CSS}">Cancel</button>
+        <button class="mfc-save-btn" data-id="${p.post_id}" style="${LINK_BTN_CSS}color:var(--cta);">Save</button>
+      </div>
+    `;
+  } else {
     wrap.innerHTML = `
       <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
       <p class="t-title-lg c-espresso" style="margin-bottom:2px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
       <p class="t-body-md c-espresso" style="margin-top:8px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(p.body || '')}</p>
+      <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:10px;">
+        <button class="mfc-edit-btn"   data-id="${p.post_id}" style="${LINK_BTN_CSS}">Edit</button>
+        <button class="mfc-delete-btn" data-id="${p.post_id}" style="${LINK_BTN_CSS}color:var(--cta);">Delete</button>
+      </div>
     `;
-    myfeedList.appendChild(wrap);
   }
+  return wrap;
 }
 
 async function renderMyHighlights() {
   const sb = await getSupabase();
-  let { data, error } = await sb
+  const { data, error } = await sb
     .from('card_highlights')
     .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) throw error;
-  const rows = Array.isArray(data) ? data : [];
+  state.myFeedHighlights = Array.isArray(data) ? data : [];
+  if (state.editingMyFeedKind === 'highlight') state.editingMyFeedId = null;
+  renderMyHighlightsList();
+}
+
+function renderMyHighlightsList() {
+  if (!myfeedList || !myfeedEmpty) return;
+  const rows = state.myFeedHighlights || [];
   if (rows.length === 0) { myfeedList.innerHTML = ''; showEmpty('highlight'); return; }
   myfeedEmpty.style.display = 'none';
   myfeedList.innerHTML = '';
-  for (const h of rows) {
-    const w = h.cards?.works || {};
-    const title = displayTitle(w.title) || '—';
-    const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
-    const fmt = GENRE_LABEL[w.format] || w.format || '';
-    const when = formatBookmarkDate(h.created_at) || '';
-    const meta = [fmt, when].filter(Boolean).join('  ·  ').toUpperCase();
-    const idTag = `#${String(h.card_id).padStart(5, '0')}`;
+  for (const h of rows) myfeedList.appendChild(buildMyFeedHighlightRow(h));
+  myfeedList.querySelectorAll('.mfh-edit-btn').forEach((b) => b.addEventListener('click', () => {
+    state.editingMyFeedId = parseInt(b.dataset.id, 10);
+    state.editingMyFeedKind = 'highlight';
+    renderMyHighlightsList();
+    const ta = myfeedList.querySelector(`textarea.mfh-edit-input[data-id="${b.dataset.id}"]`);
+    if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch {} }
+  }));
+  myfeedList.querySelectorAll('.mfh-cancel-btn').forEach((b) => b.addEventListener('click', () => {
+    state.editingMyFeedId = null; state.editingMyFeedKind = null; renderMyHighlightsList();
+  }));
+  myfeedList.querySelectorAll('.mfh-save-btn').forEach((b) => b.addEventListener('click', async () => {
+    const id = parseInt(b.dataset.id, 10);
+    const ta = myfeedList.querySelector(`textarea.mfh-edit-input[data-id="${id}"]`);
+    if (!ta) return;
+    const text = String(ta.value || '').trim();
+    if (!text) { toast('내용을 입력해주세요'); return; }
+    if (text.length > 2000) { toast('2000자 이내'); return; }
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from('card_highlights').update({ selected_text: text }).eq('highlight_id', id).eq('user_id', state.userId);
+      if (error) throw error;
+      const row = state.myFeedHighlights.find((x) => x.highlight_id === id);
+      if (row) row.selected_text = text;
+      state.editingMyFeedId = null; state.editingMyFeedKind = null;
+      renderMyHighlightsList();
+      toast('수정됨');
+    } catch (err) { console.warn(err); toast('수정 실패: ' + (err.message || '')); }
+  }));
+  myfeedList.querySelectorAll('.mfh-delete-btn').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('이 하이라이트를 삭제할까요?')) return;
+    const id = parseInt(b.dataset.id, 10);
+    try {
+      const sb = await getSupabase();
+      const { error } = await sb.from('card_highlights').delete().eq('highlight_id', id).eq('user_id', state.userId);
+      if (error) throw error;
+      state.myFeedHighlights = state.myFeedHighlights.filter((x) => x.highlight_id !== id);
+      renderMyHighlightsList();
+      toast('삭제됨');
+    } catch (err) { console.warn(err); toast('삭제 실패: ' + (err.message || '')); }
+  }));
+}
 
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);';
+function buildMyFeedHighlightRow(h) {
+  const w = h.cards?.works || {};
+  const title = displayTitle(w.title) || '—';
+  const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
+  const fmt = GENRE_LABEL[w.format] || w.format || '';
+  const when = formatBookmarkDate(h.created_at) || '';
+  const meta = [fmt, when].filter(Boolean).join('  ·  ').toUpperCase();
+  const idTag = `#${String(h.card_id).padStart(5, '0')}`;
+  const isEditing = state.editingMyFeedKind === 'highlight' && state.editingMyFeedId === h.highlight_id;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);';
+  if (isEditing) {
+    wrap.innerHTML = `
+      <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
+      <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
+      <textarea class="mfh-edit-input" data-id="${h.highlight_id}" maxlength="2000"
+                style="width:100%;min-height:90px;padding:10px;border:0.5px solid var(--latte);background:var(--paper);font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:1.7;color:var(--espresso);resize:vertical;box-sizing:border-box;margin-bottom:8px;">${escapeHtml(h.selected_text || '')}</textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="t-label-sm c-sand">${idTag}</span>
+        <div style="display:flex;gap:12px;">
+          <button class="mfh-cancel-btn" style="${LINK_BTN_CSS}">Cancel</button>
+          <button class="mfh-save-btn" data-id="${h.highlight_id}" style="${LINK_BTN_CSS}color:var(--cta);">Save</button>
+        </div>
+      </div>
+    `;
+  } else {
     wrap.innerHTML = `
       <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
       <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
       <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;">❝ ${escapeHtml(h.selected_text || '')} ❞</p>
-      <p class="t-label-sm c-sand" style="margin-top:8px;">${idTag}</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span class="t-label-sm c-sand">${idTag}</span>
+        <div style="display:flex;gap:12px;">
+          <button class="mfh-edit-btn"   data-id="${h.highlight_id}" style="${LINK_BTN_CSS}">Edit</button>
+          <button class="mfh-delete-btn" data-id="${h.highlight_id}" style="${LINK_BTN_CSS}color:var(--cta);">Delete</button>
+        </div>
+      </div>
     `;
-    myfeedList.appendChild(wrap);
   }
+  return wrap;
 }
 
 if (mypageFeedEntry) mypageFeedEntry.addEventListener('click', openMyFeedScreen);
@@ -3135,10 +3355,11 @@ function buildFeedItem(post) {
   return wrap;
 }
 
-// 카테고리 칩 클릭 → state 변경 후 재렌더
+// 카테고리 칩 클릭 → state 변경 후 재렌더 + localStorage 저장 (새로고침 유지)
 document.querySelectorAll('#feed-chips .a-chip').forEach((btn) => {
   btn.addEventListener('click', () => {
     state.feedCategory = btn.dataset.feedCat || 'today';
+    try { localStorage.setItem('ds.feedCategory', state.feedCategory); } catch {}
     renderFeed();
   });
 });
