@@ -11,3 +11,8 @@ DerivedData/
 .DS_Store
 .DS_Store
 **/.DS_Store
+
+# Local env
+.env
+.env.local
+.vercel
