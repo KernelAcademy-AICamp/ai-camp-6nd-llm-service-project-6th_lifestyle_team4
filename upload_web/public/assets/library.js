@@ -241,39 +241,131 @@ function keywordSignature(distinct) {
 
 let keywordCatCache = null; // { sig, map }
 
-// 키워드→범주 맵 확보. 캐시(메모리·localStorage) 우선, 없으면 /api/classify-keywords 호출.
-// force=true면 캐시 무시하고 LLM 재분류.
-async function ensureKeywordCategories(distinct, force = false) {
-  const sig = keywordSignature(distinct);
-  if (!force) {
-    if (keywordCatCache && keywordCatCache.sig === sig) return keywordCatCache.map;
-    try {
-      const raw = localStorage.getItem(KW_CAT_CACHE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.sig === sig && parsed.map) {
-          keywordCatCache = parsed;
-          return parsed.map;
-        }
-      }
-    } catch { /* ignore */ }
-  }
+const KW_CHUNK_SIZE = 50;   // 한 LLM 호출당 키워드 수 (작게 나눠 진행률 표시)
+const KW_CONCURRENCY = 3;   // 동시 호출 수
 
+// 캐시(메모리·localStorage)에 현재 키워드 집합의 분류가 있으면 즉시 반환, 없으면 null.
+function getCachedCategories(distinct) {
+  const sig = keywordSignature(distinct);
+  if (keywordCatCache && keywordCatCache.sig === sig) return keywordCatCache.map;
+  try {
+    const raw = localStorage.getItem(KW_CAT_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.sig === sig && parsed.map) {
+        keywordCatCache = parsed;
+        return parsed.map;
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function chunkArray(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+async function classifyChunk(keywords) {
   const token = await getAccessToken();
   const res = await fetch('/api/classify-keywords', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ keywords: distinct }),
+    body: JSON.stringify({ keywords }),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     throw new Error(detail.slice(0, 200) || `분류 실패 (${res.status})`);
   }
   const json = await res.json();
-  const map = (json && json.assignments) || {};
-  keywordCatCache = { sig, map };
+  return (json && json.assignments) || {};
+}
+
+// distinct 키워드를 청크로 나눠 분류. onProgress(doneKw, totalKw, doneBatches, totalBatches) 호출.
+// 결과 맵을 캐시에 저장하고 반환.
+async function classifyKeywords(distinct, onProgress) {
+  const batches = chunkArray(distinct, KW_CHUNK_SIZE);
+  const map = {};
+  let idx = 0;
+  let doneBatches = 0;
+  let doneKw = 0;
+
+  async function worker() {
+    while (idx < batches.length) {
+      const my = idx++;
+      const part = await classifyChunk(batches[my]);
+      Object.assign(map, part);
+      doneBatches += 1;
+      doneKw += batches[my].length;
+      if (onProgress) onProgress(doneKw, distinct.length, doneBatches, batches.length);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(KW_CONCURRENCY, batches.length) }, worker);
+  await Promise.all(workers);
+
+  keywordCatCache = { sig: keywordSignature(distinct), map };
   try { localStorage.setItem(KW_CAT_CACHE_KEY, JSON.stringify(keywordCatCache)); } catch { /* ignore */ }
   return map;
+}
+
+// 분류 진행 UI — 스피너(텍스트, CSS 무관)·경과시간·진행 막대·배치/키워드 카운트.
+// .update(...)로 진행률 갱신, .stop()으로 타이머 정리. 멈춘 듯 보이지 않게 항상 움직인다.
+function showClassifyProgress(total) {
+  const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let frame = 0;
+  const startTs = Date.now();
+
+  libraryKeywordFreqBody.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'py-6 flex flex-col items-center gap-3 text-sm';
+
+  const line1 = document.createElement('div');
+  line1.className = 'flex items-center gap-2 text-on-surface font-semibold';
+  const spin = document.createElement('span');
+  spin.className = 'font-mono text-primary';
+  spin.textContent = FRAMES[0];
+  const label = document.createElement('span');
+  label.textContent = 'Claude로 키워드 분류 중…';
+  line1.append(spin, label);
+
+  const barWrap = document.createElement('div');
+  barWrap.className = 'w-64 max-w-full h-2 rounded-full bg-surface-container-high overflow-hidden';
+  const bar = document.createElement('div');
+  bar.className = 'h-full bg-primary rounded-full';
+  bar.style.width = '0%';
+  bar.style.transition = 'width .3s';
+  barWrap.appendChild(bar);
+
+  const line2 = document.createElement('div');
+  line2.className = 'text-xs text-on-surface-variant';
+  line2.textContent = `키워드 0 / ${total}`;
+
+  const line3 = document.createElement('div');
+  line3.className = 'text-xs text-on-surface-variant';
+  line3.textContent = '요청 준비 중… 경과 0.0s';
+
+  box.append(line1, barWrap, line2, line3);
+  libraryKeywordFreqBody.appendChild(box);
+
+  let lastText = '요청 준비 중…';
+  const timer = setInterval(() => {
+    frame = (frame + 1) % FRAMES.length;
+    spin.textContent = FRAMES[frame];
+    const sec = ((Date.now() - startTs) / 1000).toFixed(1);
+    line3.textContent = `${lastText} 경과 ${sec}s`;
+  }, 120);
+
+  return {
+    update(done, totalKw, doneBatches, totalBatches) {
+      const pct = totalKw ? Math.round((done / totalKw) * 100) : 0;
+      bar.style.width = `${pct}%`;
+      line2.textContent = `키워드 ${done} / ${totalKw} (${pct}%)`;
+      lastText = `배치 ${doneBatches}/${totalBatches} 완료 ·`;
+    },
+    stop() { clearInterval(timer); },
+  };
 }
 
 // [[kw, n], ...] → 빈도 테이블 (행 클릭 시 그 키워드로 검색). max는 막대 스케일 기준(전역 최대).
@@ -363,23 +455,27 @@ async function renderKeywordFreq(force = false) {
     return;
   }
 
-  libraryKeywordFreqBody.innerHTML =
-    '<p class="text-sm text-on-surface-variant py-4 text-center">키워드 분류 중⋯ (LLM)</p>';
-
   const max = freq[0][1] || 1;
-  let map;
-  try {
-    map = await ensureKeywordCategories(distinct, force);
-  } catch (err) {
-    // 분류 실패 — 전체 평면 목록으로 폴백
-    console.error('[library] keyword classify failed:', err);
-    libraryKeywordFreqBody.innerHTML = '';
-    const note = document.createElement('p');
-    note.className = 'text-xs text-error mb-2';
-    note.textContent = `자동 분류 실패 (${err.message || err}). 전체 목록으로 표시합니다.`;
-    libraryKeywordFreqBody.appendChild(note);
-    libraryKeywordFreqBody.appendChild(buildFreqTable(freq, max));
-    return;
+
+  // 캐시에 있으면 즉시 표시(진행 UI 생략), 없으면 배치 분류 + 진행 표시
+  let map = force ? null : getCachedCategories(distinct);
+  if (!map) {
+    const progress = showClassifyProgress(distinct.length);
+    try {
+      map = await classifyKeywords(distinct, (d, t, b, B) => progress.update(d, t, b, B));
+    } catch (err) {
+      // 분류 실패 — 전체 평면 목록으로 폴백
+      console.error('[library] keyword classify failed:', err);
+      progress.stop();
+      libraryKeywordFreqBody.innerHTML = '';
+      const note = document.createElement('p');
+      note.className = 'text-xs text-error mb-2';
+      note.textContent = `자동 분류 실패 (${err.message || err}). 전체 목록으로 표시합니다.`;
+      libraryKeywordFreqBody.appendChild(note);
+      libraryKeywordFreqBody.appendChild(buildFreqTable(freq, max));
+      return;
+    }
+    progress.stop();
   }
 
   // 범주별 그룹핑 (분류 맵에 없는 키워드는 미분류)
