@@ -456,6 +456,10 @@
             <option value="">모든 작품</option>
           </select>
           <input id="library-search" type="search" placeholder="명대사 검색⋯" class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm w-48" />
+          <button type="button" id="library-keyword-freq-btn" class="px-3 py-2 rounded-lg border border-outline-variant text-sm hover:bg-surface-container-low flex items-center gap-1" title="키워드 빈도 집계">
+            <span class="material-symbols-outlined text-base">tag</span>
+            키워드 빈도
+          </button>
           <button type="button" id="library-refresh" class="px-3 py-2 rounded-lg border border-outline-variant text-sm hover:bg-surface-container-low flex items-center gap-1">
             <span class="material-symbols-outlined text-base">refresh</span>
             새로고침
@@ -480,6 +484,22 @@
             선택 삭제
           </button>
         </div>
+      </div>
+
+      <!-- 키워드 빈도 집계 패널 (토글) -->
+      <div id="library-keyword-freq" class="hidden flex-col gap-2 p-4 rounded-lg bg-surface-container-low border border-outline-variant">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-on-surface flex items-center gap-1">
+            <span class="material-symbols-outlined text-base">tag</span>
+            키워드 빈도 <span id="library-keyword-freq-summary" class="font-normal text-on-surface-variant"></span>
+          </h3>
+          <button type="button" id="library-keyword-freq-close" class="text-on-surface-variant hover:text-on-surface text-sm flex items-center gap-1">
+            <span class="material-symbols-outlined text-base">close</span>
+            닫기
+          </button>
+        </div>
+        <p class="text-xs text-on-surface-variant">전체 카드 기준 집계입니다. 표기 흔들림(예: "소유"/"소유물")을 눈으로 잡아 한쪽으로 통일하세요. 행을 클릭하면 그 키워드로 검색됩니다.</p>
+        <div id="library-keyword-freq-body" class="max-h-80 overflow-auto"></div>
       </div>
 
       <div id="library-grid" class="grid grid-cols-1 xl:grid-cols-2 gap-6 hidden"></div>
@@ -653,7 +673,7 @@
     </div>
 
     <div class="flex flex-col gap-1">
-      <label class="text-xs font-semibold text-on-surface-variant">키워드 (쉼표로 구분, 최대 3개)</label>
+      <label class="text-xs font-semibold text-on-surface-variant">키워드 (쉼표로 구분 · 정확히 3개 · 각 8자 이하 권장)</label>
       <input type="text" class="lib-edit-keywords w-full p-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" placeholder="키워드1, 키워드2, 키워드3" />
     </div>
 

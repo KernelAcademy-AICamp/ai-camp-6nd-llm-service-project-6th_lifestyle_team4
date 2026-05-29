@@ -2037,34 +2037,7 @@ function renderMyHighlightsList() {
   myfeedEmpty.style.display = 'none';
   myfeedList.innerHTML = '';
   for (const h of rows) myfeedList.appendChild(buildMyFeedHighlightRow(h));
-  myfeedList.querySelectorAll('.mfh-edit-btn').forEach((b) => b.addEventListener('click', () => {
-    state.editingMyFeedId = parseInt(b.dataset.id, 10);
-    state.editingMyFeedKind = 'highlight';
-    renderMyHighlightsList();
-    const ta = myfeedList.querySelector(`textarea.mfh-edit-input[data-id="${b.dataset.id}"]`);
-    if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch {} }
-  }));
-  myfeedList.querySelectorAll('.mfh-cancel-btn').forEach((b) => b.addEventListener('click', () => {
-    state.editingMyFeedId = null; state.editingMyFeedKind = null; renderMyHighlightsList();
-  }));
-  myfeedList.querySelectorAll('.mfh-save-btn').forEach((b) => b.addEventListener('click', async () => {
-    const id = parseInt(b.dataset.id, 10);
-    const ta = myfeedList.querySelector(`textarea.mfh-edit-input[data-id="${id}"]`);
-    if (!ta) return;
-    const text = String(ta.value || '').trim();
-    if (!text) { toast('내용을 입력해주세요'); return; }
-    if (text.length > 2000) { toast('2000자 이내'); return; }
-    try {
-      const sb = await getSupabase();
-      const { error } = await sb.from('card_highlights').update({ selected_text: text }).eq('highlight_id', id).eq('user_id', state.userId);
-      if (error) throw error;
-      const row = state.myFeedHighlights.find((x) => x.highlight_id === id);
-      if (row) row.selected_text = text;
-      state.editingMyFeedId = null; state.editingMyFeedKind = null;
-      renderMyHighlightsList();
-      toast('수정됨');
-    } catch (err) { console.warn(err); toast('수정 실패: ' + (err.message || '')); }
-  }));
+  // 하이라이트는 Delete 만 (Edit 제거).
   myfeedList.querySelectorAll('.mfh-delete-btn').forEach((b) => b.addEventListener('click', async () => {
     if (!confirm('이 하이라이트를 삭제할까요?')) return;
     const id = parseInt(b.dataset.id, 10);
@@ -2087,38 +2060,18 @@ function buildMyFeedHighlightRow(h) {
   const when = formatBookmarkDate(h.created_at) || '';
   const meta = [fmt, when].filter(Boolean).join('  ·  ').toUpperCase();
   const idTag = `#${String(h.card_id).padStart(5, '0')}`;
-  const isEditing = state.editingMyFeedKind === 'highlight' && state.editingMyFeedId === h.highlight_id;
 
   const wrap = document.createElement('div');
   wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);';
-  if (isEditing) {
-    wrap.innerHTML = `
-      <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
-      <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
-      <textarea class="mfh-edit-input" data-id="${h.highlight_id}" maxlength="2000"
-                style="width:100%;min-height:90px;padding:10px;border:0.5px solid var(--latte);background:var(--paper);font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:1.7;color:var(--espresso);resize:vertical;box-sizing:border-box;margin-bottom:8px;">${escapeHtml(h.selected_text || '')}</textarea>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span class="t-label-sm c-sand">${idTag}</span>
-        <div style="display:flex;gap:12px;">
-          <button class="mfh-cancel-btn" style="${LINK_BTN_CSS}">Cancel</button>
-          <button class="mfh-save-btn" data-id="${h.highlight_id}" style="${LINK_BTN_CSS}color:var(--cta);">Save</button>
-        </div>
-      </div>
-    `;
-  } else {
-    wrap.innerHTML = `
-      <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
-      <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
-      <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;">❝ ${escapeHtml(h.selected_text || '')} ❞</p>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
-        <span class="t-label-sm c-sand">${idTag}</span>
-        <div style="display:flex;gap:12px;">
-          <button class="mfh-edit-btn"   data-id="${h.highlight_id}" style="${LINK_BTN_CSS}">Edit</button>
-          <button class="mfh-delete-btn" data-id="${h.highlight_id}" style="${LINK_BTN_CSS}color:var(--cta);">Delete</button>
-        </div>
-      </div>
-    `;
-  }
+  wrap.innerHTML = `
+    <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
+    <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
+    <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;">❝ ${escapeHtml(h.selected_text || '')} ❞</p>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+      <span class="t-label-sm c-sand">${idTag}</span>
+      <button class="mfh-delete-btn" data-id="${h.highlight_id}" style="${LINK_BTN_CSS}color:var(--cta);">Delete</button>
+    </div>
+  `;
   return wrap;
 }
 

@@ -1,5 +1,6 @@
 import { getSupabase, requireSessionOrRedirect } from './supabase-client.js';
 import { emailToDisplayId } from './auth-utils.js';
+import { parseKeywords, validateKeywords, overLongKeywords, attachKeywordHint } from './keyword-utils.js';
 
 // ---------------------------------------------------------------------------
 // DOM refs
@@ -24,6 +25,11 @@ const confirmDeleteBtn = $('#confirm-delete');
 const libraryWorkFilter = $('#library-work-filter');
 const librarySearchInput = $('#library-search');
 const libraryRefreshBtn = $('#library-refresh');
+const libraryKeywordFreqBtn = $('#library-keyword-freq-btn');
+const libraryKeywordFreq = $('#library-keyword-freq');
+const libraryKeywordFreqClose = $('#library-keyword-freq-close');
+const libraryKeywordFreqBody = $('#library-keyword-freq-body');
+const libraryKeywordFreqSummary = $('#library-keyword-freq-summary');
 const libraryCardTemplate = $('#library-card-template');
 const libraryEditTemplate = $('#library-edit-template');
 const librarySelectionBar = $('#library-selection-bar');
@@ -153,6 +159,7 @@ async function loadLibrary() {
     state.rows = Array.isArray(data) ? data : [];
     refreshWorkFilterOptions();
     renderLibrary();
+    if (libraryKeywordFreq && !libraryKeywordFreq.classList.contains('hidden')) renderKeywordFreq();
     libraryStatus.textContent = `총 ${state.rows.length}장 로드됨.`;
   } catch (err) {
     console.error('[library] load error:', err);
@@ -202,6 +209,111 @@ function filteredRows() {
     return true;
   });
 }
+
+// ---------------------------------------------------------------------------
+// 키워드 빈도 집계 — 전체 카드(필터 무시)에서 각 키워드 사용 횟수 내림차순.
+// 표기 흔들림("소유"/"소유물" 등)을 편집자가 눈으로 잡아 수렴시키는 용도.
+// 행 클릭 시 해당 키워드로 검색되어 흔들리는 카드들을 바로 모아 볼 수 있다.
+// ---------------------------------------------------------------------------
+function computeKeywordFreq() {
+  const counts = new Map();
+  state.rows.forEach((c) => {
+    (c.keywords || []).forEach((kRaw) => {
+      const k = String(kRaw || '').trim();
+      if (!k) return;
+      counts.set(k, (counts.get(k) || 0) + 1);
+    });
+  });
+  // 횟수 내림차순, 동률이면 가나다순
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));
+}
+
+function renderKeywordFreq() {
+  if (!libraryKeywordFreqBody) return;
+  const rows = computeKeywordFreq();
+  const totalUses = rows.reduce((s, [, n]) => s + n, 0);
+  if (libraryKeywordFreqSummary) {
+    libraryKeywordFreqSummary.textContent = `· 고유 ${rows.length}종 / 총 ${totalUses}회`;
+  }
+
+  libraryKeywordFreqBody.innerHTML = '';
+  if (!rows.length) {
+    libraryKeywordFreqBody.innerHTML =
+      '<p class="text-sm text-on-surface-variant py-4 text-center">집계할 키워드가 없습니다.</p>';
+    return;
+  }
+
+  const max = rows[0][1] || 1;
+  const table = document.createElement('table');
+  table.className = 'w-full text-sm border-collapse';
+
+  const thead = document.createElement('thead');
+  thead.innerHTML =
+    '<tr class="text-left text-xs text-on-surface-variant border-b border-outline-variant">' +
+    '<th class="py-1.5 pr-2 font-semibold">키워드</th>' +
+    '<th class="py-1.5 px-2 font-semibold w-14 text-right">횟수</th>' +
+    '<th class="py-1.5 pl-2 font-semibold">분포</th>' +
+    '</tr>';
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  rows.forEach(([kw, n]) => {
+    const tr = document.createElement('tr');
+    tr.className =
+      'border-b border-outline-variant/40 hover:bg-surface-container cursor-pointer';
+    tr.title = `"${kw}" 로 검색`;
+
+    const kwTd = document.createElement('td');
+    kwTd.className = 'py-1.5 pr-2 text-on-surface';
+    kwTd.textContent = kw; // textContent — XSS 방지
+    tr.appendChild(kwTd);
+
+    const nTd = document.createElement('td');
+    nTd.className = 'py-1.5 px-2 text-right font-semibold text-on-surface tabular-nums';
+    nTd.textContent = String(n);
+    tr.appendChild(nTd);
+
+    const barTd = document.createElement('td');
+    barTd.className = 'py-1.5 pl-2';
+    const barWrap = document.createElement('div');
+    barWrap.className = 'h-2 rounded-full bg-surface-container-high overflow-hidden';
+    const bar = document.createElement('div');
+    bar.className = 'h-full bg-primary rounded-full';
+    bar.style.width = `${Math.max(4, Math.round((n / max) * 100))}%`;
+    barWrap.appendChild(bar);
+    barTd.appendChild(barWrap);
+    tr.appendChild(barTd);
+
+    tr.addEventListener('click', () => {
+      librarySearchInput.value = kw;
+      state.searchText = kw;
+      renderLibrary();
+      toggleKeywordFreq(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  libraryKeywordFreqBody.appendChild(table);
+}
+
+function toggleKeywordFreq(show) {
+  if (!libraryKeywordFreq) return;
+  const willShow =
+    show === undefined ? libraryKeywordFreq.classList.contains('hidden') : show;
+  if (willShow) {
+    renderKeywordFreq();
+    libraryKeywordFreq.classList.remove('hidden');
+    libraryKeywordFreq.classList.add('flex');
+  } else {
+    libraryKeywordFreq.classList.add('hidden');
+    libraryKeywordFreq.classList.remove('flex');
+  }
+}
+
+if (libraryKeywordFreqBtn) libraryKeywordFreqBtn.addEventListener('click', () => toggleKeywordFreq());
+if (libraryKeywordFreqClose) libraryKeywordFreqClose.addEventListener('click', () => toggleKeywordFreq(false));
 
 // ---------------------------------------------------------------------------
 // Render
@@ -732,12 +844,19 @@ function buildEditNode(card) {
   tempEl.value = card.temperature ?? 3;
   intensityEl.value = card.intensity ?? 3;
 
+  attachKeywordHint(kwEl);
+
   node.querySelector('.lib-save-edit-btn').addEventListener('click', async () => {
+    const kwList = parseKeywords(kwEl.value);
+    const kwCheck = validateKeywords(kwList);
+    if (!kwCheck.ok) { toast(kwCheck.message, 'error'); return; }
+    const over = overLongKeywords(kwList);
+    if (over.length) toast(`8자 초과 키워드: ${over.join(', ')} — 더 짧게 권장합니다.`, 'info');
     const updates = {
       quote: quoteEl.value.trim(),
       script_excerpt: excerptEl.value.trim(),
       excerpt_description: descEl.value.trim() || null,
-      keywords: kwEl.value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 3),
+      keywords: kwList,
       significance: (sigEl && sigEl.value.trim()) || null,
       temperature: Math.max(1, Math.min(5, Number(tempEl.value) || 3)),
       intensity: Math.max(1, Math.min(5, Number(intensityEl.value) || 3)),
