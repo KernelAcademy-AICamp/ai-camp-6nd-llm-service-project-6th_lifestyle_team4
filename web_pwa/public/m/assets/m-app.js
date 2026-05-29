@@ -102,6 +102,7 @@ const detailWorkTitle = $('#detail-work-title');
 const detailBookmark = $('#detail-bookmark');
 const detailMeta = $('#detail-meta');
 const detailDescription = $('#detail-description');
+const detailDescriptionBlock = $('#detail-description-block');
 const detailDescSpacer = $('#detail-desc-spacer');
 const detailScript = $('#detail-script');
 const detailSignificanceBlock = $('#detail-significance-block');
@@ -1245,10 +1246,10 @@ function formatCount(n) {
 function renderCounts(card) {
   const views = formatCount(card?.view_count || 0);
   const bookmarks = formatCount(state.bookmarkCounts?.get(card?.card_id) || 0);
-  return `<span class="t-label-sm c-walnut">`
-    + `<span class="material-symbols-outlined" style="font-size:14px;vertical-align:-2px;">visibility</span> ${views}`
-    + `&nbsp;·&nbsp;`
-    + `<span class="material-symbols-outlined" style="font-size:14px;vertical-align:-2px;">bookmark</span> ${bookmarks}`
+  return `<span class="t-label-sm c-walnut" style="display:inline-flex;align-items:center;gap:6px;">`
+    + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">visibility</span>${views}</span>`
+    + `<span>·</span>`
+    + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">bookmark</span>${bookmarks}</span>`
     + `</span>`;
 }
 
@@ -1511,7 +1512,7 @@ function buildGenreShelf(genre, items) {
     spine.style.backgroundColor = leatherColorFor(w.title);
     spine.innerHTML = `
       <div class="spine-inner">
-        <span class="spine-count">${count}</span>
+        <span class="spine-count"><svg class="spine-count-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12a1 1 0 0 1 1 1v18l-7-4-7 4V3a1 1 0 0 1 1-1z"/></svg>${count}</span>
         ${showSeries ? `<span class="spine-series">${escapeHtml(seriesLabel)}</span>` : ''}
         <span class="spine-title" style="font-size:${fontSize}px;">${escapeHtml(displayName)}</span>
         <span class="spine-genre">${escapeHtml(label)}</span>
@@ -2156,12 +2157,104 @@ themeToggle.addEventListener('keydown', (e) => {
   }
 });
 
+// ---------- Custom select — 네이티브 <select>를 톤에 맞춘 드롭다운으로 대체 ----------
+// 원본 <select>는 DOM에 숨겨둔 채 값의 원천(source of truth)으로 유지 → 저장/로드 로직 불변.
+function enhanceSelect(sel) {
+  if (!sel || sel.dataset.enhanced) return;
+  sel.dataset.enhanced = '1';
+  sel.style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'c-select';
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'c-select-trigger';
+  const label = document.createElement('span');
+  label.className = 'c-select-label';
+  const caret = document.createElement('span');
+  caret.className = 'c-select-caret';
+  trigger.append(label, caret);
+  wrap.appendChild(trigger);
+  sel.parentNode.insertBefore(wrap, sel);
+  wrap.appendChild(sel);
+
+  const menu = document.createElement('div');
+  menu.className = 'c-select-menu';
+  menu.style.display = 'none';
+  document.body.appendChild(menu);
+
+  const syncLabel = () => {
+    const opt = sel.options[sel.selectedIndex];
+    label.textContent = opt ? opt.textContent : '';
+  };
+  const isOpen = () => menu.style.display === 'block';
+
+  function position() {
+    const r = trigger.getBoundingClientRect();
+    menu.style.left = r.left + 'px';
+    menu.style.width = r.width + 'px';
+    const below = window.innerHeight - r.bottom;
+    const above = r.top;
+    if (below >= 200 || below >= above) {
+      menu.style.bottom = '';
+      menu.style.top = (r.bottom + 4) + 'px';
+      menu.style.maxHeight = Math.min(260, below - 12) + 'px';
+    } else {
+      menu.style.top = '';
+      menu.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+      menu.style.maxHeight = Math.min(260, above - 12) + 'px';
+    }
+  }
+  function close() {
+    if (!isOpen()) return;
+    menu.style.display = 'none';
+    wrap.classList.remove('open');
+    document.removeEventListener('click', onDoc);
+    window.removeEventListener('scroll', close, true);
+    window.removeEventListener('resize', close);
+  }
+  function onDoc(e) {
+    if (!menu.contains(e.target) && !trigger.contains(e.target)) close();
+  }
+  function open() {
+    menu.innerHTML = '';
+    Array.from(sel.options).forEach((opt) => {
+      const item = document.createElement('div');
+      item.className = 'c-select-option' + (opt.value === sel.value ? ' selected' : '');
+      item.textContent = opt.textContent;
+      item.addEventListener('click', () => {
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        syncLabel();
+        close();
+      });
+      menu.appendChild(item);
+    });
+    menu.style.display = 'block';
+    position();
+    wrap.classList.add('open');
+    setTimeout(() => document.addEventListener('click', onDoc), 0);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+  }
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    isOpen() ? close() : open();
+  });
+  sel._syncCustom = syncLabel;
+  syncLabel();
+}
+enhanceSelect(profileGender);
+enhanceSelect(profileAge);
+
 // ---------- Nickname edit ----------
 function openNicknameModal() {
   if (!nicknameModal) return;
   nicknameInput.value = state.userNickname || '';
   if (profileGender) profileGender.value = state.userGender || '';
   if (profileAge) profileAge.value = state.userAgeGroup || '';
+  profileGender?._syncCustom?.();
+  profileAge?._syncCustom?.();
   nicknameModal.style.display = 'flex';
   setTimeout(() => nicknameInput.focus(), 50);
 }
@@ -2679,10 +2772,10 @@ function openDetail(card) {
   // excerpt description (centered)
   if (card.excerpt_description) {
     detailDescription.textContent = flowProse(card.excerpt_description);
-    detailDescription.style.display = 'block';
+    detailDescriptionBlock.style.display = 'block';
     detailDescSpacer.style.height = '24px';
   } else {
-    detailDescription.style.display = 'none';
+    detailDescriptionBlock.style.display = 'none';
     detailDescSpacer.style.height = '0';
   }
 

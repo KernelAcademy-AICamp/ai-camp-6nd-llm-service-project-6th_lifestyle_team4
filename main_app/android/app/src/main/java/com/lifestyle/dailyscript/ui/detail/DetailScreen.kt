@@ -1,6 +1,7 @@
 package com.lifestyle.dailyscript.ui.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -88,12 +91,26 @@ fun DetailScreen(
                 Box(modifier = Modifier.height(28.dp))
 
                 if (!card.excerptDescription.isNullOrBlank()) {
-                    Text(
-                        text = card.excerptDescription,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Walnut,
-                        textAlign = TextAlign.Center,
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(0.5.dp, Latte, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
+                    ) {
+                        Text(
+                            text = "SCENE",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.22.em),
+                            color = Walnut,
+                            modifier = Modifier.alpha(0.7f),
+                        )
+                        Box(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = card.excerptDescription,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Walnut,
+                            textAlign = TextAlign.Start,
+                        )
+                    }
                     Box(modifier = Modifier.height(24.dp))
                 }
 
