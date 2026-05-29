@@ -823,12 +823,10 @@
     margin-bottom: 14px;
   }
   .feed-item-head .feed-nick {
-    font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 15px; font-weight: 400; color: var(--walnut);   /* 더 얇고 덜 진하게 */
+    /* 시간과 동일 폰트(body 기본 sans-serif) — serif 미지정으로 상속 */
+    font-size: 15px; font-weight: 400; color: var(--walnut);
+    letter-spacing: 0.04em;
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .feed-item-head .feed-nick::after {                            /* "님"만 더 작고 연하게 */
-    content: ' 님'; font-size: 11px; color: var(--sand);
   }
   .feed-item-head .feed-time {
     flex: 0 0 auto; font-size: 12px; letter-spacing: 0.04em; color: var(--roast);
