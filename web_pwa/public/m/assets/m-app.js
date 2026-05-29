@@ -336,7 +336,7 @@ const MIN_BOOKMARKS_FOR_TASTE = 10;
 
 function getInitialView() {
   const hash = (location.hash || '').replace('#', '');
-  return ['home','archive','settings'].includes(hash) ? hash : 'home';
+  return ['home','archive','feed','settings'].includes(hash) ? hash : 'home';
 }
 window.addEventListener('hashchange', () => setView(getInitialView()));
 
