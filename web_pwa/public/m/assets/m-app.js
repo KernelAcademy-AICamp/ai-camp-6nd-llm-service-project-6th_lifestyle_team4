@@ -112,6 +112,7 @@ const state = {
   allCards: [],
   bookmarks: [],            // raw bookmark rows
   bookmarkedIds: new Set(),
+  bookmarkCounts: new Map(),  // card_id → bookmark_count (from card_bookmark_counts view)
   currentView: 'home',
   detailCardId: null,
   pushEnabled: false,
@@ -264,7 +265,7 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
       userPk: state.userId != null ? String(state.userId) : null,
     });
     paintAuthIdentity();
-    await Promise.all([loadAllCards(), loadBookmarks()]);
+    await Promise.all([loadAllCards(), loadBookmarks(), loadBookmarkCounts()]);
     paintTasteProfile();
     renderHome();
     // 초기 setView — history에 중복 entry 안 쌓이게 suppress 후 replaceState로 마무리
@@ -689,7 +690,7 @@ async function loadAllCards() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('cards')
-    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, subtitle, format, author, release_year, characters)')
+    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, works(work_id, title, subtitle, format, author, release_year, characters)')
     .order('card_id', { ascending: false }).limit(500);
   if (error) throw error;
   state.allCards = Array.isArray(data) ? data : [];
@@ -700,12 +701,26 @@ async function loadBookmarks() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('user_bookmarks')
-    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
+    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false });
   if (error) { console.warn('[m] bookmarks load failed:', error); return; }
   state.bookmarks = Array.isArray(data) ? data : [];
   state.bookmarkedIds = new Set(state.bookmarks.map((b) => b.card_id));
+}
+
+async function loadBookmarkCounts() {
+  state.bookmarkCounts = new Map();
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('card_bookmark_counts')
+      .select('card_id, bookmark_count');
+    if (error) { console.warn('[m] bookmark counts load failed:', error.message); return; }
+    (data || []).forEach((r) => state.bookmarkCounts.set(r.card_id, r.bookmark_count));
+  } catch (e) {
+    console.warn('[m] loadBookmarkCounts error:', e);
+  }
 }
 
 // ---------- Today's card / 추천 ----------
@@ -926,7 +941,7 @@ async function toggleBookmark(cardId) {
     } else {
       const { data, error } = await sb.from('user_bookmarks')
         .insert({ user_id: state.userId, card_id: cardId })
-        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
+        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters))')
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
@@ -1021,6 +1036,7 @@ function applyTodayCard(card) {
     chip.textContent = format;
     todayChips.appendChild(chip);
   }
+  todayChips.insertAdjacentHTML('beforeend', `<span style="margin-left:10px;">${renderCounts(card)}</span>`);
   const kws = Array.isArray(card.keywords) ? card.keywords : [];
 
   // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
@@ -1121,6 +1137,8 @@ function buildBookmarkRow(row) {
       <p class="t-title-lg c-espresso single-line">${escapeHtml(displayTitle(w.title) || '—')}</p>
       <div style="height:4px;"></div>
       <p class="t-body-md c-walnut single-line">${escapeHtml(cleanQuote(card.quote))}</p>
+      <div style="height:6px;"></div>
+      ${renderCounts(card)}
     </div>
     <span class="material-symbols-outlined arrow">arrow_forward_ios</span>
   `;
@@ -1130,6 +1148,23 @@ function buildBookmarkRow(row) {
   hr.className = 'hairline';
   wrap.appendChild(hr);
   return wrap;
+}
+
+function formatCount(n) {
+  const v = Number(n) || 0;
+  if (v < 1000) return String(v);
+  const k = v / 1000;
+  return (k >= 10 ? Math.round(k) : Math.round(k * 10) / 10) + 'k';
+}
+
+function renderCounts(card) {
+  const views = formatCount(card?.view_count || 0);
+  const bookmarks = formatCount(state.bookmarkCounts?.get(card?.card_id) || 0);
+  return `<span class="t-label-sm c-walnut">`
+    + `<span class="material-symbols-outlined" style="font-size:14px;vertical-align:-2px;">visibility</span> ${views}`
+    + `&nbsp;·&nbsp;`
+    + `<span class="material-symbols-outlined" style="font-size:14px;vertical-align:-2px;">bookmark</span> ${bookmarks}`
+    + `</span>`;
 }
 
 function formatBookmarkDate(iso) {
@@ -2181,6 +2216,18 @@ function paintAuthIdentity() {
 // ---------- Detail (full-screen) ----------
 function openDetail(card) {
   if (!card) return;
+  // Fire-and-forget view increment + optimistic local bump so the count below reflects this open.
+  (async () => {
+    try {
+      const sb = await getSupabase();
+      await sb.rpc('increment_card_view', { p_card_id: card.card_id });
+    } catch (e) { console.warn('[m] increment view failed:', e); }
+  })();
+  card.view_count = (card.view_count || 0) + 1;
+  const sameInAllCards = state.allCards?.find((c) => c.card_id === card.card_id);
+  if (sameInAllCards && sameInAllCards !== card) {
+    sameInAllCards.view_count = card.view_count;
+  }
   state.detailCardId = card.card_id;
   const w = card.works || {};
   const title = displayTitle(w.title) || '';
@@ -2204,7 +2251,8 @@ function openDetail(card) {
     w.author ? w.author.toUpperCase() : null,
     w.release_year ? String(w.release_year) : null,
   ].filter(Boolean);
-  detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('');
+  detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
+    + renderCounts(card);
 
   // 좁은 폰 화면에서 LLM이 끼워 넣은 \n이 어색하게 wrap되는 걸 막기 위해
   // 산문 필드(설명·의의)는 줄바꿈을 공백으로 펴서 한 단락처럼 흐르게 한다.
