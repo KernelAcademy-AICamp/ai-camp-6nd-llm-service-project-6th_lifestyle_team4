@@ -3833,19 +3833,6 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
     document.body.appendChild(overlay);
   }
 
-  // [임시 진단] iOS long-press 단계 추적 배지 — 원인 확인 후 제거 예정
-  let dbgEl = document.getElementById('hl-debug');
-  if (!dbgEl) {
-    dbgEl = document.createElement('div');
-    dbgEl.id = 'hl-debug';
-    dbgEl.style.cssText = 'position:fixed;top:6px;left:6px;z-index:99999;background:rgba(0,0,0,0.82);color:#7CFC00;font:11px/1.4 monospace;padding:5px 7px;border-radius:5px;pointer-events:none;max-width:92vw;white-space:pre-wrap;';
-    document.body.appendChild(dbgEl);
-  }
-  const dbg = (m) => {
-    dbgEl.textContent = (dbgEl.textContent + '\n' + m).split('\n').slice(-7).join('\n');
-  };
-  dbg('hl ready');
-
   let lpTimer = null;
   let startPoint = null;
   let isSelecting = false;
@@ -4004,7 +3991,6 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
     if (e.touches.length > 1) return;
     const t = e.touches[0];
     startPoint = { x: t.clientX, y: t.clientY };
-    dbg('touchstart @' + Math.round(t.clientX) + ',' + Math.round(t.clientY));
     // 새 long-press → 기존 선택 해제
     if (anchor) clearAll();
     if (lpTimer) clearTimeout(lpTimer);
@@ -4012,14 +3998,11 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
       lpTimer = null;
       const p = caretFromPoint(startPoint.x, startPoint.y);
       const word = expandToWord(p);
-      dbg('lp fired | caret:' + (p ? (p.node.nodeType === 3 ? 'txt' : 'n' + p.node.nodeType) + '@' + p.offset : 'NULL')
-          + ' | word:' + (word ? word.startOffset + '-' + word.endOffset : 'NONE'));
       if (!word) return;
       anchor = { node: word.startNode, offset: word.startOffset };
       focus  = { node: word.endNode,   offset: word.endOffset };
       isSelecting = true;
       renderOverlay();
-      dbg('rects:' + overlay.childElementCount);
       try { if (navigator.vibrate) navigator.vibrate(20); } catch {}
     }, LONG_PRESS_MS);
   }, { passive: true });
@@ -4031,7 +4014,6 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
     const dy = Math.abs(t.clientY - startPoint.y);
     if (lpTimer && (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX)) {
       clearTimeout(lpTimer); lpTimer = null;
-      dbg('lp canceled: moved ' + Math.round(dx) + ',' + Math.round(dy));
     }
     if (isSelecting) {
       const p = caretFromPoint(t.clientX, t.clientY);
