@@ -320,7 +320,7 @@ const MIN_BOOKMARKS_FOR_TASTE = 10;
 
 function getInitialView() {
   const hash = (location.hash || '').replace('#', '');
-  return ['home','archive','settings'].includes(hash) ? hash : 'home';
+  return ['home','archive','feed','settings'].includes(hash) ? hash : 'home';
 }
 window.addEventListener('hashchange', () => setView(getInitialView()));
 
@@ -2935,17 +2935,20 @@ function buildFeedItem(post) {
       <span class="feed-nick">${escapeHtml(post.author_nickname || '익명')}</span>
       <span class="feed-time">${escapeHtml(formatRelativeTime(post.created_at))}</span>
     </div>
-    <div class="feed-item-body">${escapeHtml(post.body || '')}</div>
-    <div class="feed-book-foot" style="background:${color};">
-      <div class="fb-title">
-        <span class="fb-name">${escapeHtml(displayTitle(w.title) || '—')}</span>
-        ${w.release_year ? `<span class="fb-year">${escapeHtml(String(w.release_year))}</span>` : ''}
+    <div class="feed-book-wrap">
+      <div class="feed-paper">${escapeHtml(post.body || '')}</div>
+      <div class="feed-book" style="background:${color};">
+        <div class="feed-book-band"></div>
+        <div class="fb-title">
+          <span class="fb-name">${escapeHtml(displayTitle(w.title) || '—')}</span>
+          ${w.release_year ? `<span class="fb-year">${escapeHtml(String(w.release_year))}</span>` : ''}
+        </div>
+        <div class="fb-mid">
+          <span class="fb-sub">${escapeHtml(w.subtitle || '')}</span>
+          ${card.card_id != null ? `<span class="fb-num">#${escapeHtml(String(card.card_id))}</span>` : ''}
+        </div>
+        ${bottomParts.length ? `<div class="fb-bottom">${escapeHtml(bottomParts.join(' · '))}</div>` : ''}
       </div>
-      <div class="fb-mid">
-        <span class="fb-sub">${escapeHtml(w.subtitle || '')}</span>
-        ${card.card_id != null ? `<span class="fb-num">#${escapeHtml(String(card.card_id))}</span>` : ''}
-      </div>
-      ${bottomParts.length ? `<div class="fb-bottom">${escapeHtml(bottomParts.join(' · '))}</div>` : ''}
     </div>
   `;
   return wrap;

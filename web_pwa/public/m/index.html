@@ -37,6 +37,7 @@
     --highlight:#F4C20D;
     --cta:      #D85A30;
     --card-warm:#FFFDF7;  /* book modal 안 quote 카드 배경 */
+    --feed-card:#E6E1D7;  /* 피드 아이템 컨테이너 배경 (따뜻한 라이트 그레이) */
     color-scheme: light;
   }
   /* Dark mode — 의미 반전: paper ↔ espresso */
@@ -48,6 +49,7 @@
     --latte:    #2C2620;  /* 외곽선·구분선 */
     --sand:     #6B5D4F;  /* 흐린 액센트 */
     --card-warm:#15120E;  /* 어두운 카드 배경 */
+    --feed-card:#1C1813;  /* 피드 아이템 컨테이너 배경 (에스프레소보다 살짝 밝게) */
     color-scheme: dark;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -711,55 +713,76 @@
   }
 
   /* ===== Feed (오늘의 한줄) ===== */
-  .feed-item { margin-bottom: 30px; }
+  /* 컨테이너: 회색 카드 안에 [닉네임·시간] + [책에 종이가 꽂힌 모양] */
+  .feed-item {
+    background: var(--feed-card);
+    padding: 20px 18px 24px;
+    margin-bottom: 26px;
+  }
   .feed-item-head {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 4px;
   }
   .feed-item-head .feed-nick {
     font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 15px; font-weight: 700; color: var(--espresso);
+    font-size: 16px; font-weight: 700; color: var(--espresso);
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .feed-item-head .feed-time {
-    flex: 0 0 auto; font-size: 11px; letter-spacing: 0.08em; color: var(--walnut);
+    flex: 0 0 auto; font-size: 12px; letter-spacing: 0.04em; color: var(--roast);
   }
-  .feed-item-body {
-    background: var(--card-warm);
-    border: 0.5px solid var(--latte);
-    padding: 22px 20px;
+  /* 책 + 종이 겹침 컨텍스트 */
+  .feed-book-wrap { position: relative; padding-top: 8px; }
+  /* 흰 종이 — 책보다 좁고 가운데, 아래쪽이 책 금색 띠에 꽂힌 듯 */
+  .feed-paper {
+    position: relative; z-index: 1;
+    width: 74%; margin: 0 auto;
+    background: #FFFDF7;
+    padding: 24px 18px 38px;   /* 하단 여백: 책이 겹쳐도 글이 안 가려지게 */
     font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 15px; line-height: 27px; color: var(--roast);
+    font-size: 15px; line-height: 28px; color: #2C2620;
     white-space: pre-wrap; word-break: keep-all; text-align: center;
+    box-shadow: 0 8px 16px rgba(14,12,10,0.14);
   }
-  .feed-book-foot {
-    padding: 14px 16px;
-    /* background set inline via leatherColorFor(title) */
+  /* 책 — 가죽색(인라인), 위쪽 금색 띠가 종이가 꽂히는 '입구' */
+  .feed-book {
+    position: relative; z-index: 2;
+    margin-top: -22px;          /* 종이 하단을 덮어 '꽂힌' 느낌 */
+    padding: 0 18px 16px;
+    box-shadow: 0 6px 16px rgba(14,12,10,0.22);
+    /* background: leatherColorFor(title) — 인라인 */
   }
-  .feed-book-foot .fb-title {
+  /* 금색 가죽 띠 (책의 머리·종이 슬롯) */
+  .feed-book-band {
+    height: 16px; margin: 0 -18px 14px;
+    background: linear-gradient(180deg,#EAD18E 0%,#D8B468 46%,#A9823A 54%,#C9A24B 100%);
+    border-bottom: 1.5px solid rgba(0,0,0,0.32);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.28), inset 0 -2px 3px rgba(0,0,0,0.18);
+  }
+  .feed-book .fb-title {
     font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 14px; font-weight: 700; color: #E6CC82;
+    font-size: 15px; font-weight: 700; color: #E6CC82;
     display: flex; align-items: baseline; gap: 8px;
   }
-  .feed-book-foot .fb-title .fb-name {
+  .feed-book .fb-name {
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .feed-book-foot .fb-year { flex: 0 0 auto; font-size: 12px; color: #C9A24B; font-weight: 400; }
-  .feed-book-foot .fb-mid {
+  .feed-book .fb-year { flex: 0 0 auto; font-size: 13px; color: #C9A24B; font-weight: 400; }
+  .feed-book .fb-mid {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    margin-top: 6px;
+    margin-top: 7px;
   }
-  .feed-book-foot .fb-sub {
+  .feed-book .fb-sub {
     font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 12px; color: #E6CC82; min-width: 0;
+    font-size: 13px; color: #E6CC82; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .feed-book-foot .fb-num {
-    flex: 0 0 auto; font-size: 12px; letter-spacing: 0.06em; color: #C9A24B;
+  .feed-book .fb-num {
+    flex: 0 0 auto; font-size: 13px; letter-spacing: 0.06em; color: #C9A24B;
   }
-  .feed-book-foot .fb-bottom {
-    margin-top: 6px; font-size: 10px; letter-spacing: 0.12em;
-    text-transform: uppercase; color: #C9A24B;
+  .feed-book .fb-bottom {
+    margin-top: 7px; font-size: 11px; letter-spacing: 0.1em;
+    color: #C9A24B;
   }
   #feed-fab {
     position: fixed; right: 20px; bottom: 80px; z-index: 29;
