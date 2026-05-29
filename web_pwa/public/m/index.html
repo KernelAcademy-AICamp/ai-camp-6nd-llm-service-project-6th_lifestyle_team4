@@ -117,9 +117,9 @@
   .chip.filled.g-movie   { background:#4A2A18; border-color:#4A2A18; color:#FAF8F2; }
   .chip.filled.g-drama   { background:#6B4A2A; border-color:#6B4A2A; color:#FAF8F2; }
   .chip.filled.g-musical { background:#5A2818; border-color:#5A2818; color:#FAF8F2; }
-  .chip.filled.g-opera   { background:#26180E; border-color:#26180E; color:#FAF8F2; }
-  .chip.filled.g-play    { background:#3F2818; border-color:#3F2818; color:#FAF8F2; }
-  .chip.filled.g-novel   { background:#4A4036; border-color:#4A4036; color:#FAF8F2; }
+  .chip.filled.g-opera   { background:#4A2B1A; border-color:#4A2B1A; color:#FAF8F2; }
+  .chip.filled.g-play    { background:#5A2A24; border-color:#5A2A24; color:#FAF8F2; }
+  .chip.filled.g-novel   { background:#3E585A; border-color:#3E585A; color:#FAF8F2; }
   .chip.filled.g-poem    { background:#27393B; border-color:#27393B; color:#FAF8F2; }
   .chip.filled.g-essay   { background:#3A4030; border-color:#3A4030; color:#FAF8F2; }
 
@@ -152,6 +152,13 @@
   }
   .top-bar-brand {
     display: flex; align-items: center; gap: 10px;
+  }
+  /* 상세 화면 헤더는 제목이 세로로 3줄(DAILY SCRIPT/작품명/부제) 쌓이므로 높이를 늘려 잘림 방지 */
+  #detail-screen .top-bar {
+    height: auto;
+    min-height: 64px;
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
 
   /* Bottom nav (mirror BottomNavBar.kt) */
@@ -836,6 +843,38 @@
     <div style="height:40px;"></div>
   </section>
 
+  <!-- ===== Feed view ===== -->
+  <section id="view-feed" style="display:none;">
+    <div style="height:24px;"></div>
+    <h1 class="t-display-md c-espresso">피드</h1>
+    <p class="t-label-sm c-walnut" style="margin-top:6px;">매일 한 문장, 그리고 기억에 남은 장면들</p>
+
+    <!-- Category chips -->
+    <div class="archive-chips" id="feed-chips" role="tablist" style="margin-top:18px;">
+      <button class="a-chip active" data-feed-cat="today" role="tab">오늘의 한줄</button>
+      <button class="a-chip" data-feed-cat="highlight" role="tab">하이라이트</button>
+    </div>
+
+    <!-- 카테고리별 컨테이너 -->
+    <div id="feed-today" style="margin-top:24px;">
+      <div style="padding:60px 0;text-align:center;">
+        <span class="material-symbols-outlined c-sand" style="font-size:56px;">format_quote</span>
+        <p class="t-headline-sm c-espresso" style="margin-top:14px;">오늘의 한줄</p>
+        <p class="t-body-md c-walnut" style="margin-top:6px;">준비 중입니다.</p>
+      </div>
+    </div>
+
+    <div id="feed-highlight" style="margin-top:24px;display:none;">
+      <div style="padding:60px 0;text-align:center;">
+        <span class="material-symbols-outlined c-sand" style="font-size:56px;">auto_awesome</span>
+        <p class="t-headline-sm c-espresso" style="margin-top:14px;">하이라이트</p>
+        <p class="t-body-md c-walnut" style="margin-top:6px;">준비 중입니다.</p>
+      </div>
+    </div>
+
+    <div style="height:40px;"></div>
+  </section>
+
   <!-- ===== Settings view ===== -->
   <section id="view-settings" style="display:none;">
     <div style="height:40px;"></div>
@@ -853,21 +892,17 @@
     <div style="height:32px;"></div>
     <div class="hairline"></div>
 
-    <!-- MY BOOKMARKS section -->
-    <div id="mypage-bookmarks-block" style="display:none;">
+    <!-- MY CHATS entry — 클릭 시 풀스크린 chats-screen 으로 이동 -->
+    <div id="mypage-chats-block" style="display:none;">
       <div style="height:40px;"></div>
-      <p class="t-label-sm c-walnut" style="margin-bottom:12px;">MY BOOKMARKS</p>
-      <div id="mypage-bookmarks-list"></div>
-      <div style="height:32px;"></div>
-      <div class="hairline"></div>
-    </div>
-
-    <!-- MY REPLIES section -->
-    <div id="mypage-replies-block" style="display:none;">
-      <div style="height:40px;"></div>
-      <p class="t-label-sm c-walnut" style="margin-bottom:12px;">MY REPLIES</p>
-      <div id="mypage-replies-list"></div>
-      <div style="height:32px;"></div>
+      <button id="mypage-chats-entry"
+              style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
+        <div style="flex:1;min-width:0;">
+          <p class="t-label-sm c-walnut" style="margin-bottom:6px;">MY CHATS</p>
+          <p class="t-body-md c-espresso">View comments you've posted</p>
+        </div>
+        <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+      </button>
       <div class="hairline"></div>
     </div>
 
@@ -973,12 +1008,39 @@
     <span class="t-label-sm">ARCHIVE</span>
     <span class="nav-dot"></span>
   </button>
+  <button data-nav="feed" class="nav-item">
+    <span class="material-symbols-outlined nav-icon">dynamic_feed</span>
+    <span class="t-label-sm">FEED</span>
+    <span class="nav-dot"></span>
+  </button>
   <button data-nav="settings" class="nav-item">
     <span class="material-symbols-outlined nav-icon">settings</span>
     <span class="t-label-sm">SETTINGS</span>
     <span class="nav-dot"></span>
   </button>
 </nav>
+
+<!-- ===== My Chats Screen (full screen overlay) ===== -->
+<div id="chats-screen" class="detail-screen">
+  <header class="top-bar">
+    <button id="chats-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
+    </button>
+    <div style="display:flex;flex-direction:column;align-items:center;">
+      <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">MY CHATS</span>
+    </div>
+    <span style="width:40px;"></span>
+  </header>
+  <div class="hairline"></div>
+  <div class="detail-body" id="chats-body" style="text-align:left;padding:24px 20px 80px;">
+    <div id="chats-list"></div>
+    <div id="chats-empty" style="display:none;padding:80px 0;text-align:center;">
+      <span class="material-symbols-outlined c-sand" style="font-size:56px;">forum</span>
+      <p class="t-headline-sm c-espresso" style="margin-top:14px;">아직 단 댓글이 없어요</p>
+      <p class="t-body-md c-walnut" style="margin-top:6px;">명대사에 첫 댓글을 남겨보세요.</p>
+    </div>
+  </div>
+</div>
 
 <!-- ===== Detail Screen (full screen, slides up) ===== -->
 <div id="detail-screen" class="detail-screen">
@@ -988,7 +1050,7 @@
     </button>
     <div style="display:flex;flex-direction:column;align-items:center;min-width:0;max-width:calc(100% - 100px);">
       <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">DAILY SCRIPT</span>
-      <span id="detail-work-title" class="t-headline-lg c-espresso" style="text-align:center;"></span>
+      <span id="detail-work-title" class="t-headline-lg c-espresso" style="text-align:center;margin-top:6px;"></span>
       <span id="detail-work-subtitle" class="t-label-sm c-walnut" style="display:none;text-align:center;margin-top:2px;"></span>
     </div>
     <button id="detail-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:8px;">
