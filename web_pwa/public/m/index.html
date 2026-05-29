@@ -705,6 +705,89 @@
     font-size: 10px; letter-spacing: 0.3em;
     text-transform: uppercase; color: var(--sand);
   }
+
+  /* ===== Feed (오늘의 한줄) ===== */
+  .feed-item { margin-bottom: 30px; }
+  .feed-item-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .feed-item-head .feed-nick {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 15px; font-weight: 700; color: var(--espresso);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .feed-item-head .feed-time {
+    flex: 0 0 auto; font-size: 11px; letter-spacing: 0.08em; color: var(--walnut);
+  }
+  .feed-item-body {
+    background: var(--card-warm);
+    border: 0.5px solid var(--latte);
+    padding: 22px 20px;
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 15px; line-height: 27px; color: var(--roast);
+    white-space: pre-wrap; word-break: keep-all; text-align: center;
+  }
+  .feed-book-foot {
+    padding: 14px 16px;
+    /* background set inline via leatherColorFor(title) */
+  }
+  .feed-book-foot .fb-title {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 14px; font-weight: 700; color: #E6CC82;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .feed-book-foot .fb-title .fb-name {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .feed-book-foot .fb-year { flex: 0 0 auto; font-size: 12px; color: #C9A24B; font-weight: 400; }
+  .feed-book-foot .fb-mid {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    margin-top: 6px;
+  }
+  .feed-book-foot .fb-sub {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 12px; color: #E6CC82; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .feed-book-foot .fb-num {
+    flex: 0 0 auto; font-size: 12px; letter-spacing: 0.06em; color: #C9A24B;
+  }
+  .feed-book-foot .fb-bottom {
+    margin-top: 6px; font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #C9A24B;
+  }
+  #feed-fab {
+    position: fixed; right: 20px; bottom: 80px; z-index: 29;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--espresso); color: var(--paper);
+    border: none; cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: 0 6px 20px rgba(14,12,10,0.35);
+  }
+  #feed-fab .material-symbols-outlined { font-size: 28px; }
+  /* Feed overlays (picker + compose) — modal pattern */
+  .feed-sheet {
+    background: var(--paper); width: 100%; max-width: 460px;
+    max-height: 86vh; display: flex; flex-direction: column;
+    border: 0.5px solid var(--latte);
+  }
+  .feed-sheet-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    padding: 24px 22px 14px;
+  }
+  .feed-sheet-close {
+    flex: 0 0 auto; background: transparent; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 2px;
+  }
+  .feed-sheet-close .material-symbols-outlined { font-size: 20px; color: var(--walnut); }
+  .feed-sheet-body { overflow-y: auto; padding: 0 22px 24px; }
+  .feed-pick-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 0; cursor: pointer;
+    border-bottom: 0.5px solid var(--latte);
+  }
+  .feed-pick-row .arrow { font-size: 16px; color: var(--sand); flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -857,11 +940,7 @@
 
     <!-- 카테고리별 컨테이너 -->
     <div id="feed-today" style="margin-top:24px;">
-      <div style="padding:60px 0;text-align:center;">
-        <span class="material-symbols-outlined c-sand" style="font-size:56px;">format_quote</span>
-        <p class="t-headline-sm c-espresso" style="margin-top:14px;">오늘의 한줄</p>
-        <p class="t-body-md c-walnut" style="margin-top:6px;">준비 중입니다.</p>
-      </div>
+      <div id="feed-list"></div>
     </div>
 
     <div id="feed-highlight" style="margin-top:24px;display:none;">
@@ -874,6 +953,11 @@
 
     <div style="height:40px;"></div>
   </section>
+
+  <!-- Feed FAB — feed 탭에서만 노출 (setView에서 토글) -->
+  <button id="feed-fab" aria-label="한줄 리뷰 작성">
+    <span class="material-symbols-outlined">add</span>
+  </button>
 
   <!-- ===== Settings view ===== -->
   <section id="view-settings" style="display:none;">
@@ -1194,6 +1278,49 @@
     <button id="nickname-cancel" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
       Cancel
     </button>
+  </div>
+</div>
+
+<!-- ===== Feed: 북마크 선택 오버레이 ===== -->
+<div id="feed-picker-modal" style="position:fixed;inset:0;background:rgba(14,12,10,0.65);display:none;align-items:flex-end;justify-content:center;z-index:140;padding:0;">
+  <div class="feed-sheet">
+    <div class="feed-sheet-head">
+      <div style="flex:1;min-width:0;">
+        <p class="t-label-sm c-walnut" style="margin-bottom:6px;">MY BOOKMARKS</p>
+        <h3 class="t-headline-md c-espresso">어떤 명대사에 한줄을 남길까요?</h3>
+      </div>
+      <button id="feed-picker-close" class="feed-sheet-close" aria-label="close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="feed-sheet-body">
+      <div id="feed-picker-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Feed: 한줄 작성 오버레이 ===== -->
+<div id="feed-compose-modal" style="position:fixed;inset:0;background:rgba(14,12,10,0.65);display:none;align-items:flex-end;justify-content:center;z-index:141;padding:0;">
+  <div class="feed-sheet">
+    <div class="feed-sheet-head">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">
+          <h3 id="fc-title" class="t-headline-md c-espresso" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></h3>
+          <span id="fc-edition" class="t-label-sm c-walnut" style="flex:0 0 auto;"></span>
+        </div>
+        <p id="fc-meta" class="t-label-sm c-walnut" style="margin-top:6px;"></p>
+      </div>
+      <button id="feed-compose-close" class="feed-sheet-close" aria-label="close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="feed-sheet-body">
+      <div class="hairline" style="margin-bottom:16px;"></div>
+      <textarea id="fc-input" maxlength="300" rows="6" placeholder="이 명대사에 대한 한줄을 남겨보세요…"
+                style="width:100%;box-sizing:border-box;padding:14px;background:var(--card-warm);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:26px;outline:none;resize:none;"></textarea>
+      <p id="fc-counter" class="t-body-sm c-walnut" style="text-align:right;margin-top:6px;">0/300자</p>
+      <button id="fc-submit" class="sharp-btn" style="width:100%;margin-top:14px;">등록 하기</button>
+    </div>
   </div>
 </div>
 

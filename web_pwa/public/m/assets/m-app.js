@@ -96,6 +96,20 @@ const detailReplyTarget = $('#detail-reply-target');
 const detailReplyTargetName = $('#detail-reply-target-name');
 const detailReplyCancel = $('#detail-reply-cancel');
 
+const feedList = $('#feed-list');
+const feedFab = $('#feed-fab');
+const feedPickerModal = $('#feed-picker-modal');
+const feedPickerList = $('#feed-picker-list');
+const feedPickerClose = $('#feed-picker-close');
+const feedComposeModal = $('#feed-compose-modal');
+const fcTitle = $('#fc-title');
+const fcMeta = $('#fc-meta');
+const fcEdition = $('#fc-edition');
+const fcInput = $('#fc-input');
+const fcCounter = $('#fc-counter');
+const fcSubmit = $('#fc-submit');
+const feedComposeClose = $('#feed-compose-close');
+
 const toastEl = $('#toast');
 
 // ---------- State ----------
@@ -130,6 +144,10 @@ const state = {
   replyingToNickname: '',
   editingCommentId: null,      // 현재 인라인 수정 중인 comment_id (null = 수정 모드 아님)
   feedCategory: 'today',       // 피드 내부 카테고리: 'today' | 'highlight'
+  feedPosts: [],               // feed_posts 조인 rows (없으면 FEED_SAMPLES로 대체 표시)
+  feedLoaded: false,           // loadFeedPosts 1회 호출 여부
+  composeCard: null,           // 작성 오버레이 대상 카드
+  feedSubmitting: false,
 };
 let detailCommentsChannel = null;
 
@@ -2768,6 +2786,64 @@ async function unsubscribeFromDetailComments() {
 }
 
 // ---------- Feed ----------
+// 백엔드(feed_posts)가 비어있거나 로컬(정적 서버)에서 불러오기 실패 시 보여줄 더미.
+// DB row와 동일한 모양(cards→works 조인 형태)이라 buildFeedItem이 그대로 처리한다.
+const _feedNow = Date.now();
+const _feedAgo = (ms) => new Date(_feedNow - ms).toISOString();
+const _MIN = 60000, _HR = 3600000, _DAY = 86400000;
+const FEED_SAMPLES = [
+  {
+    post_id: 's1', author_nickname: '춤추는 늑대', created_at: _feedAgo(1 * _MIN),
+    body: '처음 읽었을 때보다 다시 펼쳤을 때 더 좋았다.\n홈즈의 관찰력은 결국 사람을 향한 관심이라는 걸 이제야 알겠다.',
+    cards: { card_id: 232, quote: '자네는 보기만 하고 관찰하지는 않는군.',
+      works: { title: '셜록 홈즈', subtitle: '얼룩끈', format: 'novel', author: '아서 코난 도일', release_year: 1892 } },
+  },
+  {
+    post_id: 's2', author_nickname: '별 보는 고양이', created_at: _feedAgo(12 * _HR),
+    body: '사느냐 죽느냐, 그 한 줄 앞에서 한참을 멈췄다.\n오래된 문장인데 하나도 낡지 않았다.',
+    cards: { card_id: 17, quote: '사느냐 죽느냐, 그것이 문제로다.',
+      works: { title: '햄릿', subtitle: '', format: 'play', author: '윌리엄 셰익스피어', release_year: 1601 } },
+  },
+  {
+    post_id: 's3', author_nickname: '댄싱 울프', created_at: _feedAgo(3 * _HR),
+    body: '추리보다 인물이 남는 이야기.\n다 읽고 나면 사건은 잊혀도 그 새벽의 공기는 오래 기억에 남는다.',
+    cards: { card_id: 255, quote: '평범함 속에 비범함이 숨어 있다네.',
+      works: { title: '셜록 홈즈', subtitle: '보스콤 계곡의 미스터리', format: 'novel', author: '아서 코난 도일', release_year: 1891 } },
+  },
+  {
+    post_id: 's4', author_nickname: '노래하는 강아지', created_at: _feedAgo(3 * _DAY),
+    body: '아무 일도 일어나지 않는데 자꾸 마음이 움직인다.\n체호프는 늘 그런 식이다.',
+    cards: { card_id: 123, quote: '우리는 살아갈 거예요, 긴 나날들을.',
+      works: { title: '바냐 아저씨', subtitle: '', format: 'play', author: '안톤 체호프', release_year: 1897 } },
+  },
+  {
+    post_id: 's5', author_nickname: '책 읽는 여우', created_at: _feedAgo(5 * _DAY),
+    body: '개츠비가 바라본 초록 불빛이 오늘따라 내 것처럼 느껴졌다.',
+    cards: { card_id: 88, quote: '그래서 우리는 계속 나아간다, 물결을 거슬러.',
+      works: { title: '위대한 개츠비', subtitle: '', format: 'novel', author: 'F. 스콧 피츠제럴드', release_year: 1925 } },
+  },
+];
+
+// feed_posts 조인 로드 — loadBookmarks() 와 동일한 cards→works 조인 패턴
+async function loadFeedPosts() {
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('feed_posts')
+      .select('post_id, card_id, user_id, author_nickname, body, created_at, cards(card_id, quote, works(title, subtitle, format, author, release_year))')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    state.feedPosts = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('[m] loadFeedPosts failed:', err);
+    state.feedPosts = [];
+  } finally {
+    state.feedLoaded = true;
+    if (state.currentView === 'feed') renderFeedList();
+  }
+}
+
 function renderFeed() {
   // 카테고리 칩 active 상태
   const cat = state.feedCategory || 'today';
@@ -2779,6 +2855,44 @@ function renderFeed() {
   const highlight = document.getElementById('feed-highlight');
   if (today) today.style.display = (cat === 'today') ? 'block' : 'none';
   if (highlight) highlight.style.display = (cat === 'highlight') ? 'block' : 'none';
+  if (cat === 'today') renderFeedList();
+}
+
+// 실제 글이 있으면 그것을, 없으면(로컬·빈 DB) 더미를 보여준다.
+function renderFeedList() {
+  if (!feedList) return;
+  const list = state.feedPosts.length ? state.feedPosts : FEED_SAMPLES;
+  feedList.innerHTML = '';
+  list.forEach((post) => feedList.appendChild(buildFeedItem(post)));
+}
+
+function buildFeedItem(post) {
+  const card = post.cards || {};
+  const w = card.works || {};
+  const wrap = document.createElement('div');
+  wrap.className = 'feed-item';
+  const color = leatherColorFor(w.title);
+  const genreLabel = GENRE_LABEL[w.format] || w.format || '';
+  const bottomParts = [genreLabel, w.author].filter(Boolean);
+  wrap.innerHTML = `
+    <div class="feed-item-head">
+      <span class="feed-nick">${escapeHtml(post.author_nickname || '익명')}</span>
+      <span class="feed-time">${escapeHtml(formatRelativeTime(post.created_at))}</span>
+    </div>
+    <div class="feed-item-body">${escapeHtml(post.body || '')}</div>
+    <div class="feed-book-foot" style="background:${color};">
+      <div class="fb-title">
+        <span class="fb-name">${escapeHtml(displayTitle(w.title) || '—')}</span>
+        ${w.release_year ? `<span class="fb-year">${escapeHtml(String(w.release_year))}</span>` : ''}
+      </div>
+      <div class="fb-mid">
+        <span class="fb-sub">${escapeHtml(w.subtitle || '')}</span>
+        ${card.card_id != null ? `<span class="fb-num">#${escapeHtml(String(card.card_id))}</span>` : ''}
+      </div>
+      ${bottomParts.length ? `<div class="fb-bottom">${escapeHtml(bottomParts.join(' · '))}</div>` : ''}
+    </div>
+  `;
+  return wrap;
 }
 
 // 카테고리 칩 클릭 → state 변경 후 재렌더
@@ -2788,6 +2902,138 @@ document.querySelectorAll('#feed-chips .a-chip').forEach((btn) => {
     renderFeed();
   });
 });
+
+// ----- Feed: 작성 플로우 (FAB → 북마크 선택 → 한줄 작성 → 등록) -----
+function restoreScrollIfClosed() {
+  if (feedPickerModal.style.display !== 'flex' && feedComposeModal.style.display !== 'flex') {
+    document.body.style.overflow = '';
+  }
+}
+
+function openFeedPicker() {
+  if (state.isAnonymous) {
+    openPromptModal({
+      title: '로그인이 필요해요',
+      message: '북마크한 명대사에 한줄을 남기려면 로그인이 필요해요.',
+    });
+    return;
+  }
+  renderFeedPicker();
+  feedPickerModal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeFeedPicker() {
+  feedPickerModal.style.display = 'none';
+  restoreScrollIfClosed();
+}
+
+function renderFeedPicker() {
+  feedPickerList.innerHTML = '';
+  const rows = [...state.bookmarks].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+  if (!rows.length) {
+    feedPickerList.innerHTML =
+      '<div style="padding:48px 0;text-align:center;"><p class="t-body-md c-walnut" style="line-height:1.7;">아직 북마크한 명대사가 없어요.<br>마음에 드는 명대사를 먼저 보관해보세요.</p></div>';
+    return;
+  }
+  rows.forEach((row) => feedPickerList.appendChild(buildFeedPickerRow(row)));
+}
+
+function buildFeedPickerRow(row) {
+  const card = row.cards || {};
+  const w = card.works || {};
+  const node = document.createElement('div');
+  node.className = 'feed-pick-row';
+  const metaParts = [GENRE_LABEL[w.format] || w.format, w.release_year].filter(Boolean);
+  node.innerHTML = `
+    <div style="flex:1;min-width:0;">
+      ${metaParts.length ? `<p class="t-label-sm c-walnut">${escapeHtml(metaParts.join(' · ').toUpperCase())}</p><div style="height:6px;"></div>` : ''}
+      <p class="t-title-lg c-espresso single-line">${escapeHtml(displayTitle(w.title) || '—')}</p>
+      <div style="height:4px;"></div>
+      <p class="t-body-md c-walnut single-line">${escapeHtml(cleanQuote(card.quote))}</p>
+    </div>
+    <span class="material-symbols-outlined arrow">arrow_forward_ios</span>
+  `;
+  node.addEventListener('click', () => openFeedCompose(card));
+  return node;
+}
+
+function openFeedCompose(card) {
+  if (!card) return;
+  state.composeCard = card;
+  const w = card.works || {};
+  fcTitle.textContent = displayTitle(w.title) || '—';
+  const metaParts = [GENRE_LABEL[w.format] || w.format, w.author, w.release_year].filter(Boolean);
+  fcMeta.textContent = metaParts.join(' · ').toUpperCase();
+  fcEdition.textContent = card.card_id != null ? `#${card.card_id}` : '';
+  fcInput.value = '';
+  updateFcCounter();
+  closeFeedPicker();            // picker 닫되 compose가 곧 열리므로 스크롤락 유지
+  feedComposeModal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => { try { fcInput.focus(); } catch {} }, 60);
+}
+
+function closeFeedCompose() {
+  feedComposeModal.style.display = 'none';
+  state.composeCard = null;
+  restoreScrollIfClosed();
+}
+
+function updateFcCounter() {
+  const len = (fcInput.value || '').length;
+  fcCounter.textContent = `${len}/300자`;
+}
+
+async function submitFeedPost() {
+  if (state.feedSubmitting) return;
+  if (state.isAnonymous) { toast('로그인이 필요합니다'); return; }
+  const card = state.composeCard;
+  if (!card || card.card_id == null || !state.userId) return;
+  const body = String(fcInput.value || '').trim();
+  if (!body) { toast('내용을 입력해주세요'); return; }
+  state.feedSubmitting = true;
+  fcSubmit.disabled = true;
+  try {
+    const sb = await getSupabase();
+    const payload = {
+      card_id: card.card_id,
+      user_id: state.userId,
+      author_nickname: state.userNickname || null,
+      body,
+    };
+    const { data, error } = await sb
+      .from('feed_posts')
+      .insert(payload)
+      .select('post_id, card_id, user_id, author_nickname, body, created_at')
+      .single();
+    if (error) throw error;
+    track('feed_post_submitted', { card_id: card.card_id });
+    // insert 응답엔 조인이 없으므로 작성에 쓴 카드 정보를 붙여 즉시 렌더
+    const enriched = { ...data, cards: { card_id: card.card_id, quote: card.quote, works: card.works } };
+    state.feedPosts.unshift(enriched);
+    closeFeedCompose();
+    state.feedCategory = 'today';
+    renderFeed();
+    toast('피드에 올렸어요');
+  } catch (err) {
+    console.warn('[m] submitFeedPost failed:', err);
+    toast('등록 실패: ' + (err.message || ''));
+  } finally {
+    state.feedSubmitting = false;
+    fcSubmit.disabled = false;
+  }
+}
+
+if (feedFab) feedFab.addEventListener('click', openFeedPicker);
+if (feedPickerClose) feedPickerClose.addEventListener('click', closeFeedPicker);
+if (feedComposeClose) feedComposeClose.addEventListener('click', closeFeedCompose);
+if (feedPickerModal) feedPickerModal.addEventListener('click', (e) => { if (e.target === feedPickerModal) closeFeedPicker(); });
+if (feedComposeModal) feedComposeModal.addEventListener('click', (e) => { if (e.target === feedComposeModal) closeFeedCompose(); });
+if (fcInput) fcInput.addEventListener('input', updateFcCounter);
+if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
 
 // ---------- View switching ----------
 function setView(view) {
@@ -2804,6 +3050,7 @@ function setView(view) {
   viewArchive.style.display = (view === 'archive') ? 'block' : 'none';
   if (viewFeed) viewFeed.style.display = (view === 'feed') ? 'block' : 'none';
   viewSettings.style.display = (view === 'settings') ? 'block' : 'none';
+  if (feedFab) feedFab.style.display = (view === 'feed') ? 'flex' : 'none';
 
   // Top bar — Settings has its own
   topBarHome.style.display = (view === 'settings') ? 'none' : 'flex';
@@ -2814,7 +3061,10 @@ function setView(view) {
   });
 
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
-  if (view === 'feed') renderFeed();
+  if (view === 'feed') {
+    renderFeed();
+    if (!state.feedLoaded) loadFeedPosts();  // 읽기는 공개 — 익명도 실제 피드 로드
+  }
   if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
