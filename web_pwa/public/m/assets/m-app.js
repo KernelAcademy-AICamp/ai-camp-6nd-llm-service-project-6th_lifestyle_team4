@@ -723,15 +723,19 @@ function isTasteEnabled() {
   return localStorage.getItem('ds.taste') === '1';
 }
 
+// 추천이 통계적으로 의미 있게 작동하려면 일정 수 이상의 북마크가 필요.
+const MIN_BOOKMARKS_FOR_TASTE = 10;
+
 /**
  * 북마크 카드들의 온도/강도 평균으로 사용자 취향 프로파일을 구성.
  * 카드의 temperature/intensity 가 숫자가 아니면 무시.
+ * 북마크 수가 MIN_BOOKMARKS_FOR_TASTE 미만이면 null 반환 (추천 비활성).
  */
 function computeTasteProfile() {
   const bookmarkedCards = (state.bookmarks || [])
     .map((b) => b.cards)
     .filter(Boolean);
-  if (bookmarkedCards.length === 0) return null;
+  if (bookmarkedCards.length < MIN_BOOKMARKS_FOR_TASTE) return null;
   let sumT = 0, sumI = 0, nT = 0, nI = 0;
   for (const c of bookmarkedCards) {
     if (typeof c.temperature === 'number') { sumT += c.temperature; nT++; }
@@ -1664,16 +1668,15 @@ function paintTasteProfile() {
     tasteProfileEl.style.display = 'none';
     return;
   }
-  const taste = computeTasteProfile();
-  if (!taste) {
+  // 북마크 수가 임계치 미만일 때만 안내 — 어떤 기준으로 추천하는지는 노출하지 않음.
+  const bookmarkCount = (state.bookmarks || []).filter((b) => b && b.cards).length;
+  if (bookmarkCount < MIN_BOOKMARKS_FOR_TASTE) {
     tasteProfileEl.style.display = 'block';
-    tasteProfileEl.textContent = 'No bookmarks yet — collect cards to start analysis';
+    tasteProfileEl.textContent = `북마크 ${MIN_BOOKMARKS_FOR_TASTE}개 이상부터 추천이 적용됩니다 (현재 ${bookmarkCount}/${MIN_BOOKMARKS_FOR_TASTE})`;
     return;
   }
-  const t = taste.avgTemperature?.toFixed(1) ?? '—';
-  const i = taste.avgIntensity?.toFixed(1) ?? '—';
-  tasteProfileEl.style.display = 'block';
-  tasteProfileEl.textContent = `Based on: temperature ${t} · intensity ${i} (from ${taste.count} bookmark${taste.count === 1 ? '' : 's'})`;
+  // 임계치 충족 — 어떤 기준인지는 가리고 안내 영역 자체를 숨김.
+  tasteProfileEl.style.display = 'none';
 }
 
 tasteToggle.addEventListener('click', () => {
