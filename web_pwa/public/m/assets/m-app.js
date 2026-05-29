@@ -185,13 +185,15 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
   function speakerOf(raw) {
     const t = raw.trim();
     if (!t) return null;
-    // 1) characters 매칭 — 이름 뒤가 공백/콜론/괄호/줄끝일 때만 화자로 인정.
-    //    이름 뒤에 마침표·쉼표 등 문장부호가 바로 붙으면 호격(부름말, 예: "노라.")이라 제외.
+    // 1) characters 매칭 — 이름 뒤(공백 무시)가 콜론/괄호/줄끝일 때만 화자로 인정.
+    //    이름 뒤에 바로 단어·문장부호가 오면 화자 라벨이 아님:
+    //      "노라." (호격), "랑크 의사 당신도…"(다른 인물을 부르며 하는 노라의 대사) 등.
     for (const name of names) {
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(`^${escaped}(?=[\\s:：(（]|$)\\s*[:：]?\\s*(.*)$`);
-      const m = t.match(re);
-      if (m) return { name, rest: m[1] || '' };
+      if (!t.startsWith(name)) continue;
+      const tt = t.slice(name.length).trim();
+      if (tt === '') return { name, rest: '' };                          // 이름만
+      if (tt[0] === ':' || tt[0] === '：') return { name, rest: tt.slice(1).trim() };  // 이름: 대사
+      if (tt[0] === '(' || tt[0] === '（') return { name, rest: tt };     // 이름 (지문)
     }
     // 2) 콜론 패턴 폴백 — "이름: 대사"
     const m = t.match(/^([^\n:：—\-]{1,20})[:：]\s*(.*)$/);
