@@ -11,6 +11,7 @@ const topBarSettings = $('#top-bar-settings');
 
 const viewHome = $('#view-home');
 const viewArchive = $('#view-archive');
+const viewFeed = $('#view-feed');
 const viewSettings = $('#view-settings');
 
 const homeLoading = $('#home-loading');
@@ -53,10 +54,13 @@ const signinGoogle = $('#signin-google');
 const signinKakao = $('#signin-kakao');
 const tasteToggle = $('#taste-toggle');
 const tasteProfileEl = $('#taste-profile');
-const mypageBookmarksBlock = $('#mypage-bookmarks-block');
-const mypageBookmarksList = $('#mypage-bookmarks-list');
-const mypageRepliesBlock = $('#mypage-replies-block');
-const mypageRepliesList = $('#mypage-replies-list');
+const mypageChatsBlock = $('#mypage-chats-block');
+const mypageChatsEntry = $('#mypage-chats-entry');
+const chatsScreen = $('#chats-screen');
+const chatsBack = $('#chats-back');
+const chatsList = $('#chats-list');
+const chatsEmpty = $('#chats-empty');
+const chatsBody = $('#chats-body');
 const themeToggle = $('#theme-toggle');
 const themeSubtitle = $('#theme-subtitle');
 const editNicknameBtn = $('#edit-nickname-btn');
@@ -125,6 +129,7 @@ const state = {
   replyingToCommentId: null,   // 현재 답글 작성 대상 comment_id (null = 최상위 댓글)
   replyingToNickname: '',
   editingCommentId: null,      // 현재 인라인 수정 중인 comment_id (null = 수정 모드 아님)
+  feedCategory: 'today',       // 피드 내부 카테고리: 'today' | 'highlight'
 };
 let detailCommentsChannel = null;
 
@@ -299,6 +304,10 @@ window.addEventListener('hashchange', () => setView(getInitialView()));
 window.addEventListener('popstate', () => {
   if (detailScreen && detailScreen.classList.contains('open')) {
     closeDetailInternal();
+    return;
+  }
+  if (chatsScreen && chatsScreen.classList.contains('open')) {
+    closeChatsScreenInternal();
     return;
   }
   if (bookModal && bookModal.classList.contains('open')) {
@@ -702,7 +711,7 @@ async function loadBookmarks() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('user_bookmarks')
-    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
+    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false });
   if (error) { console.warn('[m] bookmarks load failed:', error); return; }
@@ -716,15 +725,19 @@ function isTasteEnabled() {
   return localStorage.getItem('ds.taste') === '1';
 }
 
+// 추천이 통계적으로 의미 있게 작동하려면 일정 수 이상의 북마크가 필요.
+const MIN_BOOKMARKS_FOR_TASTE = 10;
+
 /**
  * 북마크 카드들의 온도/강도 평균으로 사용자 취향 프로파일을 구성.
  * 카드의 temperature/intensity 가 숫자가 아니면 무시.
+ * 북마크 수가 MIN_BOOKMARKS_FOR_TASTE 미만이면 null 반환 (추천 비활성).
  */
 function computeTasteProfile() {
   const bookmarkedCards = (state.bookmarks || [])
     .map((b) => b.cards)
     .filter(Boolean);
-  if (bookmarkedCards.length === 0) return null;
+  if (bookmarkedCards.length < MIN_BOOKMARKS_FOR_TASTE) return null;
   let sumT = 0, sumI = 0, nT = 0, nI = 0;
   for (const c of bookmarkedCards) {
     if (typeof c.temperature === 'number') { sumT += c.temperature; nT++; }
@@ -928,7 +941,7 @@ async function toggleBookmark(cardId) {
     } else {
       const { data, error } = await sb.from('user_bookmarks')
         .insert({ user_id: state.userId, card_id: cardId })
-        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
+        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
@@ -1549,54 +1562,72 @@ function paintTasteToggle() {
   paintTasteProfile();
 }
 
-function renderMyBookmarks() {
-  if (!mypageBookmarksBlock || !mypageBookmarksList) return;
-  const rows = (state.bookmarks || []).filter((r) => r && r.cards);
-  if (rows.length === 0) {
-    mypageBookmarksBlock.style.display = 'none';
-    mypageBookmarksList.innerHTML = '';
-    return;
-  }
-  mypageBookmarksList.innerHTML = '';
-  for (const row of rows) {
-    mypageBookmarksList.appendChild(buildBookmarkRow(row));
-  }
-  mypageBookmarksBlock.style.display = 'block';
+// Settings 의 MY CHATS 진입 버튼 표시/숨김 — 로그인 사용자에게만 노출
+function paintMyChatsEntry() {
+  if (!mypageChatsBlock) return;
+  mypageChatsBlock.style.display = state.userId ? 'block' : 'none';
 }
 
-async function renderMyReplies() {
-  if (!mypageRepliesBlock || !mypageRepliesList) return;
-  if (!state.userId) {
-    mypageRepliesBlock.style.display = 'none';
-    mypageRepliesList.innerHTML = '';
-    return;
+function openChatsScreen() {
+  if (!chatsScreen) return;
+  if (!state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
+  history.pushState({ overlay: 'chats' }, '');
+  chatsScreen.style.display = 'flex';
+  if (chatsBody) chatsBody.scrollTop = 0;
+  requestAnimationFrame(() => chatsScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+  // 데이터 로드 (entry 안 하던 초기 상태에선 비어 있을 수 있음)
+  loadAndRenderMyChats().catch((err) => console.warn('[m] openChatsScreen load failed', err));
+}
+
+function closeChatsScreenInternal() {
+  if (!chatsScreen) return;
+  chatsScreen.classList.remove('open');
+  setTimeout(() => {
+    chatsScreen.style.display = 'none';
+    document.body.style.overflow = '';
+  }, 250);
+}
+
+function closeChatsScreen() {
+  if (history.state && history.state.overlay === 'chats') {
+    history.back();
+  } else {
+    closeChatsScreenInternal();
   }
+}
+
+async function loadAndRenderMyChats() {
+  if (!chatsList || !chatsEmpty) return;
+  // 우선 빈 상태 숨기고 로딩 표시
+  chatsEmpty.style.display = 'none';
+  chatsList.innerHTML = '<p class="t-body-md c-walnut" style="padding:8px 0;">불러오는 중⋯</p>';
   try {
     const sb = getSupabase();
-    if (!sb) {
-      mypageRepliesBlock.style.display = 'none';
-      return;
-    }
+    if (!sb) { chatsList.innerHTML = ''; chatsEmpty.style.display = 'block'; return; }
     const { data, error } = await sb
       .from('card_comments')
       .select('comment_id, card_id, body, created_at, parent_comment_id')
       .eq('user_id', state.userId)
-      .not('parent_comment_id', 'is', null)
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(100);
     if (error) throw error;
     const rows = Array.isArray(data) ? data : [];
     if (rows.length === 0) {
-      mypageRepliesBlock.style.display = 'none';
-      mypageRepliesList.innerHTML = '';
+      chatsList.innerHTML = '';
+      chatsEmpty.style.display = 'block';
       return;
     }
-    mypageRepliesList.innerHTML = '';
+    chatsEmpty.style.display = 'none';
+    chatsList.innerHTML = '';
     for (const r of rows) {
       const card = (state.allCards || []).find((c) => c.card_id === r.card_id);
       const w = card?.works || {};
       const title = displayTitle(w.title) || '—';
-      const metaParts = [formatBookmarkDate(r.created_at), title].filter(Boolean);
+      const kindLabel = r.parent_comment_id != null ? '↳ 답글' : '댓글';
+      // 작성 시각 (월/일 + 시:분)
+      const when = formatBookmarkDate(r.created_at) || '';
+      const metaParts = [when, title, kindLabel].filter(Boolean);
       const meta = metaParts.join('  —  ').toUpperCase();
 
       const wrap = document.createElement('div');
@@ -1605,26 +1636,33 @@ async function renderMyReplies() {
       node.innerHTML = `
         <div style="flex:1;min-width:0;">
           ${meta ? `<p class="t-label-sm c-walnut">${escapeHtml(meta)}</p><div style="height:6px;"></div>` : ''}
-          <p class="t-body-md c-espresso single-line">${escapeHtml(r.body || '')}</p>
+          <p class="t-body-md c-espresso" style="line-height:1.55;white-space:pre-wrap;">${escapeHtml(r.body || '')}</p>
         </div>
         <span class="material-symbols-outlined arrow">arrow_forward_ios</span>
       `;
       if (card) {
-        node.addEventListener('click', () => openDetail(card));
+        node.addEventListener('click', () => {
+          closeChatsScreenInternal();
+          // 살짝 지연 후 상세 열기 — 다중 overlay 충돌 방지
+          setTimeout(() => openDetail(card), 280);
+        });
       }
       wrap.appendChild(node);
       const hr = document.createElement('div');
       hr.className = 'hairline';
       wrap.appendChild(hr);
-      mypageRepliesList.appendChild(wrap);
+      chatsList.appendChild(wrap);
     }
-    mypageRepliesBlock.style.display = 'block';
   } catch (err) {
-    console.warn('[m] renderMyReplies failed', err);
-    mypageRepliesBlock.style.display = 'none';
-    mypageRepliesList.innerHTML = '';
+    console.warn('[m] loadAndRenderMyChats failed', err);
+    chatsList.innerHTML = '';
+    chatsEmpty.style.display = 'block';
   }
 }
+
+// 이벤트 바인딩
+if (mypageChatsEntry) mypageChatsEntry.addEventListener('click', openChatsScreen);
+if (chatsBack) chatsBack.addEventListener('click', closeChatsScreen);
 
 function paintTasteProfile() {
   if (!tasteProfileEl) return;
@@ -1632,16 +1670,15 @@ function paintTasteProfile() {
     tasteProfileEl.style.display = 'none';
     return;
   }
-  const taste = computeTasteProfile();
-  if (!taste) {
+  // 북마크 수가 임계치 미만일 때만 안내 — 어떤 기준으로 추천하는지는 노출하지 않음.
+  const bookmarkCount = (state.bookmarks || []).filter((b) => b && b.cards).length;
+  if (bookmarkCount < MIN_BOOKMARKS_FOR_TASTE) {
     tasteProfileEl.style.display = 'block';
-    tasteProfileEl.textContent = 'No bookmarks yet — collect cards to start analysis';
+    tasteProfileEl.textContent = `북마크 ${MIN_BOOKMARKS_FOR_TASTE}개 이상부터 추천이 적용됩니다 (현재 ${bookmarkCount}/${MIN_BOOKMARKS_FOR_TASTE})`;
     return;
   }
-  const t = taste.avgTemperature?.toFixed(1) ?? '—';
-  const i = taste.avgIntensity?.toFixed(1) ?? '—';
-  tasteProfileEl.style.display = 'block';
-  tasteProfileEl.textContent = `Based on: temperature ${t} · intensity ${i} (from ${taste.count} bookmark${taste.count === 1 ? '' : 's'})`;
+  // 임계치 충족 — 어떤 기준인지는 가리고 안내 영역 자체를 숨김.
+  tasteProfileEl.style.display = 'none';
 }
 
 tasteToggle.addEventListener('click', () => {
@@ -2730,6 +2767,28 @@ async function unsubscribeFromDetailComments() {
   detailCommentsChannel = null;
 }
 
+// ---------- Feed ----------
+function renderFeed() {
+  // 카테고리 칩 active 상태
+  const cat = state.feedCategory || 'today';
+  document.querySelectorAll('#feed-chips .a-chip').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.feedCat === cat);
+  });
+  // 컨텐츠 영역 표시 전환
+  const today = document.getElementById('feed-today');
+  const highlight = document.getElementById('feed-highlight');
+  if (today) today.style.display = (cat === 'today') ? 'block' : 'none';
+  if (highlight) highlight.style.display = (cat === 'highlight') ? 'block' : 'none';
+}
+
+// 카테고리 칩 클릭 → state 변경 후 재렌더
+document.querySelectorAll('#feed-chips .a-chip').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.feedCategory = btn.dataset.feedCat || 'today';
+    renderFeed();
+  });
+});
+
 // ---------- View switching ----------
 function setView(view) {
   // 익명 사용자는 보관함 진입 차단 — 안내 후 home으로 보정 (재귀 없이 1패스)
@@ -2743,6 +2802,7 @@ function setView(view) {
   state.currentView = view;
   viewHome.style.display = (view === 'home') ? 'block' : 'none';
   viewArchive.style.display = (view === 'archive') ? 'block' : 'none';
+  if (viewFeed) viewFeed.style.display = (view === 'feed') ? 'block' : 'none';
   viewSettings.style.display = (view === 'settings') ? 'block' : 'none';
 
   // Top bar — Settings has its own
@@ -2754,7 +2814,8 @@ function setView(view) {
   });
 
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
-  if (view === 'settings') { paintTasteProfile(); renderMyBookmarks(); renderMyReplies(); }
+  if (view === 'feed') renderFeed();
+  if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
   if (!suppressPushState) {
