@@ -1,5 +1,6 @@
 import { getSupabase, getAccessToken, requireSessionOrRedirect } from './supabase-client.js';
 import { emailToDisplayId } from './auth-utils.js';
+import { parseKeywords, validateKeywords, overLongKeywords, attachKeywordHint } from './keyword-utils.js';
 
 // Vercel이 함수 크래시 시 plain-text 페이지("A server error...")를 돌려보내는데
 // 그대로 res.json()을 부르면 SyntaxError가 나서 진짜 에러가 가려집니다.
@@ -467,12 +468,19 @@ function buildCardEditNode(card, idx) {
   tempEl.value = card.temperature ?? 3;
   intensityEl.value = card.intensity ?? 3;
 
+  attachKeywordHint(kwEl);
+
   node.querySelector('.save-edit-btn').addEventListener('click', () => {
+    const kwList = parseKeywords(kwEl.value);
+    const kwCheck = validateKeywords(kwList);
+    if (!kwCheck.ok) { toast(kwCheck.message, 'error'); return; }
+    const over = overLongKeywords(kwList);
+    if (over.length) toast(`8자 초과 키워드: ${over.join(', ')} — 더 짧게 권장합니다.`, 'info');
     const updates = {
       quote: quoteEl.value.trim(),
       script_excerpt: excerptEl.value.trim(),
       excerpt_description: descEl.value.trim(),
-      keywords: kwEl.value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 3),
+      keywords: kwList,
       temperature: Math.max(1, Math.min(5, Number(tempEl.value) || 3)),
       intensity: Math.max(1, Math.min(5, Number(intensityEl.value) || 3)),
       editing: false,
