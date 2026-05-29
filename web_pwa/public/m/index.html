@@ -426,6 +426,20 @@
   .editorial-toggle.on { background: var(--espresso); }
   .editorial-toggle.on .knob { left: 22px; border-color: var(--espresso); }
 
+  /* Star rating (의견 남기기 만족도) */
+  .star-rating { display: flex; gap: 6px; }
+  .star-rating .star {
+    background: transparent; border: none; cursor: pointer;
+    padding: 2px; line-height: 1;
+    font-size: 32px;
+    /* 앱 전역에 -webkit-text-fill-color 가 깔려 있어 color 만으론 글리프 색이 안 먹는다 → 함께 지정 */
+    color: var(--sand); -webkit-text-fill-color: var(--sand);
+    transition: color 0.12s, -webkit-text-fill-color 0.12s, transform 0.12s;
+  }
+  .star-rating .star.on { color: var(--highlight); -webkit-text-fill-color: var(--highlight); }
+  .star-rating .star:hover { transform: scale(1.08); }
+  .star-rating .star:focus-visible { outline: 2px solid var(--cta); outline-offset: 2px; }
+
   /* Avatar square (initials box) */
   .avatar-box {
     width: 36px; height: 36px;
@@ -1291,6 +1305,12 @@
     </a>
     <div class="hairline"></div>
 
+    <button id="feedback-entry" class="setting-row" style="width:100%;background:transparent;border:none;cursor:pointer;text-align:left;">
+      <p class="t-title-lg c-espresso">의견 남기기</p>
+      <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+    </button>
+    <div class="hairline"></div>
+
     <div class="setting-row">
       <p class="t-title-lg c-espresso">버전 정보</p>
       <span class="t-label-sm c-walnut">V1.0.0</span>
@@ -1382,6 +1402,80 @@
       <p class="t-headline-sm c-espresso" style="margin-top:14px;">아직 단 댓글이 없어요</p>
       <p class="t-body-md c-walnut" style="margin-top:6px;">명대사에 첫 댓글을 남겨보세요.</p>
     </div>
+  </div>
+</div>
+
+<!-- ===== Feedback Screen (full screen, slides up) — 의견 남기기 ===== -->
+<div id="feedback-screen" class="detail-screen">
+  <header class="top-bar">
+    <button id="feedback-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
+    </button>
+    <div style="display:flex;flex-direction:column;align-items:center;">
+      <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">FEEDBACK</span>
+      <span class="t-headline-lg c-espresso" style="margin-top:6px;">의견 남기기</span>
+    </div>
+    <span style="width:40px;"></span>
+  </header>
+  <div class="hairline"></div>
+  <div class="detail-body" id="feedback-body" style="text-align:left;padding:20px 20px 100px;">
+
+    <div id="fb-form">
+      <p class="t-body-sm c-walnut" style="margin-bottom:22px;line-height:1.6;">서비스에 대한 의견을 자유롭게 들려주세요. 큰 힘이 됩니다 🙌</p>
+
+      <label for="fb-gender" class="t-label-sm c-walnut" style="display:block;margin-bottom:6px;">성별 <span style="opacity:0.7;">(선택)</span></label>
+      <select id="fb-gender" style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">
+        <option value="">선택 안 함</option>
+        <option value="남성">남성</option>
+        <option value="여성">여성</option>
+        <option value="기타">기타</option>
+      </select>
+
+      <label for="fb-age" class="t-label-sm c-walnut" style="display:block;margin-top:18px;margin-bottom:6px;">연령대 <span style="opacity:0.7;">(선택)</span></label>
+      <select id="fb-age" style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">
+        <option value="">선택 안 함</option>
+        <option value="10대">10대</option>
+        <option value="20대">20대</option>
+        <option value="30대">30대</option>
+        <option value="40대">40대</option>
+        <option value="50대">50대</option>
+        <option value="60대 이상">60대 이상</option>
+      </select>
+
+      <label class="t-label-sm c-walnut" style="display:block;margin-top:22px;margin-bottom:8px;">만족도 <span class="c-cta">*</span></label>
+      <div id="fb-rating" class="star-rating" role="radiogroup" aria-label="만족도 (필수)">
+        <button type="button" class="star" role="radio" aria-checked="false" data-val="1" aria-label="매우 불만족">★</button>
+        <button type="button" class="star" role="radio" aria-checked="false" data-val="2" aria-label="불만족">★</button>
+        <button type="button" class="star" role="radio" aria-checked="false" data-val="3" aria-label="보통">★</button>
+        <button type="button" class="star" role="radio" aria-checked="false" data-val="4" aria-label="만족">★</button>
+        <button type="button" class="star" role="radio" aria-checked="false" data-val="5" aria-label="매우 만족">★</button>
+      </div>
+      <p id="fb-rating-label" class="t-label-sm c-walnut" style="margin-top:8px;height:16px;"></p>
+
+      <label for="fb-liked" class="t-label-sm c-walnut" style="display:block;margin-top:20px;margin-bottom:6px;">무엇이 좋았나요? <span style="opacity:0.7;">(선택)</span></label>
+      <textarea id="fb-liked" maxlength="1000" rows="3" placeholder="좋았던 점을 알려주세요" style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:1.6;outline:none;resize:vertical;min-height:72px;"></textarea>
+
+      <label for="fb-improve" class="t-label-sm c-walnut" style="display:block;margin-top:18px;margin-bottom:6px;">더 필요한 게 있으셨나요? <span style="opacity:0.7;">(선택)</span></label>
+      <textarea id="fb-improve" maxlength="1000" rows="3" placeholder="아쉬웠거나 더 있었으면 하는 점" style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:1.6;outline:none;resize:vertical;min-height:72px;"></textarea>
+
+      <label for="fb-message" class="t-label-sm c-walnut" style="display:block;margin-top:18px;margin-bottom:6px;">기타 의견 <span style="opacity:0.7;">(선택)</span></label>
+      <textarea id="fb-message" maxlength="1000" rows="3" placeholder="편하게 남겨주세요!" style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:1.6;outline:none;resize:vertical;min-height:72px;"></textarea>
+
+      <label for="fb-email" class="t-label-sm c-walnut" style="display:block;margin-top:18px;margin-bottom:6px;">이메일 <span style="opacity:0.7;">(선택 · 답변받기)</span></label>
+      <input id="fb-email" type="email" inputmode="email" autocomplete="email" maxlength="120" placeholder="you@example.com" style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;outline:none;" />
+
+      <p id="fb-error" class="t-body-sm c-cta" style="display:none;margin-top:16px;"></p>
+
+      <button id="fb-submit" class="sharp-btn" style="width:100%;margin-top:24px;">보내기</button>
+    </div>
+
+    <div id="fb-success" style="display:none;text-align:center;padding:60px 8px;">
+      <span class="material-symbols-outlined c-cta" style="font-size:56px;">favorite</span>
+      <p class="t-headline-md c-espresso" style="margin-top:16px;">감사합니다!</p>
+      <p class="t-body-md c-walnut" style="margin-top:8px;line-height:1.6;">소중한 의견이 잘 전달되었어요.</p>
+      <button id="fb-success-close" class="sharp-btn outline" style="width:100%;margin-top:32px;">닫기</button>
+    </div>
+
   </div>
 </div>
 
@@ -1705,6 +1799,19 @@
     <button id="prompt-modal-confirm" class="sharp-btn" style="width:100%;margin-top:6px;">로그인</button>
     <button id="prompt-modal-dismiss" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);">
       닫기
+    </button>
+  </div>
+</div>
+
+<!-- ===== 의견 남기기 유도 모달 (카드 15장 열람 시 1회) ===== -->
+<div id="feedback-nudge-modal" style="position:fixed;inset:0;background:rgba(14,12,10,0.65);display:none;align-items:center;justify-content:center;z-index:129;padding:24px;">
+  <div style="background:var(--paper);width:100%;max-width:420px;padding:28px 24px;border:0.5px solid var(--latte);">
+    <p class="t-label-sm c-walnut" style="margin-bottom:6px;">FEEDBACK</p>
+    <h3 class="t-headline-md c-espresso" style="margin-bottom:14px;">벌써 명대사 15편을 만나셨네요</h3>
+    <p class="t-body-sm c-walnut" style="margin-bottom:18px;line-height:1.6;">잠깐, 사용해보신 소감을 들려주시겠어요? 설정에서 의견을 남길 수 있어요.</p>
+    <button id="fb-nudge-confirm" class="sharp-btn" style="width:100%;margin-top:6px;">의견 남기기</button>
+    <button id="fb-nudge-dismiss" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);">
+      다음에
     </button>
   </div>
 </div>

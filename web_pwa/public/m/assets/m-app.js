@@ -96,6 +96,9 @@ const nicknameRandomizeBtn = $('#nickname-randomize');
 const profileGender = $('#profile-gender');
 const profileAge = $('#profile-age');
 
+const feedbackScreen = $('#feedback-screen');
+const feedbackEntry = $('#feedback-entry');
+
 const detailScreen = $('#detail-screen');
 const detailBody = detailScreen?.querySelector('.detail-body');
 const detailBack = $('#detail-back');
@@ -370,6 +373,10 @@ window.addEventListener('hashchange', () => setView(getInitialView()));
 window.addEventListener('popstate', () => {
   if (hlComposeScreen && hlComposeScreen.classList.contains('open')) {
     closeHlComposeInternal();
+    return;
+  }
+  if (feedbackScreen && feedbackScreen.classList.contains('open')) {
+    closeFeedbackScreenInternal();
     return;
   }
   if (detailScreen && detailScreen.classList.contains('open')) {
@@ -1878,6 +1885,156 @@ function closeMyFeedScreen() {
   else closeMyFeedScreenInternal();
 }
 
+// ---------- 의견 남기기 (피드백) ----------
+const FB_RATING_LABELS = { 1: '매우 불만족', 2: '불만족', 3: '보통', 4: '만족', 5: '매우 만족' };
+let fbRatingValue = 0;       // 현재 선택된 별점 (0 = 미선택)
+let fbSubmitting = false;
+
+// 별점 그리기 — previewVal 이 있으면(호버/포커스) 미리보기, 없으면 확정값 기준
+function paintFbStars(previewVal) {
+  const shown = previewVal || fbRatingValue;
+  document.querySelectorAll('#fb-rating .star').forEach((star) => {
+    const v = Number(star.dataset.val);
+    star.classList.toggle('on', v <= shown);
+    star.setAttribute('aria-checked', String(v === fbRatingValue));
+  });
+  const labelEl = $('#fb-rating-label');
+  if (labelEl) labelEl.textContent = shown ? FB_RATING_LABELS[shown] : '';
+}
+
+function setFbRating(val) {
+  fbRatingValue = val;
+  paintFbStars();
+  const err = $('#fb-error');
+  if (err && val) err.style.display = 'none';
+}
+
+// 별점 인터랙션 1회 연결 (클릭·호버·포커스·키보드)
+function initFbRating() {
+  const wrap = $('#fb-rating');
+  if (!wrap || wrap._wired) return;
+  wrap._wired = true;
+  wrap.querySelectorAll('.star').forEach((star) => {
+    const v = Number(star.dataset.val);
+    star.addEventListener('click', () => setFbRating(v));
+    star.addEventListener('mouseenter', () => paintFbStars(v));
+    star.addEventListener('focus', () => paintFbStars(v));
+  });
+  wrap.addEventListener('mouseleave', () => paintFbStars());
+  wrap.addEventListener('blur', () => paintFbStars(), true);
+  wrap.addEventListener('keydown', (e) => {
+    let next = fbRatingValue;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = Math.min(5, (fbRatingValue || 0) + 1);
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = Math.max(1, (fbRatingValue || 1) - 1);
+    else if (e.key >= '1' && e.key <= '5') next = Number(e.key);
+    else if (e.key === 'Home') next = 1;
+    else if (e.key === 'End') next = 5;
+    else return;
+    e.preventDefault();
+    setFbRating(next);
+    wrap.querySelector(`.star[data-val="${next}"]`)?.focus();
+  });
+}
+
+function resetFeedbackForm() {
+  fbRatingValue = 0;
+  ['fb-gender', 'fb-age', 'fb-liked', 'fb-improve', 'fb-message', 'fb-email'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  paintFbStars();
+  const err = $('#fb-error'); if (err) err.style.display = 'none';
+  const form = $('#fb-form'); if (form) form.style.display = '';
+  const success = $('#fb-success'); if (success) success.style.display = 'none';
+  const submit = $('#fb-submit'); if (submit) { submit.disabled = false; submit.textContent = '보내기'; }
+}
+
+// 회원이면 성별·연령대·이메일 프리필 (state 값 → 폼 라벨)
+function prefillFeedback() {
+  const genderMap = { male: '남성', female: '여성', other: '기타' };
+  const g = document.getElementById('fb-gender');
+  if (g && genderMap[state.userGender]) g.value = genderMap[state.userGender];
+  const a = document.getElementById('fb-age');
+  if (a && state.userAgeGroup) {
+    const n = parseInt(state.userAgeGroup, 10); // '20s' → 20
+    const label = n >= 60 ? '60대 이상' : (n >= 10 ? n + '대' : '');
+    if (label && [...a.options].some((o) => o.value === label)) a.value = label;
+  }
+  const em = document.getElementById('fb-email');
+  if (em && state.authEmail) em.value = state.authEmail;
+}
+
+function openFeedbackScreen() {
+  if (!feedbackScreen) return;
+  resetFeedbackForm();
+  initFbRating();
+  prefillFeedback();
+  history.pushState({ overlay: 'feedback' }, '');
+  feedbackScreen.style.display = 'flex';
+  requestAnimationFrame(() => feedbackScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+}
+function closeFeedbackScreenInternal() {
+  if (!feedbackScreen) return;
+  feedbackScreen.classList.remove('open');
+  setTimeout(() => {
+    feedbackScreen.style.display = 'none';
+    document.body.style.overflow = '';
+  }, 250);
+}
+function closeFeedbackScreen() {
+  if (history.state && history.state.overlay === 'feedback') history.back();
+  else closeFeedbackScreenInternal();
+}
+
+async function submitFeedback() {
+  if (fbSubmitting) return;
+  const err = $('#fb-error');
+  // 만족도(별점)만 필수
+  if (!fbRatingValue) {
+    if (err) { err.textContent = '만족도를 선택해 주세요.'; err.style.display = 'block'; }
+    document.querySelector('#fb-rating .star')?.focus();
+    return;
+  }
+  const val = (id) => (document.getElementById(id)?.value || '').trim();
+  const payload = {
+    gender: val('fb-gender'),
+    age: val('fb-age'),
+    rating: fbRatingValue,
+    liked: val('fb-liked'),
+    improve: val('fb-improve'),
+    message: val('fb-message'),
+    email: val('fb-email'),
+    page: location.href,
+  };
+  const submit = $('#fb-submit');
+  fbSubmitting = true;
+  if (submit) { submit.disabled = true; submit.textContent = '보내는 중…'; }
+  if (err) err.style.display = 'none';
+  try {
+    const res = await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('http ' + res.status);
+    try { track('feedback_submit', { rating: fbRatingValue }); } catch {}
+    const form = $('#fb-form'); if (form) form.style.display = 'none';
+    const success = $('#fb-success'); if (success) success.style.display = 'block';
+  } catch (e) {
+    console.warn('[feedback] submit failed:', e);
+    if (err) { err.textContent = '전송에 실패했어요. 잠시 후 다시 시도해 주세요.'; err.style.display = 'block'; }
+    if (submit) { submit.disabled = false; submit.textContent = '다시 시도'; }
+  } finally {
+    fbSubmitting = false;
+  }
+}
+
+feedbackEntry?.addEventListener('click', openFeedbackScreen);
+$('#feedback-back')?.addEventListener('click', closeFeedbackScreen);
+$('#fb-submit')?.addEventListener('click', submitFeedback);
+$('#fb-success-close')?.addEventListener('click', closeFeedbackScreen);
+
 function paintMyFeedChips() {
   const cat = state.myfeedCategory || 'comment';
   document.querySelectorAll('#myfeed-chips .a-chip').forEach((btn) => {
@@ -2447,6 +2604,40 @@ function maybeShowLanding() {
   });
 }
 
+// ---------- 카드 15장 열람 시 피드백 유도 (최초 1회) ----------
+const CARDS_VIEWED_KEY = 'ds.cardsViewed';
+const FEEDBACK_NUDGE_KEY = 'ds.feedbackNudgeSeen';
+const FEEDBACK_NUDGE_THRESHOLD = 15;
+
+function feedbackNudgeSeen() {
+  try { return localStorage.getItem(FEEDBACK_NUDGE_KEY) === '1'; } catch { return false; }
+}
+function bumpCardsViewed() {
+  let n = 0;
+  try { n = (parseInt(localStorage.getItem(CARDS_VIEWED_KEY), 10) || 0) + 1; } catch { n = 0; }
+  try { localStorage.setItem(CARDS_VIEWED_KEY, String(n)); } catch {}
+  return n;
+}
+
+const feedbackNudgeModal = $('#feedback-nudge-modal');
+function maybeShowFeedbackNudge() {
+  if (!feedbackNudgeModal || feedbackNudgeSeen()) return;
+  try { localStorage.setItem(FEEDBACK_NUDGE_KEY, '1'); } catch {}  // 표시 즉시 영구 1회 보장
+  feedbackNudgeModal.style.display = 'flex';
+}
+function closeFeedbackNudge() {
+  if (feedbackNudgeModal) feedbackNudgeModal.style.display = 'none';
+}
+$('#fb-nudge-confirm')?.addEventListener('click', () => {
+  closeFeedbackNudge();
+  setView('settings');
+  openFeedbackScreen();
+});
+$('#fb-nudge-dismiss')?.addEventListener('click', closeFeedbackNudge);
+feedbackNudgeModal?.addEventListener('click', (e) => {
+  if (e.target === feedbackNudgeModal) closeFeedbackNudge();
+});
+
 const REMEMBER_KEY = 'ds.rememberCreds';
 const SESSION_KEY = 'ds.sessionId';
 function loadRememberedCreds() {
@@ -2733,6 +2924,10 @@ function paintAuthIdentity() {
 // ---------- Detail (full-screen) ----------
 function openDetail(card) {
   if (!card) return;
+  // 카드 열람 누적 카운트 — 임계치 도달 시, 카드를 가리지 않도록 '닫힐 때' 유도 팝업 예약
+  if (bumpCardsViewed() >= FEEDBACK_NUDGE_THRESHOLD && !feedbackNudgeSeen()) {
+    state._feedbackNudgePending = true;
+  }
   // Fire-and-forget view increment + optimistic local bump so the count below reflects this open.
   (async () => {
     try {
@@ -2843,6 +3038,11 @@ function closeDetailInternal() {
     state.detailCardId = null;
     state.detailComments = [];
     state.detailLikes = new Map();
+    // 15장 열람 유도 팝업이 예약돼 있으면 카드가 닫힌 뒤 노출
+    if (state._feedbackNudgePending) {
+      state._feedbackNudgePending = false;
+      maybeShowFeedbackNudge();
+    }
   }, 250);
 }
 function closeDetail() {
