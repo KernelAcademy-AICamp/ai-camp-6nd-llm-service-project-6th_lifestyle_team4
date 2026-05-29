@@ -55,7 +55,12 @@ const signinKakao = $('#signin-kakao');
 const tasteToggle = $('#taste-toggle');
 const tasteProfileEl = $('#taste-profile');
 const mypageChatsBlock = $('#mypage-chats-block');
-const mypageChatsList = $('#mypage-chats-list');
+const mypageChatsEntry = $('#mypage-chats-entry');
+const chatsScreen = $('#chats-screen');
+const chatsBack = $('#chats-back');
+const chatsList = $('#chats-list');
+const chatsEmpty = $('#chats-empty');
+const chatsBody = $('#chats-body');
 const themeToggle = $('#theme-toggle');
 const themeSubtitle = $('#theme-subtitle');
 const editNicknameBtn = $('#edit-nickname-btn');
@@ -297,6 +302,10 @@ window.addEventListener('hashchange', () => setView(getInitialView()));
 window.addEventListener('popstate', () => {
   if (detailScreen && detailScreen.classList.contains('open')) {
     closeDetailInternal();
+    return;
+  }
+  if (chatsScreen && chatsScreen.classList.contains('open')) {
+    closeChatsScreenInternal();
     return;
   }
   if (bookModal && bookModal.classList.contains('open')) {
@@ -1547,47 +1556,72 @@ function paintTasteToggle() {
   paintTasteProfile();
 }
 
-// MY CHATS — 내가 단 댓글·답글 모두 (parent_comment_id 필터 없음)
-async function renderMyChats() {
-  if (!mypageChatsBlock || !mypageChatsList) return;
-  // 빈 상태에서도 섹션은 항상 노출 — 로그인하지 않은 익명만 숨김
-  if (!state.userId) {
-    mypageChatsBlock.style.display = 'none';
-    mypageChatsList.innerHTML = '';
-    return;
+// Settings 의 MY CHATS 진입 버튼 표시/숨김 — 로그인 사용자에게만 노출
+function paintMyChatsEntry() {
+  if (!mypageChatsBlock) return;
+  mypageChatsBlock.style.display = state.userId ? 'block' : 'none';
+}
+
+function openChatsScreen() {
+  if (!chatsScreen) return;
+  if (!state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
+  history.pushState({ overlay: 'chats' }, '');
+  chatsScreen.style.display = 'flex';
+  if (chatsBody) chatsBody.scrollTop = 0;
+  requestAnimationFrame(() => chatsScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+  // 데이터 로드 (entry 안 하던 초기 상태에선 비어 있을 수 있음)
+  loadAndRenderMyChats().catch((err) => console.warn('[m] openChatsScreen load failed', err));
+}
+
+function closeChatsScreenInternal() {
+  if (!chatsScreen) return;
+  chatsScreen.classList.remove('open');
+  setTimeout(() => {
+    chatsScreen.style.display = 'none';
+    document.body.style.overflow = '';
+  }, 250);
+}
+
+function closeChatsScreen() {
+  if (history.state && history.state.overlay === 'chats') {
+    history.back();
+  } else {
+    closeChatsScreenInternal();
   }
-  mypageChatsBlock.style.display = 'block';
+}
 
-  const emptyHtml = `
-    <p class="t-body-md c-walnut" style="padding:8px 0;text-align:left;">아직 단 댓글이 없어요.</p>
-  `;
-
+async function loadAndRenderMyChats() {
+  if (!chatsList || !chatsEmpty) return;
+  // 우선 빈 상태 숨기고 로딩 표시
+  chatsEmpty.style.display = 'none';
+  chatsList.innerHTML = '<p class="t-body-md c-walnut" style="padding:8px 0;">불러오는 중⋯</p>';
   try {
     const sb = getSupabase();
-    if (!sb) {
-      mypageChatsList.innerHTML = emptyHtml;
-      return;
-    }
+    if (!sb) { chatsList.innerHTML = ''; chatsEmpty.style.display = 'block'; return; }
     const { data, error } = await sb
       .from('card_comments')
       .select('comment_id, card_id, body, created_at, parent_comment_id')
       .eq('user_id', state.userId)
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(100);
     if (error) throw error;
     const rows = Array.isArray(data) ? data : [];
     if (rows.length === 0) {
-      mypageChatsList.innerHTML = emptyHtml;
+      chatsList.innerHTML = '';
+      chatsEmpty.style.display = 'block';
       return;
     }
-    mypageChatsList.innerHTML = '';
+    chatsEmpty.style.display = 'none';
+    chatsList.innerHTML = '';
     for (const r of rows) {
       const card = (state.allCards || []).find((c) => c.card_id === r.card_id);
       const w = card?.works || {};
       const title = displayTitle(w.title) || '—';
-      // 답글이면 ↳ 표시로 구분
       const kindLabel = r.parent_comment_id != null ? '↳ 답글' : '댓글';
-      const metaParts = [formatBookmarkDate(r.created_at), title, kindLabel].filter(Boolean);
+      // 작성 시각 (월/일 + 시:분)
+      const when = formatBookmarkDate(r.created_at) || '';
+      const metaParts = [when, title, kindLabel].filter(Boolean);
       const meta = metaParts.join('  —  ').toUpperCase();
 
       const wrap = document.createElement('div');
@@ -1596,24 +1630,33 @@ async function renderMyChats() {
       node.innerHTML = `
         <div style="flex:1;min-width:0;">
           ${meta ? `<p class="t-label-sm c-walnut">${escapeHtml(meta)}</p><div style="height:6px;"></div>` : ''}
-          <p class="t-body-md c-espresso single-line">${escapeHtml(r.body || '')}</p>
+          <p class="t-body-md c-espresso" style="line-height:1.55;white-space:pre-wrap;">${escapeHtml(r.body || '')}</p>
         </div>
         <span class="material-symbols-outlined arrow">arrow_forward_ios</span>
       `;
       if (card) {
-        node.addEventListener('click', () => openDetail(card));
+        node.addEventListener('click', () => {
+          closeChatsScreenInternal();
+          // 살짝 지연 후 상세 열기 — 다중 overlay 충돌 방지
+          setTimeout(() => openDetail(card), 280);
+        });
       }
       wrap.appendChild(node);
       const hr = document.createElement('div');
       hr.className = 'hairline';
       wrap.appendChild(hr);
-      mypageChatsList.appendChild(wrap);
+      chatsList.appendChild(wrap);
     }
   } catch (err) {
-    console.warn('[m] renderMyChats failed', err);
-    mypageChatsList.innerHTML = emptyHtml;
+    console.warn('[m] loadAndRenderMyChats failed', err);
+    chatsList.innerHTML = '';
+    chatsEmpty.style.display = 'block';
   }
 }
+
+// 이벤트 바인딩
+if (mypageChatsEntry) mypageChatsEntry.addEventListener('click', openChatsScreen);
+if (chatsBack) chatsBack.addEventListener('click', closeChatsScreen);
 
 function paintTasteProfile() {
   if (!tasteProfileEl) return;
@@ -2767,7 +2810,7 @@ function setView(view) {
 
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
   if (view === 'feed') renderFeed();
-  if (view === 'settings') { paintTasteProfile(); renderMyChats(); }
+  if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
   if (!suppressPushState) {

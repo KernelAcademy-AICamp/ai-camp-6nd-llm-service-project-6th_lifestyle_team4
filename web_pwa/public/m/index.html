@@ -892,12 +892,17 @@
     <div style="height:32px;"></div>
     <div class="hairline"></div>
 
-    <!-- MY CHATS section — 내가 단 댓글·답글 모두 -->
+    <!-- MY CHATS entry — 클릭 시 풀스크린 chats-screen 으로 이동 -->
     <div id="mypage-chats-block" style="display:none;">
       <div style="height:40px;"></div>
-      <p class="t-label-sm c-walnut" style="margin-bottom:12px;">MY CHATS</p>
-      <div id="mypage-chats-list"></div>
-      <div style="height:32px;"></div>
+      <button id="mypage-chats-entry"
+              style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
+        <div style="flex:1;min-width:0;">
+          <p class="t-label-sm c-walnut" style="margin-bottom:6px;">MY CHATS</p>
+          <p class="t-body-md c-espresso">내가 쓴 댓글 모아보기</p>
+        </div>
+        <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+      </button>
       <div class="hairline"></div>
     </div>
 
@@ -1014,6 +1019,28 @@
     <span class="nav-dot"></span>
   </button>
 </nav>
+
+<!-- ===== My Chats Screen (full screen overlay) ===== -->
+<div id="chats-screen" class="detail-screen">
+  <header class="top-bar">
+    <button id="chats-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
+    </button>
+    <div style="display:flex;flex-direction:column;align-items:center;">
+      <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">MY CHATS</span>
+    </div>
+    <span style="width:40px;"></span>
+  </header>
+  <div class="hairline"></div>
+  <div class="detail-body" id="chats-body" style="text-align:left;padding:24px 20px 80px;">
+    <div id="chats-list"></div>
+    <div id="chats-empty" style="display:none;padding:80px 0;text-align:center;">
+      <span class="material-symbols-outlined c-sand" style="font-size:56px;">forum</span>
+      <p class="t-headline-sm c-espresso" style="margin-top:14px;">아직 단 댓글이 없어요</p>
+      <p class="t-body-md c-walnut" style="margin-top:6px;">명대사에 첫 댓글을 남겨보세요.</p>
+    </div>
+  </div>
+</div>
 
 <!-- ===== Detail Screen (full screen, slides up) ===== -->
 <div id="detail-screen" class="detail-screen">
