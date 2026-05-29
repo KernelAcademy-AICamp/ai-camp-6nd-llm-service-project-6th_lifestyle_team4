@@ -431,7 +431,6 @@ function startPollingFallback() {
         lastBookmarkCount = bookmarkCount;
         await Promise.all([loadAllCards(), loadBookmarks()]);
         rerenderActiveView();
-        toast('데이터 갱신됨');
       }
     } catch (err) {
       console.warn('[m] polling check failed:', err);
@@ -452,7 +451,6 @@ async function subscribeToChanges() {
         console.log('[m] realtime cards event:', payload.eventType);
         await loadAllCards();
         rerenderActiveView();
-        toast('데이터 갱신됨');
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'works' }, async (payload) => {
         console.log('[m] realtime works event:', payload.eventType);
