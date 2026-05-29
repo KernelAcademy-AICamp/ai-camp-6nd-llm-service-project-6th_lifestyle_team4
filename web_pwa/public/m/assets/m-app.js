@@ -72,7 +72,6 @@ const hlSubtitleEl = $('#hl-subtitle');
 const hlAuthorYearEl = $('#hl-author-year');
 const hlCardIdEl = $('#hl-card-id');
 const hlSelectedTextEl = $('#hl-selected-text');
-const hlUserNoteEl = $('#hl-user-note');
 const highlightsList = $('#highlights-list');
 const highlightsEmpty = $('#highlights-empty');
 const themeToggle = $('#theme-toggle');
@@ -3167,9 +3166,14 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
   function expandToWord(point) {
     if (!point || point.node.nodeType !== 3) return null;
     const text = point.node.textContent || '';
-    let s = point.offset, e = point.offset;
-    // 빈 영역(공백) 터치면 단어 없음 → 가장 가까운 단어로 옮김
-    if (/\s/.test(text[s] || '') && /\s/.test(text[s - 1] || '')) return null;
+    let pos = Math.max(0, Math.min(text.length, point.offset));
+    // 공백 위 터치면 가장 가까운 글자로 스냅
+    if (/\s/.test(text[pos] || '')) {
+      if (pos > 0 && /\S/.test(text[pos - 1])) pos -= 1;
+      else if (pos < text.length && /\S/.test(text[pos])) { /* ok */ }
+      else return null;
+    }
+    let s = pos, e = pos;
     while (s > 0 && /\S/.test(text[s - 1])) s--;
     while (e < text.length && /\S/.test(text[e])) e++;
     if (s >= e) return null;
@@ -3202,15 +3206,33 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
     const r = buildRange();
     if (!r) { hideHl(); return; }
     const sr = scriptEl.getBoundingClientRect();
+    // 1) 형광펜 사각형 (라인별)
     const rects = r.getClientRects();
     for (const rect of rects) {
       const d = document.createElement('div');
+      d.className = 'hl-rect';
       d.style.left = (rect.left - sr.left) + 'px';
       d.style.top = (rect.top - sr.top) + 'px';
       d.style.width = rect.width + 'px';
       d.style.height = rect.height + 'px';
       overlay.appendChild(d);
     }
+    // 2) 끝점 caret — 사용자가 드래그한 마지막 지점 시각화
+    try {
+      const endRange = document.createRange();
+      endRange.setStart(r.endContainer, r.endOffset);
+      endRange.setEnd(r.endContainer, r.endOffset);
+      const rcts = endRange.getClientRects();
+      const last = rcts[rcts.length - 1] || (rects.length ? rects[rects.length - 1] : null);
+      if (last) {
+        const caret = document.createElement('div');
+        caret.className = 'hl-edge';
+        caret.style.left = (last.right - sr.left) + 'px';
+        caret.style.top = (last.top - sr.top) + 'px';
+        caret.style.height = Math.max(14, last.height) + 'px';
+        overlay.appendChild(caret);
+      }
+    } catch {}
     showHl();
   }
 
@@ -3376,7 +3398,6 @@ function openHlCompose() {
     hlCoverFallback.textContent = subtitle || title || '';
   }
   if (hlSelectedTextEl) hlSelectedTextEl.textContent = selectedText;
-  if (hlUserNoteEl) hlUserNoteEl.value = '';
 
   history.pushState({ overlay: 'hl-compose' }, '');
   hlComposeScreen.style.display = 'flex';
@@ -3408,7 +3429,6 @@ hlComposeSave?.addEventListener('click', async () => {
   if (!state.draftHighlight) { closeHlComposeInternal(); return; }
   if (state.isAnonymous || !state.userId) { toast('로그인이 필요합니다'); return; }
   const { card, selectedText } = state.draftHighlight;
-  const note = hlUserNoteEl ? String(hlUserNoteEl.value || '').trim() : '';
   if (!selectedText) { toast('본문 선택이 비어있어요'); return; }
   try {
     hlComposeSave.disabled = true;
@@ -3417,7 +3437,6 @@ hlComposeSave?.addEventListener('click', async () => {
       card_id: card.card_id,
       user_id: state.userId,
       selected_text: selectedText,
-      user_note: note || null,
     });
     if (error) throw error;
     toast('하이라이트 추가됨');
@@ -3445,7 +3464,7 @@ async function loadAndRenderHighlights() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('card_highlights')
-      .select('highlight_id, card_id, user_id, selected_text, user_note, created_at, cards(card_id, works(work_id, title, subtitle, author, release_year))')
+      .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, author, release_year))')
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) throw error;
@@ -3490,7 +3509,6 @@ function renderHighlights() {
         <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;text-align:center;">${escapeHtml(h.selected_text || '')}</p>
         <span style="position:absolute;right:0;bottom:-10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:22px;color:var(--sand);">❞</span>
       </div>
-      ${h.user_note ? `<p class="t-body-sm c-walnut" style="margin-top:14px;font-style:italic;">${escapeHtml(h.user_note)}</p>` : ''}
       <p class="t-label-sm c-sand" style="margin-top:14px;">#${String(h.card_id).padStart(5,'0')}  ·  ${escapeHtml(formatBookmarkDate(h.created_at))}</p>
     `;
     highlightsList.appendChild(item);

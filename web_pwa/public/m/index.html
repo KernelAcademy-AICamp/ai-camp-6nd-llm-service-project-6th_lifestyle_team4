@@ -249,9 +249,23 @@
       user-select: none;
     }
   }
-  /* 우리 커스텀 selection 오버레이 */
+  /* 우리 커스텀 selection 오버레이 — 텍스트 뒤에 깔리는 형광펜 효과 + 끝점 표시 */
   .hl-overlay { position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:0; }
-  .hl-overlay > div { position:absolute;background:rgba(216,90,48,0.22);border-radius:2px; }
+  .hl-overlay .hl-rect {
+    position:absolute;
+    background: rgba(216,90,48,0.32);
+    border-radius: 2px;
+    box-shadow: inset 0 -2px 0 rgba(216,90,48,0.8);  /* 형광펜 느낌의 하단 라인 */
+  }
+  /* 선택 끝점 caret — 어디까지 잡혔는지 명확히 */
+  .hl-overlay .hl-edge {
+    position:absolute;
+    width: 2px;
+    background: var(--cta);
+    border-radius: 1px;
+    animation: hl-blink 1s ease-in-out infinite;
+  }
+  @keyframes hl-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
   /* 데스크톱 native selection 도 우리 톤으로 */
   .script-mono::selection { background: rgba(216,90,48,0.22); color: var(--espresso); }
   .script-mono::-moz-selection { background: rgba(216,90,48,0.22); color: var(--espresso); }
@@ -1296,14 +1310,6 @@
       <span style="position:absolute;top:6px;left:10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:24px;color:var(--sand);">❝</span>
       <span style="position:absolute;bottom:0px;right:10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:24px;color:var(--sand);">❞</span>
       <p id="hl-selected-text" style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:16px;line-height:30px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;text-align:center;padding:0 20px;"></p>
-    </div>
-
-    <!-- (선택) 사용자 코멘트 -->
-    <div style="margin-top:20px;">
-      <p class="t-label-sm c-walnut" style="margin-bottom:8px;">한 줄 코멘트 (선택)</p>
-      <textarea id="hl-user-note" maxlength="500"
-                placeholder="이 구절에 대한 생각을 더해보세요…"
-                style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:inherit;font-size:14px;line-height:1.6;outline:none;resize:vertical;min-height:72px;"></textarea>
     </div>
   </div>
 </div>
