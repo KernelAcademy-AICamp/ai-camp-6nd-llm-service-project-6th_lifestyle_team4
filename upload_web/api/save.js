@@ -20,6 +20,9 @@ function normalizeWork(work, fullScriptText) {
   if (!fullScriptText) throw new Error('full_script_text is required');
   return {
     title: String(work.title),
+    // 시리즈물(예: 셜록홈즈 → 보헤미아 왕국의 스캔들)의 개별 편 이름.
+    // LLM이 비워서 보내면 null.
+    subtitle: work.subtitle ? String(work.subtitle).trim() || null : null,
     format: work.format,
     author: work.author ?? null,
     release_year: work.release_year ?? null,

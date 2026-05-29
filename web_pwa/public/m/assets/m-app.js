@@ -1,6 +1,6 @@
 // Daily Script SPA — Android HomeScreen/ArchiveScreen/SettingsScreen/DetailScreen port
 import { getSupabase } from '/assets/supabase-client.js';
-import { initAnalytics, track, identify } from '/assets/analytics.js';
+import { initAnalytics, track, identify, setUserProps, resetUser } from '/assets/analytics.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -124,6 +124,7 @@ const state = {
   detailCommentSubmitting: false,
   replyingToCommentId: null,   // 현재 답글 작성 대상 comment_id (null = 최상위 댓글)
   replyingToNickname: '',
+  editingCommentId: null,      // 현재 인라인 수정 중인 comment_id (null = 수정 모드 아님)
 };
 let detailCommentsChannel = null;
 
@@ -249,7 +250,19 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
     paintThemeToggle();
     loadRecentlyShownFromStorage();
     await bootstrapAuth();
-    identify(state.userId);
+    // Amplitude 사용자 ID: 회원이면 실제 아이디(login_id), 없으면(익명·구계정) 내부 숫자 user_id
+    const amplitudeUserId = (!state.isAnonymous && state.userLoginId)
+      ? state.userLoginId
+      : String(state.userId);
+    identify(amplitudeUserId);
+    // 회원/익명 구분 + (회원이면) 성별·나이대를 Amplitude User Property로 전송 (타겟층 분석용)
+    // user_pk: login_id로 식별해도 DB 내부 user_id로 역추적할 수 있게 보존
+    setUserProps({
+      accountType: state.isAnonymous ? 'anonymous' : 'member',
+      gender: state.isAnonymous ? null : state.userGender,
+      ageGroup: state.isAnonymous ? null : state.userAgeGroup,
+      userPk: state.userId != null ? String(state.userId) : null,
+    });
     paintAuthIdentity();
     await Promise.all([loadAllCards(), loadBookmarks()]);
     paintTasteProfile();
@@ -676,7 +689,7 @@ async function loadAllCards() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('cards')
-    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year, characters)')
+    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, subtitle, format, author, release_year, characters)')
     .order('card_id', { ascending: false }).limit(500);
   if (error) throw error;
   state.allCards = Array.isArray(data) ? data : [];
@@ -687,7 +700,7 @@ async function loadBookmarks() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('user_bookmarks')
-    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
+    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false });
   if (error) { console.warn('[m] bookmarks load failed:', error); return; }
@@ -764,14 +777,18 @@ function pickByTasteRandom() {
     return p;
   }
 
-  // 거리 역수 가중 — 최근 제외
+  // 거리 역수 가중 — 최근 + 북마크 제외
+  const bookmarked = state.bookmarkedIds || new Set();
   let candidates = state.allCards.filter(
-    (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number') && !exclude.has(c.card_id)
+    (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number')
+        && !exclude.has(c.card_id)
+        && !bookmarked.has(c.card_id)
   );
   if (candidates.length === 0) {
-    // 폴백 — 전체에서 가중 랜덤
+    // 폴백 — 북마크는 계속 제외, 최근만 허용
     candidates = state.allCards.filter(
-      (c) => typeof c.temperature === 'number' || typeof c.intensity === 'number'
+      (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number')
+          && !bookmarked.has(c.card_id)
     );
   }
   if (candidates.length === 0) {
@@ -835,17 +852,29 @@ document.addEventListener('visibilitychange', () => {
 
 function candidatesExcludingRecent() {
   const exclude = new Set(state.recentlyShownIds);
-  const pool = state.allCards.filter((c) => !exclude.has(c.card_id));
-  // 풀이 너무 작으면 (전체가 10개 이하) 폴백
+  const bookmarked = state.bookmarkedIds || new Set();
+  // 1차: 최근 본 것 + 북마크된 것 모두 제외 (정상 동작 — 새로고침 시 북마크는 안 떠야 함)
+  let pool = state.allCards.filter((c) => !exclude.has(c.card_id) && !bookmarked.has(c.card_id));
+  if (pool.length > 0) return pool;
+  // 2차 폴백: 북마크만 빼고 최근 본 것은 다시 허용 (북마크 안 한 카드 우선)
+  pool = state.allCards.filter((c) => !bookmarked.has(c.card_id));
+  if (pool.length > 0) return pool;
+  // 3차 폴백: 전체가 북마크된 상황 — 최근만 빼서라도 보여줌
+  pool = state.allCards.filter((c) => !exclude.has(c.card_id));
   return pool.length > 0 ? pool : state.allCards;
 }
 
-// 직전에 보던 카드(큐의 마지막) 복원 — 없거나 카드가 삭제됐으면 null
+// 직전에 보던 카드(큐의 마지막) 복원 — 없거나 카드가 삭제·북마크됐으면 건너뜀
 function restoreLastShownCard() {
   const ids = state.recentlyShownIds;
   if (!ids || ids.length === 0) return null;
-  const lastId = ids[ids.length - 1];
-  return state.allCards.find((c) => c.card_id === lastId) || null;
+  const bookmarked = state.bookmarkedIds || new Set();
+  // 가장 최근부터 거꾸로 — 북마크된 카드는 새로고침 시 부활시키지 않음
+  for (let i = ids.length - 1; i >= 0; i--) {
+    const card = state.allCards.find((c) => c.card_id === ids[i]);
+    if (card && !bookmarked.has(card.card_id)) return card;
+  }
+  return null;
 }
 
 function rememberShown(cardId) {
@@ -897,7 +926,7 @@ async function toggleBookmark(cardId) {
     } else {
       const { data, error } = await sb.from('user_bookmarks')
         .insert({ user_id: state.userId, card_id: cardId })
-        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, format, author, release_year, characters))')
+        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, significance, works(work_id, title, subtitle, format, author, release_year, characters))')
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
@@ -988,7 +1017,7 @@ function applyTodayCard(card) {
   const format = card.works?.format;
   if (format) {
     const chip = document.createElement('span');
-    chip.className = 'chip filled';
+    chip.className = `chip filled g-${String(format).toLowerCase()}`;
     chip.textContent = format;
     todayChips.appendChild(chip);
   }
@@ -1008,7 +1037,10 @@ function applyTodayCard(card) {
   if (workTitle) {
     const fmt = card.works?.format || '';
     const genreLabel = GENRE_LABEL[fmt] || '';
-    todayWork.textContent = genreLabel ? `— ${genreLabel} <${workTitle}>` : `— <${workTitle}>`;
+    // 시리즈물(예: 셜록홈즈 — 보헤미아 왕국의 스캔들)이면 subtitle을 제목 뒤에 붙임.
+    const subtitle = card.works?.subtitle ? String(card.works.subtitle).trim() : '';
+    const titleBlock = subtitle ? `<${workTitle}> ${subtitle}` : `<${workTitle}>`;
+    todayWork.textContent = genreLabel ? `— ${genreLabel} ${titleBlock}` : `— ${titleBlock}`;
     todayWork.style.display = 'block';
     todayWorkSpacer.style.height = '20px';
   } else {
@@ -1212,13 +1244,28 @@ function extractSeries(workOrTitle) {
   return { series: t, subtitle: '', full: t };
 }
 
-// displayTitle alias 적용 후 series + subtitle + author 로 그룹 키 생성.
+// works.subtitle (DB) 우선, 없으면 extractSeries 휴리스틱 fallback.
 // 같은 series지만 subtitle이 다르면 별도 책으로 유지 (책꽂이에 시리즈가 여러 권으로 늘어섬).
+function resolveSeriesSubtitle(work) {
+  const dbSubtitle = work?.subtitle ? String(work.subtitle).trim() : '';
+  if (dbSubtitle) {
+    return {
+      series: displayTitle(work?.title || ''),
+      subtitle: dbSubtitle,
+    };
+  }
+  // legacy: 부제가 분리되지 않은 채 title에 통째로 들어있는 경우 — 패턴으로 추출 시도
+  const ext = extractSeries({
+    title: displayTitle(work?.title || ''),
+    author: work?.author || '',
+  });
+  return { series: ext.series, subtitle: ext.subtitle };
+}
+
 function workGroupKey(work) {
-  // displayTitle 적용된 title + author 로 시리즈 감지
-  const ext = extractSeries({ title: displayTitle(work?.title || ''), author: work?.author || '' });
+  const { series, subtitle } = resolveSeriesSubtitle(work);
   const a = (work?.author || '').toLowerCase().trim();
-  return `${ext.series.toLowerCase()}__${ext.subtitle.toLowerCase()}__${a}`;
+  return `${series.toLowerCase()}__${subtitle.toLowerCase()}__${a}`;
 }
 
 function groupBookmarksByWork() {
@@ -1229,15 +1276,12 @@ function groupBookmarksByWork() {
     const work = card.works || {};
     const key = workGroupKey(work);
     if (!byWork.has(key)) {
-      const { series, subtitle } = extractSeries({
-        title: displayTitle(work.title || ''),
-        author: work.author || '',
-      });
+      const { series, subtitle } = resolveSeriesSubtitle(work);
       byWork.set(key, {
         key,
         series,
         subtitle,
-        // spine 표시용 — subtitle 있으면 부제, 없으면 시리즈명
+        // spine 표시용 — subtitle 있으면 부제(개별 편), 없으면 시리즈명
         title: subtitle || series || displayTitle(work.title) || '제목 없음',
         rawTitle: work.title || '',
         format: (work.format || '').toLowerCase(),
@@ -1687,6 +1731,8 @@ async function saveNickname() {
     state.userNickname = newName;
     state.userGender = gender || '';
     state.userAgeGroup = ageGroup || '';
+    // 변경된 성별·나이대를 Amplitude에 반영
+    setUserProps({ accountType: 'member', gender: state.userGender, ageGroup: state.userAgeGroup });
     paintAuthIdentity();
     closeNicknameModal();
     toast('프로필이 저장됐어요');
@@ -1722,6 +1768,7 @@ signOutBtn.addEventListener('click', async () => {
     }
   } catch {}
   await sb.auth.signOut();
+  resetUser();  // Amplitude userId/deviceId 초기화 (회원 분석 깔끔하게 분리)
   localStorage.removeItem('ds.prevAnonUserId');
   localStorage.removeItem(SESSION_KEY);
   // 자격증명 기억은 유지 (다음 로그인 편의)
@@ -2025,6 +2072,8 @@ async function submitSignin() {
     } else {
       clearRememberedCreds();
     }
+    // 명시적 로그인/가입 이벤트 (Amplitude) — reload 전에 발생, SDK가 저장 후 전송
+    track(signinMode === 'signup' ? 'sign_up' : 'login', { method: 'id_password' });
     toast(signinMode === 'signup' ? '가입 완료' : '로그인 됨');
     closeSigninModal();
     // 세션이 바뀌었으므로 reload — bootstrapAuth가 새 user 행 만들고 마이그레이션 + session_id 발급
@@ -2135,8 +2184,19 @@ function openDetail(card) {
   state.detailCardId = card.card_id;
   const w = card.works || {};
   const title = displayTitle(w.title) || '';
+  const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
 
   detailWorkTitle.textContent = title;
+  // 시리즈물 부제 — 있으면 작은 글자로 타이틀 아래 표시
+  const detailWorkSubtitle = document.getElementById('detail-work-subtitle');
+  if (detailWorkSubtitle) {
+    if (subtitle) {
+      detailWorkSubtitle.textContent = subtitle;
+      detailWorkSubtitle.style.display = 'block';
+    } else {
+      detailWorkSubtitle.style.display = 'none';
+    }
+  }
 
   // metadata chips row (FORMAT / AUTHOR / YEAR — uppercase labels)
   const items = [
@@ -2337,13 +2397,19 @@ function renderComments() {
     const likedByMe = myUserId != null && likeSet.has(myUserId);
     const nickname = c.author_nickname || '익명';
     const isMine = myUserId != null && c.user_id === myUserId;
-    return `
-      <div class="comment-row${isReply ? ' is-reply' : ''}" data-comment-id="${c.comment_id}"
-           style="border:0.5px solid var(--latte);padding:12px 14px;background:var(--paper);${isReply ? 'margin-left:24px;border-left:2px solid var(--cta);' : ''}">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">
-          <span class="t-label-sm c-espresso" style="font-weight:600;">${isReply ? '↳ ' : ''}${escapeHtml(nickname)}</span>
-          <span class="t-label-sm c-walnut">${escapeHtml(formatRelativeTime(c.created_at))}</span>
-        </div>
+    const isEditing = state.editingCommentId === c.comment_id;
+    const linkBtnCss = 'background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;';
+
+    // 본문 + 액션 — 수정 모드일 땐 textarea + Save/Cancel
+    const bodyAndActions = isEditing
+      ? `
+        <textarea class="comment-edit-input" data-comment-id="${c.comment_id}" maxlength="500"
+                  style="width:100%;min-height:60px;padding:8px;border:0.5px solid var(--latte);background:var(--paper);font-family:inherit;font-size:14px;line-height:1.6;color:var(--espresso);resize:vertical;box-sizing:border-box;margin-bottom:8px;">${escapeHtml(c.body)}</textarea>
+        <div style="display:flex;justify-content:flex-end;gap:12px;">
+          <button class="comment-cancel-edit-btn" data-comment-id="${c.comment_id}" style="${linkBtnCss}">Cancel</button>
+          <button class="comment-save-edit-btn" data-comment-id="${c.comment_id}" style="${linkBtnCss}color:var(--cta);">Save</button>
+        </div>`
+      : `
         <p class="t-body-md c-espresso" style="line-height:1.6;white-space:pre-wrap;margin:0 0 8px 0;text-align:left;">${escapeHtml(c.body)}</p>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
           <div style="display:flex;align-items:center;gap:14px;">
@@ -2352,10 +2418,22 @@ function renderComments() {
               <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' ${likedByMe ? 1 : 0};">favorite</span>
               <span class="t-label-sm" style="color:${likedByMe ? 'var(--cta)' : 'var(--walnut)'};">${likeCount}</span>
             </button>
-            ${!isReply ? `<button class="comment-reply-btn" data-comment-id="${c.comment_id}" data-nickname="${escapeHtml(nickname)}" style="background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Reply</button>` : ''}
+            ${!isReply ? `<button class="comment-reply-btn" data-comment-id="${c.comment_id}" data-nickname="${escapeHtml(nickname)}" style="${linkBtnCss}">Reply</button>` : ''}
           </div>
-          ${isMine ? `<button class="comment-delete-btn" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Delete</button>` : ''}
+          ${isMine ? `<div style="display:flex;gap:12px;">
+            <button class="comment-edit-btn" data-comment-id="${c.comment_id}" style="${linkBtnCss}">Edit</button>
+            <button class="comment-delete-btn" data-comment-id="${c.comment_id}" style="${linkBtnCss}">Delete</button>
+          </div>` : ''}
+        </div>`;
+
+    return `
+      <div class="comment-row${isReply ? ' is-reply' : ''}" data-comment-id="${c.comment_id}"
+           style="border:0.5px solid var(--latte);padding:12px 14px;background:var(--paper);${isReply ? 'margin-left:24px;border-left:2px solid var(--cta);' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">
+          <span class="t-label-sm c-espresso" style="font-weight:600;">${isReply ? '↳ ' : ''}${escapeHtml(nickname)}</span>
+          <span class="t-label-sm c-walnut">${escapeHtml(formatRelativeTime(c.created_at))}</span>
         </div>
+        ${bodyAndActions}
       </div>
     `;
   };
@@ -2384,6 +2462,24 @@ function renderComments() {
       const id = parseInt(btn.dataset.commentId, 10);
       const nick = btn.dataset.nickname || '';
       if (!Number.isNaN(id)) startReply(id, nick);
+    });
+  });
+  detailCommentsList.querySelectorAll('.comment-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (!Number.isNaN(id)) startEditComment(id);
+    });
+  });
+  detailCommentsList.querySelectorAll('.comment-cancel-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => cancelEditComment());
+  });
+  detailCommentsList.querySelectorAll('.comment-save-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (Number.isNaN(id)) return;
+      const ta = detailCommentsList.querySelector(`textarea.comment-edit-input[data-comment-id="${id}"]`);
+      if (!ta) return;
+      saveEditComment(id, ta.value);
     });
   });
 }
@@ -2457,6 +2553,53 @@ async function submitComment() {
   } finally {
     state.detailCommentSubmitting = false;
     detailCommentSubmit.disabled = false;
+  }
+}
+
+function startEditComment(commentId) {
+  if (state.isAnonymous) { toast('로그인이 필요합니다'); return; }
+  state.editingCommentId = commentId;
+  renderComments();
+  // textarea가 화면에 그려진 뒤 focus + 커서 맨 뒤로
+  const ta = detailCommentsList.querySelector(`textarea.comment-edit-input[data-comment-id="${commentId}"]`);
+  if (ta) {
+    ta.focus();
+    const len = ta.value.length;
+    try { ta.setSelectionRange(len, len); } catch {}
+  }
+}
+
+function cancelEditComment() {
+  state.editingCommentId = null;
+  renderComments();
+}
+
+async function saveEditComment(commentId, rawBody) {
+  if (state.isAnonymous || !state.userId) return;
+  const body = String(rawBody || '').trim();
+  if (!body) { toast('내용을 입력해주세요'); return; }
+  if (body.length > 500) { toast('500자 이내로 작성해주세요'); return; }
+  // 변경 없으면 그냥 닫기
+  const original = state.detailComments.find((x) => x.comment_id === commentId);
+  if (original && original.body === body) {
+    state.editingCommentId = null;
+    renderComments();
+    return;
+  }
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('card_comments')
+      .update({ body })
+      .eq('comment_id', commentId)
+      .eq('user_id', state.userId);
+    if (error) throw error;
+    if (original) original.body = body;
+    state.editingCommentId = null;
+    renderComments();
+    toast('댓글이 수정되었습니다');
+  } catch (err) {
+    console.warn('[m] saveEditComment failed:', err);
+    toast('수정 실패: ' + (err.message || ''));
   }
 }
 
@@ -2659,9 +2802,11 @@ function escapeHtml(s) {
 }
 
 // 발췌문 표시용 정리. admin library.js와 동일 로직 — 화자/대사 라인 재조립.
-// 산문(novel/essay)은 추출 당시 문장마다 줄바꿈이 들어가 토막나 보인다.
-// 단락(빈 줄) 구분은 보존하고, 단락 안의 줄바꿈은 공백으로 펴서 한 단락처럼 흐르게 한다.
-// (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로를 탄다.)
+// 산문(novel/essay)은 추출 당시 절(쉼표)마다 줄바꿈이 들어가 토막나 보인다.
+// 절 단위 줄바꿈은 공백으로 펴고, 따옴표로 감싸 문장부호(. ! ? …)로 끝나는 대사는
+// 위·아래 빈 줄을 넣어 별도 단락으로 분리한다. 그 외 서술은 문장 끝(. ! ? …)마다
+// 줄을 끊어 '한 문장 = 한 줄'로 만든다. (강조용 짧은 따옴표 "정의"처럼 끝에 문장부호가 없으면 분리 안 함.)
+// 단락(빈 줄) 구분은 보존. (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로.)
 const PROSE_FORMATS = new Set(['novel', 'essay']);
 function isProseFormat(fmt) {
   return PROSE_FORMATS.has(String(fmt || '').toLowerCase());
@@ -2669,8 +2814,27 @@ function isProseFormat(fmt) {
 function flowProseScript(text) {
   return String(text ?? '')
     .replace(/\r\n?/g, '\n')
+    // 소설 대사 표기 「」 → 큰따옴표 “”. 아래 대사 단락 분리 로직이 “” 기준이라 변환 후 동일 처리됨.
+    .replace(/「/g, '“').replace(/」/g, '”')
+    // em-dash 변형·연속 하이픈(--)은 산문에서 끊김 표기 잔여물 → 공백으로
+    .replace(/[—–―─━‐‑‒ㅡー﹘﹣－]+/g, ' ')
+    .replace(/-{2,}/g, ' ')
     .split(/\n{2,}/)
-    .map((p) => p.replace(/[ \t]*\n[ \t]*/g, ' ').replace(/[ \t]{2,}/g, ' ').trim())
+    .map((p) => {
+      // 절 줄바꿈을 공백으로 편 뒤, 따옴표 대사(문장부호로 끝남)를 별도 단락으로 분리.
+      const flowed = p
+        .replace(/[ \t]*\n[ \t]*/g, ' ')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim()
+        .replace(/\s*([“"][^”"]*[.!?…][”"])\s*/g, '\n\n$1\n\n');
+      // 각 조각(서술/대사)을 문장 끝마다 줄바꿈 → 한 문장 = 한 줄.
+      return flowed
+        .split('\n')
+        .map((line) => line.trim().replace(/([.!?…])\s+/g, '$1\n'))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/^\n+|\n+$/g, '');
+    })
     .filter(Boolean)
     .join('\n\n');
 }

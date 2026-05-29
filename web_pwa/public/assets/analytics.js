@@ -10,6 +10,7 @@ let bootPromise = null;
 const MAX_BUFFER = 100;
 const buffer = [];           // boot 완료 전 들어온 track 호출 버퍼
 let pendingUserId = null;    // boot 완료 전 들어온 identify 대상
+let pendingUserProps = null; // boot 완료 전 들어온 setUserProps 대상
 
 export function initAnalytics() {
   if (!bootPromise) bootPromise = boot();
@@ -32,6 +33,7 @@ async function boot() {
 
   booted = true;
   if (pendingUserId != null) applyUserId(pendingUserId);
+  if (pendingUserProps != null) { applyUserProps(pendingUserProps); pendingUserProps = null; }
   for (const ev of buffer.splice(0)) emit(ev.name, ev.props);
 }
 
@@ -40,6 +42,9 @@ async function bootAmplitude(apiKey) {
   try {
     amplitude = await import('https://esm.sh/@amplitude/analytics-browser@2');
     amplitude.init(apiKey, {
+      // DB 내부 user_id(예: '42')는 짧음 — 기본 최소길이(5) 검증에 걸려
+      // "Invalid id length for user_id" 에러로 식별·전송이 실패하므로 1로 완화.
+      minIdLength: 1,
       autocapture: {
         pageViews: true,
         sessions: true,
@@ -91,6 +96,48 @@ export function identify(userId) {
 
 function applyUserId(userId) {
   const id = String(userId);
-  try { if (amplitude) amplitude.setUserId(id); } catch { /* noop */ }
+  try {
+    if (amplitude) { amplitude.setUserId(id); console.log('[analytics] user id 설정 →', id); }
+    else console.warn('[analytics] setUserId 무시 — Amplitude 미초기화(키 없음/로드 실패)');
+  } catch (e) { console.warn('[analytics] setUserId 실패:', e); }
   try { if (clarityReady && window.clarity) window.clarity('identify', id); } catch { /* noop */ }
+}
+
+// 사용자 속성을 Amplitude User Property로 전송.
+// 로그인 직후 / 프로필 변경 시 호출. 값이 비면 해당 속성을 unset.
+// props: { accountType?: 'member'|'anonymous', gender?: string, ageGroup?: string, userPk?: string }
+//   - accountType: 회원/익명 구분용 (모든 사용자에게 전송 → 회원만 필터 가능)
+//   - gender/age_group: 값은 영문 코드(male/female/other, 10s..90s) — 회원만
+//   - user_pk: DB 내부 user_id (식별자를 login_id로 써도 역추적 가능하게 보존)
+export function setUserProps(props = {}) {
+  if (!booted) { pendingUserProps = props; return; }
+  applyUserProps(props);
+}
+
+function applyUserProps(props) {
+  if (!amplitude) {
+    console.warn('[analytics] setUserProps 무시 — Amplitude 미초기화(키 없음/로드 실패)', props);
+    return;
+  }
+  try {
+    const id = new amplitude.Identify();
+    if (props.accountType) id.set('account_type', props.accountType);
+    if (props.userPk) id.set('user_pk', props.userPk);
+    if (props.gender) id.set('gender', props.gender); else id.unset('gender');
+    if (props.ageGroup) id.set('age_group', props.ageGroup); else id.unset('age_group');
+    amplitude.identify(id);
+    console.log('[analytics] user props 전송 →', {
+      account_type: props.accountType || null,
+      user_pk: props.userPk || null,
+      gender: props.gender || null,
+      age_group: props.ageGroup || null,
+    });
+  } catch (e) {
+    console.warn('[analytics] setUserProps 실패:', e);
+  }
+}
+
+// 로그아웃 시 사용자/디바이스 식별 초기화
+export function resetUser() {
+  try { if (amplitude) amplitude.reset(); } catch { /* noop */ }
 }

@@ -145,7 +145,7 @@ async function loadLibrary() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, format, author, release_year, characters)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, subtitle, format, author, release_year, characters)')
       .order('card_id', { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -360,16 +360,21 @@ function buildShelfSection(group) {
   if (isDeleteMode) bookshelf.classList.add('bookshelf-delete-mode');
   const shelfRow = document.createElement('div');
   shelfRow.className = 'shelf-row';
-  // 같은 그룹(시리즈) 내에서도 work.title이 다르면(부제별) 색상이 다름.
-  // 정렬: title 기준 — 같은 부제 카드는 인접해서 표시됨
+  // 같은 그룹(시리즈) 내에서도 부제(subtitle)별로 색상이 다름.
+  // 정렬: subtitle → title 순 — 같은 부제 카드는 인접해서 묶여 보임.
   const sortedCards = [...cards].sort((a, b) => {
+    const sa = (a.works?.subtitle || '').toLowerCase();
+    const sb = (b.works?.subtitle || '').toLowerCase();
+    if (sa !== sb) return sa.localeCompare(sb);
     const ta = a.works?.title || '';
     const tb = b.works?.title || '';
     return ta.localeCompare(tb);
   });
   sortedCards.forEach((card, idx) => {
-    // 카드별 base color — work.title 기반 (부제가 다르면 다른 hue)
-    const baseColor = colorForTitle(card.works?.title || group.key);
+    // 카드별 base color — subtitle(부제) 우선, 없으면 title.
+    // 같은 부제 카드들은 동일 hue, 부제가 다르면 다른 hue.
+    const colorKey = card.works?.subtitle || card.works?.title || group.key;
+    const baseColor = colorForTitle(colorKey);
     shelfRow.appendChild(buildSpine(card, baseColor, idx, isDeleteMode));
   });
   bookshelf.appendChild(shelfRow);
@@ -645,12 +650,20 @@ function buildViewNode(card) {
   const node = libraryCardTemplate.content.firstElementChild.cloneNode(true);
   const work = card.works || {};
 
-  const workLine = [displayTitle(work.title) || `Work #${card.work_id}`, work.format, work.release_year, work.author]
-    .filter(Boolean).join(' · ');
+  // 셜록홈즈 시리즈처럼 부제가 있으면 제목 바로 뒤에 끼워 — 어느 편 카드인지 한눈에.
+  const workLine = [
+    displayTitle(work.title) || `Work #${card.work_id}`,
+    work.subtitle || null,
+    work.format,
+    work.release_year,
+    work.author,
+  ].filter(Boolean).join(' · ');
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
   node.querySelector('.lib-quote').textContent = card.quote ? `"${cleanForDisplay(card.quote)}"` : '';
-  node.querySelector('.lib-excerpt').innerHTML = boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters);
+  node.querySelector('.lib-excerpt').innerHTML = isProseFormat(work.format)
+    ? escapeHtml(flowProseScript(card.script_excerpt || ''))
+    : boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters);
   node.querySelector('.lib-description').textContent = cleanForDisplay(card.excerpt_description || '');
 
   const kwEl = node.querySelector('.lib-keywords');
@@ -875,6 +888,43 @@ function escapeHtml(s) {
 //   (빈 줄)
 //   화자B
 //   대사B
+// 산문(novel/essay)은 추출 당시 절(쉼표)마다 줄바꿈이 들어가 토막나 보인다.
+// 절 단위 줄바꿈은 공백으로 펴고, 따옴표로 감싸 문장부호(. ! ? …)로 끝나는 대사는
+// 위·아래 빈 줄을 넣어 별도 단락으로 분리한다. 그 외 서술은 문장 끝(. ! ? …)마다
+// 줄을 끊어 '한 문장 = 한 줄'로 만든다. (강조용 짧은 따옴표 "정의"처럼 끝에 문장부호가 없으면 분리 안 함.)
+// 단락(빈 줄) 구분은 보존. (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로.)
+const PROSE_FORMATS = new Set(['novel', 'essay']);
+function isProseFormat(fmt) {
+  return PROSE_FORMATS.has(String(fmt || '').toLowerCase());
+}
+function flowProseScript(text) {
+  return String(text ?? '')
+    .replace(/\r\n?/g, '\n')
+    // 소설 대사 표기 「」 → 큰따옴표 “”. 아래 대사 단락 분리 로직이 “” 기준이라 변환 후 동일 처리됨.
+    .replace(/「/g, '“').replace(/」/g, '”')
+    // em-dash 변형·연속 하이픈(--)은 산문에서 끊김 표기 잔여물 → 공백으로
+    .replace(/[—–―─━‐‑‒ㅡー﹘﹣－]+/g, ' ')
+    .replace(/-{2,}/g, ' ')
+    .split(/\n{2,}/)
+    .map((p) => {
+      // 절 줄바꿈을 공백으로 편 뒤, 따옴표 대사(문장부호로 끝남)를 별도 단락으로 분리.
+      const flowed = p
+        .replace(/[ \t]*\n[ \t]*/g, ' ')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim()
+        .replace(/\s*([“"][^”"]*[.!?…][”"])\s*/g, '\n\n$1\n\n');
+      // 각 조각(서술/대사)을 문장 끝마다 줄바꿈 → 한 문장 = 한 줄.
+      return flowed
+        .split('\n')
+        .map((line) => line.trim().replace(/([.!?…])\s+/g, '$1\n'))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/^\n+|\n+$/g, '');
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 function cleanForDisplay(s) {
   let text = String(s ?? '');
 
@@ -1075,7 +1125,7 @@ function renderAppCardHtml(card) {
         <p class="app-work-title">${escapeHtml(workLine)}</p>
         <p class="app-quote">${escapeHtml(cleanQuote)}</p>
         ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(cleanForDisplay(card.excerpt_description))}</p>` : ''}
-        <div class="app-excerpt">${boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters)}</div>
+        <div class="app-excerpt">${isProseFormat(work.format) ? escapeHtml(flowProseScript(card.script_excerpt || '')) : boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters)}</div>
         ${keywords ? `<div class="app-keywords">${keywords}</div>` : ''}
         <div class="app-meters">
           <div class="app-meter">
