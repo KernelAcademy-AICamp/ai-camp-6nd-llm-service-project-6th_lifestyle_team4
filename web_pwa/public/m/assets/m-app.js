@@ -61,6 +61,16 @@ const chatsBack = $('#chats-back');
 const chatsList = $('#chats-list');
 const chatsEmpty = $('#chats-empty');
 const chatsBody = $('#chats-body');
+// MY FEED
+const mypageFeedBlock = $('#mypage-feed-block');
+const mypageFeedEntry = $('#mypage-feed-entry');
+const myfeedScreen = $('#myfeed-screen');
+const myfeedBack = $('#myfeed-back');
+const myfeedList = $('#myfeed-list');
+const myfeedEmpty = $('#myfeed-empty');
+const myfeedEmptyIcon = $('#myfeed-empty-icon');
+const myfeedEmptyTitle = $('#myfeed-empty-title');
+const myfeedEmptySub = $('#myfeed-empty-sub');
 // Highlight 기능
 const hlAddBtn = $('#hl-add-btn');
 const hlComposeScreen = $('#hl-compose-screen');
@@ -164,6 +174,7 @@ const state = {
   feedSubmitting: false,
   draftHighlight: null,        // (하이라이트) { card, selectedText } — compose 화면 채움용
   highlights: [],              // (하이라이트) card_highlights 조회 rows (cards/works join)
+  myfeedCategory: 'comment',   // MY FEED 내부 카테고리: 'comment' | 'highlight'
 };
 let detailCommentsChannel = null;
 
@@ -348,6 +359,10 @@ window.addEventListener('popstate', () => {
   }
   if (detailScreen && detailScreen.classList.contains('open')) {
     closeDetailInternal();
+    return;
+  }
+  if (myfeedScreen && myfeedScreen.classList.contains('open')) {
+    closeMyFeedScreenInternal();
     return;
   }
   if (chatsScreen && chatsScreen.classList.contains('open')) {
@@ -1743,6 +1758,152 @@ async function loadAndRenderMyChats() {
 // 이벤트 바인딩
 if (mypageChatsEntry) mypageChatsEntry.addEventListener('click', openChatsScreen);
 if (chatsBack) chatsBack.addEventListener('click', closeChatsScreen);
+
+// ============================================================================
+// MY FEED — 내가 쓴 오늘의 한줄(comment) + 내가 만든 하이라이트(highlight)
+// ============================================================================
+function paintMyFeedEntry() {
+  if (!mypageFeedBlock) return;
+  mypageFeedBlock.style.display = state.userId ? 'block' : 'none';
+}
+
+function openMyFeedScreen() {
+  if (!myfeedScreen) return;
+  if (!state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
+  history.pushState({ overlay: 'myfeed' }, '');
+  myfeedScreen.style.display = 'flex';
+  requestAnimationFrame(() => myfeedScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+  paintMyFeedChips();
+  loadAndRenderMyFeed().catch((e) => console.warn('[myfeed] load failed', e));
+}
+
+function closeMyFeedScreenInternal() {
+  if (!myfeedScreen) return;
+  myfeedScreen.classList.remove('open');
+  setTimeout(() => {
+    myfeedScreen.style.display = 'none';
+    document.body.style.overflow = '';
+  }, 250);
+}
+function closeMyFeedScreen() {
+  if (history.state && history.state.overlay === 'myfeed') history.back();
+  else closeMyFeedScreenInternal();
+}
+
+function paintMyFeedChips() {
+  const cat = state.myfeedCategory || 'comment';
+  document.querySelectorAll('#myfeed-chips .a-chip').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.myfeedCat === cat);
+  });
+}
+
+// 카테고리 칩 클릭
+document.querySelectorAll('#myfeed-chips .a-chip').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.myfeedCategory = btn.dataset.myfeedCat || 'comment';
+    paintMyFeedChips();
+    loadAndRenderMyFeed().catch((e) => console.warn('[myfeed] reload failed', e));
+  });
+});
+
+async function loadAndRenderMyFeed() {
+  if (!myfeedList || !myfeedEmpty) return;
+  myfeedEmpty.style.display = 'none';
+  myfeedList.innerHTML = '<p class="t-body-md c-walnut" style="padding:8px 0;">불러오는 중⋯</p>';
+  const cat = state.myfeedCategory || 'comment';
+  try {
+    if (cat === 'comment') await renderMyComments();
+    else await renderMyHighlights();
+  } catch (err) {
+    console.warn('[myfeed] render failed', err);
+    myfeedList.innerHTML = '';
+    showEmpty(cat);
+  }
+}
+
+function showEmpty(cat) {
+  if (!myfeedEmpty) return;
+  if (cat === 'comment') {
+    if (myfeedEmptyIcon) myfeedEmptyIcon.textContent = 'edit_note';
+    if (myfeedEmptyTitle) myfeedEmptyTitle.textContent = '아직 작성한 한줄이 없어요';
+    if (myfeedEmptySub) myfeedEmptySub.textContent = '피드의 + 로 오늘의 한줄을 남겨보세요.';
+  } else {
+    if (myfeedEmptyIcon) myfeedEmptyIcon.textContent = 'auto_awesome';
+    if (myfeedEmptyTitle) myfeedEmptyTitle.textContent = '아직 만든 하이라이트가 없어요';
+    if (myfeedEmptySub) myfeedEmptySub.textContent = '본문을 길게 눌러 한 구절을 하이라이트해보세요.';
+  }
+  myfeedEmpty.style.display = 'block';
+}
+
+async function renderMyComments() {
+  const sb = await getSupabase();
+  let { data, error } = await sb
+    .from('feed_posts')
+    .select('post_id, card_id, user_id, body, created_at, cards(card_id, quote, works(title, subtitle, format, author, release_year))')
+    .eq('user_id', state.userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const rows = Array.isArray(data) ? data : [];
+  if (rows.length === 0) { myfeedList.innerHTML = ''; showEmpty('comment'); return; }
+  myfeedEmpty.style.display = 'none';
+  myfeedList.innerHTML = '';
+  for (const p of rows) {
+    const w = p.cards?.works || {};
+    const title = displayTitle(w.title) || '—';
+    const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
+    const fmt = GENRE_LABEL[w.format] || w.format || '';
+    const when = formatBookmarkDate(p.created_at) || '';
+    const meta = [fmt, when].filter(Boolean).join('  ·  ').toUpperCase();
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);';
+    wrap.innerHTML = `
+      <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
+      <p class="t-title-lg c-espresso" style="margin-bottom:2px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
+      <p class="t-body-md c-espresso" style="margin-top:8px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(p.body || '')}</p>
+    `;
+    myfeedList.appendChild(wrap);
+  }
+}
+
+async function renderMyHighlights() {
+  const sb = await getSupabase();
+  let { data, error } = await sb
+    .from('card_highlights')
+    .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
+    .eq('user_id', state.userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const rows = Array.isArray(data) ? data : [];
+  if (rows.length === 0) { myfeedList.innerHTML = ''; showEmpty('highlight'); return; }
+  myfeedEmpty.style.display = 'none';
+  myfeedList.innerHTML = '';
+  for (const h of rows) {
+    const w = h.cards?.works || {};
+    const title = displayTitle(w.title) || '—';
+    const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
+    const fmt = GENRE_LABEL[w.format] || w.format || '';
+    const when = formatBookmarkDate(h.created_at) || '';
+    const meta = [fmt, when].filter(Boolean).join('  ·  ').toUpperCase();
+    const idTag = `#${String(h.card_id).padStart(5, '0')}`;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);';
+    wrap.innerHTML = `
+      <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
+      <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
+      <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;">❝ ${escapeHtml(h.selected_text || '')} ❞</p>
+      <p class="t-label-sm c-sand" style="margin-top:8px;">${idTag}</p>
+    `;
+    myfeedList.appendChild(wrap);
+  }
+}
+
+if (mypageFeedEntry) mypageFeedEntry.addEventListener('click', openMyFeedScreen);
+if (myfeedBack) myfeedBack.addEventListener('click', closeMyFeedScreen);
 
 function paintTasteProfile() {
   if (!tasteProfileEl) return;
@@ -3604,7 +3765,7 @@ function setView(view) {
     renderFeed();
     if (!state.feedLoaded) loadFeedPosts();  // 읽기는 공개 — 익명도 실제 피드 로드
   }
-  if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); }
+  if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); paintMyFeedEntry(); }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
   if (!suppressPushState) {
