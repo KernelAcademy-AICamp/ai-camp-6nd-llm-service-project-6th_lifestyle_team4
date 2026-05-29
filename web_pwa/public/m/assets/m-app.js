@@ -3460,12 +3460,23 @@ hlComposeSave?.addEventListener('click', async () => {
   try {
     hlComposeSave.disabled = true;
     const sb = await getSupabase();
-    const { error } = await sb.from('card_highlights').insert({
+    let { error } = await sb.from('card_highlights').insert({
       card_id: card.card_id,
       user_id: state.userId,
       selected_text: selectedText,
       author_nickname: state.userNickname || null,
     });
+    // 018 마이그레이션이 아직 안 돌아간 환경에서는 author_nickname 컬럼이 없음 →
+    // 그 경우만 한 번 더 시도(저장 자체는 무조건 성공시킴).
+    if (error && /author_nickname|schema cache/i.test(error.message || '')) {
+      console.warn('[hl] author_nickname column missing, retrying without it');
+      const retry = await sb.from('card_highlights').insert({
+        card_id: card.card_id,
+        user_id: state.userId,
+        selected_text: selectedText,
+      });
+      error = retry.error;
+    }
     if (error) throw error;
     toast('하이라이트 추가됨');
     closeHlComposeInternal();
@@ -3490,11 +3501,21 @@ async function loadAndRenderHighlights() {
   highlightsList.innerHTML = '<p class="t-body-md c-walnut" style="padding:8px 0;text-align:center;">불러오는 중⋯</p>';
   try {
     const sb = await getSupabase();
-    const { data, error } = await sb
+    let { data, error } = await sb
       .from('card_highlights')
       .select('highlight_id, card_id, user_id, selected_text, author_nickname, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
       .order('created_at', { ascending: false })
       .limit(50);
+    // 018 마이그레이션 안 돌아간 경우 author_nickname 빼고 재시도
+    if (error && /author_nickname|schema cache/i.test(error.message || '')) {
+      console.warn('[hl] author_nickname column missing, falling back select');
+      const retry = await sb
+        .from('card_highlights')
+        .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      data = retry.data; error = retry.error;
+    }
     if (error) throw error;
     state.highlights = Array.isArray(data) ? data : [];
     renderHighlights();
