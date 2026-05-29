@@ -61,6 +61,20 @@ const chatsBack = $('#chats-back');
 const chatsList = $('#chats-list');
 const chatsEmpty = $('#chats-empty');
 const chatsBody = $('#chats-body');
+// Highlight 기능
+const hlAddBtn = $('#hl-add-btn');
+const hlComposeScreen = $('#hl-compose-screen');
+const hlComposeBack = $('#hl-compose-back');
+const hlComposeSave = $('#hl-compose-save');
+const hlCoverFallback = $('#hl-cover-fallback');
+const hlTitleEl = $('#hl-title');
+const hlSubtitleEl = $('#hl-subtitle');
+const hlAuthorYearEl = $('#hl-author-year');
+const hlCardIdEl = $('#hl-card-id');
+const hlSelectedTextEl = $('#hl-selected-text');
+const hlUserNoteEl = $('#hl-user-note');
+const highlightsList = $('#highlights-list');
+const highlightsEmpty = $('#highlights-empty');
 const themeToggle = $('#theme-toggle');
 const themeSubtitle = $('#theme-subtitle');
 const editNicknameBtn = $('#edit-nickname-btn');
@@ -145,10 +159,12 @@ const state = {
   replyingToNickname: '',
   editingCommentId: null,      // 현재 인라인 수정 중인 comment_id (null = 수정 모드 아님)
   feedCategory: 'today',       // 피드 내부 카테고리: 'today' | 'highlight'
-  feedPosts: [],               // feed_posts 조인 rows (없으면 FEED_SAMPLES로 대체 표시)
+  feedPosts: [],               // (오늘의 한줄) feed_posts 조인 rows. 없으면 FEED_SAMPLES 폴백.
   feedLoaded: false,           // loadFeedPosts 1회 호출 여부
-  composeCard: null,           // 작성 오버레이 대상 카드
+  composeCard: null,           // 오늘의 한줄 작성 모달 대상 카드
   feedSubmitting: false,
+  draftHighlight: null,        // (하이라이트) { card, selectedText } — compose 화면 채움용
+  highlights: [],              // (하이라이트) card_highlights 조회 rows (cards/works join)
 };
 let detailCommentsChannel = null;
 
@@ -327,6 +343,10 @@ window.addEventListener('hashchange', () => setView(getInitialView()));
 // ===== Hardware/swipe back (Android edge swipe, iOS swipe-from-edge) =====
 // 우선순위: detail screen 닫기 → book modal 닫기 → tab 이동
 window.addEventListener('popstate', () => {
+  if (hlComposeScreen && hlComposeScreen.classList.contains('open')) {
+    closeHlComposeInternal();
+    return;
+  }
   if (detailScreen && detailScreen.classList.contains('open')) {
     closeDetailInternal();
     return;
@@ -2912,6 +2932,7 @@ function renderFeed() {
   if (today) today.style.display = (cat === 'today') ? 'block' : 'none';
   if (highlight) highlight.style.display = (cat === 'highlight') ? 'block' : 'none';
   if (cat === 'today') renderFeedList();
+  if (cat === 'highlight') loadAndRenderHighlights().catch((e) => console.warn('[hl] load failed', e));
 }
 
 // 실제 글이 있으면 그것을, 없으면(로컬·빈 DB) 더미를 보여준다.
@@ -3093,6 +3114,391 @@ if (feedPickerModal) feedPickerModal.addEventListener('click', (e) => { if (e.ta
 if (feedComposeModal) feedComposeModal.addEventListener('click', (e) => { if (e.target === feedComposeModal) closeFeedCompose(); });
 if (fcInput) fcInput.addEventListener('input', updateFcCounter);
 if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
+
+// ============================================================================
+// HIGHLIGHT 기능
+// ============================================================================
+
+// ============================================================================
+// 본문 커스텀 선택 (Android·iOS 시스템 텍스트 메뉴 우회)
+// ----------------------------------------------------------------------------
+// CSS 에서 터치 단말은 user-select:none. 네이티브 선택 자체를 못 하게 해
+// OS·브라우저의 텍스트 작업 메뉴(구글 검색·복사·공유) 자체가 트리거되지 않는다.
+// 대신 여기서 long-press → 단어 선택 → 드래그 확장을 직접 구현.
+// 컨텍스트 메뉴·복사 이벤트도 같이 막아 데스크톱에서도 우리 + HL 만 의미 있게 함.
+// 외부에서 window.__getScriptHlText() / window.__clearScriptHl() 로 접근.
+// ============================================================================
+(function setupTouchHighlight() {
+  const scriptEl = document.getElementById('detail-script');
+  if (!scriptEl) return;
+
+  // -- 컨텍스트 메뉴·복사·드래그 차단 (데스크톱 우클릭 포함) -----------------
+  scriptEl.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
+  ['copy', 'cut', 'paste'].forEach((evt) =>
+    scriptEl.addEventListener(evt, (e) => e.preventDefault())
+  );
+  scriptEl.addEventListener('dragstart', (e) => e.preventDefault());
+
+  // -- selection 오버레이 ----------------------------------------------------
+  const overlay = document.createElement('div');
+  overlay.className = 'hl-overlay';
+  scriptEl.insertBefore(overlay, scriptEl.firstChild);
+
+  let lpTimer = null;
+  let startPoint = null;
+  let isSelecting = false;
+  let anchor = null;   // {node, offset}
+  let focus = null;
+  const LONG_PRESS_MS = 500;
+  const MOVE_CANCEL_PX = 12;
+
+  function caretFromPoint(x, y) {
+    if (document.caretRangeFromPoint) {
+      const r = document.caretRangeFromPoint(x, y);
+      if (r && r.startContainer) return { node: r.startContainer, offset: r.startOffset };
+    }
+    if (document.caretPositionFromPoint) {
+      const p = document.caretPositionFromPoint(x, y);
+      if (p && p.offsetNode) return { node: p.offsetNode, offset: p.offset };
+    }
+    return null;
+  }
+
+  function expandToWord(point) {
+    if (!point || point.node.nodeType !== 3) return null;
+    const text = point.node.textContent || '';
+    let s = point.offset, e = point.offset;
+    // 빈 영역(공백) 터치면 단어 없음 → 가장 가까운 단어로 옮김
+    if (/\s/.test(text[s] || '') && /\s/.test(text[s - 1] || '')) return null;
+    while (s > 0 && /\S/.test(text[s - 1])) s--;
+    while (e < text.length && /\S/.test(text[e])) e++;
+    if (s >= e) return null;
+    return { startNode: point.node, startOffset: s, endNode: point.node, endOffset: e };
+  }
+
+  function buildRange() {
+    if (!anchor || !focus) return null;
+    const r = document.createRange();
+    try {
+      // anchor 가 focus 보다 뒤면 swap
+      const tmp = document.createRange();
+      tmp.setStart(anchor.node, anchor.offset); tmp.collapse(true);
+      const tmp2 = document.createRange();
+      tmp2.setStart(focus.node, focus.offset); tmp2.collapse(true);
+      const cmp = tmp.compareBoundaryPoints(Range.START_TO_START, tmp2);
+      if (cmp <= 0) {
+        r.setStart(anchor.node, anchor.offset);
+        r.setEnd(focus.node, focus.offset);
+      } else {
+        r.setStart(focus.node, focus.offset);
+        r.setEnd(anchor.node, anchor.offset);
+      }
+      return r.collapsed ? null : r;
+    } catch { return null; }
+  }
+
+  function renderOverlay() {
+    overlay.innerHTML = '';
+    const r = buildRange();
+    if (!r) { hideHl(); return; }
+    const sr = scriptEl.getBoundingClientRect();
+    const rects = r.getClientRects();
+    for (const rect of rects) {
+      const d = document.createElement('div');
+      d.style.left = (rect.left - sr.left) + 'px';
+      d.style.top = (rect.top - sr.top) + 'px';
+      d.style.width = rect.width + 'px';
+      d.style.height = rect.height + 'px';
+      overlay.appendChild(d);
+    }
+    showHl();
+  }
+
+  function showHl() {
+    const btn = document.getElementById('hl-add-btn');
+    if (!btn) return;
+    if (detailScreen && detailScreen.classList.contains('open')) {
+      btn.style.display = 'block';
+    }
+  }
+  function hideHl() {
+    const btn = document.getElementById('hl-add-btn');
+    if (btn) btn.style.display = 'none';
+  }
+
+  function clearAll() {
+    anchor = null; focus = null; isSelecting = false;
+    overlay.innerHTML = '';
+    hideHl();
+  }
+
+  // 외부 노출 — + HL 핸들러에서 호출
+  window.__getScriptHlText = () => {
+    const r = buildRange();
+    return r ? r.toString().trim() : '';
+  };
+  window.__clearScriptHl = clearAll;
+
+  // -- 터치 인터랙션 ---------------------------------------------------------
+  scriptEl.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) return;
+    const t = e.touches[0];
+    startPoint = { x: t.clientX, y: t.clientY };
+    // 새 long-press → 기존 선택 해제
+    if (anchor) clearAll();
+    if (lpTimer) clearTimeout(lpTimer);
+    lpTimer = setTimeout(() => {
+      lpTimer = null;
+      const p = caretFromPoint(startPoint.x, startPoint.y);
+      const word = expandToWord(p);
+      if (!word) return;
+      anchor = { node: word.startNode, offset: word.startOffset };
+      focus  = { node: word.endNode,   offset: word.endOffset };
+      isSelecting = true;
+      renderOverlay();
+      try { if (navigator.vibrate) navigator.vibrate(20); } catch {}
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+
+  scriptEl.addEventListener('touchmove', (e) => {
+    if (!startPoint) return;
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - startPoint.x);
+    const dy = Math.abs(t.clientY - startPoint.y);
+    if (lpTimer && (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX)) {
+      clearTimeout(lpTimer); lpTimer = null;
+    }
+    if (isSelecting) {
+      const p = caretFromPoint(t.clientX, t.clientY);
+      if (p) {
+        focus = p;
+        renderOverlay();
+      }
+      e.preventDefault();  // 선택 중에는 스크롤 잠금
+    }
+  }, { passive: false });
+
+  ['touchend', 'touchcancel'].forEach((evt) =>
+    scriptEl.addEventListener(evt, () => {
+      if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+      startPoint = null;
+      // 선택 자체는 유지 (+ HL 누를 때까지)
+    }, { passive: true })
+  );
+
+  // 본문 바깥 탭하면 선택 해제 (+ HL 버튼 위 탭은 예외)
+  document.addEventListener('touchstart', (e) => {
+    if (scriptEl.contains(e.target)) return;
+    const btn = document.getElementById('hl-add-btn');
+    if (btn && btn.contains(e.target)) return;
+    if (anchor) clearAll();
+  }, true);
+
+  // 상세화면이 닫히면 선택 정리
+  if (typeof detailScreen !== 'undefined' && detailScreen) {
+    new MutationObserver(() => {
+      if (!detailScreen.classList.contains('open')) clearAll();
+    }).observe(detailScreen, { attributes: true, attributeFilter: ['class'] });
+  }
+})();
+
+// 데스크톱(native selection) fallback: 텍스트 선택되면 + HL 버튼 노출
+// (터치 단말은 setupTouchHighlight 내부에서 직접 show/hide)
+function updateHlButtonForSelection() {
+  if (!hlAddBtn) return;
+  if (!detailScreen || !detailScreen.classList.contains('open')) {
+    hlAddBtn.style.display = 'none';
+    return;
+  }
+  // 커스텀 selection 이 활성화돼 있으면 그대로 둠
+  const customText = (typeof window.__getScriptHlText === 'function') ? window.__getScriptHlText() : '';
+  if (customText) { hlAddBtn.style.display = 'block'; return; }
+  // native selection (데스크톱)
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed) { hlAddBtn.style.display = 'none'; return; }
+  const text = String(sel.toString() || '').trim();
+  if (!text) { hlAddBtn.style.display = 'none'; return; }
+  const scriptEl = document.getElementById('detail-script');
+  if (!scriptEl) { hlAddBtn.style.display = 'none'; return; }
+  const range = sel.getRangeAt(0);
+  if (!scriptEl.contains(range.commonAncestorContainer)) {
+    hlAddBtn.style.display = 'none';
+    return;
+  }
+  hlAddBtn.style.display = 'block';
+}
+
+document.addEventListener('selectionchange', updateHlButtonForSelection);
+document.addEventListener('mouseup', () => setTimeout(updateHlButtonForSelection, 30));
+
+hlAddBtn?.addEventListener('click', () => {
+  // 커스텀 selection(터치) 우선, 없으면 native(데스크톱) 사용
+  let text = (typeof window.__getScriptHlText === 'function') ? window.__getScriptHlText() : '';
+  let usedCustom = !!text;
+  if (!text) {
+    const sel = window.getSelection();
+    text = sel ? String(sel.toString() || '').trim() : '';
+  }
+  if (!text) { toast('본문에서 텍스트를 선택해주세요'); return; }
+  const cardId = state.detailCardId;
+  const card = (state.allCards || []).find((c) => c.card_id === cardId);
+  if (!card) { toast('카드 정보를 찾을 수 없어요'); return; }
+  if (state.isAnonymous || !state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
+
+  state.draftHighlight = { card, selectedText: text };
+  // 선택 해제
+  if (usedCustom && typeof window.__clearScriptHl === 'function') window.__clearScriptHl();
+  else { const s = window.getSelection(); if (s) s.removeAllRanges(); }
+  hlAddBtn.style.display = 'none';
+  openHlCompose();
+});
+
+function openHlCompose() {
+  if (!hlComposeScreen || !state.draftHighlight) return;
+  const { card, selectedText } = state.draftHighlight;
+  const w = card.works || {};
+  const title = displayTitle(w.title) || '';
+  const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
+  const author = w.author || '';
+  const year = w.release_year ? String(w.release_year) : '';
+
+  if (hlTitleEl) hlTitleEl.textContent = title || '제목 없음';
+  if (hlSubtitleEl) {
+    if (subtitle) { hlSubtitleEl.textContent = subtitle; hlSubtitleEl.style.display = 'block'; }
+    else hlSubtitleEl.style.display = 'none';
+  }
+  if (hlAuthorYearEl) {
+    hlAuthorYearEl.textContent = [author, year].filter(Boolean).join(' · ');
+  }
+  if (hlCardIdEl) hlCardIdEl.textContent = `#${String(card.card_id).padStart(5, '0')}`;
+  if (hlCoverFallback) {
+    // 표지 fallback — 작품 제목 일부를 박스 안에
+    hlCoverFallback.textContent = subtitle || title || '';
+  }
+  if (hlSelectedTextEl) hlSelectedTextEl.textContent = selectedText;
+  if (hlUserNoteEl) hlUserNoteEl.value = '';
+
+  history.pushState({ overlay: 'hl-compose' }, '');
+  hlComposeScreen.style.display = 'flex';
+  requestAnimationFrame(() => hlComposeScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+}
+
+function closeHlComposeInternal() {
+  if (!hlComposeScreen) return;
+  hlComposeScreen.classList.remove('open');
+  setTimeout(() => {
+    hlComposeScreen.style.display = 'none';
+    document.body.style.overflow = '';
+    state.draftHighlight = null;
+  }, 250);
+}
+
+function closeHlCompose() {
+  if (history.state && history.state.overlay === 'hl-compose') {
+    history.back();
+  } else {
+    closeHlComposeInternal();
+  }
+}
+
+hlComposeBack?.addEventListener('click', closeHlCompose);
+
+hlComposeSave?.addEventListener('click', async () => {
+  if (!state.draftHighlight) { closeHlComposeInternal(); return; }
+  if (state.isAnonymous || !state.userId) { toast('로그인이 필요합니다'); return; }
+  const { card, selectedText } = state.draftHighlight;
+  const note = hlUserNoteEl ? String(hlUserNoteEl.value || '').trim() : '';
+  if (!selectedText) { toast('본문 선택이 비어있어요'); return; }
+  try {
+    hlComposeSave.disabled = true;
+    const sb = await getSupabase();
+    const { error } = await sb.from('card_highlights').insert({
+      card_id: card.card_id,
+      user_id: state.userId,
+      selected_text: selectedText,
+      user_note: note || null,
+    });
+    if (error) throw error;
+    toast('하이라이트 추가됨');
+    closeHlComposeInternal();
+    // 상세화면도 함께 닫고 피드 > 하이라이트로 이동
+    if (detailScreen && detailScreen.classList.contains('open')) closeDetailInternal();
+    setTimeout(() => {
+      state.feedCategory = 'highlight';
+      setView('feed');
+    }, 280);
+  } catch (err) {
+    console.warn('[hl] save failed', err);
+    toast('저장 실패: ' + (err.message || ''));
+  } finally {
+    hlComposeSave.disabled = false;
+  }
+});
+
+// 피드 > 하이라이트 로드 + 렌더
+async function loadAndRenderHighlights() {
+  if (!highlightsList || !highlightsEmpty) return;
+  highlightsEmpty.style.display = 'none';
+  highlightsList.innerHTML = '<p class="t-body-md c-walnut" style="padding:8px 0;text-align:center;">불러오는 중⋯</p>';
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('card_highlights')
+      .select('highlight_id, card_id, user_id, selected_text, user_note, created_at, cards(card_id, works(work_id, title, subtitle, author, release_year))')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    state.highlights = Array.isArray(data) ? data : [];
+    renderHighlights();
+  } catch (err) {
+    console.warn('[hl] load failed', err);
+    highlightsList.innerHTML = '';
+    highlightsEmpty.style.display = 'block';
+  }
+}
+
+function renderHighlights() {
+  if (!highlightsList || !highlightsEmpty) return;
+  const rows = state.highlights || [];
+  if (rows.length === 0) {
+    highlightsList.innerHTML = '';
+    highlightsEmpty.style.display = 'block';
+    return;
+  }
+  highlightsEmpty.style.display = 'none';
+  highlightsList.innerHTML = '';
+  for (const h of rows) {
+    const w = h.cards?.works || {};
+    const title = displayTitle(w.title) || '';
+    const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
+    const author = w.author || '';
+    const year = w.release_year || '';
+    const coverText = subtitle || title;
+
+    const item = document.createElement('div');
+    item.style.cssText = 'display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px 8px;border:0.5px solid var(--latte);background:var(--card-warm);';
+    item.innerHTML = `
+      <div style="width:120px;height:170px;background:linear-gradient(160deg,#B33A2E 0%,#7A1F15 100%);border-radius:6px;display:flex;align-items:center;justify-content:center;padding:14px;text-align:center;color:#fff;font-family:'Nanum Myeongjo',Georgia,serif;font-weight:700;line-height:1.4;font-size:13px;box-shadow:0 4px 14px rgba(14,12,10,0.18);word-break:keep-all;">
+        ${escapeHtml(coverText)}
+      </div>
+      <h3 class="t-headline-md c-espresso" style="margin-top:18px;word-break:keep-all;">${escapeHtml(title)}</h3>
+      ${subtitle ? `<p class="t-body-md c-walnut" style="margin-top:2px;">${escapeHtml(subtitle)}</p>` : ''}
+      ${author ? `<p class="t-label-sm c-walnut" style="margin-top:6px;">${escapeHtml(author)}${year ? '  ·  ' + escapeHtml(String(year)) : ''}</p>` : ''}
+      <div style="position:relative;margin-top:18px;padding:0 32px;max-width:520px;">
+        <span style="position:absolute;left:0;top:-4px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:22px;color:var(--sand);">❝</span>
+        <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;text-align:center;">${escapeHtml(h.selected_text || '')}</p>
+        <span style="position:absolute;right:0;bottom:-10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:22px;color:var(--sand);">❞</span>
+      </div>
+      ${h.user_note ? `<p class="t-body-sm c-walnut" style="margin-top:14px;font-style:italic;">${escapeHtml(h.user_note)}</p>` : ''}
+      <p class="t-label-sm c-sand" style="margin-top:14px;">#${String(h.card_id).padStart(5,'0')}  ·  ${escapeHtml(formatBookmarkDate(h.created_at))}</p>
+    `;
+    highlightsList.appendChild(item);
+  }
+}
+
+// popstate 처리 — hl-compose 도 우선순위에 포함
+// (기존 popstate 핸들러는 별도로 detail/chats/book modal 처리. 여기서 보완)
 
 // ---------- View switching ----------
 function setView(view) {
