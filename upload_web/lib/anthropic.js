@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { EXTRACT_PROMPTS, TRANSLATE_PROMPT, CHARACTERS_PROMPT } from './prompts.js';
+import { EXTRACT_PROMPTS, TRANSLATE_PROMPT, CHARACTERS_PROMPT, CLASSIFY_KEYWORDS_PROMPT } from './prompts.js';
 
 // SDK 기본 재시도(2회)에 더해 우리도 직접 백오프 재시도를 한 번 더 감쌉니다.
 // 529(overloaded) / 429(rate limit) / 5xx 는 일시적인 경우가 많아 재시도가 효과적.
@@ -173,6 +173,18 @@ export async function runExtractCharacters(scriptText) {
   const result = await callClaude(prompt, { maxTokens: 1024 });
   const arr = Array.isArray(result?.characters) ? result.characters : [];
   return [...new Set(arr.map((s) => String(s).trim()).filter(Boolean))];
+}
+
+// 키워드 배열을 6개 의미 범주(+미분류)로 분류. { 키워드: 범주 } 맵 반환.
+// 화면 표시용 — DB 저장 안 함.
+export async function runClassifyKeywords(keywords) {
+  const list = [...new Set((keywords || []).map((k) => String(k).trim()).filter(Boolean))];
+  if (!list.length) return {};
+  const prompt = CLASSIFY_KEYWORDS_PROMPT.replace('{{KEYWORDS_JSON}}', JSON.stringify(list, null, 2));
+  const result = await callClaude(prompt, { maxTokens: 8192 });
+  const assignments =
+    result && typeof result.assignments === 'object' && result.assignments ? result.assignments : {};
+  return assignments;
 }
 
 export async function runTranslate(card) {

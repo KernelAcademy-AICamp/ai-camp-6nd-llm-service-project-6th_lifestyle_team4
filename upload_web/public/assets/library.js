@@ -1,4 +1,4 @@
-import { getSupabase, requireSessionOrRedirect } from './supabase-client.js';
+import { getSupabase, getAccessToken, requireSessionOrRedirect } from './supabase-client.js';
 import { emailToDisplayId } from './auth-utils.js';
 import { parseKeywords, validateKeywords, overLongKeywords, attachKeywordHint } from './keyword-utils.js';
 
@@ -28,6 +28,7 @@ const libraryRefreshBtn = $('#library-refresh');
 const libraryKeywordFreqBtn = $('#library-keyword-freq-btn');
 const libraryKeywordFreq = $('#library-keyword-freq');
 const libraryKeywordFreqClose = $('#library-keyword-freq-close');
+const libraryKeywordFreqReclassify = $('#library-keyword-freq-reclassify');
 const libraryKeywordFreqBody = $('#library-keyword-freq-body');
 const libraryKeywordFreqSummary = $('#library-keyword-freq-summary');
 const libraryCardTemplate = $('#library-card-template');
@@ -228,39 +229,62 @@ function computeKeywordFreq() {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));
 }
 
-function renderKeywordFreq() {
-  if (!libraryKeywordFreqBody) return;
-  const rows = computeKeywordFreq();
-  const totalUses = rows.reduce((s, [, n]) => s + n, 0);
-  if (libraryKeywordFreqSummary) {
-    libraryKeywordFreqSummary.textContent = `· 고유 ${rows.length}종 / 총 ${totalUses}회`;
+// 6개 의미 범주 — 표시 순서. 분류에 없거나 애매한 키워드는 '미분류'로.
+const KEYWORD_CATEGORIES = ['관계·사랑', '상실·애도', '자기·정체성', '결단·행동', '세계관·환멸', '정서 상태'];
+const KEYWORD_UNCLASSIFIED = '미분류';
+const KW_CAT_CACHE_KEY = 'sq-keyword-categories';
+
+// distinct 키워드 집합의 서명 — 집합이 바뀌면 재분류가 트리거된다.
+function keywordSignature(distinct) {
+  return distinct.slice().sort().join('|');
+}
+
+let keywordCatCache = null; // { sig, map }
+
+// 키워드→범주 맵 확보. 캐시(메모리·localStorage) 우선, 없으면 /api/classify-keywords 호출.
+// force=true면 캐시 무시하고 LLM 재분류.
+async function ensureKeywordCategories(distinct, force = false) {
+  const sig = keywordSignature(distinct);
+  if (!force) {
+    if (keywordCatCache && keywordCatCache.sig === sig) return keywordCatCache.map;
+    try {
+      const raw = localStorage.getItem(KW_CAT_CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.sig === sig && parsed.map) {
+          keywordCatCache = parsed;
+          return parsed.map;
+        }
+      }
+    } catch { /* ignore */ }
   }
 
-  libraryKeywordFreqBody.innerHTML = '';
-  if (!rows.length) {
-    libraryKeywordFreqBody.innerHTML =
-      '<p class="text-sm text-on-surface-variant py-4 text-center">집계할 키워드가 없습니다.</p>';
-    return;
+  const token = await getAccessToken();
+  const res = await fetch('/api/classify-keywords', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ keywords: distinct }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(detail.slice(0, 200) || `분류 실패 (${res.status})`);
   }
+  const json = await res.json();
+  const map = (json && json.assignments) || {};
+  keywordCatCache = { sig, map };
+  try { localStorage.setItem(KW_CAT_CACHE_KEY, JSON.stringify(keywordCatCache)); } catch { /* ignore */ }
+  return map;
+}
 
-  const max = rows[0][1] || 1;
+// [[kw, n], ...] → 빈도 테이블 (행 클릭 시 그 키워드로 검색). max는 막대 스케일 기준(전역 최대).
+function buildFreqTable(rows, max) {
   const table = document.createElement('table');
   table.className = 'w-full text-sm border-collapse';
-
-  const thead = document.createElement('thead');
-  thead.innerHTML =
-    '<tr class="text-left text-xs text-on-surface-variant border-b border-outline-variant">' +
-    '<th class="py-1.5 pr-2 font-semibold">키워드</th>' +
-    '<th class="py-1.5 px-2 font-semibold w-14 text-right">횟수</th>' +
-    '<th class="py-1.5 pl-2 font-semibold">분포</th>' +
-    '</tr>';
-  table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
   rows.forEach(([kw, n]) => {
     const tr = document.createElement('tr');
-    tr.className =
-      'border-b border-outline-variant/40 hover:bg-surface-container cursor-pointer';
+    tr.className = 'border-b border-outline-variant/40 hover:bg-surface-container cursor-pointer';
     tr.title = `"${kw}" 로 검색`;
 
     const kwTd = document.createElement('td');
@@ -269,7 +293,7 @@ function renderKeywordFreq() {
     tr.appendChild(kwTd);
 
     const nTd = document.createElement('td');
-    nTd.className = 'py-1.5 px-2 text-right font-semibold text-on-surface tabular-nums';
+    nTd.className = 'py-1.5 px-2 text-right font-semibold text-on-surface tabular-nums w-14';
     nTd.textContent = String(n);
     tr.appendChild(nTd);
 
@@ -295,7 +319,87 @@ function renderKeywordFreq() {
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
-  libraryKeywordFreqBody.appendChild(table);
+  return table;
+}
+
+// 범주 1개 → 접이식 <details> 섹션 (헤더에 종/횟수 소계)
+function buildCategorySection(cat, rows, max) {
+  const subtotal = rows.reduce((s, [, n]) => s + n, 0);
+  const details = document.createElement('details');
+  details.className = 'border border-outline-variant rounded-lg overflow-hidden';
+
+  const summary = document.createElement('summary');
+  summary.className =
+    'cursor-pointer select-none px-3 py-2 bg-surface-container flex items-center justify-between text-sm font-semibold text-on-surface';
+  const left = document.createElement('span');
+  left.textContent = cat;
+  const right = document.createElement('span');
+  right.className = 'text-on-surface-variant font-normal';
+  right.textContent = `${rows.length}종 · ${subtotal}회`;
+  summary.appendChild(left);
+  summary.appendChild(right);
+  details.appendChild(summary);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'px-3 pb-2';
+  wrap.appendChild(buildFreqTable(rows, max));
+  details.appendChild(wrap);
+  return details;
+}
+
+async function renderKeywordFreq(force = false) {
+  if (!libraryKeywordFreqBody) return;
+  const freq = computeKeywordFreq(); // [[kw, n], ...]
+  const distinct = freq.map(([k]) => k);
+  const totalUses = freq.reduce((s, [, n]) => s + n, 0);
+  if (libraryKeywordFreqSummary) {
+    libraryKeywordFreqSummary.textContent = `· 고유 ${freq.length}종 / 총 ${totalUses}회`;
+  }
+
+  libraryKeywordFreqBody.innerHTML = '';
+  if (!freq.length) {
+    libraryKeywordFreqBody.innerHTML =
+      '<p class="text-sm text-on-surface-variant py-4 text-center">집계할 키워드가 없습니다.</p>';
+    return;
+  }
+
+  libraryKeywordFreqBody.innerHTML =
+    '<p class="text-sm text-on-surface-variant py-4 text-center">키워드 분류 중⋯ (LLM)</p>';
+
+  const max = freq[0][1] || 1;
+  let map;
+  try {
+    map = await ensureKeywordCategories(distinct, force);
+  } catch (err) {
+    // 분류 실패 — 전체 평면 목록으로 폴백
+    console.error('[library] keyword classify failed:', err);
+    libraryKeywordFreqBody.innerHTML = '';
+    const note = document.createElement('p');
+    note.className = 'text-xs text-error mb-2';
+    note.textContent = `자동 분류 실패 (${err.message || err}). 전체 목록으로 표시합니다.`;
+    libraryKeywordFreqBody.appendChild(note);
+    libraryKeywordFreqBody.appendChild(buildFreqTable(freq, max));
+    return;
+  }
+
+  // 범주별 그룹핑 (분류 맵에 없는 키워드는 미분류)
+  const groups = new Map();
+  [...KEYWORD_CATEGORIES, KEYWORD_UNCLASSIFIED].forEach((c) => groups.set(c, []));
+  freq.forEach(([kw, n]) => {
+    let cat = map[kw];
+    if (!groups.has(cat)) cat = KEYWORD_UNCLASSIFIED;
+    groups.get(cat).push([kw, n]);
+  });
+
+  libraryKeywordFreqBody.innerHTML = '';
+  const sections = document.createElement('div');
+  sections.className = 'flex flex-col gap-2';
+  [...KEYWORD_CATEGORIES, KEYWORD_UNCLASSIFIED].forEach((cat) => {
+    const rows = groups.get(cat);
+    if (!rows.length) return;
+    sections.appendChild(buildCategorySection(cat, rows, max));
+  });
+  libraryKeywordFreqBody.appendChild(sections);
 }
 
 function toggleKeywordFreq(show) {
@@ -314,6 +418,7 @@ function toggleKeywordFreq(show) {
 
 if (libraryKeywordFreqBtn) libraryKeywordFreqBtn.addEventListener('click', () => toggleKeywordFreq());
 if (libraryKeywordFreqClose) libraryKeywordFreqClose.addEventListener('click', () => toggleKeywordFreq(false));
+if (libraryKeywordFreqReclassify) libraryKeywordFreqReclassify.addEventListener('click', () => renderKeywordFreq(true));
 
 // ---------------------------------------------------------------------------
 // Render
