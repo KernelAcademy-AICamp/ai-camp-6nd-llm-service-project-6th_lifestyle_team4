@@ -249,9 +249,23 @@
       user-select: none;
     }
   }
-  /* 우리 커스텀 selection 오버레이 */
+  /* 우리 커스텀 selection 오버레이 — 텍스트 뒤에 깔리는 형광펜 효과 + 끝점 표시 */
   .hl-overlay { position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:0; }
-  .hl-overlay > div { position:absolute;background:rgba(216,90,48,0.22);border-radius:2px; }
+  .hl-overlay .hl-rect {
+    position:absolute;
+    background: rgba(216,90,48,0.32);
+    border-radius: 2px;
+    box-shadow: inset 0 -2px 0 rgba(216,90,48,0.8);  /* 형광펜 느낌의 하단 라인 */
+  }
+  /* 선택 끝점 caret — 어디까지 잡혔는지 명확히 */
+  .hl-overlay .hl-edge {
+    position:absolute;
+    width: 2px;
+    background: var(--cta);
+    border-radius: 1px;
+    animation: hl-blink 1s ease-in-out infinite;
+  }
+  @keyframes hl-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
   /* 데스크톱 native selection 도 우리 톤으로 */
   .script-mono::selection { background: rgba(216,90,48,0.22); color: var(--espresso); }
   .script-mono::-moz-selection { background: rgba(216,90,48,0.22); color: var(--espresso); }

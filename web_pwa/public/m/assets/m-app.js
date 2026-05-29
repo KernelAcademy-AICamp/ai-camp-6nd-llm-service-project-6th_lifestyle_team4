@@ -3167,9 +3167,14 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
   function expandToWord(point) {
     if (!point || point.node.nodeType !== 3) return null;
     const text = point.node.textContent || '';
-    let s = point.offset, e = point.offset;
-    // 빈 영역(공백) 터치면 단어 없음 → 가장 가까운 단어로 옮김
-    if (/\s/.test(text[s] || '') && /\s/.test(text[s - 1] || '')) return null;
+    let pos = Math.max(0, Math.min(text.length, point.offset));
+    // 공백 위 터치면 가장 가까운 글자로 스냅
+    if (/\s/.test(text[pos] || '')) {
+      if (pos > 0 && /\S/.test(text[pos - 1])) pos -= 1;
+      else if (pos < text.length && /\S/.test(text[pos])) { /* ok */ }
+      else return null;
+    }
+    let s = pos, e = pos;
     while (s > 0 && /\S/.test(text[s - 1])) s--;
     while (e < text.length && /\S/.test(text[e])) e++;
     if (s >= e) return null;
@@ -3202,15 +3207,33 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
     const r = buildRange();
     if (!r) { hideHl(); return; }
     const sr = scriptEl.getBoundingClientRect();
+    // 1) 형광펜 사각형 (라인별)
     const rects = r.getClientRects();
     for (const rect of rects) {
       const d = document.createElement('div');
+      d.className = 'hl-rect';
       d.style.left = (rect.left - sr.left) + 'px';
       d.style.top = (rect.top - sr.top) + 'px';
       d.style.width = rect.width + 'px';
       d.style.height = rect.height + 'px';
       overlay.appendChild(d);
     }
+    // 2) 끝점 caret — 사용자가 드래그한 마지막 지점 시각화
+    try {
+      const endRange = document.createRange();
+      endRange.setStart(r.endContainer, r.endOffset);
+      endRange.setEnd(r.endContainer, r.endOffset);
+      const rcts = endRange.getClientRects();
+      const last = rcts[rcts.length - 1] || (rects.length ? rects[rects.length - 1] : null);
+      if (last) {
+        const caret = document.createElement('div');
+        caret.className = 'hl-edge';
+        caret.style.left = (last.right - sr.left) + 'px';
+        caret.style.top = (last.top - sr.top) + 'px';
+        caret.style.height = Math.max(14, last.height) + 'px';
+        overlay.appendChild(caret);
+      }
+    } catch {}
     showHl();
   }
 
