@@ -3138,10 +3138,13 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
   );
   scriptEl.addEventListener('dragstart', (e) => e.preventDefault());
 
-  // -- selection 오버레이 ----------------------------------------------------
-  const overlay = document.createElement('div');
-  overlay.className = 'hl-overlay';
-  scriptEl.insertBefore(overlay, scriptEl.firstChild);
+  // -- selection 오버레이 (body 직속 fixed — innerHTML 재할당에도 살아남음) --
+  let overlay = document.getElementById('hl-selection-layer');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'hl-selection-layer';
+    document.body.appendChild(overlay);
+  }
 
   let lpTimer = null;
   let startPoint = null;
@@ -3205,19 +3208,19 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
     overlay.innerHTML = '';
     const r = buildRange();
     if (!r) { hideHl(); return; }
-    const sr = scriptEl.getBoundingClientRect();
-    // 1) 형광펜 사각형 (라인별)
+    // 1) 형광펜 사각형 (라인별, viewport 좌표 그대로)
     const rects = r.getClientRects();
     for (const rect of rects) {
+      if (rect.width === 0 && rect.height === 0) continue;
       const d = document.createElement('div');
       d.className = 'hl-rect';
-      d.style.left = (rect.left - sr.left) + 'px';
-      d.style.top = (rect.top - sr.top) + 'px';
-      d.style.width = rect.width + 'px';
+      d.style.left   = rect.left   + 'px';
+      d.style.top    = rect.top    + 'px';
+      d.style.width  = rect.width  + 'px';
       d.style.height = rect.height + 'px';
       overlay.appendChild(d);
     }
-    // 2) 끝점 caret — 사용자가 드래그한 마지막 지점 시각화
+    // 2) 끝점 caret
     try {
       const endRange = document.createRange();
       endRange.setStart(r.endContainer, r.endOffset);
@@ -3227,14 +3230,19 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
       if (last) {
         const caret = document.createElement('div');
         caret.className = 'hl-edge';
-        caret.style.left = (last.right - sr.left) + 'px';
-        caret.style.top = (last.top - sr.top) + 'px';
+        caret.style.left = (last.right) + 'px';
+        caret.style.top = (last.top) + 'px';
         caret.style.height = Math.max(14, last.height) + 'px';
         overlay.appendChild(caret);
       }
     } catch {}
     showHl();
   }
+
+  // 스크롤·리사이즈에도 오버레이가 따라오게
+  const reposition = () => { if (anchor && focus) renderOverlay(); };
+  window.addEventListener('scroll', reposition, true);
+  window.addEventListener('resize', reposition);
 
   function showHl() {
     const btn = document.getElementById('hl-add-btn');

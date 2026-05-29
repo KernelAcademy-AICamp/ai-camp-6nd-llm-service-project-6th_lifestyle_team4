@@ -249,17 +249,24 @@
       user-select: none;
     }
   }
-  /* 우리 커스텀 selection 오버레이 — 텍스트 뒤에 깔리는 형광펜 효과 + 끝점 표시 */
-  .hl-overlay { position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:0; }
-  .hl-overlay .hl-rect {
-    position:absolute;
-    background: rgba(216,90,48,0.32);
-    border-radius: 2px;
-    box-shadow: inset 0 -2px 0 rgba(216,90,48,0.8);  /* 형광펜 느낌의 하단 라인 */
+  /* 커스텀 selection 오버레이 — body 직속 fixed 컨테이너.
+     viewport 좌표를 그대로 써서 #detail-script 의 innerHTML 재할당과 무관하게 살아남고
+     텍스트 위(z-index 55)에 노란 형광펜으로 명확히 보이게. */
+  #hl-selection-layer {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 55;
+    overflow: visible;
   }
-  /* 선택 끝점 caret — 어디까지 잡혔는지 명확히 */
-  .hl-overlay .hl-edge {
-    position:absolute;
+  #hl-selection-layer .hl-rect {
+    position: fixed;
+    background: rgba(244,194,13,0.55);   /* 노란 형광펜 — 텍스트 가독성 유지 */
+    border-radius: 2px;
+    mix-blend-mode: multiply;
+    box-shadow: inset 0 -2px 0 rgba(216,90,48,0.85);
+  }
+  #hl-selection-layer .hl-edge {
+    position: fixed;
     width: 2px;
     background: var(--cta);
     border-radius: 1px;
