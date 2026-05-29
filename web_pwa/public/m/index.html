@@ -843,6 +843,38 @@
     <div style="height:40px;"></div>
   </section>
 
+  <!-- ===== Feed view ===== -->
+  <section id="view-feed" style="display:none;">
+    <div style="height:24px;"></div>
+    <h1 class="t-display-md c-espresso">피드</h1>
+    <p class="t-label-sm c-walnut" style="margin-top:6px;">매일 한 문장, 그리고 기억에 남은 장면들</p>
+
+    <!-- Category chips -->
+    <div class="archive-chips" id="feed-chips" role="tablist" style="margin-top:18px;">
+      <button class="a-chip active" data-feed-cat="today" role="tab">오늘의 한줄</button>
+      <button class="a-chip" data-feed-cat="highlight" role="tab">하이라이트</button>
+    </div>
+
+    <!-- 카테고리별 컨테이너 -->
+    <div id="feed-today" style="margin-top:24px;">
+      <div style="padding:60px 0;text-align:center;">
+        <span class="material-symbols-outlined c-sand" style="font-size:56px;">format_quote</span>
+        <p class="t-headline-sm c-espresso" style="margin-top:14px;">오늘의 한줄</p>
+        <p class="t-body-md c-walnut" style="margin-top:6px;">준비 중입니다.</p>
+      </div>
+    </div>
+
+    <div id="feed-highlight" style="margin-top:24px;display:none;">
+      <div style="padding:60px 0;text-align:center;">
+        <span class="material-symbols-outlined c-sand" style="font-size:56px;">auto_awesome</span>
+        <p class="t-headline-sm c-espresso" style="margin-top:14px;">하이라이트</p>
+        <p class="t-body-md c-walnut" style="margin-top:6px;">준비 중입니다.</p>
+      </div>
+    </div>
+
+    <div style="height:40px;"></div>
+  </section>
+
   <!-- ===== Settings view ===== -->
   <section id="view-settings" style="display:none;">
     <div style="height:40px;"></div>
@@ -978,6 +1010,11 @@
   <button data-nav="archive" class="nav-item">
     <span class="material-symbols-outlined nav-icon">history</span>
     <span class="t-label-sm">ARCHIVE</span>
+    <span class="nav-dot"></span>
+  </button>
+  <button data-nav="feed" class="nav-item">
+    <span class="material-symbols-outlined nav-icon">dynamic_feed</span>
+    <span class="t-label-sm">FEED</span>
     <span class="nav-dot"></span>
   </button>
   <button data-nav="settings" class="nav-item">

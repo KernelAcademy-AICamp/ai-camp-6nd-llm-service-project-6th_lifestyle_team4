@@ -11,6 +11,7 @@ const topBarSettings = $('#top-bar-settings');
 
 const viewHome = $('#view-home');
 const viewArchive = $('#view-archive');
+const viewFeed = $('#view-feed');
 const viewSettings = $('#view-settings');
 
 const homeLoading = $('#home-loading');
@@ -125,6 +126,7 @@ const state = {
   replyingToCommentId: null,   // 현재 답글 작성 대상 comment_id (null = 최상위 댓글)
   replyingToNickname: '',
   editingCommentId: null,      // 현재 인라인 수정 중인 comment_id (null = 수정 모드 아님)
+  feedCategory: 'today',       // 피드 내부 카테고리: 'today' | 'highlight'
 };
 let detailCommentsChannel = null;
 
@@ -2728,6 +2730,28 @@ async function unsubscribeFromDetailComments() {
   detailCommentsChannel = null;
 }
 
+// ---------- Feed ----------
+function renderFeed() {
+  // 카테고리 칩 active 상태
+  const cat = state.feedCategory || 'today';
+  document.querySelectorAll('#feed-chips .a-chip').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.feedCat === cat);
+  });
+  // 컨텐츠 영역 표시 전환
+  const today = document.getElementById('feed-today');
+  const highlight = document.getElementById('feed-highlight');
+  if (today) today.style.display = (cat === 'today') ? 'block' : 'none';
+  if (highlight) highlight.style.display = (cat === 'highlight') ? 'block' : 'none';
+}
+
+// 카테고리 칩 클릭 → state 변경 후 재렌더
+document.querySelectorAll('#feed-chips .a-chip').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.feedCategory = btn.dataset.feedCat || 'today';
+    renderFeed();
+  });
+});
+
 // ---------- View switching ----------
 function setView(view) {
   // 익명 사용자는 보관함 진입 차단 — 안내 후 home으로 보정 (재귀 없이 1패스)
@@ -2741,6 +2765,7 @@ function setView(view) {
   state.currentView = view;
   viewHome.style.display = (view === 'home') ? 'block' : 'none';
   viewArchive.style.display = (view === 'archive') ? 'block' : 'none';
+  if (viewFeed) viewFeed.style.display = (view === 'feed') ? 'block' : 'none';
   viewSettings.style.display = (view === 'settings') ? 'block' : 'none';
 
   // Top bar — Settings has its own
@@ -2752,6 +2777,7 @@ function setView(view) {
   });
 
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
+  if (view === 'feed') renderFeed();
   if (view === 'settings') { paintTasteProfile(); renderMyBookmarks(); renderMyReplies(); }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
