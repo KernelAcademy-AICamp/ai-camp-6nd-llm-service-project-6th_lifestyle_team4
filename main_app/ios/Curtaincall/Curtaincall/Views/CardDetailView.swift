@@ -30,12 +30,25 @@ struct CardDetailView: View {
                     Spacer().frame(height: 28)
 
                     if let desc = card.excerptDescription, !desc.isEmpty {
-                        Text(desc)
-                            .font(.bodySans(16))
-                            .foregroundStyle(.walnut)
-                            .multilineTextAlignment(.center)
-                            .bookLeading(size: 16)
-                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("SCENE")
+                                .labelCaps()
+                                .opacity(0.7)
+                            Text(desc)
+                                .font(.bodySans(16))
+                                .foregroundStyle(.walnut)
+                                .multilineTextAlignment(.leading)
+                                .bookLeading(size: 16)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.vertical, 16)
+                        .padding(.horizontal, 18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color.latte, lineWidth: 0.5)
+                        )
                         Spacer().frame(height: 24)
                     }
 

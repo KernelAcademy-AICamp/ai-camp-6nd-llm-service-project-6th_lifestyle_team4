@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" sizes="512x512" href="/m/icons/icon-book-512.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="/m/icons/icon-book-192.png" />
 <link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg?v=2" />
-<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;500;700;800&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <script>
   /* FOUC 방지 — 페이지 렌더 직전에 테마 적용 */
   (function(){
@@ -144,6 +144,49 @@
     border: 0.5px solid var(--espresso);
   }
 
+  /* Custom select — 톤에 맞춘 드롭다운 (네이티브 <select> 대체) */
+  .c-select { position: relative; width: 100%; }
+  .c-select-trigger {
+    width: 100%;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 15px 16px;
+    background: var(--paper);
+    border: 0.5px solid var(--walnut);
+    color: var(--espresso);
+    font-family: 'Nanum Myeongjo','Noto Serif KR',Georgia,serif;
+    font-size: 16px; line-height: 1.2;
+    text-align: left; cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  .c-select.open .c-select-trigger,
+  .c-select-trigger:hover { border-color: var(--espresso); }
+  .c-select-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .c-select-caret {
+    flex: 0 0 auto; width: 7px; height: 7px; margin-bottom: 3px;
+    border-right: 1.2px solid var(--walnut); border-bottom: 1.2px solid var(--walnut);
+    transform: rotate(45deg); transition: transform 0.18s ease;
+  }
+  .c-select.open .c-select-caret { transform: rotate(225deg); margin-bottom: -3px; }
+  .c-select-menu {
+    position: fixed; z-index: 200;
+    background: var(--paper);
+    border: 0.5px solid var(--espresso);
+    box-shadow: 0 20px 48px rgba(14,12,10,0.22);
+    overflow-y: auto;
+    animation: cSelectIn 0.14s ease;
+  }
+  @keyframes cSelectIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .c-select-option {
+    padding: 14px 16px;
+    font-family: 'Nanum Myeongjo','Noto Serif KR',Georgia,serif;
+    font-size: 15px; color: var(--espresso);
+    cursor: pointer; border-top: 0.5px solid var(--latte);
+    transition: background 0.12s ease;
+  }
+  .c-select-option:first-child { border-top: none; }
+  .c-select-option:hover { background: var(--latte); }
+  .c-select-option.selected { font-weight: 600; }
+
   /* Top bar */
   .top-bar {
     position: sticky; top: 0; z-index: 30;
@@ -154,6 +197,15 @@
   }
   .top-bar-brand {
     display: flex; align-items: center; gap: 10px;
+  }
+  /* 로고 워드마크 */
+  .brand-logo {
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
+    font-weight: 500;
+    font-size: 22px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    color: var(--espresso);
   }
   /* 상세 화면 헤더는 제목이 세로로 3줄(DAILY SCRIPT/작품명/부제) 쌓이므로 높이를 늘려 잘림 방지 */
   #detail-screen .top-bar {
@@ -333,6 +385,20 @@
     font-family: 'Noto Sans KR', sans-serif;
     font-weight: 700;
   }
+  /* 상황설명 — 대사와 분리되도록 은은한 톤 블록으로 감싼다 */
+  .scene-block {
+    border: 0.5px solid var(--latte);
+    border-radius: 4px;
+    padding: 16px 18px;
+    text-align: left;
+  }
+  .scene-block .scene-label {
+    display: block;
+    letter-spacing: 0.22em;
+    margin-bottom: 8px;
+    opacity: 0.7;
+  }
+  .scene-block p { margin: 0; }
 
   /* Settings */
   .setting-row {
@@ -635,11 +701,20 @@
   }
   .spine .spine-count {
     font-family: 'Nanum Myeongjo', serif; font-size: 11px;
+    line-height: 1;
     color: #E6CC82;
     text-shadow: 0 1px 2px rgba(0,0,0,0.6);
     flex-shrink: 0;
     background: transparent;
     width: auto; height: auto;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    margin-bottom: 10px;
+  }
+  .spine .spine-count-icon {
+    width: 9px; height: 9px;
+    fill: #E6CC82;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6));
+    flex-shrink: 0;
   }
   .spine .spine-title {
     writing-mode: vertical-rl;
@@ -927,8 +1002,7 @@
 <!-- ===== Top Bar (Home/Archive show HomeTopBar; Settings shows SettingsTopBar; Detail shows DetailTopBar) ===== -->
 <header id="top-bar-home" class="top-bar">
   <div class="top-bar-brand">
-    <span class="material-symbols-outlined c-espresso" style="font-size:20px;">menu_book</span>
-    <span class="t-headline-md c-espresso">Daily Script</span>
+    <span class="brand-logo">Daily Script</span>
   </div>
   <div style="display:flex;align-items:center;gap:14px;">
     <div title="실시간 동기화 상태" style="display:flex;align-items:center;gap:6px;">
@@ -942,10 +1016,7 @@
 </header>
 
 <header id="top-bar-settings" class="top-bar" style="display:none;">
-  <span class="t-headline-md c-espresso">Daily Script</span>
-  <div class="avatar-box">
-    <span class="t-label-sm c-espresso">DS</span>
-  </div>
+  <span class="brand-logo">Daily Script</span>
 </header>
 
 <div class="hairline"></div>
@@ -975,7 +1046,7 @@
       <!-- Today Card -->
       <article id="today-card" class="sharp-card" style="padding:20px;cursor:pointer;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div id="today-chips" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+          <div id="today-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
           <button id="today-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:0;">
             <span class="material-symbols-outlined c-walnut" style="font-size:24px;">bookmark</span>
           </button>
@@ -1101,11 +1172,11 @@
               style="background:transparent;border:0.5px solid var(--walnut);color:var(--walnut);
                      padding:6px 10px;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;
                      font-weight:600;cursor:pointer;flex-shrink:0;margin-top:8px;">
-        EDIT
+        Profile Edit
       </button>
     </div>
     <div id="settings-identity-spacer" style="height:10px;"></div>
-    <p id="settings-bio" class="t-body-lg c-walnut">매일 한 장의 명대사로 하루를 시작합니다.</p>
+    <p id="settings-bio" class="t-body-sm c-walnut" style="opacity:0.4;font-size:12px;">매일 한 장의 명대사로 하루를 시작합니다.</p>
     <div style="height:32px;"></div>
     <div class="hairline"></div>
 
@@ -1320,7 +1391,10 @@
     <div id="detail-meta" style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;"></div>
     <div style="height:28px;"></div>
 
-    <p id="detail-description" class="t-body-lg c-walnut" style="display:none;white-space:pre-wrap;"></p>
+    <div id="detail-description-block" class="scene-block" style="display:none;">
+      <span class="scene-label t-label-sm c-walnut">SCENE</span>
+      <p id="detail-description" class="t-body-lg c-walnut" style="white-space:pre-wrap;"></p>
+    </div>
     <div id="detail-desc-spacer" style="height:0;"></div>
 
     <pre id="detail-script" class="script-mono"></pre>
@@ -1331,7 +1405,7 @@
       <div style="height:24px;"></div>
       <p class="t-label-sm c-walnut" style="text-align:center;">작품의 의의</p>
       <div style="height:12px;"></div>
-      <p id="detail-significance" class="t-body-lg c-espresso" style="text-align:left;white-space:pre-wrap;"></p>
+      <p id="detail-significance" class="t-body-lg c-espresso" style="text-align:center;white-space:pre-wrap;"></p>
     </div>
 
     <div style="height:48px;"></div>
@@ -1451,7 +1525,7 @@
     <p class="t-label-sm c-walnut" style="margin-bottom:6px;">PROFILE</p>
     <h3 class="t-headline-md c-espresso" style="margin-bottom:14px;">프로필 수정</h3>
     <p class="t-body-sm c-walnut" style="margin-bottom:18px;line-height:1.6;">
-      앱에서 사용할 이름과 성별·나이대를 수정할 수 있어요. 성별·나이대는 선택 입력이며, 입력하시면 취향에 맞는 명대사를 추천해드려요.
+      앱에서 쓸 닉네임을 바꿀 수 있어요.<br>성별·연령대는 선택이며, 알려주시면 취향에 맞는 명대사를 추천해드립니다.
     </p>
 
     <label class="t-label-sm c-walnut" style="display:block;margin-bottom:6px;">닉네임</label>
@@ -1461,7 +1535,7 @@
       <button id="nickname-randomize" type="button" class="sharp-btn outline" style="flex:0 0 auto;width:auto;white-space:nowrap;padding:0 14px;font-size:12px;letter-spacing:0;">랜덤</button>
     </div>
 
-    <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">성별 · 선택</label>
+    <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">성별</label>
     <select id="profile-gender"
             style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">
       <option value="">선택 안 함</option>
@@ -1470,7 +1544,7 @@
       <option value="other">기타</option>
     </select>
 
-    <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">나이대 · 선택</label>
+    <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">연령</label>
     <select id="profile-age"
             style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">
       <option value="">선택 안 함</option>
@@ -1485,8 +1559,8 @@
       <option value="90s">90대</option>
     </select>
 
-    <button id="nickname-save" class="sharp-btn" style="width:100%;margin-top:18px;">저장</button>
-    <button id="nickname-cancel" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
+    <button id="nickname-save" class="sharp-btn" style="width:100%;margin-top:24px;border-radius:0;padding:17px;font-size:12px;font-weight:500;letter-spacing:0.32em;text-transform:uppercase;">Save</button>
+    <button id="nickname-cancel" style="width:100%;background:transparent;border:none;margin-top:14px;cursor:pointer;font-size:11px;letter-spacing:0.28em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
       Cancel
     </button>
   </div>

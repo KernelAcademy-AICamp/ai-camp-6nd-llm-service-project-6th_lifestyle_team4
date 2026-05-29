@@ -3,7 +3,8 @@
     "api/extract.js": { "maxDuration": 300 },
     "api/translate.js": { "maxDuration": 120 },
     "api/save.js": { "maxDuration": 30 },
-    "api/backfill-characters.js": { "maxDuration": 300 }
+    "api/backfill-characters.js": { "maxDuration": 300 },
+    "api/classify-keywords.js": { "maxDuration": 60 }
   },
   "headers": [
     {

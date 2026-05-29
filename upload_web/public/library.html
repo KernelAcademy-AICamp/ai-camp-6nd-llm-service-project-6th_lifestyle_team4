@@ -493,12 +493,18 @@
             <span class="material-symbols-outlined text-base">tag</span>
             키워드 빈도 <span id="library-keyword-freq-summary" class="font-normal text-on-surface-variant"></span>
           </h3>
-          <button type="button" id="library-keyword-freq-close" class="text-on-surface-variant hover:text-on-surface text-sm flex items-center gap-1">
-            <span class="material-symbols-outlined text-base">close</span>
-            닫기
-          </button>
+          <div class="flex items-center gap-3">
+            <button type="button" id="library-keyword-freq-reclassify" class="text-on-surface-variant hover:text-on-surface text-sm flex items-center gap-1" title="LLM으로 다시 분류">
+              <span class="material-symbols-outlined text-base">autorenew</span>
+              재분류
+            </button>
+            <button type="button" id="library-keyword-freq-close" class="text-on-surface-variant hover:text-on-surface text-sm flex items-center gap-1">
+              <span class="material-symbols-outlined text-base">close</span>
+              닫기
+            </button>
+          </div>
         </div>
-        <p class="text-xs text-on-surface-variant">전체 카드 기준 집계입니다. 표기 흔들림(예: "소유"/"소유물")을 눈으로 잡아 한쪽으로 통일하세요. 행을 클릭하면 그 키워드로 검색됩니다.</p>
+        <p class="text-xs text-on-surface-variant">전체 카드 기준 집계를 6개 의미 범주로 자동 분류(LLM)해 묶었습니다. 표기 흔들림(예: "소유"/"소유물")을 눈으로 잡아 한쪽으로 통일하세요. 범주 헤더를 눌러 펼치고, 키워드를 클릭하면 그 키워드로 검색됩니다.</p>
         <div id="library-keyword-freq-body" class="max-h-80 overflow-auto"></div>
       </div>
 

@@ -26,7 +26,7 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
     "title": "작품 제목 (시리즈물이면 시리즈명만)",
     "subtitle": "부제 또는 null",
     "format": "movie | drama | play | musical | opera | novel | poem | essay 중 하나",
-    "author": "작가명 또는 null",
+    "author": "작가명(영문 작가는 반드시 통용되는 한국어 표기로 변환) 또는 null",
     "release_year": 연도(정수) 또는 null,
     "genres": ["장르1", "장르2"],
     "characters": ["등장인물1", "등장인물2"]
@@ -49,6 +49,7 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
   · **단행본/단편/단일 작품**(예: 영화 "베테랑", 소설 "데미안") → title="작품명", subtitle=null
   · **시리즈물·연작·옴니버스의 개별 편**(예: 셜록홈즈의 "보헤미아 왕국의 스캔들", 해리포터의 "마법사의 돌", TV 드라마의 개별 에피소드) → title="시리즈/작품명"(셜록홈즈/해리포터), subtitle="개별 편 이름"(보헤미아 왕국의 스캔들/마법사의 돌)
   · 부제가 분명히 별도로 존재하지 않으면 subtitle=null. **억지로 분리하지 말 것.**
+- author: 작가명. **영문 작가는 반드시 통용되는 한국어 표기로 변환** (예: "Arthur Conan Doyle"→"아서 코난 도일", "Mary Shelley"→"메리 셸리", "James Cameron"→"제임스 카메론", "Hermann Hesse"→"헤르만 헤세"). 통용 표기가 모호하면 한국어 음역으로. 영문 그대로 두지 말 것. 미상이면 null.
 - format: "movie", "drama", "play", "musical", "opera", "novel", "poem", "essay" 중 정확히 하나
   · 대본/시나리오 형식: movie(영화), drama(TV 드라마), play(희곡/연극), musical(뮤지컬), opera(오페라)
   · 문학 형식: novel(소설), poem(시), essay(에세이/수필)
@@ -236,7 +237,7 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
     "title": "작품 제목 (시리즈물이면 시리즈명만)",
     "subtitle": "부제 또는 null",
     "format": "movie | drama | play | musical | opera | novel | poem | essay 중 하나",
-    "author": "작가명 또는 null",
+    "author": "작가명(영문 작가는 반드시 통용되는 한국어 표기로 변환) 또는 null",
     "release_year": 연도(정수) 또는 null,
     "genres": ["장르1", "장르2"],
     "characters": ["등장인물1", "등장인물2"]
@@ -300,6 +301,9 @@ libretto와 희곡 대본을 깊이 읽어내며, 음악과 극이 결합된 작
 - **단행본/단편/단일 작품**(예: 영화 "베테랑", 오페라 "리골레토") → \`title\`="작품명", \`subtitle\`=null
 - **시리즈물·연작의 개별 편**(예: 셜록홈즈의 "보헤미아 왕국의 스캔들", 해리포터의 "마법사의 돌") → \`title\`="시리즈명"(셜록홈즈), \`subtitle\`="개별 편 이름"(보헤미아 왕국의 스캔들)
 - 부제가 분명히 별도로 존재하지 않으면 \`subtitle\`=null. **억지로 분리하지 말 것.**
+
+### \`work.author\`
+작가명. **영문 작가는 반드시 통용되는 한국어 표기로 변환** (예: "Giuseppe Verdi"→"주세페 베르디", "Wolfgang Amadeus Mozart"→"볼프강 아마데우스 모차르트", "William Shakespeare"→"윌리엄 셰익스피어", "Arthur Conan Doyle"→"아서 코난 도일"). 통용 표기가 모호하면 한국어 음역으로. 영문 그대로 두지 말 것. 미상이면 null.
 
 ### \`work.format\`
 "movie" | "drama" | "play" | "musical" | "opera" | "novel" | "poem" | "essay" 중 정확히 하나.
@@ -580,7 +584,7 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
     "title": "작품 제목 (시리즈물이면 시리즈명만)",
     "subtitle": "부제 또는 null",
     "format": "play",
-    "author": "작가명 또는 null",
+    "author": "작가명(영문 작가는 반드시 통용되는 한국어 표기로 변환) 또는 null",
     "release_year": 연도(정수) 또는 null,
     "genres": ["장르1", "장르2"],
     "characters": ["등장인물1", "등장인물2"]
@@ -605,6 +609,8 @@ const EXTRACT_PROMPT_PLAY = `[01 ROLE]
   · **단행본/단일 작품**(예: "햄릿", "갈매기") → title="작품명", subtitle=null
   · **시리즈물·연작의 개별 편**(예: 한 작가의 연작 희곡) → title="시리즈/작품명", subtitle="개별 편 이름"
   · 부제가 분명히 별도로 존재하지 않으면 subtitle=null. **억지로 분리하지 말 것.**
+
+- author: 작가명. **영문 작가는 반드시 통용되는 한국어 표기로 변환** (예: "William Shakespeare"→"윌리엄 셰익스피어", "Anton Chekhov"→"안톤 체호프", "Henrik Ibsen"→"헨리크 입센", "Tennessee Williams"→"테네시 윌리엄스"). 영문 그대로 두지 말 것. 미상이면 null.
 
 - format
   · "play" 고정
@@ -937,7 +943,7 @@ const EXTRACT_PROMPT_LITERATURE = `[01 ROLE]
     "title": "작품 제목 (시리즈물이면 시리즈명만)",
     "subtitle": "부제 또는 null",
     "format": "novel | poem | essay 중 하나",
-    "author": "작가명 또는 null",
+    "author": "작가명(영문 작가는 반드시 통용되는 한국어 표기로 변환) 또는 null",
     "release_year": 연도(정수) 또는 null,
     "genres": ["장르1", "장르2"],
     "characters": ["등장인물1", "등장인물2"]
@@ -961,6 +967,8 @@ const EXTRACT_PROMPT_LITERATURE = `[01 ROLE]
   · **단행본/단일 작품**(예: 소설 "데미안", 시 "님의 침묵") → title="작품명", subtitle=null
   · **시리즈물·연작·옴니버스의 개별 편**(예: 셜록홈즈의 "보헤미아 왕국의 스캔들", 해리포터의 "마법사의 돌") → title="시리즈/작품명"(셜록홈즈), subtitle="개별 편 이름"(보헤미아 왕국의 스캔들)
   · 부제가 분명히 별도로 존재하지 않으면 subtitle=null. **억지로 분리하지 말 것.**
+
+- author: 작가명. **영문 작가는 반드시 통용되는 한국어 표기로 변환** (예: "Arthur Conan Doyle"→"아서 코난 도일", "Hermann Hesse"→"헤르만 헤세", "Mary Shelley"→"메리 셸리", "Franz Kafka"→"프란츠 카프카", "Virginia Woolf"→"버지니아 울프"). 영문 그대로 두지 말 것. 미상이면 null.
 
 - format
   · "novel"(소설) | "poem"(시) | "essay"(에세이/수필) 중 정확히 하나
@@ -1423,4 +1431,37 @@ export const CHARACTERS_PROMPT = `당신은 대본에서 등장인물 이름만 
 """
 {{SCRIPT_TEXT}}
 """
+`;
+
+// ---------------------------------------------------------------------------
+//  CLASSIFY_KEYWORDS_PROMPT
+//  - admin 라이브러리의 키워드 빈도 뷰에서, 흩어진 키워드들을 6개 의미 범주로
+//    묶어 한눈에 보기 위한 자동 분류용.
+//  - 입력: distinct 키워드 배열 (JSON). `{{KEYWORDS_JSON}}` 자리에 치환.
+//  - 출력: { "assignments": { "키워드": "범주", ... } } JSON 한 덩어리.
+//  - 화면 표시용일 뿐 DB에는 저장하지 않음.
+// ---------------------------------------------------------------------------
+export const CLASSIFY_KEYWORDS_PROMPT = `[ROLE]
+당신은 한국어 문학·드라마·영화 명장면 키워드를 의미 범주로 분류하는 분류기입니다.
+
+[CATEGORIES]
+아래 6개 범주 중 가장 잘 맞는 하나로 각 키워드를 분류하세요. 어디에도 잘 맞지 않으면 "미분류".
+- 관계·사랑 : 사랑·연애·가족·우정·유대·부녀애 등 인물 사이의 관계와 애정
+- 상실·애도 : 죽음·이별·상실·그리움·애도·회한 등 잃음과 그로 인한 슬픔
+- 자기·정체성 : 자아·정체성·자기인식·성장·자존·양심 등 '나'를 향한 물음
+- 결단·행동 : 결심·선택·복수·도전·저항·희생 등 의지와 행동
+- 세계관·환멸 : 권력·사회·부조리·환멸·운명·진실 등 세계·체제를 향한 시선
+- 정서 상태 : 무기력·불안·분노·두려움·공허·권태 등 일시적 감정·심리 상태
+
+[RULES]
+- 입력으로 받은 모든 키워드를 하나도 빠짐없이 분류한다.
+- 각 키워드는 정확히 하나의 범주에만 배정한다.
+- 범주명은 위 6개("관계·사랑","상실·애도","자기·정체성","결단·행동","세계관·환멸","정서 상태") 또는 "미분류" 문자열을 그대로 쓴다. 다른 표기·새 범주 생성 금지.
+- 의미가 가까운 표기 변형(예: "소유"와 "소유물")은 같은 범주로.
+
+[OUTPUT]
+{ "assignments": { "키워드1": "범주", "키워드2": "범주" } }
+
+[INPUT]
+{{KEYWORDS_JSON}}
 `;
