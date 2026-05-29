@@ -8,6 +8,7 @@ const $$ = (s) => document.querySelectorAll(s);
 // ---------- DOM ----------
 const topBarHome = $('#top-bar-home');
 const topBarSettings = $('#top-bar-settings');
+const headerHairline = $('#header-hairline');
 
 const viewHome = $('#view-home');
 const viewArchive = $('#view-archive');
@@ -1294,8 +1295,8 @@ homeRefresh.addEventListener('click', () => {
   if (state.isAnonymous) {
     if (getRefreshState().count >= REFRESH_LIMIT) {
       openPromptModal({
-        title: '새 명대사는 3번까지',
-        message: '오늘 새 명대사를 3번 받아보셨어요. 로그인하면 무제한으로 즐길 수 있어요.',
+        title: '새로운 명대사는 3번까지',
+        message: '오늘 명대사를 3번 받아보셨어요.\n로그인하면 무제한으로 고전 명대사를 즐길 수 있어요.',
       });
       return;
     }
@@ -2228,7 +2229,7 @@ function buildMyFeedHighlightRow(h) {
   wrap.innerHTML = `
     <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
     <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
-    <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;">❝ ${escapeHtml(h.selected_text || '')} ❞</p>
+    <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;">“${escapeHtml(h.selected_text || '')}”</p>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
       <span class="t-label-sm c-sand">${idTag}</span>
       <button class="mfh-delete-btn" data-id="${h.highlight_id}" style="${LINK_BTN_CSS}color:var(--cta);">Delete</button>
@@ -2532,14 +2533,27 @@ const promptModalTitle = $('#prompt-modal-title');
 const promptModalMsg = $('#prompt-modal-msg');
 const promptModalConfirm = $('#prompt-modal-confirm');
 const promptModalDismiss = $('#prompt-modal-dismiss');
+const promptModalSubnote = $('#prompt-modal-subnote');
+const DISMISS_LINK_STYLE = 'width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);';
 let _promptOnDismiss = null;
 
-function openPromptModal({ title, message, confirmLabel = '로그인', dismissLabel = '닫기', onConfirm = null, onDismiss = null }) {
+function openPromptModal({ title, message, confirmLabel = '로그인', dismissLabel = '닫기', subNote = '', dismissAsButton = false, onConfirm = null, onDismiss = null }) {
   if (!promptModal) return;
   promptModalTitle.textContent = title;
   promptModalMsg.textContent = message;
   promptModalConfirm.textContent = confirmLabel;
   promptModalDismiss.textContent = dismissLabel;
+  if (promptModalSubnote) {
+    promptModalSubnote.textContent = subNote;
+    promptModalSubnote.style.display = subNote ? 'block' : 'none';
+  }
+  if (dismissAsButton) {
+    promptModalDismiss.className = 'sharp-btn outline';
+    promptModalDismiss.style.cssText = 'width:100%;margin-top:10px;';
+  } else {
+    promptModalDismiss.className = '';
+    promptModalDismiss.style.cssText = DISMISS_LINK_STYLE;
+  }
   promptModal._onConfirm = onConfirm;
   _promptOnDismiss = onDismiss;
   promptModal.style.display = 'flex';
@@ -2594,9 +2608,11 @@ function maybeShowLanding() {
   const markSeen = () => { try { localStorage.setItem(LANDING_SEEN_KEY, '1'); } catch {} };
   openPromptModal({
     title: '오늘의 명대사',
-    message: '로그인하면 마음에 든 명대사를 보관하고 다른 기기에서도 이어볼 수 있어요. 먼저 둘러보셔도 좋아요.',
+    message: '로그인하면 마음에 든 명대사를 내 서재에 보관 할 수 있어요.',
     confirmLabel: '로그인 / 회원가입',
+    subNote: '먼저 둘러보셔도 좋아요.',
     dismissLabel: '둘러보기',
+    dismissAsButton: true,
     onConfirm: markSeen,
     onDismiss: markSeen,
   });
@@ -2890,10 +2906,11 @@ function paintAuthIdentity() {
   // bio 영역에 provider 뱃지 / 이메일
   // 익명일 때만 SIGN IN 섹션 (ID + 비밀번호 모달 열기) 노출
   if (state.isAnonymous) {
-    settingsBio.textContent = '매일 한 장의 명대사로 하루를 시작합니다.';
+    settingsBio.style.display = 'none';
     if (signinBlock) signinBlock.style.display = 'block';
     signOutBtn.textContent = 'Reset Anonymous';
   } else {
+    settingsBio.style.display = '';
     if (signinBlock) signinBlock.style.display = 'none';
     // ID+비밀번호 계정은 합성 이메일(@user.local) 대신 아이디만 노출
     const isLocalAccount = (state.authEmail || '').endsWith('@user.local');
@@ -3816,6 +3833,19 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
     document.body.appendChild(overlay);
   }
 
+  // [임시 진단] iOS long-press 단계 추적 배지 — 원인 확인 후 제거 예정
+  let dbgEl = document.getElementById('hl-debug');
+  if (!dbgEl) {
+    dbgEl = document.createElement('div');
+    dbgEl.id = 'hl-debug';
+    dbgEl.style.cssText = 'position:fixed;top:6px;left:6px;z-index:99999;background:rgba(0,0,0,0.82);color:#7CFC00;font:11px/1.4 monospace;padding:5px 7px;border-radius:5px;pointer-events:none;max-width:92vw;white-space:pre-wrap;';
+    document.body.appendChild(dbgEl);
+  }
+  const dbg = (m) => {
+    dbgEl.textContent = (dbgEl.textContent + '\n' + m).split('\n').slice(-7).join('\n');
+  };
+  dbg('hl ready');
+
   let lpTimer = null;
   let startPoint = null;
   let isSelecting = false;
@@ -3827,13 +3857,43 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
   function caretFromPoint(x, y) {
     if (document.caretRangeFromPoint) {
       const r = document.caretRangeFromPoint(x, y);
-      if (r && r.startContainer) return { node: r.startContainer, offset: r.startOffset };
+      if (r && r.startContainer && r.startContainer.nodeType === 3 && scriptEl.contains(r.startContainer)) {
+        return { node: r.startContainer, offset: r.startOffset };
+      }
     }
     if (document.caretPositionFromPoint) {
       const p = document.caretPositionFromPoint(x, y);
-      if (p && p.offsetNode) return { node: p.offsetNode, offset: p.offset };
+      if (p && p.offsetNode && p.offsetNode.nodeType === 3 && scriptEl.contains(p.offsetNode)) {
+        return { node: p.offsetNode, offset: p.offset };
+      }
     }
-    return null;
+    // iOS WebKit: user-select:none(@media pointer:coarse) 인 .script-mono 위에서는
+    // 위 두 caret API 가 null 또는 바깥 노드를 반환한다. Range 글자 단위 hit-test 는
+    // user-select 와 무관하게 동작하므로, 좌표에 닿는(없으면 가장 가까운) 글자를 직접 찾는다.
+    return caretFromPointFallback(x, y);
+  }
+
+  function caretFromPointFallback(x, y) {
+    const walker = document.createTreeWalker(scriptEl, NodeFilter.SHOW_TEXT, null);
+    const probe = document.createRange();
+    let best = null, bestDist = Infinity, node;
+    while ((node = walker.nextNode())) {
+      const len = (node.textContent || '').length;
+      for (let i = 0; i < len; i++) {
+        probe.setStart(node, i);
+        probe.setEnd(node, i + 1);
+        for (const rc of probe.getClientRects()) {
+          if (rc.width === 0 && rc.height === 0) continue;
+          if (y >= rc.top && y <= rc.bottom && x >= rc.left && x <= rc.right) {
+            return { node, offset: x < rc.left + rc.width / 2 ? i : i + 1 };
+          }
+          const cx = rc.left + rc.width / 2, cy = rc.top + rc.height / 2;
+          const d = (cx - x) ** 2 + (cy - y) ** 2;
+          if (d < bestDist) { bestDist = d; best = { node, offset: x < cx ? i : i + 1 }; }
+        }
+      }
+    }
+    return best;
   }
 
   function expandToWord(point) {
@@ -3944,6 +4004,7 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
     if (e.touches.length > 1) return;
     const t = e.touches[0];
     startPoint = { x: t.clientX, y: t.clientY };
+    dbg('touchstart @' + Math.round(t.clientX) + ',' + Math.round(t.clientY));
     // 새 long-press → 기존 선택 해제
     if (anchor) clearAll();
     if (lpTimer) clearTimeout(lpTimer);
@@ -3951,11 +4012,14 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
       lpTimer = null;
       const p = caretFromPoint(startPoint.x, startPoint.y);
       const word = expandToWord(p);
+      dbg('lp fired | caret:' + (p ? (p.node.nodeType === 3 ? 'txt' : 'n' + p.node.nodeType) + '@' + p.offset : 'NULL')
+          + ' | word:' + (word ? word.startOffset + '-' + word.endOffset : 'NONE'));
       if (!word) return;
       anchor = { node: word.startNode, offset: word.startOffset };
       focus  = { node: word.endNode,   offset: word.endOffset };
       isSelecting = true;
       renderOverlay();
+      dbg('rects:' + overlay.childElementCount);
       try { if (navigator.vibrate) navigator.vibrate(20); } catch {}
     }, LONG_PRESS_MS);
   }, { passive: true });
@@ -3967,6 +4031,7 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
     const dy = Math.abs(t.clientY - startPoint.y);
     if (lpTimer && (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX)) {
       clearTimeout(lpTimer); lpTimer = null;
+      dbg('lp canceled: moved ' + Math.round(dx) + ',' + Math.round(dy));
     }
     if (isSelecting) {
       const p = caretFromPoint(t.clientX, t.clientY);
@@ -4212,9 +4277,9 @@ function renderHighlights() {
         ${author ? `<p class="bc-author">${escapeHtml(author)}</p>` : ''}
       </div>
       <div class="hl-quote">
-        <span class="open-q">❝</span>
+        <span class="open-q">“</span>
         <p>${escapeHtml(h.selected_text || '')}</p>
-        <span class="close-q">❞</span>
+        <span class="close-q">”</span>
       </div>
       <p class="hl-card-foot">#${String(h.card_id).padStart(5,'0')}</p>
     `;
@@ -4245,6 +4310,8 @@ function setView(view) {
   // Top bar — Settings has its own
   topBarHome.style.display = (view === 'settings') ? 'none' : 'flex';
   topBarSettings.style.display = (view === 'settings') ? 'flex' : 'none';
+  // 설정 화면에선 헤더 하단 구분선 숨김 (소개문구 위 라인 제거)
+  if (headerHairline) headerHairline.style.display = (view === 'settings') ? 'none' : 'block';
 
   $$('.bottom-nav .nav-item').forEach((b) => {
     b.classList.toggle('active', b.dataset.nav === view);

@@ -1035,14 +1035,14 @@
 <header id="top-bar-settings" class="top-bar" style="display:none;">
   <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동">Daily Script</span>
   <button id="feedback-entry"
-          style="background:transparent;border:0.5px solid var(--espresso);color:var(--espresso);-webkit-text-fill-color:var(--espresso);
+          style="background:var(--espresso);border:0.5px solid var(--espresso);color:var(--paper);-webkit-text-fill-color:var(--paper);
                  padding:6px 10px 6px 12px;font-family:'Noto Sans KR',sans-serif;font-size:10px;letter-spacing:0.2em;text-align:center;text-transform:uppercase;
                  font-weight:900;cursor:pointer;flex-shrink:0;">
     의견 남기기
   </button>
 </header>
 
-<div class="hairline"></div>
+<div id="header-hairline" class="hairline"></div>
 
 <main>
 
@@ -1188,7 +1188,7 @@
 
   <!-- ===== Settings view ===== -->
   <section id="view-settings" style="display:none;">
-    <div style="height:40px;"></div>
+    <div style="height:16px;"></div>
     <div id="settings-identity" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
       <h1 id="settings-name" class="t-display-md c-espresso" style="flex:1;min-width:0;word-break:keep-all;">Anonymous</h1>
       <button id="edit-nickname-btn"
@@ -1200,8 +1200,28 @@
     </div>
     <div id="settings-identity-spacer" style="height:10px;"></div>
     <p id="settings-bio" class="t-body-sm c-walnut" style="opacity:0.4;font-size:12px;">매일 한 장의 명대사로 하루를 시작합니다.</p>
-    <div style="height:32px;"></div>
+    <div style="height:16px;"></div>
     <div class="hairline"></div>
+
+    <!-- SIGN IN section — visible only when anonymous -->
+    <div id="signin-block" style="display:none;">
+      <div style="height:16px;"></div>
+      <p class="t-label-sm c-walnut" style="margin-bottom:12px;">ACCOUNT</p>
+      <p class="t-body-sm c-walnut" style="margin-bottom:14px;line-height:1.6;">
+        아이디와 비밀번호로 로그인하면 다른 기기에서도 북마크가 동기화됩니다.
+      </p>
+
+      <button id="open-signin-modal" class="sharp-btn outline" style="width:100%;">
+        로그인 · 회원가입
+      </button>
+
+      <p class="t-body-sm c-walnut" style="margin-top:14px;line-height:1.6;font-size:11px;">
+        가입 시 현재 익명 북마크는 자동으로 새 계정에 옮겨집니다.
+      </p>
+
+      <div style="height:32px;"></div>
+      <div class="hairline"></div>
+    </div>
 
     <!-- 내 활동 섹션 라벨 — 로그인(활동 블록 표시) 시에만 노출 -->
     <div id="mypage-activity-label" style="display:none;">
@@ -1232,26 +1252,6 @@
         </div>
         <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
       </button>
-      <div class="hairline"></div>
-    </div>
-
-    <!-- SIGN IN section — visible only when anonymous -->
-    <div id="signin-block" style="display:none;">
-      <div style="height:40px;"></div>
-      <p class="t-label-sm c-walnut" style="margin-bottom:12px;">ACCOUNT</p>
-      <p class="t-body-sm c-walnut" style="margin-bottom:14px;line-height:1.6;">
-        아이디와 비밀번호로 로그인하면 다른 기기에서도 북마크가 동기화됩니다.
-      </p>
-
-      <button id="open-signin-modal" class="sharp-btn outline" style="width:100%;">
-        로그인 · 회원가입
-      </button>
-
-      <p class="t-body-sm c-walnut" style="margin-top:14px;line-height:1.6;font-size:11px;">
-        가입 시 현재 익명 북마크는 자동으로 새 계정에 옮겨집니다.
-      </p>
-
-      <div style="height:32px;"></div>
       <div class="hairline"></div>
     </div>
 
@@ -1596,8 +1596,8 @@
 
     <!-- 선택된 본문 -->
     <div style="background:var(--card-warm);border:0.5px solid var(--latte);border-left:3px solid var(--cta);padding:18px 18px;position:relative;">
-      <span style="position:absolute;top:6px;left:10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:24px;color:var(--sand);">❝</span>
-      <span style="position:absolute;bottom:0px;right:10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:24px;color:var(--sand);">❞</span>
+      <span style="position:absolute;top:8px;left:10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:28px;line-height:1;color:var(--sand);">“</span>
+      <span style="position:absolute;bottom:2px;right:10px;font-family:'Nanum Myeongjo',Georgia,serif;font-size:28px;line-height:1;color:var(--sand);">”</span>
       <p id="hl-selected-text" style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:16px;line-height:30px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;text-align:center;padding:0 20px;"></p>
     </div>
   </div>
@@ -1791,12 +1791,13 @@
 
 <!-- ===== 공용 안내/유도 모달 (랜딩 + 회원전용 게이트) ===== -->
 <div id="prompt-modal" style="position:fixed;inset:0;background:rgba(14,12,10,0.65);display:none;align-items:center;justify-content:center;z-index:128;padding:24px;">
-  <div style="background:var(--paper);width:100%;max-width:420px;padding:28px 24px;border:0.5px solid var(--latte);">
+  <div style="background:var(--paper);width:100%;max-width:420px;padding:28px 24px;border:0.5px solid var(--latte);text-align:center;">
     <p class="t-label-sm c-walnut" style="margin-bottom:6px;">MEMBERS</p>
     <h3 id="prompt-modal-title" class="t-headline-md c-espresso" style="margin-bottom:14px;"></h3>
-    <p id="prompt-modal-msg" class="t-body-sm c-walnut" style="margin-bottom:18px;line-height:1.6;"></p>
+    <p id="prompt-modal-msg" class="t-body-sm c-walnut" style="margin-bottom:18px;line-height:1.6;white-space:pre-line;"></p>
 
     <button id="prompt-modal-confirm" class="sharp-btn" style="width:100%;margin-top:6px;">로그인</button>
+    <p id="prompt-modal-subnote" class="t-body-sm c-walnut" style="display:none;margin-top:16px;margin-bottom:0;line-height:1.6;"></p>
     <button id="prompt-modal-dismiss" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);">
       닫기
     </button>
@@ -1805,10 +1806,10 @@
 
 <!-- ===== 의견 남기기 유도 모달 (카드 15장 열람 시 1회) ===== -->
 <div id="feedback-nudge-modal" style="position:fixed;inset:0;background:rgba(14,12,10,0.65);display:none;align-items:center;justify-content:center;z-index:129;padding:24px;">
-  <div style="background:var(--paper);width:100%;max-width:420px;padding:28px 24px;border:0.5px solid var(--latte);">
+  <div style="background:var(--paper);width:100%;max-width:420px;padding:28px 24px;border:0.5px solid var(--latte);text-align:center;">
     <p class="t-label-sm c-walnut" style="margin-bottom:6px;">FEEDBACK</p>
     <h3 class="t-headline-md c-espresso" style="margin-bottom:14px;">벌써 명대사 15편을 만나셨네요</h3>
-    <p class="t-body-sm c-walnut" style="margin-bottom:18px;line-height:1.6;">잠깐, 사용해보신 소감을 들려주시겠어요? 설정에서 의견을 남길 수 있어요.</p>
+    <p class="t-body-sm c-walnut" style="margin-bottom:18px;line-height:1.6;">잠깐, 사용해보신 소감을 들려주시겠어요?<br>설정에서 의견을 남길 수 있어요.</p>
     <button id="fb-nudge-confirm" class="sharp-btn" style="width:100%;margin-top:6px;">의견 남기기</button>
     <button id="fb-nudge-dismiss" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);">
       다음에
