@@ -3116,6 +3116,39 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
 // HIGHLIGHT 기능
 // ============================================================================
 
+// 상세화면 본문에서 OS·브라우저 네이티브 텍스트 작업 메뉴(구글 검색·복사·공유 등)를 차단.
+// 우리 + HL 만 동작시키기 위한 가드 — 선택과 드래그 핸들 자체는 막지 않는다.
+(function blockNativeTextMenusOnScript() {
+  const scriptEl = document.getElementById('detail-script');
+  if (!scriptEl) return;
+
+  const within = (target) => target && scriptEl.contains(target);
+  const isSelectionInScript = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return false;
+    const range = sel.getRangeAt(0);
+    return scriptEl.contains(range.commonAncestorContainer);
+  };
+
+  // 우클릭/롱프레스 컨텍스트 메뉴 차단
+  scriptEl.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
+  // 문서 전체로 올라가는 컨텍스트 메뉴도 본문 선택 중이면 차단
+  document.addEventListener('contextmenu', (e) => {
+    if (within(e.target) || isSelectionInScript()) { e.preventDefault(); }
+  }, true);
+
+  // 복사·잘라내기·붙여넣기 차단 (드래그로 잡고 메뉴를 띄우려는 흐름 자체를 봉쇄)
+  ['copy', 'cut', 'paste'].forEach((evt) => {
+    scriptEl.addEventListener(evt, (e) => { e.preventDefault(); });
+  });
+  // 드래그앤드롭 차단
+  scriptEl.addEventListener('dragstart', (e) => e.preventDefault());
+
+  // Android Chrome 의 액션 모드(선택 툴바)는 일부 단말에서 selectstart 직후에 뜸.
+  // 우리가 직접 + HL 을 띄우니, 시스템 툴바 동작은 의미가 없게 만든다.
+  // (완전히 숨길 수는 없지만 위 contextmenu + 복사 차단 조합으로 검색·복사가 무력화됨.)
+})();
+
 // 상세화면 본문에서 텍스트가 선택되면 + HL 버튼 노출
 function updateHlButtonForSelection() {
   if (!hlAddBtn) return;

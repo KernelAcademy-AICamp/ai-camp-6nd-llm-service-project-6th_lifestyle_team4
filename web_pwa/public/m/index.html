@@ -231,7 +231,16 @@
     color: var(--espresso);
     white-space: pre-wrap;
     text-align: left;
+    /* PWA: 선택은 허용하되 OS/브라우저의 텍스트 작업 메뉴(복사/검색/공유)는 차단.
+       하이라이트 + HL 버튼만 동작하게. */
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
   }
+  /* iOS Safari 의 선택 핸들 ::selection 은 살리되 색만 우리 톤으로 */
+  .script-mono::selection { background: rgba(216,90,48,0.18); color: var(--espresso); }
+  .script-mono::-moz-selection { background: rgba(216,90,48,0.18); color: var(--espresso); }
   .script-mono strong {
     font-family: 'Noto Sans KR', sans-serif;
     font-weight: 700;
