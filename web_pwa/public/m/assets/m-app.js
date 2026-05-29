@@ -120,6 +120,7 @@ const state = {
   detailCommentSubmitting: false,
   replyingToCommentId: null,   // 현재 답글 작성 대상 comment_id (null = 최상위 댓글)
   replyingToNickname: '',
+  editingCommentId: null,      // 현재 인라인 수정 중인 comment_id (null = 수정 모드 아님)
 };
 let detailCommentsChannel = null;
 
@@ -2306,13 +2307,19 @@ function renderComments() {
     const likedByMe = myUserId != null && likeSet.has(myUserId);
     const nickname = c.author_nickname || '익명';
     const isMine = myUserId != null && c.user_id === myUserId;
-    return `
-      <div class="comment-row${isReply ? ' is-reply' : ''}" data-comment-id="${c.comment_id}"
-           style="border:0.5px solid var(--latte);padding:12px 14px;background:var(--paper);${isReply ? 'margin-left:24px;border-left:2px solid var(--cta);' : ''}">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">
-          <span class="t-label-sm c-espresso" style="font-weight:600;">${isReply ? '↳ ' : ''}${escapeHtml(nickname)}</span>
-          <span class="t-label-sm c-walnut">${escapeHtml(formatRelativeTime(c.created_at))}</span>
-        </div>
+    const isEditing = state.editingCommentId === c.comment_id;
+    const linkBtnCss = 'background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;';
+
+    // 본문 + 액션 — 수정 모드일 땐 textarea + Save/Cancel
+    const bodyAndActions = isEditing
+      ? `
+        <textarea class="comment-edit-input" data-comment-id="${c.comment_id}" maxlength="500"
+                  style="width:100%;min-height:60px;padding:8px;border:0.5px solid var(--latte);background:var(--paper);font-family:inherit;font-size:14px;line-height:1.6;color:var(--espresso);resize:vertical;box-sizing:border-box;margin-bottom:8px;">${escapeHtml(c.body)}</textarea>
+        <div style="display:flex;justify-content:flex-end;gap:12px;">
+          <button class="comment-cancel-edit-btn" data-comment-id="${c.comment_id}" style="${linkBtnCss}">Cancel</button>
+          <button class="comment-save-edit-btn" data-comment-id="${c.comment_id}" style="${linkBtnCss}color:var(--cta);">Save</button>
+        </div>`
+      : `
         <p class="t-body-md c-espresso" style="line-height:1.6;white-space:pre-wrap;margin:0 0 8px 0;text-align:left;">${escapeHtml(c.body)}</p>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
           <div style="display:flex;align-items:center;gap:14px;">
@@ -2321,10 +2328,22 @@ function renderComments() {
               <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' ${likedByMe ? 1 : 0};">favorite</span>
               <span class="t-label-sm" style="color:${likedByMe ? 'var(--cta)' : 'var(--walnut)'};">${likeCount}</span>
             </button>
-            ${!isReply ? `<button class="comment-reply-btn" data-comment-id="${c.comment_id}" data-nickname="${escapeHtml(nickname)}" style="background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Reply</button>` : ''}
+            ${!isReply ? `<button class="comment-reply-btn" data-comment-id="${c.comment_id}" data-nickname="${escapeHtml(nickname)}" style="${linkBtnCss}">Reply</button>` : ''}
           </div>
-          ${isMine ? `<button class="comment-delete-btn" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;padding:4px 0;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Delete</button>` : ''}
+          ${isMine ? `<div style="display:flex;gap:12px;">
+            <button class="comment-edit-btn" data-comment-id="${c.comment_id}" style="${linkBtnCss}">Edit</button>
+            <button class="comment-delete-btn" data-comment-id="${c.comment_id}" style="${linkBtnCss}">Delete</button>
+          </div>` : ''}
+        </div>`;
+
+    return `
+      <div class="comment-row${isReply ? ' is-reply' : ''}" data-comment-id="${c.comment_id}"
+           style="border:0.5px solid var(--latte);padding:12px 14px;background:var(--paper);${isReply ? 'margin-left:24px;border-left:2px solid var(--cta);' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">
+          <span class="t-label-sm c-espresso" style="font-weight:600;">${isReply ? '↳ ' : ''}${escapeHtml(nickname)}</span>
+          <span class="t-label-sm c-walnut">${escapeHtml(formatRelativeTime(c.created_at))}</span>
         </div>
+        ${bodyAndActions}
       </div>
     `;
   };
@@ -2353,6 +2372,24 @@ function renderComments() {
       const id = parseInt(btn.dataset.commentId, 10);
       const nick = btn.dataset.nickname || '';
       if (!Number.isNaN(id)) startReply(id, nick);
+    });
+  });
+  detailCommentsList.querySelectorAll('.comment-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (!Number.isNaN(id)) startEditComment(id);
+    });
+  });
+  detailCommentsList.querySelectorAll('.comment-cancel-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => cancelEditComment());
+  });
+  detailCommentsList.querySelectorAll('.comment-save-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (Number.isNaN(id)) return;
+      const ta = detailCommentsList.querySelector(`textarea.comment-edit-input[data-comment-id="${id}"]`);
+      if (!ta) return;
+      saveEditComment(id, ta.value);
     });
   });
 }
@@ -2426,6 +2463,53 @@ async function submitComment() {
   } finally {
     state.detailCommentSubmitting = false;
     detailCommentSubmit.disabled = false;
+  }
+}
+
+function startEditComment(commentId) {
+  if (state.isAnonymous) { toast('로그인이 필요합니다'); return; }
+  state.editingCommentId = commentId;
+  renderComments();
+  // textarea가 화면에 그려진 뒤 focus + 커서 맨 뒤로
+  const ta = detailCommentsList.querySelector(`textarea.comment-edit-input[data-comment-id="${commentId}"]`);
+  if (ta) {
+    ta.focus();
+    const len = ta.value.length;
+    try { ta.setSelectionRange(len, len); } catch {}
+  }
+}
+
+function cancelEditComment() {
+  state.editingCommentId = null;
+  renderComments();
+}
+
+async function saveEditComment(commentId, rawBody) {
+  if (state.isAnonymous || !state.userId) return;
+  const body = String(rawBody || '').trim();
+  if (!body) { toast('내용을 입력해주세요'); return; }
+  if (body.length > 500) { toast('500자 이내로 작성해주세요'); return; }
+  // 변경 없으면 그냥 닫기
+  const original = state.detailComments.find((x) => x.comment_id === commentId);
+  if (original && original.body === body) {
+    state.editingCommentId = null;
+    renderComments();
+    return;
+  }
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('card_comments')
+      .update({ body })
+      .eq('comment_id', commentId)
+      .eq('user_id', state.userId);
+    if (error) throw error;
+    if (original) original.body = body;
+    state.editingCommentId = null;
+    renderComments();
+    toast('댓글이 수정되었습니다');
+  } catch (err) {
+    console.warn('[m] saveEditComment failed:', err);
+    toast('수정 실패: ' + (err.message || ''));
   }
 }
 
