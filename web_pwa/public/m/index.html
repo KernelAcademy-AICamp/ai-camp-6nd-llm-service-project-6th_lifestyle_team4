@@ -657,7 +657,7 @@
     background: var(--card-warm);
     border: 0.5px solid var(--latte);
     border-left: 3px solid var(--sand);
-    padding: 22px 16px 16px 18px;
+    padding: 18px 16px 16px 18px;
     margin-bottom: 12px;
     cursor: pointer;
     position: relative;
@@ -675,20 +675,24 @@
     content: '#' counter(quote-counter, decimal-leading-zero);
     counter-increment: quote-counter;
     position: absolute;
-    top: 8px; right: 12px;
+    top: 10px; right: 12px;
     font-size: 9px; letter-spacing: 0.25em;
     color: var(--sand); font-weight: 700;
   }
+  /* 북마크한 날짜 — 카드 위쪽에 in-flow 로 배치해 명대사와 자연스럽게 간격을 둠.
+     색·웨이트도 살짝 연하게. */
   .book .book-quote-date {
-    position: absolute;
-    top: 8px; left: 18px;
-    font-size: 9px; letter-spacing: 0.2em;
+    display: block;
+    font-size: 10px; letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--walnut); font-weight: 600;
+    color: var(--sand);
+    font-weight: 500;
+    margin-bottom: 14px;
+    padding-right: 40px;  /* 우측 counter(#01) 와 겹치지 않게 */
   }
   .book .book-quote-text {
     font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 16px; line-height: 26px;
+    font-size: 16px; line-height: 30px;
     color: var(--espresso);
     word-break: keep-all;
     white-space: pre-line;
@@ -983,7 +987,7 @@
               style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
         <div style="flex:1;min-width:0;">
           <p class="t-label-sm c-walnut" style="margin-bottom:6px;">MY CHATS</p>
-          <p class="t-body-md c-espresso">View comments you've posted</p>
+          <p class="t-body-sm c-walnut">View comments you've posted</p>
         </div>
         <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
       </button>
