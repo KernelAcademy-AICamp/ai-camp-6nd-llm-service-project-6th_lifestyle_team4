@@ -809,14 +809,16 @@
 
   /* ===== Feed (오늘의 한줄) ===== */
   /* 회색 컨테이너 안에: [닉네임·시간] + 흰 종이가 책 금박 단면에 꽂혀 얹힌 모양.
-     책은 컨테이너에 꽉 차지 않고 사방 여백을 두고 인셋(목업 기준). */
+     책은 컨테이너 좌·우·바닥에 꽉 차고(여백 0), 좌측엔 책등(spine)을 둔다. */
   .feed-item {
     background: var(--feed-card);
-    padding: 16px 16px 18px;    /* 사방 여백 → 책이 좌우로 안 꽉 차고 인셋 */
+    padding-top: 16px;          /* 상단만 여백 — 책은 컨테이너 좌·우·바닥에 꽉 참 */
     margin-bottom: 24px;
+    overflow: hidden;
   }
   .feed-item-head {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 0 16px;            /* 닉네임·시간만 좌우 여백 */
     margin-bottom: 10px;
   }
   .feed-item-head .feed-nick {
@@ -840,22 +842,29 @@
     white-space: pre-wrap; word-break: keep-all; text-align: center;
     box-shadow: 0 8px 16px rgba(14,12,10,0.16);
   }
-  /* 책 — 가죽색(인라인). 사방 인셋 + 높이 낮게.
-     왼쪽 책등·오른쪽 페이지 단면·아래 음영을 inset 그림자로 → '책'처럼 입체감 */
+  /* 책 — 가죽색(인라인). 컨테이너에 꽉 참 + 높이 낮게.
+     상단 금박 단면(페이지) + 좌측 책등(::before) + 오른쪽/아래 음영으로 '책'처럼 */
   .feed-book {
     position: relative; z-index: 2;
     margin-top: -22px;          /* 종이 하단을 덮어 '꽂힌' 느낌 */
-    padding: 0 16px 12px;       /* 높이 낮게: 하단 패딩 축소 */
+    padding: 0 16px 12px 28px;  /* 좌측은 책등 공간 확보, 높이 낮게 */
+    overflow: hidden;           /* 금박 띠·책등 클립 */
     box-shadow:
-      inset 7px 0 9px -6px rgba(0,0,0,0.45),     /* 왼쪽 책등 그림자 */
-      inset -5px 0 8px -6px rgba(0,0,0,0.30),    /* 오른쪽 페이지 단면 */
+      inset -5px 0 8px -6px rgba(0,0,0,0.28),    /* 오른쪽 페이지 단면 */
       inset 0 -13px 16px -12px rgba(0,0,0,0.30), /* 아래쪽 입체 음영 */
-      0 5px 12px rgba(14,12,10,0.26);            /* 바닥 드롭 섀도 */
+      0 -2px 8px rgba(14,12,10,0.10);            /* 종이 위로 살짝 */
     /* background: leatherColorFor(title) — 인라인 */
   }
-  /* 금박 페이지 단면 띠 — 얇은 줄 반복으로 책장 단면(gilt edge) 느낌, 종이가 꽂히는 입구 */
+  /* 좌측 책등(spine) — 같은 가죽을 어둡게 + 옆 금색 제본 라인. 어떤 가죽색에도 어울리게 반투명 */
+  .feed-book::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 20px; z-index: 3;
+    background: linear-gradient(90deg, rgba(0,0,0,0.46) 0%, rgba(0,0,0,0.10) 58%, rgba(0,0,0,0.34) 100%);
+    border-right: 1.5px solid rgba(0,0,0,0.55);
+    box-shadow: inset -3px 0 0 rgba(214,180,98,0.5);  /* 책등 옆 금색 라인 */
+  }
+  /* 금박 페이지 단면 띠 — 책장 단면(gilt edge), 종이가 꽂히는 입구. 책등 위는 ::before가 덮음 */
   .feed-book-band {
-    height: 13px; margin: 5px -16px 9px;   /* 위 5px 가죽 lip + 낮은 띠 */
+    height: 13px; margin: 5px -16px 9px -28px;   /* 책 폭 가득(좌측 책등은 ::before가 위에 덮음) */
     background: repeating-linear-gradient(180deg,
       #F2DCA0 0px, #D8B468 1.5px, #A9823A 3px, #806128 3.4px);
     border-top: 1px solid rgba(0,0,0,0.28);
