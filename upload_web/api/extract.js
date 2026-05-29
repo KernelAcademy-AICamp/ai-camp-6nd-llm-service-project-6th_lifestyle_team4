@@ -97,12 +97,22 @@ export default async function handler(req, res) {
       return res.status(err.status || 401).json({ error: err.message });
     }
     console.error('[extract] error:', err);
+    // Anthropic 사용량(결제) 한도 도달 — 메시지 패턴 또는 status 코드로 판별
+    const msg = err?.message || '';
+    if (/usage limits|reached your specified/i.test(msg)) {
+      // 메시지에서 'regain access on YYYY-MM-DD' 일자가 있으면 함께 안내
+      const dateMatch = msg.match(/regain access on (\d{4}-\d{2}-\d{2})/i);
+      const when = dateMatch ? ` (${dateMatch[1]}에 자동 복구)` : '';
+      return res.status(402).json({
+        error: `Anthropic API 사용량 한도에 도달했습니다${when}. Anthropic Console → Settings → Limits 에서 한도를 올려주세요. (당장은 더 가벼운 모델을 골라도 같은 한도라 통과되지 않습니다.)`,
+      });
+    }
     if (err?.status === 529 || err?.status === 429) {
       return res.status(503).json({
         error: 'Anthropic API가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.',
       });
     }
-    if (err?.code === 'ETIMEDOUT' || /timeout/i.test(err?.message || '')) {
+    if (err?.code === 'ETIMEDOUT' || /timeout/i.test(msg)) {
       return res.status(504).json({
         error: 'LLM 응답 대기 시간이 너무 깁니다. 파일이 너무 길거나 모델이 느려진 상태일 수 있습니다. 잠시 후 다시 시도해주세요.',
       });
