@@ -64,9 +64,19 @@ export default async function handler(req, res) {
     const modelKey = (fields.model || '').trim().toLowerCase();
 
     const extracted = await extractText(fileBuffer, filename, mimetype);
-    const scriptText = (extracted || '').trim();
+    let scriptText = (extracted || '').trim();
     if (!scriptText) {
       return res.status(400).json({ error: '파일에서 텍스트를 추출하지 못했습니다. (스캔본 PDF는 OCR이 필요할 수 있습니다)' });
+    }
+
+    // Claude 입력 한도(200K 토큰) 보호 — 한국어는 대략 1글자 ≈ 0.5~1 토큰.
+    // 프롬프트 본문(~10K 토큰)·시드 블록·출력 여유(16K 토큰)를 빼고 안전한 상한을 400K 글자(약 130~160K 토큰)로 둔다.
+    const MAX_SCRIPT_CHARS = 400000;
+    let truncated = false;
+    if (scriptText.length > MAX_SCRIPT_CHARS) {
+      console.warn(`[extract] script too long ${scriptText.length} → trimming to ${MAX_SCRIPT_CHARS}`);
+      scriptText = scriptText.slice(0, MAX_SCRIPT_CHARS);
+      truncated = true;
     }
 
     // 폼에서 작품명을 받았으면 웹(Wikiquote 다국어 + 나무위키)에서 명대사 시드를 끌어와
@@ -91,7 +101,12 @@ export default async function handler(req, res) {
     const result = await runExtract(scriptText, category, seedBlock, modelKey);
     // works.full_script_text는 NOT NULL이므로 저장 단계에서 다시 필요.
     // 응답에 함께 실어 클라이언트 state에 보관 → /api/save 호출 시 다시 전송.
-    return res.status(200).json({ ...result, full_script_text: scriptText, _seed_debug: seedDebug });
+    return res.status(200).json({
+      ...result,
+      full_script_text: scriptText,
+      _seed_debug: seedDebug,
+      _truncated: truncated || undefined,
+    });
   } catch (err) {
     if (err instanceof AuthError) {
       return res.status(err.status || 401).json({ error: err.message });
@@ -113,6 +128,12 @@ export default async function handler(req, res) {
       const when = dateMatch ? ` (${dateMatch[1]}에 자동 복구)` : '';
       return res.status(402).json({
         error: `Anthropic API 사용량 한도에 도달했습니다${when}. Anthropic Console → Settings → Limits 에서 한도를 올려주세요.`,
+      });
+    }
+    // 1.5) 입력 길이 초과 — 보통 우리가 400K 글자로 잘라 보내므로 발생하지 않지만, 시드 블록 등이 폭증하면 가능.
+    if (/prompt is too long|tokens.*maximum|maximum.*tokens/i.test(msg)) {
+      return res.status(413).json({
+        error: '대본이 너무 깁니다. 모델 입력 한도(200K 토큰)를 넘었어요. 파일을 둘로 나눠 따로 추출해주세요.',
       });
     }
     // 2) 모델이 존재하지 않거나 사용 권한 없음 (404 / 400 + not_found / 403)

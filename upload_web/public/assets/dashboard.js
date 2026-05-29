@@ -222,7 +222,11 @@ async function handleFile(file) {
       body: fd,
     });
     applyExtraction(json);
-    toast('추출 완료', 'success');
+    if (json?._truncated) {
+      toast('추출 완료 — 단, 대본이 너무 길어 일부만(앞 400K글자) 분석했어요.', 'info');
+    } else {
+      toast('추출 완료', 'success');
+    }
   } catch (err) {
     console.error(err);
     toast(err.message || '추출 실패', 'error');
