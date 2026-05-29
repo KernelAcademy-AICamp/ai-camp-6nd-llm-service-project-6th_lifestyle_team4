@@ -37,6 +37,7 @@ async function callClaude(prompt, { maxTokens = 8192, model = null } = {}) {
   // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper는 1회 추가 시도까지만 (총 ≤2회).
   // 외부 재시도 횟수가 많으면 Vercel 함수 timeout(300s)을 잡아먹어 전체 실패.
   const useModel = resolveModel(model);
+  console.log(`[anthropic] call model=${useModel} max_tokens=${maxTokens}`);
   const MAX_OUTER_ATTEMPTS = 2;
   let lastErr;
   for (let attempt = 0; attempt < MAX_OUTER_ATTEMPTS; attempt++) {
@@ -54,13 +55,20 @@ async function callClaude(prompt, { maxTokens = 8192, model = null } = {}) {
       return parseJson(text);
     } catch (err) {
       lastErr = err;
+      // 디버그 로그 — Vercel 함수 로그에 정확한 원인이 남도록
+      console.error(
+        `[anthropic] attempt ${attempt + 1} failed model=${useModel} ` +
+        `status=${err?.status} type=${err?.error?.type || err?.type} ` +
+        `message=${(err?.message || '').slice(0, 300)}`
+      );
       if (!isRetryable(err) || attempt === MAX_OUTER_ATTEMPTS - 1) break;
-      // 3s 백오프 + jitter (SDK가 이미 자체 백오프 했음)
       const delayMs = 3000 + Math.floor(Math.random() * 500);
-      console.warn(`[anthropic] retryable ${err.status} on attempt ${attempt + 1}; waiting ${delayMs}ms`);
+      console.warn(`[anthropic] retrying after ${delayMs}ms (status=${err?.status})`);
       await new Promise((r) => setTimeout(r, delayMs));
     }
   }
+  // 에러 객체에 model 정보를 실어서 호출자가 사용자 메시지에 활용 가능
+  if (lastErr) lastErr.__model = useModel;
   throw lastErr;
 }
 

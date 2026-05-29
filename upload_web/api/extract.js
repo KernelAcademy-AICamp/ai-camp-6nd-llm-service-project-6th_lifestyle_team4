@@ -96,27 +96,48 @@ export default async function handler(req, res) {
     if (err instanceof AuthError) {
       return res.status(err.status || 401).json({ error: err.message });
     }
-    console.error('[extract] error:', err);
-    // Anthropic 사용량(결제) 한도 도달 — 메시지 패턴 또는 status 코드로 판별
+    // 자세한 에러 로그 — Vercel 함수 로그로 원인 추적
+    console.error(
+      `[extract] error model=${err?.__model || '?'} status=${err?.status} ` +
+      `type=${err?.error?.type || err?.type} message=${(err?.message || '').slice(0, 300)}`
+    );
+
     const msg = err?.message || '';
+    const status = err?.status;
+    const modelName = err?.__model || '';
+    const modelTag = modelName ? ` (${modelName})` : '';
+
+    // 1) 결제/사용량 한도
     if (/usage limits|reached your specified/i.test(msg)) {
-      // 메시지에서 'regain access on YYYY-MM-DD' 일자가 있으면 함께 안내
       const dateMatch = msg.match(/regain access on (\d{4}-\d{2}-\d{2})/i);
       const when = dateMatch ? ` (${dateMatch[1]}에 자동 복구)` : '';
       return res.status(402).json({
-        error: `Anthropic API 사용량 한도에 도달했습니다${when}. Anthropic Console → Settings → Limits 에서 한도를 올려주세요. (당장은 더 가벼운 모델을 골라도 같은 한도라 통과되지 않습니다.)`,
+        error: `Anthropic API 사용량 한도에 도달했습니다${when}. Anthropic Console → Settings → Limits 에서 한도를 올려주세요.`,
       });
     }
-    if (err?.status === 529 || err?.status === 429) {
+    // 2) 모델이 존재하지 않거나 사용 권한 없음 (404 / 400 + not_found / 403)
+    //    사용자 계정에 Sonnet/Opus 액세스가 없을 때 흔히 발생.
+    if (status === 404 || status === 403 ||
+        /not[_ ]?found|invalid.*model|does not exist|don.?t have access/i.test(msg)) {
+      return res.status(400).json({
+        error: `선택한 모델${modelTag}을(를) 사용할 수 없습니다. 계정에 해당 모델 액세스 권한이 없거나 모델 ID 가 변경됐을 수 있습니다. Haiku 로 다시 시도해보세요.`,
+      });
+    }
+    // 3) 일시 과부하·레이트리밋
+    if (status === 529 || status === 429) {
       return res.status(503).json({
-        error: 'Anthropic API가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.',
+        error: `Anthropic API${modelTag}가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.`,
       });
     }
+    // 4) 타임아웃
     if (err?.code === 'ETIMEDOUT' || /timeout/i.test(msg)) {
       return res.status(504).json({
-        error: 'LLM 응답 대기 시간이 너무 깁니다. 파일이 너무 길거나 모델이 느려진 상태일 수 있습니다. 잠시 후 다시 시도해주세요.',
+        error: `LLM 응답 대기 시간이 너무 깁니다${modelTag}. 파일이 너무 길거나 모델이 느려진 상태일 수 있습니다. 잠시 후 다시 시도해주세요.`,
       });
     }
-    return res.status(500).json({ error: err.message || 'Internal error' });
+    // 5) 그 외 — status 와 모델을 메시지에 노출해 디버깅 도움
+    return res.status(500).json({
+      error: `추출 실패${modelTag}${status ? ` (status ${status})` : ''}: ${msg || 'Internal error'}`,
+    });
   }
 }
