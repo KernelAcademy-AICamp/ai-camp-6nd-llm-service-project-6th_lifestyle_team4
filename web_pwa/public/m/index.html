@@ -734,15 +734,18 @@
   }
 
   /* ===== Feed (오늘의 한줄) ===== */
-  /* 컨테이너: 회색 카드 안에 [닉네임·시간] + [책에 종이가 꽂힌 모양] */
+  /* 컨테이너: 회색 카드. 상단엔 [닉네임·시간], 책은 좌·우·바닥에 꽉 차고
+     그 위에 흰 종이가 금색 띠에 꽂혀 얹힌 모양 */
   .feed-item {
     background: var(--feed-card);
-    padding: 20px 18px 24px;
+    padding-top: 18px;          /* 상단만 여백 — 책은 컨테이너 가장자리에 붙음 */
     margin-bottom: 26px;
+    overflow: hidden;
   }
   .feed-item-head {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    margin-bottom: 4px;
+    padding: 0 18px;            /* 닉네임·시간만 좌우 여백 */
+    margin-bottom: 12px;
   }
   .feed-item-head .feed-nick {
     font-family: 'Nanum Myeongjo', Georgia, serif;
@@ -753,32 +756,33 @@
     flex: 0 0 auto; font-size: 12px; letter-spacing: 0.04em; color: var(--roast);
   }
   /* 책 + 종이 겹침 컨텍스트 */
-  .feed-book-wrap { position: relative; padding-top: 8px; }
+  .feed-book-wrap { position: relative; }
   /* 흰 종이 — 책보다 좁고 가운데, 아래쪽이 책 금색 띠에 꽂힌 듯 */
   .feed-paper {
     position: relative; z-index: 1;
-    width: 74%; margin: 0 auto;
+    width: 72%; margin: 0 auto;
     background: #FFFDF7;
-    padding: 24px 18px 38px;   /* 하단 여백: 책이 겹쳐도 글이 안 가려지게 */
+    padding: 22px 16px 44px;   /* 하단 여백 크게: 책이 겹쳐도 글 안 가려지게 */
     font-family: 'Nanum Myeongjo', Georgia, serif;
     font-size: 15px; line-height: 28px; color: #2C2620;
     white-space: pre-wrap; word-break: keep-all; text-align: center;
-    box-shadow: 0 8px 16px rgba(14,12,10,0.14);
+    box-shadow: 0 10px 18px rgba(14,12,10,0.18);
   }
-  /* 책 — 가죽색(인라인), 위쪽 금색 띠가 종이가 꽂히는 '입구' */
+  /* 책 — 가죽색(인라인). 컨테이너 좌·우·바닥에 꽉 참(가장자리 여백 0) */
   .feed-book {
     position: relative; z-index: 2;
-    margin-top: -22px;          /* 종이 하단을 덮어 '꽂힌' 느낌 */
-    padding: 0 18px 16px;
-    box-shadow: 0 6px 16px rgba(14,12,10,0.22);
+    margin-top: -28px;          /* 종이 하단을 덮어 '꽂힌' 느낌 */
+    padding: 0 18px 18px;       /* 내부 텍스트 여백만 (박스는 컨테이너 폭 가득) */
+    box-shadow: 0 -3px 12px rgba(14,12,10,0.14);
     /* background: leatherColorFor(title) — 인라인 */
   }
-  /* 금색 가죽 띠 (책의 머리·종이 슬롯) */
+  /* 금색 가죽 띠 (책의 머리·종이가 꽂히는 '입구') */
   .feed-book-band {
-    height: 16px; margin: 0 -18px 14px;
-    background: linear-gradient(180deg,#EAD18E 0%,#D8B468 46%,#A9823A 54%,#C9A24B 100%);
-    border-bottom: 1.5px solid rgba(0,0,0,0.32);
-    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.28), inset 0 -2px 3px rgba(0,0,0,0.18);
+    height: 18px; margin: 0 -18px 16px;   /* 책 좌우 패딩 상쇄 → 책 폭 가득 */
+    background: linear-gradient(180deg,#F0D89C 0%,#DCBA6E 42%,#A9823A 52%,#C9A24B 78%,#9C7732 100%);
+    border-top: 1px solid rgba(255,255,255,0.30);
+    border-bottom: 2px solid rgba(0,0,0,0.38);
+    box-shadow: inset 0 2px 2px rgba(255,255,255,0.22), inset 0 -3px 4px rgba(0,0,0,0.22);
   }
   .feed-book .fb-title {
     font-family: 'Nanum Myeongjo', Georgia, serif;
