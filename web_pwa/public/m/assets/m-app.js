@@ -1550,15 +1550,22 @@ function paintTasteToggle() {
 // MY CHATS — 내가 단 댓글·답글 모두 (parent_comment_id 필터 없음)
 async function renderMyChats() {
   if (!mypageChatsBlock || !mypageChatsList) return;
+  // 빈 상태에서도 섹션은 항상 노출 — 로그인하지 않은 익명만 숨김
   if (!state.userId) {
     mypageChatsBlock.style.display = 'none';
     mypageChatsList.innerHTML = '';
     return;
   }
+  mypageChatsBlock.style.display = 'block';
+
+  const emptyHtml = `
+    <p class="t-body-md c-walnut" style="padding:8px 0;text-align:left;">아직 단 댓글이 없어요.</p>
+  `;
+
   try {
     const sb = getSupabase();
     if (!sb) {
-      mypageChatsBlock.style.display = 'none';
+      mypageChatsList.innerHTML = emptyHtml;
       return;
     }
     const { data, error } = await sb
@@ -1570,8 +1577,7 @@ async function renderMyChats() {
     if (error) throw error;
     const rows = Array.isArray(data) ? data : [];
     if (rows.length === 0) {
-      mypageChatsBlock.style.display = 'none';
-      mypageChatsList.innerHTML = '';
+      mypageChatsList.innerHTML = emptyHtml;
       return;
     }
     mypageChatsList.innerHTML = '';
@@ -1603,11 +1609,9 @@ async function renderMyChats() {
       wrap.appendChild(hr);
       mypageChatsList.appendChild(wrap);
     }
-    mypageChatsBlock.style.display = 'block';
   } catch (err) {
     console.warn('[m] renderMyChats failed', err);
-    mypageChatsBlock.style.display = 'none';
-    mypageChatsList.innerHTML = '';
+    mypageChatsList.innerHTML = emptyHtml;
   }
 }
 
