@@ -54,6 +54,7 @@ const signinGoogle = $('#signin-google');
 const signinKakao = $('#signin-kakao');
 const tasteToggle = $('#taste-toggle');
 const tasteProfileEl = $('#taste-profile');
+const mypageActivityLabel = $('#mypage-activity-label');
 const mypageChatsBlock = $('#mypage-chats-block');
 const mypageChatsEntry = $('#mypage-chats-entry');
 const chatsScreen = $('#chats-screen');
@@ -1673,6 +1674,8 @@ function paintTasteToggle() {
 
 // Settings 의 MY CHATS 진입 버튼 표시/숨김 — 로그인 사용자에게만 노출
 function paintMyChatsEntry() {
+  // '내 활동' 라벨은 활동 블록과 함께(로그인 시) 노출
+  if (mypageActivityLabel) mypageActivityLabel.style.display = state.userId ? 'block' : 'none';
   if (!mypageChatsBlock) return;
   mypageChatsBlock.style.display = state.userId ? 'block' : 'none';
 }
@@ -2143,7 +2146,7 @@ function paintThemeToggle() {
   themeToggle.classList.toggle('on', isDark);
   themeToggle.setAttribute('aria-checked', isDark ? 'true' : 'false');
   if (themeSubtitle) {
-    themeSubtitle.textContent = isDark ? 'Dark · espresso night' : 'Light · cream paper';
+    themeSubtitle.textContent = isDark ? '다크 · 에스프레소 나이트' : '라이트 · 크림 페이퍼';
   }
 }
 
@@ -4075,6 +4078,21 @@ $$('[data-nav]').forEach((btn) => {
   btn.addEventListener('click', () => {
     track('nav', { to: btn.dataset.nav });
     setView(btn.dataset.nav);
+  });
+});
+
+// 상단 좌측 'Daily Script' 로고: 어느 화면에서든 클릭(또는 Enter/Space) 시 홈으로
+$$('.brand-logo').forEach((logo) => {
+  const goHome = () => {
+    track('nav', { to: 'home', from: 'brand-logo' });
+    setView('home');
+  };
+  logo.addEventListener('click', goHome);
+  logo.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      goHome();
+    }
   });
 });
 

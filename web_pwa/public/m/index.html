@@ -206,7 +206,10 @@
     line-height: 1;
     letter-spacing: -0.01em;
     color: var(--espresso);
+    cursor: pointer;
+    user-select: none;
   }
+  .brand-logo:active { opacity: 0.55; }
   /* 상세 화면 헤더는 제목이 세로로 3줄(DAILY SCRIPT/작품명/부제) 쌓이므로 높이를 늘려 잘림 방지 */
   #detail-screen .top-bar {
     height: auto;
@@ -1002,7 +1005,7 @@
 <!-- ===== Top Bar (Home/Archive show HomeTopBar; Settings shows SettingsTopBar; Detail shows DetailTopBar) ===== -->
 <header id="top-bar-home" class="top-bar">
   <div class="top-bar-brand">
-    <span class="brand-logo">Daily Script</span>
+    <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동">Daily Script</span>
   </div>
   <div style="display:flex;align-items:center;gap:14px;">
     <div title="실시간 동기화 상태" style="display:flex;align-items:center;gap:6px;">
@@ -1016,7 +1019,7 @@
 </header>
 
 <header id="top-bar-settings" class="top-bar" style="display:none;">
-  <span class="brand-logo">Daily Script</span>
+  <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동">Daily Script</span>
 </header>
 
 <div class="hairline"></div>
@@ -1172,7 +1175,7 @@
               style="background:transparent;border:0.5px solid var(--walnut);color:var(--walnut);
                      padding:6px 10px;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;
                      font-weight:600;cursor:pointer;flex-shrink:0;margin-top:8px;">
-        Profile Edit
+        프로필 편집
       </button>
     </div>
     <div id="settings-identity-spacer" style="height:10px;"></div>
@@ -1180,14 +1183,19 @@
     <div style="height:32px;"></div>
     <div class="hairline"></div>
 
+    <!-- 내 활동 섹션 라벨 — 로그인(활동 블록 표시) 시에만 노출 -->
+    <div id="mypage-activity-label" style="display:none;">
+      <div style="height:20px;"></div>
+      <p class="t-label-sm c-walnut" style="margin-bottom:12px;font-weight:700;">내 활동</p>
+    </div>
+
     <!-- MY CHATS entry — 클릭 시 풀스크린 chats-screen 으로 이동 -->
     <div id="mypage-chats-block" style="display:none;">
-      <div style="height:40px;"></div>
       <button id="mypage-chats-entry"
               style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
         <div style="flex:1;min-width:0;">
-          <p class="t-label-sm c-walnut" style="margin-bottom:6px;">MY CHATS</p>
-          <p class="t-body-sm c-walnut">View comments you've posted</p>
+          <p class="t-title-lg c-espresso" style="margin-bottom:4px;">내 댓글</p>
+          <p class="t-body-sm c-walnut">내가 남긴 댓글 보기</p>
         </div>
         <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
       </button>
@@ -1199,8 +1207,8 @@
       <button id="mypage-feed-entry"
               style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
         <div style="flex:1;min-width:0;">
-          <p class="t-label-sm c-walnut" style="margin-bottom:6px;">MY FEED</p>
-          <p class="t-body-sm c-walnut">View one-liners and highlights you've shared</p>
+          <p class="t-title-lg c-espresso" style="margin-bottom:4px;">내 피드</p>
+          <p class="t-body-sm c-walnut">내가 공유한 한 줄과 하이라이트 보기</p>
         </div>
         <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
       </button>
@@ -1228,13 +1236,13 @@
     </div>
 
     <div style="height:40px;"></div>
-    <p class="t-label-sm c-walnut" style="margin-bottom:12px;">GENERAL PREFERENCES</p>
+    <p class="t-label-sm c-walnut" style="margin-bottom:12px;font-weight:700;">일반 설정</p>
 
     <div class="setting-row">
       <div style="flex:1;">
-        <p class="t-title-lg c-espresso">Push Notifications</p>
+        <p class="t-title-lg c-espresso">푸시 알림</p>
         <div style="height:4px;"></div>
-        <p class="t-body-sm c-walnut">Daily digest and breaking insights</p>
+        <p class="t-body-sm c-walnut">데일리 다이제스트와 주요 소식</p>
       </div>
       <div id="push-toggle" class="editorial-toggle" role="switch" aria-checked="false" tabindex="0">
         <div class="knob"></div>
@@ -1244,9 +1252,9 @@
 
     <div class="setting-row">
       <div style="flex:1;">
-        <p class="t-title-lg c-espresso">Theme Settings</p>
+        <p class="t-title-lg c-espresso">테마 설정</p>
         <div style="height:4px;"></div>
-        <p id="theme-subtitle" class="t-body-sm c-walnut">Light · cream paper</p>
+        <p id="theme-subtitle" class="t-body-sm c-walnut">라이트 · 크림 페이퍼</p>
       </div>
       <div id="theme-toggle" class="editorial-toggle" role="switch" aria-checked="false" tabindex="0" aria-label="Toggle dark theme">
         <div class="knob"></div>
@@ -1257,9 +1265,9 @@
     <!-- Personalized Recommendations -->
     <div class="setting-row">
       <div style="flex:1;">
-        <p class="t-title-lg c-espresso">Personalized Recommendations</p>
+        <p class="t-title-lg c-espresso">맞춤 추천</p>
         <div style="height:4px;"></div>
-        <p class="t-body-sm c-walnut">Suggests cards similar to your bookmarks</p>
+        <p class="t-body-sm c-walnut">북마크와 비슷한 카드를 추천합니다</p>
         <p id="taste-profile" class="t-label-sm c-walnut" style="margin-top:8px;display:none;"></p>
       </div>
       <div id="taste-toggle" class="editorial-toggle" role="switch" aria-checked="false" tabindex="0">
@@ -1269,21 +1277,28 @@
     <div class="hairline"></div>
 
     <div style="height:40px;"></div>
-    <p class="t-label-sm c-walnut" style="margin-bottom:12px;">LEGAL & ABOUT</p>
+    <p class="t-label-sm c-walnut" style="margin-bottom:12px;font-weight:700;">약관 및 정보</p>
 
-    <div class="setting-row">
-      <p class="t-title-lg c-espresso">Terms of Service</p>
-    </div>
+    <a href="/m/terms.html" class="setting-row" style="text-decoration:none;">
+      <p class="t-title-lg c-espresso">이용약관</p>
+      <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+    </a>
+    <div class="hairline"></div>
+
+    <a href="/m/privacy.html" class="setting-row" style="text-decoration:none;">
+      <p class="t-title-lg c-espresso">개인정보 처리방침</p>
+      <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+    </a>
     <div class="hairline"></div>
 
     <div class="setting-row">
-      <p class="t-title-lg c-espresso">Version Info</p>
+      <p class="t-title-lg c-espresso">버전 정보</p>
       <span class="t-label-sm c-walnut">V1.0.0</span>
     </div>
     <div class="hairline"></div>
 
     <div style="height:40px;"></div>
-    <button id="sign-out-btn" class="sharp-btn outline">Sign Out</button>
+    <button id="sign-out-btn" class="sharp-btn outline">로그아웃</button>
     <div style="height:24px;"></div>
 
     <button data-install-app data-install-always class="sharp-btn outline" style="display:none;align-items:center;justify-content:center;gap:8px;">
