@@ -248,6 +248,12 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
   return distinct.size === 1 ? blocks[0].speaker : '';
 }
 
+// ---------- 추천 관련 상수 ----------
+// IIFE Init 안에서 paintTasteToggle → paintTasteProfile 가 즉시 이 상수를
+// 참조하기 때문에, 선언이 그보다 뒤에 있으면 TDZ 에러('Cannot access ... before
+// initialization')로 부팅이 실패한다. 그래서 init 이전 module-top 에 둔다.
+const MIN_BOOKMARKS_FOR_TASTE = 10;
+
 // ---------- Init ----------
 (async () => {
   try {
@@ -740,19 +746,21 @@ function isTasteEnabled() {
   return localStorage.getItem('ds.taste') === '1';
 }
 
-// 추천이 통계적으로 의미 있게 작동하려면 일정 수 이상의 북마크가 필요.
-const MIN_BOOKMARKS_FOR_TASTE = 10;
+// MIN_BOOKMARKS_FOR_TASTE 는 IIFE Init 보다 앞쪽 module-top 에 선언돼 있음 (TDZ 회피).
 
 /**
  * 북마크 카드들의 온도/강도 평균으로 사용자 취향 프로파일을 구성.
  * 카드의 temperature/intensity 가 숫자가 아니면 무시.
- * 북마크 수가 MIN_BOOKMARKS_FOR_TASTE 미만이면 null 반환 (추천 비활성).
+ * 임계치 판정은 '북마크 행 수' 기준 — 조인이 일부 실패해 cards 가 null
+ * 이어도 사용자 입장의 북마크 개수와 일치하도록.
  */
 function computeTasteProfile() {
+  const totalBookmarks = (state.bookmarks || []).length;
+  if (totalBookmarks < MIN_BOOKMARKS_FOR_TASTE) return null;
   const bookmarkedCards = (state.bookmarks || [])
     .map((b) => b.cards)
     .filter(Boolean);
-  if (bookmarkedCards.length < MIN_BOOKMARKS_FOR_TASTE) return null;
+  if (bookmarkedCards.length === 0) return null;
   let sumT = 0, sumI = 0, nT = 0, nI = 0;
   for (const c of bookmarkedCards) {
     if (typeof c.temperature === 'number') { sumT += c.temperature; nT++; }
