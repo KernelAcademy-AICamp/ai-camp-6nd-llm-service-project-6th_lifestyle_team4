@@ -23,19 +23,23 @@ export default async function handler(req, res) {
 
     const limit = clampInt(req.query?.limit, 1, 15, 5);
 
-    // author 가 라틴 문자를 포함하는 행만 대상.
-    // PostgREST 의 정규식 매치 연산자는 'match' (Postgres `~` 와 동일, case-sensitive).
-    const { data: works, error: selErr } = await supabaseAdmin
+    // PostgREST 의 regex 필터(match·~)가 클라이언트 버전에 따라 파싱 오류를 내는
+    // 경우가 있어, author NOT NULL 행을 전부 받아 JS 에서 라틴 문자 포함 여부로
+    // 거른다. works 테이블은 보통 수십~수백 행이라 충분히 빠르다.
+    const { data: allAuthors, error: selErr } = await supabaseAdmin
       .from('works')
       .select('work_id, title, author')
       .not('author', 'is', null)
-      .filter('author', 'match', '[A-Za-z]')
-      .order('work_id', { ascending: true })
-      .limit(limit);
+      .order('work_id', { ascending: true });
     if (selErr) throw selErr;
 
+    const englishCandidates = (allAuthors || []).filter(
+      (w) => typeof w.author === 'string' && /[A-Za-z]/.test(w.author)
+    );
+    const batch = englishCandidates.slice(0, limit);
+
     const results = [];
-    for (const w of works || []) {
+    for (const w of batch) {
       const before = w.author;
       try {
         const ko = await runKoreanizeAuthor(before);
@@ -55,13 +59,15 @@ export default async function handler(req, res) {
       }
     }
 
-    // 아직 영문이 남아 있는 행 수
-    const { count: remaining, error: cntErr } = await supabaseAdmin
+    // 아직 영문이 남아 있는 행 수 (배치 처리 직후 재조회)
+    const { data: afterAll, error: cntErr } = await supabaseAdmin
       .from('works')
-      .select('work_id', { count: 'exact', head: true })
-      .not('author', 'is', null)
-      .filter('author', 'match', '[A-Za-z]');
+      .select('work_id, author')
+      .not('author', 'is', null);
     if (cntErr) throw cntErr;
+    const remaining = (afterAll || []).filter(
+      (w) => typeof w.author === 'string' && /[A-Za-z]/.test(w.author)
+    ).length;
 
     return res.status(200).json({
       processed: results.length,
