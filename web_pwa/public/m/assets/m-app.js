@@ -3116,52 +3116,205 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
 // HIGHLIGHT 기능
 // ============================================================================
 
-// 상세화면 본문에서 OS·브라우저 네이티브 텍스트 작업 메뉴(구글 검색·복사·공유 등)를 차단.
-// 우리 + HL 만 동작시키기 위한 가드 — 선택과 드래그 핸들 자체는 막지 않는다.
-(function blockNativeTextMenusOnScript() {
+// ============================================================================
+// 본문 커스텀 선택 (Android·iOS 시스템 텍스트 메뉴 우회)
+// ----------------------------------------------------------------------------
+// CSS 에서 터치 단말은 user-select:none. 네이티브 선택 자체를 못 하게 해
+// OS·브라우저의 텍스트 작업 메뉴(구글 검색·복사·공유) 자체가 트리거되지 않는다.
+// 대신 여기서 long-press → 단어 선택 → 드래그 확장을 직접 구현.
+// 컨텍스트 메뉴·복사 이벤트도 같이 막아 데스크톱에서도 우리 + HL 만 의미 있게 함.
+// 외부에서 window.__getScriptHlText() / window.__clearScriptHl() 로 접근.
+// ============================================================================
+(function setupTouchHighlight() {
   const scriptEl = document.getElementById('detail-script');
   if (!scriptEl) return;
 
-  const within = (target) => target && scriptEl.contains(target);
-  const isSelectionInScript = () => {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return false;
-    const range = sel.getRangeAt(0);
-    return scriptEl.contains(range.commonAncestorContainer);
-  };
-
-  // 우클릭/롱프레스 컨텍스트 메뉴 차단
+  // -- 컨텍스트 메뉴·복사·드래그 차단 (데스크톱 우클릭 포함) -----------------
   scriptEl.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
-  // 문서 전체로 올라가는 컨텍스트 메뉴도 본문 선택 중이면 차단
-  document.addEventListener('contextmenu', (e) => {
-    if (within(e.target) || isSelectionInScript()) { e.preventDefault(); }
-  }, true);
-
-  // 복사·잘라내기·붙여넣기 차단 (드래그로 잡고 메뉴를 띄우려는 흐름 자체를 봉쇄)
-  ['copy', 'cut', 'paste'].forEach((evt) => {
-    scriptEl.addEventListener(evt, (e) => { e.preventDefault(); });
-  });
-  // 드래그앤드롭 차단
+  ['copy', 'cut', 'paste'].forEach((evt) =>
+    scriptEl.addEventListener(evt, (e) => e.preventDefault())
+  );
   scriptEl.addEventListener('dragstart', (e) => e.preventDefault());
 
-  // Android Chrome 의 액션 모드(선택 툴바)는 일부 단말에서 selectstart 직후에 뜸.
-  // 우리가 직접 + HL 을 띄우니, 시스템 툴바 동작은 의미가 없게 만든다.
-  // (완전히 숨길 수는 없지만 위 contextmenu + 복사 차단 조합으로 검색·복사가 무력화됨.)
+  // -- selection 오버레이 ----------------------------------------------------
+  const overlay = document.createElement('div');
+  overlay.className = 'hl-overlay';
+  scriptEl.insertBefore(overlay, scriptEl.firstChild);
+
+  let lpTimer = null;
+  let startPoint = null;
+  let isSelecting = false;
+  let anchor = null;   // {node, offset}
+  let focus = null;
+  const LONG_PRESS_MS = 500;
+  const MOVE_CANCEL_PX = 12;
+
+  function caretFromPoint(x, y) {
+    if (document.caretRangeFromPoint) {
+      const r = document.caretRangeFromPoint(x, y);
+      if (r && r.startContainer) return { node: r.startContainer, offset: r.startOffset };
+    }
+    if (document.caretPositionFromPoint) {
+      const p = document.caretPositionFromPoint(x, y);
+      if (p && p.offsetNode) return { node: p.offsetNode, offset: p.offset };
+    }
+    return null;
+  }
+
+  function expandToWord(point) {
+    if (!point || point.node.nodeType !== 3) return null;
+    const text = point.node.textContent || '';
+    let s = point.offset, e = point.offset;
+    // 빈 영역(공백) 터치면 단어 없음 → 가장 가까운 단어로 옮김
+    if (/\s/.test(text[s] || '') && /\s/.test(text[s - 1] || '')) return null;
+    while (s > 0 && /\S/.test(text[s - 1])) s--;
+    while (e < text.length && /\S/.test(text[e])) e++;
+    if (s >= e) return null;
+    return { startNode: point.node, startOffset: s, endNode: point.node, endOffset: e };
+  }
+
+  function buildRange() {
+    if (!anchor || !focus) return null;
+    const r = document.createRange();
+    try {
+      // anchor 가 focus 보다 뒤면 swap
+      const tmp = document.createRange();
+      tmp.setStart(anchor.node, anchor.offset); tmp.collapse(true);
+      const tmp2 = document.createRange();
+      tmp2.setStart(focus.node, focus.offset); tmp2.collapse(true);
+      const cmp = tmp.compareBoundaryPoints(Range.START_TO_START, tmp2);
+      if (cmp <= 0) {
+        r.setStart(anchor.node, anchor.offset);
+        r.setEnd(focus.node, focus.offset);
+      } else {
+        r.setStart(focus.node, focus.offset);
+        r.setEnd(anchor.node, anchor.offset);
+      }
+      return r.collapsed ? null : r;
+    } catch { return null; }
+  }
+
+  function renderOverlay() {
+    overlay.innerHTML = '';
+    const r = buildRange();
+    if (!r) { hideHl(); return; }
+    const sr = scriptEl.getBoundingClientRect();
+    const rects = r.getClientRects();
+    for (const rect of rects) {
+      const d = document.createElement('div');
+      d.style.left = (rect.left - sr.left) + 'px';
+      d.style.top = (rect.top - sr.top) + 'px';
+      d.style.width = rect.width + 'px';
+      d.style.height = rect.height + 'px';
+      overlay.appendChild(d);
+    }
+    showHl();
+  }
+
+  function showHl() {
+    const btn = document.getElementById('hl-add-btn');
+    if (!btn) return;
+    if (detailScreen && detailScreen.classList.contains('open')) {
+      btn.style.display = 'block';
+    }
+  }
+  function hideHl() {
+    const btn = document.getElementById('hl-add-btn');
+    if (btn) btn.style.display = 'none';
+  }
+
+  function clearAll() {
+    anchor = null; focus = null; isSelecting = false;
+    overlay.innerHTML = '';
+    hideHl();
+  }
+
+  // 외부 노출 — + HL 핸들러에서 호출
+  window.__getScriptHlText = () => {
+    const r = buildRange();
+    return r ? r.toString().trim() : '';
+  };
+  window.__clearScriptHl = clearAll;
+
+  // -- 터치 인터랙션 ---------------------------------------------------------
+  scriptEl.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) return;
+    const t = e.touches[0];
+    startPoint = { x: t.clientX, y: t.clientY };
+    // 새 long-press → 기존 선택 해제
+    if (anchor) clearAll();
+    if (lpTimer) clearTimeout(lpTimer);
+    lpTimer = setTimeout(() => {
+      lpTimer = null;
+      const p = caretFromPoint(startPoint.x, startPoint.y);
+      const word = expandToWord(p);
+      if (!word) return;
+      anchor = { node: word.startNode, offset: word.startOffset };
+      focus  = { node: word.endNode,   offset: word.endOffset };
+      isSelecting = true;
+      renderOverlay();
+      try { if (navigator.vibrate) navigator.vibrate(20); } catch {}
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+
+  scriptEl.addEventListener('touchmove', (e) => {
+    if (!startPoint) return;
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - startPoint.x);
+    const dy = Math.abs(t.clientY - startPoint.y);
+    if (lpTimer && (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX)) {
+      clearTimeout(lpTimer); lpTimer = null;
+    }
+    if (isSelecting) {
+      const p = caretFromPoint(t.clientX, t.clientY);
+      if (p) {
+        focus = p;
+        renderOverlay();
+      }
+      e.preventDefault();  // 선택 중에는 스크롤 잠금
+    }
+  }, { passive: false });
+
+  ['touchend', 'touchcancel'].forEach((evt) =>
+    scriptEl.addEventListener(evt, () => {
+      if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+      startPoint = null;
+      // 선택 자체는 유지 (+ HL 누를 때까지)
+    }, { passive: true })
+  );
+
+  // 본문 바깥 탭하면 선택 해제 (+ HL 버튼 위 탭은 예외)
+  document.addEventListener('touchstart', (e) => {
+    if (scriptEl.contains(e.target)) return;
+    const btn = document.getElementById('hl-add-btn');
+    if (btn && btn.contains(e.target)) return;
+    if (anchor) clearAll();
+  }, true);
+
+  // 상세화면이 닫히면 선택 정리
+  if (typeof detailScreen !== 'undefined' && detailScreen) {
+    new MutationObserver(() => {
+      if (!detailScreen.classList.contains('open')) clearAll();
+    }).observe(detailScreen, { attributes: true, attributeFilter: ['class'] });
+  }
 })();
 
-// 상세화면 본문에서 텍스트가 선택되면 + HL 버튼 노출
+// 데스크톱(native selection) fallback: 텍스트 선택되면 + HL 버튼 노출
+// (터치 단말은 setupTouchHighlight 내부에서 직접 show/hide)
 function updateHlButtonForSelection() {
   if (!hlAddBtn) return;
-  // 상세화면이 닫혀 있으면 숨김
   if (!detailScreen || !detailScreen.classList.contains('open')) {
     hlAddBtn.style.display = 'none';
     return;
   }
+  // 커스텀 selection 이 활성화돼 있으면 그대로 둠
+  const customText = (typeof window.__getScriptHlText === 'function') ? window.__getScriptHlText() : '';
+  if (customText) { hlAddBtn.style.display = 'block'; return; }
+  // native selection (데스크톱)
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed) { hlAddBtn.style.display = 'none'; return; }
   const text = String(sel.toString() || '').trim();
   if (!text) { hlAddBtn.style.display = 'none'; return; }
-  // 선택 범위가 #detail-script 안에 있는지 확인
   const scriptEl = document.getElementById('detail-script');
   if (!scriptEl) { hlAddBtn.style.display = 'none'; return; }
   const range = sel.getRangeAt(0);
@@ -3173,23 +3326,26 @@ function updateHlButtonForSelection() {
 }
 
 document.addEventListener('selectionchange', updateHlButtonForSelection);
-// touchend 직후엔 selectionchange 가 늦게 올 수 있어 한 번 더 체크
-document.addEventListener('touchend', () => setTimeout(updateHlButtonForSelection, 60));
 document.addEventListener('mouseup', () => setTimeout(updateHlButtonForSelection, 30));
 
 hlAddBtn?.addEventListener('click', () => {
-  const sel = window.getSelection();
-  const text = sel ? String(sel.toString() || '').trim() : '';
+  // 커스텀 selection(터치) 우선, 없으면 native(데스크톱) 사용
+  let text = (typeof window.__getScriptHlText === 'function') ? window.__getScriptHlText() : '';
+  let usedCustom = !!text;
+  if (!text) {
+    const sel = window.getSelection();
+    text = sel ? String(sel.toString() || '').trim() : '';
+  }
   if (!text) { toast('본문에서 텍스트를 선택해주세요'); return; }
-  // 현재 열려 있는 상세화면의 카드 정보
   const cardId = state.detailCardId;
   const card = (state.allCards || []).find((c) => c.card_id === cardId);
   if (!card) { toast('카드 정보를 찾을 수 없어요'); return; }
   if (state.isAnonymous || !state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
 
   state.draftHighlight = { card, selectedText: text };
-  // 선택 해제 + 버튼 숨김
-  if (sel) sel.removeAllRanges();
+  // 선택 해제
+  if (usedCustom && typeof window.__clearScriptHl === 'function') window.__clearScriptHl();
+  else { const s = window.getSelection(); if (s) s.removeAllRanges(); }
   hlAddBtn.style.display = 'none';
   openHlCompose();
 });
