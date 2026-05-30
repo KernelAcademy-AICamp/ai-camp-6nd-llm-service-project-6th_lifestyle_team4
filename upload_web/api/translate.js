@@ -22,8 +22,9 @@ export default async function handler(req, res) {
     if (quote.length > 2000 || script.length > 10000) {
       throw new HttpError('card text is too large', 413);
     }
+    const work = body?.work && typeof body.work === 'object' ? body.work : null;
 
-    const result = await runTranslate(card);
+    const result = await runTranslate(work, card);
     return res.status(200).json(result);
   } catch (err) {
     if (err instanceof AuthError) {

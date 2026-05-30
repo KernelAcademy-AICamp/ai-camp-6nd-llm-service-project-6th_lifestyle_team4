@@ -1,5 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { EXTRACT_PROMPTS, TRANSLATE_PROMPT, CHARACTERS_PROMPT, CLASSIFY_KEYWORDS_PROMPT } from './prompts.js';
+import {
+  EXTRACT_PROMPTS,
+  TRANSLATE_PROMPT,
+  TRANSLATE_SYSTEM,
+  CHARACTERS_PROMPT,
+  CLASSIFY_KEYWORDS_PROMPT,
+} from './prompts.js';
 
 // SDK 기본 재시도(2회)에 더해 우리도 직접 백오프 재시도를 한 번 더 감쌉니다.
 // 529(overloaded) / 429(rate limit) / 5xx 는 일시적인 경우가 많아 재시도가 효과적.
@@ -44,26 +50,42 @@ function getClient() {
   return client;
 }
 
-async function callClaude(prompt, { maxTokens = 8192, model = null } = {}) {
+async function callClaude(
+  prompt,
+  { maxTokens = 8192, model = null, system = null, temperature = null, topP = null, prefill = null } = {}
+) {
   // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper는 1회 추가 시도까지만 (총 ≤2회).
   // 외부 재시도 횟수가 많으면 Vercel 함수 timeout(300s)을 잡아먹어 전체 실패.
   const useModel = resolveModel(model);
   console.log(`[anthropic] call model=${useModel} max_tokens=${maxTokens}`);
   const MAX_OUTER_ATTEMPTS = 2;
   let lastErr;
+  const messages = [{ role: 'user', content: prompt }];
+  if (prefill) {
+    // Anthropic Messages API: assistant 메시지로 응답을 prefill 하면 그 뒤부터 이어 생성한다.
+    // 응답 text에는 prefill 자체가 포함되지 않으므로 파싱 시 앞에 다시 붙여 줘야 한다.
+    messages.push({ role: 'assistant', content: prefill });
+  }
   for (let attempt = 0; attempt < MAX_OUTER_ATTEMPTS; attempt++) {
     try {
-      const res = await getClient().messages.create({
+      const payload = {
         model: useModel,
         max_tokens: maxTokens,
-        system: SYSTEM_JSON_ONLY,
-        messages: [{ role: 'user', content: prompt }],
-      });
+        system: system || SYSTEM_JSON_ONLY,
+        messages,
+      };
+      if (temperature !== null) payload.temperature = temperature;
+      if (topP !== null) payload.top_p = topP;
+      const res = await getClient().messages.create(payload);
       const text = res.content
         .filter((b) => b.type === 'text')
         .map((b) => b.text)
         .join('');
-      return parseJson(text);
+      // prefill을 미리 박았으면 응답 앞에 다시 이어 붙여 완전한 JSON으로 만든다.
+      // 단, 모델이 prefill을 무시하고 '{'부터 새로 출력한 경우엔 그대로 둠 (이중 헤더 방지).
+      const combined =
+        prefill && !text.trimStart().startsWith('{') ? prefill + text : text;
+      return parseJson(combined);
     } catch (err) {
       lastErr = err;
       // 디버그 로그 — Vercel 함수 로그에 정확한 원인이 남도록
@@ -480,40 +502,46 @@ export async function runKoreanizeAuthor(rawAuthor) {
   return out || s;
 }
 
-export async function runTranslate(card) {
-  // TRANSLATE_PROMPT는 {work, cards:[...]} 봉투를 기대합니다.
-  // 단일 카드 번역 요청을 그 형식에 맞춰 감싸고, 응답의 cards[0]에서 번역된 quote/script_excerpt를 꺼냅니다.
+export async function runTranslate(work, card) {
+  // TRANSLATE_PROMPT는 {work, card} 봉투를 받고, 응답은 {quote, script_excerpt} 두 필드만.
+  // 출력 스키마를 단순화해 모델이 형식 검열에 토큰을 덜 쓰게 하고,
+  // 작품 메타·excerpt_description을 컨텍스트로 함께 넘겨 말투·시대 톤을 잡게 한다.
+  const w = work && typeof work === 'object' ? work : {};
   const envelope = {
     work: {
-      title: 'unknown',
-      format: 'movie',
-      author: null,
-      release_year: null,
-      genres: [],
+      title: w.title ?? null,
+      subtitle: w.subtitle ?? null,
+      format: w.format ?? null,
+      author: w.author ?? null,
+      release_year: w.release_year ?? null,
+      genres: Array.isArray(w.genres) ? w.genres : [],
+      characters: Array.isArray(w.characters) ? w.characters : [],
     },
-    cards: [
-      {
-        quote: card.quote ?? '',
-        script_excerpt: card.script_excerpt ?? '',
-        excerpt_description: card.excerpt_description ?? '',
-        keywords: Array.isArray(card.keywords) ? card.keywords : [],
-        temperature: card.temperature ?? 3,
-        intensity: card.intensity ?? 3,
-      },
-    ],
+    card: {
+      quote: card.quote ?? '',
+      script_excerpt: card.script_excerpt ?? '',
+      // 번역 대상은 아니지만, 화자·청자·관계·시대 추론에 쓰라고 함께 보낸다.
+      excerpt_description: card.excerpt_description ?? '',
+    },
   };
 
   const prompt = TRANSLATE_PROMPT.replace('{{INPUT_JSON}}', JSON.stringify(envelope, null, 2));
   // script_excerpt가 2000자 이상으로 길어, 영문→한국어 번역 출력이 4096 토큰을 넘어
   // JSON이 중간에 잘리는 문제(=valid JSON 실패)를 막기 위해 넉넉히 16000으로.
-  const result = await callClaude(prompt, { maxTokens: 16000 });
+  // prefill로 응답 JSON 헤더를 미리 박아 모델이 형식 토큰에 자원을 덜 쓰게 한다.
+  const result = await callClaude(prompt, {
+    maxTokens: 16000,
+    system: TRANSLATE_SYSTEM,
+    temperature: 0.3,
+    topP: 0.9,
+    prefill: '{"quote":"',
+  });
 
-  const translated = result?.cards?.[0];
-  if (!translated || typeof translated.quote !== 'string') {
-    throw new Error('Translation response missing cards[0]');
+  if (!result || typeof result.quote !== 'string') {
+    throw new Error('Translation response missing quote');
   }
   return {
-    quote_translated: translated.quote,
-    script_excerpt_translated: translated.script_excerpt,
+    quote_translated: result.quote,
+    script_excerpt_translated: result.script_excerpt,
   };
 }

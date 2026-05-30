@@ -614,6 +614,7 @@ async function requestTranslation(token, card) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      work: state.work || null,
       card: {
         quote: card.quote,
         script_excerpt: card.script_excerpt,
