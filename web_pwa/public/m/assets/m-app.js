@@ -3035,7 +3035,7 @@ function openDetail(card) {
   // 그 외(대본/시)는 기존 화자 라인 볼드 처리 (admin library.js와 동일).
   detailScript.innerHTML = isProseFormat(w.format)
     ? escapeHtml(flowProseScript(card.script_excerpt || ''))
-    : boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), w.characters);
+    : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', w.characters), w.characters);
 
   // significance — 네 프롬프트(screen/opera/play/literature) 모두 생성하므로
   // format 게이팅 없이 값이 있으면 표시.
@@ -4442,7 +4442,7 @@ function flowProseScript(text) {
     .join('\n\n');
 }
 
-function cleanForDisplay(s) {
+function cleanForDisplay(s, characterNames) {
   let text = String(s ?? '');
   text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
   const speakers = new Set();
@@ -4452,7 +4452,21 @@ function cleanForDisplay(s) {
     const name = m[1].trim();
     if (name) speakers.add(name);
   }
-  const PARTICLE_END = /(가|이|은|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  // 조사로 끝나는 단어는 narrative 주어 — 화자명이 아님. 께/께서는 존경형 격조사.
+  const PARTICLE_END = /(가|이|은|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에|께|께서|께선)$/;
+  // 접속·시간·양태 부사 — 줄 첫 단어로 자주 등장하지만 화자가 아님.
+  // characters 목록이 비어있을 때의 안전망으로만 사용한다.
+  const CONNECTIVE_DENY = new Set([
+    '그리고','그러나','그래서','하지만','그런데','그러면','그러니까','그러므로','따라서',
+    '또한','또는','그래도','그럼에도','한편','결국','마침내','다만','물론','사실',
+    '아무튼','그때','이때','이윽고','갑자기','천천히','잠시','다시','이미','이제',
+    '지금','드디어','문득','잠깐','순간',
+  ]);
+  const characterSet = new Set(
+    (Array.isArray(characterNames) ? characterNames : [])
+      .map((n) => String(n).trim())
+      .filter(Boolean)
+  );
   const headCounts = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
@@ -4466,7 +4480,14 @@ function cleanForDisplay(s) {
     }
   }
   Object.entries(headCounts).forEach(([word, count]) => {
-    if (count >= 2) speakers.add(word);
+    if (count < 2) return;
+    // 등장인물 목록이 있으면 실제 인물에 한해 화자로 승격, 없으면 접속부사 denylist로 거른다.
+    if (characterSet.size > 0) {
+      if (!characterSet.has(word)) return;
+    } else {
+      if (CONNECTIVE_DENY.has(word)) return;
+    }
+    speakers.add(word);
   });
   text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
   const sortedSpeakers = [...speakers].sort((a, b) => b.length - a.length);
