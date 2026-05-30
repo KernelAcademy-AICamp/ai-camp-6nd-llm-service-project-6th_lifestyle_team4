@@ -5,8 +5,13 @@
 //  - 정적 자산 (JS/CSS/이미지) → stale-while-revalidate
 //  - API/Supabase/Anthropic → 항상 네트워크 패스스루
 //  - 업데이트는 즉시 활성화 (skipWaiting + clients.claim)
-const CACHE_VERSION = 'sq-v49-extract-trim-long';
+const CACHE_PREFIX = 'sq-';
+const CACHE_VERSION = 'sq-v50-error-guards';
 const STATIC_ASSETS = [
+  '/index.html',
+  '/dashboard.html',
+  '/library.html',
+  '/quiz.html',
   '/assets/login.js',
   '/assets/dashboard.js',
   '/assets/library.js',
@@ -40,7 +45,7 @@ self.addEventListener('activate', (event) => {
     (async () => {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))
+        keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_VERSION).map((k) => caches.delete(k))
       );
       await self.clients.claim();
       // 모든 열린 클라이언트에게 "갱신됨" 알림
@@ -94,7 +99,11 @@ async function networkFirst(req) {
     const cached = await caches.match(req);
     if (cached) return cached;
     // 그것도 없으면 index 폴백
-    return caches.match('/index.html');
+    return (await caches.match('/index.html')) ||
+      new Response('Offline', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      });
   }
 }
 

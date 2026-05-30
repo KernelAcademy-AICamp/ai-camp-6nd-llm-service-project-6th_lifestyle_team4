@@ -4,9 +4,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
 let clientPromise = null;
 
+function fetchConfigWithTimeout() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  return fetch('/api/config', {
+    signal: controller.signal,
+    cache: 'no-store',
+  }).finally(() => clearTimeout(timer));
+}
+
 export function getSupabase() {
   if (!clientPromise) {
-    clientPromise = fetch('/api/config')
+    clientPromise = fetchConfigWithTimeout()
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load /api/config');
         return r.json();
@@ -18,15 +27,24 @@ export function getSupabase() {
         return createClient(supabaseUrl, supabaseAnonKey, {
           auth: { persistSession: true, autoRefreshToken: true },
         });
+      })
+      .catch((err) => {
+        clientPromise = null;
+        throw err;
       });
   }
   return clientPromise;
 }
 
 export async function getAccessToken() {
-  const sb = await getSupabase();
-  const { data } = await sb.auth.getSession();
-  return data?.session?.access_token ?? null;
+  try {
+    const sb = await getSupabase();
+    const { data } = await sb.auth.getSession();
+    return data?.session?.access_token ?? null;
+  } catch (err) {
+    console.warn('[supabase] session unavailable:', err);
+    return null;
+  }
 }
 
 export async function requireSessionOrRedirect(redirectTo = '/') {

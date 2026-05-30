@@ -3,10 +3,7 @@ import { EXTRACT_PROMPTS, TRANSLATE_PROMPT, CHARACTERS_PROMPT, CLASSIFY_KEYWORDS
 
 // SDK 기본 재시도(2회)에 더해 우리도 직접 백오프 재시도를 한 번 더 감쌉니다.
 // 529(overloaded) / 429(rate limit) / 5xx 는 일시적인 경우가 많아 재시도가 효과적.
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  maxRetries: 4,
-});
+let client = null;
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
 // 짧은 키('haiku'|'sonnet'|'opus') → 실제 Claude 모델 ID
@@ -33,6 +30,20 @@ function isRetryable(err) {
   return s === 408 || s === 409 || s === 429 || s === 529 || (s >= 500 && s < 600);
 }
 
+function getClient() {
+  if (client) return client;
+  if (!process.env.ANTHROPIC_API_KEY) {
+    const err = new Error('ANTHROPIC_API_KEY is not configured');
+    err.status = 500;
+    throw err;
+  }
+  client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    maxRetries: 4,
+  });
+  return client;
+}
+
 async function callClaude(prompt, { maxTokens = 8192, model = null } = {}) {
   // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper는 1회 추가 시도까지만 (총 ≤2회).
   // 외부 재시도 횟수가 많으면 Vercel 함수 timeout(300s)을 잡아먹어 전체 실패.
@@ -42,7 +53,7 @@ async function callClaude(prompt, { maxTokens = 8192, model = null } = {}) {
   let lastErr;
   for (let attempt = 0; attempt < MAX_OUTER_ATTEMPTS; attempt++) {
     try {
-      const res = await client.messages.create({
+      const res = await getClient().messages.create({
         model: useModel,
         max_tokens: maxTokens,
         system: SYSTEM_JSON_ONLY,
@@ -180,12 +191,247 @@ function parseJson(text) {
   throw new Error('LLM did not return valid JSON (all repair attempts failed)');
 }
 
-export async function runExtract(scriptText, category = 'screen', seedBlock = '', model = null) {
+const EXTRACT_CHUNK_TARGET_CHARS = 300000;
+const EXTRACT_CHUNK_WINDOW_CHARS = 50000;
+const EXTRACT_CHUNK_OVERLAP_CHARS = 3000;
+const EXTRACT_FINAL_INPUT_CARDS = 80;
+const EXTRACT_FINAL_OUTPUT_CARDS = 40;
+
+function buildExtractPrompt(scriptText, category, seedBlock = '', chunkInfo = null) {
   const tpl = EXTRACT_PROMPTS[category] || EXTRACT_PROMPTS.screen;
+  const chunkNote = chunkInfo
+    ? [
+        '',
+        '[CHUNKING NOTE]',
+        `This is chunk ${chunkInfo.index} of ${chunkInfo.total} from one full script.`,
+        `The chunks overlap by about ${chunkInfo.overlapChars} characters, so avoid duplicate cards from repeated overlap text.`,
+        'Extract strong candidates from this visible section. A later merge pass will deduplicate and select across the whole work.',
+      ].join('\n')
+    : '';
   const prompt = tpl
-    .replace('{{QUOTE_SEED_BLOCK}}', seedBlock || '')
+    .replace('{{QUOTE_SEED_BLOCK}}', `${seedBlock || ''}${chunkNote}`)
     .replace('{{SCRIPT_TEXT}}', scriptText);
+  return prompt;
+}
+
+function findRegexCandidates(text, from, to, regex, baseScore, useEnd = false) {
+  const zone = text.slice(from, to);
+  const re = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : `${regex.flags}g`);
+  const candidates = [];
+  let match;
+  while ((match = re.exec(zone)) !== null) {
+    const pos = from + match.index + (useEnd ? match[0].length : 0);
+    candidates.push({ pos, baseScore });
+    if (match[0].length === 0) re.lastIndex += 1;
+  }
+  return candidates;
+}
+
+function findBestSplit(text, start, desired, searchStart, searchEnd) {
+  const candidates = [
+    ...findRegexCandidates(text, searchStart, searchEnd, /^\s*(?:ACT|PART|CHAPTER|PROLOGUE|EPILOGUE|제\s*\d+\s*(?:막|장|부)|\d+\s*(?:막|장|부)|막\s*\d+|장\s*\d+)(?:\s|[:：.-]|$).*$/gim, 900),
+    ...findRegexCandidates(text, searchStart, searchEnd, /^\s*(?:SCENE|씬|장면)\s*\d*(?:\s|[:：.-]|$).*$/gim, 760),
+    ...findRegexCandidates(text, searchStart, searchEnd, /^\s*(?:INT\.|EXT\.|I\/E\.|실내|실외)(?:\s|[:：.-]|$).*$/gim, 720),
+    ...findRegexCandidates(text, searchStart, searchEnd, /\n[ \t]*\n[ \t]*\n+/g, 620, true),
+    ...findRegexCandidates(text, searchStart, searchEnd, /\n[ \t]*\n(?=[^\n]{1,50}\n)/g, 520, true),
+    ...findRegexCandidates(text, searchStart, searchEnd, /[.!?。！？…]["')\]]?\s+/g, 360, true),
+  ].filter((c) => c.pos > start + 1000 && c.pos < text.length);
+
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => {
+    const aScore = a.baseScore - Math.abs(a.pos - desired) / 1000;
+    const bScore = b.baseScore - Math.abs(b.pos - desired) / 1000;
+    return bScore - aScore;
+  });
+  return candidates[0].pos;
+}
+
+export function splitScriptIntoChunks(
+  scriptText,
+  {
+    targetChars = EXTRACT_CHUNK_TARGET_CHARS,
+    windowChars = EXTRACT_CHUNK_WINDOW_CHARS,
+    overlapChars = EXTRACT_CHUNK_OVERLAP_CHARS,
+  } = {}
+) {
+  const text = String(scriptText || '');
+  if (text.length <= targetChars + windowChars) {
+    return [{ index: 1, total: 1, start: 0, end: text.length, text }];
+  }
+
+  const chunks = [];
+  let start = 0;
+  let guard = 0;
+  while (start < text.length && guard < 1000) {
+    guard += 1;
+    const remaining = text.length - start;
+    if (remaining <= targetChars + windowChars) {
+      chunks.push({ start, end: text.length, text: text.slice(start) });
+      break;
+    }
+
+    const desired = start + targetChars;
+    const minSearchStart = start + Math.floor(targetChars * 0.55);
+    const searchStart = Math.max(minSearchStart, desired - windowChars);
+    const searchEnd = Math.min(text.length, desired + windowChars);
+    const splitAt = findBestSplit(text, start, desired, searchStart, searchEnd) || Math.min(text.length, desired);
+    const end = Math.max(start + 1, splitAt);
+    chunks.push({ start, end, text: text.slice(start, end) });
+
+    const nextStart = Math.max(end - overlapChars, start + 1);
+    start = nextStart >= end ? end : nextStart;
+  }
+
+  return chunks.map((chunk, idx) => ({
+    ...chunk,
+    index: idx + 1,
+    total: chunks.length,
+  }));
+}
+
+async function runExtractSingle(scriptText, category, seedBlock, model, chunkInfo = null) {
+  const prompt = buildExtractPrompt(scriptText, category, seedBlock, chunkInfo);
   return callClaude(prompt, { maxTokens: 16000, model });
+}
+
+function arrayOfStrings(value) {
+  return Array.isArray(value)
+    ? [...new Set(value.map((v) => String(v).trim()).filter(Boolean))]
+    : [];
+}
+
+function normalizeWork(work) {
+  const source = work && typeof work === 'object' ? work : {};
+  return {
+    title: source.title ? String(source.title).trim() : 'unknown',
+    subtitle: source.subtitle ? String(source.subtitle).trim() : null,
+    format: source.format ? String(source.format).trim() : 'movie',
+    author: source.author == null ? null : String(source.author).trim() || null,
+    release_year: source.release_year == null ? null : String(source.release_year).trim() || null,
+    genres: arrayOfStrings(source.genres),
+    characters: arrayOfStrings(source.characters),
+  };
+}
+
+function mergeWork(base, next) {
+  const out = normalizeWork(base);
+  const other = normalizeWork(next);
+  for (const key of ['title', 'subtitle', 'format', 'author', 'release_year']) {
+    if ((!out[key] || out[key] === 'unknown') && other[key] && other[key] !== 'unknown') {
+      out[key] = other[key];
+    }
+  }
+  out.genres = [...new Set([...arrayOfStrings(out.genres), ...arrayOfStrings(other.genres)])];
+  out.characters = [...new Set([...arrayOfStrings(out.characters), ...arrayOfStrings(other.characters)])];
+  return out;
+}
+
+function cardKey(card) {
+  const raw = String(card?.quote || card?.script_excerpt || '').toLowerCase();
+  return raw.replace(/[^\p{L}\p{N}]+/gu, '').slice(0, 160);
+}
+
+function mergeExtractResults(results) {
+  let work = normalizeWork(results[0]?.work);
+  const cards = [];
+  const seen = new Set();
+
+  for (const result of results) {
+    work = mergeWork(work, result?.work);
+    const resultCards = Array.isArray(result?.cards) ? result.cards : [];
+    for (const card of resultCards) {
+      if (!card || typeof card !== 'object') continue;
+      const key = cardKey(card);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      cards.push(card);
+    }
+  }
+
+  return { work, cards };
+}
+
+function pickEvenly(items, limit) {
+  if (items.length <= limit) return items;
+  const picked = [];
+  const step = items.length / limit;
+  for (let i = 0; i < limit; i++) {
+    picked.push(items[Math.floor(i * step)]);
+  }
+  return picked;
+}
+
+async function finalizeChunkedExtract(merged, model) {
+  const input = {
+    work: merged.work,
+    cards: pickEvenly(merged.cards, EXTRACT_FINAL_INPUT_CARDS),
+  };
+  const prompt = `You are merging quote-card extraction results from chunks of one complete script.
+Return one JSON object with the same schema:
+{
+  "work": {"title":"","subtitle":null,"format":"","author":null,"release_year":null,"genres":[],"characters":[]},
+  "cards": []
+}
+
+Rules:
+- Deduplicate cards that quote or describe the same moment.
+- Keep the strongest cards across the whole work, not only the first chunk.
+- Prefer cards that are important to the whole narrative, emotionally resonant, or highly recognizable.
+- Keep at most ${EXTRACT_FINAL_OUTPUT_CARDS} cards.
+- Preserve useful keywords, temperature, intensity, excerpt_description, and significance.
+- Do not invent quotes or scene text that is not in the input.
+
+INPUT_JSON:
+${JSON.stringify(input, null, 2)}`;
+
+  const finalResult = await callClaude(prompt, { maxTokens: 16000, model });
+  return {
+    work: mergeWork(merged.work, finalResult?.work),
+    cards: Array.isArray(finalResult?.cards) && finalResult.cards.length ? finalResult.cards : merged.cards,
+  };
+}
+
+export async function runExtract(scriptText, category = 'screen', seedBlock = '', model = null) {
+  const chunks = splitScriptIntoChunks(scriptText);
+  if (chunks.length === 1) {
+    return runExtractSingle(scriptText, category, seedBlock, model);
+  }
+
+  console.log(
+    `[anthropic] chunked extract chars=${String(scriptText || '').length} ` +
+    `chunks=${chunks.length} target=${EXTRACT_CHUNK_TARGET_CHARS} overlap=${EXTRACT_CHUNK_OVERLAP_CHARS}`
+  );
+
+  const results = [];
+  for (const chunk of chunks) {
+    console.log(`[anthropic] extracting chunk ${chunk.index}/${chunk.total} chars=${chunk.text.length}`);
+    results.push(await runExtractSingle(chunk.text, category, seedBlock, model, {
+      index: chunk.index,
+      total: chunk.total,
+      overlapChars: EXTRACT_CHUNK_OVERLAP_CHARS,
+    }));
+  }
+
+  const merged = mergeExtractResults(results);
+  let finalResult = merged;
+  let finalizeFailed = false;
+  try {
+    finalResult = await finalizeChunkedExtract(merged, model);
+  } catch (err) {
+    finalizeFailed = true;
+    console.warn('[anthropic] chunk finalization failed, returning deterministic merge:', err?.message || err);
+  }
+
+  return {
+    ...finalResult,
+    __chunked: {
+      chunks: chunks.length,
+      target_chars: EXTRACT_CHUNK_TARGET_CHARS,
+      window_chars: EXTRACT_CHUNK_WINDOW_CHARS,
+      overlap_chars: EXTRACT_CHUNK_OVERLAP_CHARS,
+      finalize_failed: finalizeFailed || undefined,
+    },
+  };
 }
 
 // 대본 전문에서 등장인물 이름 목록만 추출. (works.characters 백필용)

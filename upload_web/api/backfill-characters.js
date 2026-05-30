@@ -34,6 +34,10 @@ export default async function handler(req, res) {
     const results = [];
     for (const w of works || []) {
       try {
+        if (!w.full_script_text || !String(w.full_script_text).trim()) {
+          results.push({ work_id: w.work_id, title: w.title, error: 'full_script_text is empty' });
+          continue;
+        }
         const characters = await runExtractCharacters(w.full_script_text);
         const { error: updErr } = await supabaseAdmin
           .from('works')

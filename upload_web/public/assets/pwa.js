@@ -116,11 +116,16 @@ document.addEventListener('click', async (e) => {
 
   // Android/Chrome: 캐시된 프롬프트 사용
   if (deferredPrompt) {
-    deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    deferredPrompt = null;
-    if (!btn.hasAttribute('data-install-always')) {
-      btn.classList.add('hidden');
+    try {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+    } catch (err) {
+      console.warn('[pwa] install prompt failed:', err);
+    } finally {
+      deferredPrompt = null;
+      if (!btn.hasAttribute('data-install-always')) {
+        btn.classList.add('hidden');
+      }
     }
     return;
   }
@@ -140,9 +145,13 @@ document.addEventListener('click', async (e) => {
 });
 
 // iOS에서 페이지가 비로그인 페이지(index)일 때만 첫 방문 시 자동 배너 노출
-if (isIos && !isInStandalone && location.pathname === '/' || location.pathname.endsWith('/index.html')) {
-  if (!sessionStorage.getItem('pwa.iosHintShown')) {
-    // 자동 표시는 부담스러우므로 비활성화 — 사용자가 버튼을 눌렀을 때만 안내
-    // sessionStorage.setItem('pwa.iosHintShown', '1');
+if (isIos && !isInStandalone && (location.pathname === '/' || location.pathname.endsWith('/index.html'))) {
+  try {
+    if (!sessionStorage.getItem('pwa.iosHintShown')) {
+      // 자동 표시는 부담스러우므로 비활성화 — 사용자가 버튼을 눌렀을 때만 안내
+      // sessionStorage.setItem('pwa.iosHintShown', '1');
+    }
+  } catch {
+    /* storage unavailable */
   }
 }

@@ -4,14 +4,39 @@ import { requireAdmin, AuthError } from '../lib/auth.js';
 import { runExtract } from '../lib/anthropic.js';
 import { extractText } from '../lib/parse-document.js';
 import { fetchQuoteSeeds, formatSeedBlock } from '../lib/quotes/index.js';
+import { HttpError, sendError } from '../lib/http.js';
 
 export const config = {
   api: { bodyParser: false },
 };
 
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_UPLOAD_LABEL_MB = Math.ceil(MAX_UPLOAD_BYTES / 1024 / 1024);
+
 function readMultipart(req) {
   return new Promise((resolve, reject) => {
-    const bb = Busboy({ headers: req.headers, limits: { files: 1, fileSize: 25 * 1024 * 1024 } });
+    const contentLength = Number(req.headers?.['content-length'] || 0);
+    if (contentLength > MAX_UPLOAD_BYTES + 1024 * 1024) {
+      reject(new HttpError(`Uploaded file is too large (max ${MAX_UPLOAD_LABEL_MB}MB)`, 413));
+      return;
+    }
+
+    let bb;
+    try {
+      bb = Busboy({
+        headers: req.headers,
+        limits: {
+          files: 1,
+          fields: 5,
+          parts: 8,
+          fieldSize: 4 * 1024,
+          fileSize: MAX_UPLOAD_BYTES,
+        },
+      });
+    } catch {
+      reject(new HttpError('multipart/form-data request is required', 400));
+      return;
+    }
     let fileBuffer = null;
     let filename = '';
     let mimetype = '';
@@ -37,9 +62,12 @@ function readMultipart(req) {
     });
 
     bb.on('error', reject);
+    bb.on('filesLimit', () => reject(new HttpError('Only one file can be uploaded', 400)));
+    bb.on('fieldsLimit', () => reject(new HttpError('Too many form fields', 400)));
+    bb.on('partsLimit', () => reject(new HttpError('Too many multipart fields', 400)));
     bb.on('finish', () => {
-      if (tooLarge) return reject(new Error('파일 크기가 25MB를 초과합니다.'));
-      if (!fileBuffer) return reject(new Error('업로드된 파일이 없습니다.'));
+      if (tooLarge) return reject(new HttpError(`Uploaded file is too large (max ${MAX_UPLOAD_LABEL_MB}MB)`, 413));
+      if (!fileBuffer) return reject(new HttpError('Uploaded file is required', 400));
       resolve({ file: fileBuffer, filename, mimetype, fields });
     });
 
@@ -59,24 +87,14 @@ export default async function handler(req, res) {
     const { file: fileBuffer, filename, mimetype, fields } = await readMultipart(req);
     const rawCategory = (fields.category || '').trim();
     const category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'screen';
-    const titleHint = (fields.title || '').trim();
+    const titleHint = (fields.title || '').trim().slice(0, 200);
     // AI 모델 ('haiku' | 'sonnet' | 'opus'). 잘못된 값은 anthropic.js 에서 fallback.
     const modelKey = (fields.model || '').trim().toLowerCase();
 
     const extracted = await extractText(fileBuffer, filename, mimetype);
     let scriptText = (extracted || '').trim();
     if (!scriptText) {
-      return res.status(400).json({ error: '파일에서 텍스트를 추출하지 못했습니다. (스캔본 PDF는 OCR이 필요할 수 있습니다)' });
-    }
-
-    // Claude 입력 한도(200K 토큰) 보호 — 한국어는 대략 1글자 ≈ 0.5~1 토큰.
-    // 프롬프트 본문(~10K 토큰)·시드 블록·출력 여유(16K 토큰)를 빼고 안전한 상한을 400K 글자(약 130~160K 토큰)로 둔다.
-    const MAX_SCRIPT_CHARS = 400000;
-    let truncated = false;
-    if (scriptText.length > MAX_SCRIPT_CHARS) {
-      console.warn(`[extract] script too long ${scriptText.length} → trimming to ${MAX_SCRIPT_CHARS}`);
-      scriptText = scriptText.slice(0, MAX_SCRIPT_CHARS);
-      truncated = true;
+      throw new HttpError('Could not extract text from the file. Scanned PDFs may need OCR first.', 400);
     }
 
     // 폼에서 작품명을 받았으면 웹(Wikiquote 다국어 + 나무위키)에서 명대사 시드를 끌어와
@@ -99,17 +117,21 @@ export default async function handler(req, res) {
     }
 
     const result = await runExtract(scriptText, category, seedBlock, modelKey);
+    const { __chunked, ...extractPayload } = result || {};
     // works.full_script_text는 NOT NULL이므로 저장 단계에서 다시 필요.
     // 응답에 함께 실어 클라이언트 state에 보관 → /api/save 호출 시 다시 전송.
     return res.status(200).json({
-      ...result,
+      ...extractPayload,
       full_script_text: scriptText,
       _seed_debug: seedDebug,
-      _truncated: truncated || undefined,
+      _chunked: __chunked || undefined,
     });
   } catch (err) {
     if (err instanceof AuthError) {
       return res.status(err.status || 401).json({ error: err.message });
+    }
+    if (err instanceof HttpError) {
+      return sendError(res, err);
     }
     // 자세한 에러 로그 — Vercel 함수 로그로 원인 추적
     console.error(
@@ -130,10 +152,10 @@ export default async function handler(req, res) {
         error: `Anthropic API 사용량 한도에 도달했습니다${when}. Anthropic Console → Settings → Limits 에서 한도를 올려주세요.`,
       });
     }
-    // 1.5) 입력 길이 초과 — 보통 우리가 400K 글자로 잘라 보내므로 발생하지 않지만, 시드 블록 등이 폭증하면 가능.
+    // 1.5) 입력 길이 초과 — chunk target이 현재 모델에 비해 너무 크면 발생할 수 있다.
     if (/prompt is too long|tokens.*maximum|maximum.*tokens/i.test(msg)) {
       return res.status(413).json({
-        error: '대본이 너무 깁니다. 모델 입력 한도(200K 토큰)를 넘었어요. 파일을 둘로 나눠 따로 추출해주세요.',
+        error: '대본 chunk가 모델 입력 한도를 넘었어요. 코드의 chunk 기준 글자 수를 더 작게 낮춰 다시 시도해주세요.',
       });
     }
     // 2) 모델이 존재하지 않거나 사용 권한 없음 (404 / 400 + not_found / 403)

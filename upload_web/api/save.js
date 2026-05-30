@@ -1,33 +1,34 @@
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase-admin.js';
 import { runKoreanizeAuthor } from '../lib/anthropic.js';
-
-async function readJsonBody(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
-}
+import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
 const ALLOWED_FORMATS = new Set(['movie', 'drama', 'play', 'musical', 'opera', 'novel', 'poem', 'essay']);
 
+const MAX_CARDS_PER_SAVE = 150;
+const MAX_FULL_SCRIPT_CHARS = 5000000;
+const SAVE_BODY_MAX_BYTES = 30 * 1024 * 1024;
+
 function normalizeWork(work, fullScriptText) {
-  if (!work || typeof work !== 'object') throw new Error('work is required');
-  if (!work.title) throw new Error('work.title is required');
+  if (!work || typeof work !== 'object') throw new HttpError('work is required', 400);
+  if (!work.title) throw new HttpError('work.title is required', 400);
   if (!ALLOWED_FORMATS.has(work.format)) {
-    throw new Error('work.format must be one of movie | drama | play | musical | opera | novel | poem | essay');
+    throw new HttpError('work.format must be one of movie | drama | play | musical | opera | novel | poem | essay', 400);
   }
-  if (!fullScriptText) throw new Error('full_script_text is required');
+  const script = String(fullScriptText || '');
+  if (!script.trim()) throw new HttpError('full_script_text is required', 400);
+  if (MAX_FULL_SCRIPT_CHARS > 0 && script.length > MAX_FULL_SCRIPT_CHARS) {
+    throw new HttpError('full_script_text is too large', 413);
+  }
   return {
-    title: String(work.title),
+    title: String(work.title).trim().slice(0, 300),
     // 시리즈물(예: 셜록홈즈 → 보헤미아 왕국의 스캔들)의 개별 편 이름.
     // LLM이 비워서 보내면 null.
     subtitle: work.subtitle ? String(work.subtitle).trim() || null : null,
     format: work.format,
-    author: work.author ?? null,
-    release_year: work.release_year ?? null,
-    full_script_text: String(fullScriptText),
+    author: work.author == null ? null : String(work.author).trim().slice(0, 200) || null,
+    release_year: work.release_year == null ? null : String(work.release_year).trim().slice(0, 20) || null,
+    full_script_text: script,
     // 등장인물 이름 목록 (jsonb). LLM이 줬을 때만 저장, 없으면 null.
     characters: Array.isArray(work.characters)
       ? [...new Set(work.characters.map((c) => String(c).trim()).filter(Boolean))]
@@ -63,22 +64,24 @@ function pickDisplayedFields(card) {
 }
 
 function normalizeCard(card, workId) {
-  if (!card || typeof card !== 'object') throw new Error('card must be an object');
+  if (!card || typeof card !== 'object') throw new HttpError('card must be an object', 400);
   if (!card.quote || !card.script_excerpt) {
-    throw new Error('card.quote and card.script_excerpt are required');
+    throw new HttpError('card.quote and card.script_excerpt are required', 400);
   }
   const display = pickDisplayedFields(card);
   return {
     work_id: workId,
-    quote: normalizeText(display.quote),
-    script_excerpt: normalizeText(display.script_excerpt),
-    excerpt_description: normalizeText(display.excerpt_description),
+    quote: normalizeText(display.quote)?.slice(0, 2000),
+    script_excerpt: normalizeText(display.script_excerpt)?.slice(0, 10000),
+    excerpt_description: normalizeText(display.excerpt_description)?.slice(0, 2000),
     // keywords 컬럼은 jsonb. Supabase JS가 배열을 그대로 JSON으로 직렬화함.
-    keywords: Array.isArray(card.keywords) ? card.keywords.map(String) : [],
+    keywords: Array.isArray(card.keywords)
+      ? [...new Set(card.keywords.map((k) => String(k).trim()).filter(Boolean))].slice(0, 10)
+      : [],
     temperature: clampInt(card.temperature, 1, 5),
     intensity: clampInt(card.intensity, 1, 5),
     // 의의(significance) — DB의 cards.significance 컬럼에 저장 (텍스트, NULL 허용)
-    significance: card.significance ? normalizeText(String(card.significance)) : null,
+    significance: card.significance ? normalizeText(String(card.significance)).slice(0, 3000) : null,
   };
 }
 
@@ -123,7 +126,7 @@ export default async function handler(req, res) {
   try {
     await requireAdmin(req);
 
-    const body = await readJsonBody(req);
+    const body = await readJsonBody(req, { maxBytes: SAVE_BODY_MAX_BYTES });
     const workInput = normalizeWork(body.work, body.full_script_text);
 
     // 저장 직전 가드: LLM이 영문 작가명을 보냈으면 한국어로 변환 후 저장.
@@ -141,7 +144,10 @@ export default async function handler(req, res) {
     }
 
     if (!Array.isArray(body.cards) || body.cards.length === 0) {
-      return res.status(400).json({ error: 'cards array is required and non-empty' });
+      throw new HttpError('cards array is required and non-empty', 400);
+    }
+    if (body.cards.length > MAX_CARDS_PER_SAVE) {
+      throw new HttpError(`too many cards (max ${MAX_CARDS_PER_SAVE})`, 413);
     }
 
     // 1) works insert
@@ -154,7 +160,7 @@ export default async function handler(req, res) {
     createdWorkId = workRow.work_id;
 
     // 2) genres + work_genres (LLM이 work.genres를 줬을 때만)
-    const genreIds = await resolveGenreIds(body.work.genres);
+    const genreIds = await resolveGenreIds(body.work?.genres);
     if (genreIds.length > 0) {
       const links = genreIds.map((genre_id) => ({ work_id: createdWorkId, genre_id }));
       const { error: linkErr } = await supabaseAdmin.from('work_genres').insert(links);
@@ -178,7 +184,9 @@ export default async function handler(req, res) {
     if (err instanceof AuthError) {
       return res.status(err.status || 401).json({ error: err.message });
     }
-    console.error('[save] error:', err);
+    if (!(err instanceof HttpError)) {
+      console.error('[save] error:', err);
+    }
 
     // Best-effort rollback (Supabase REST에는 트랜잭션이 없음)
     if (createdWorkId) {
@@ -190,6 +198,10 @@ export default async function handler(req, res) {
       } catch (cleanupErr) {
         console.error('[save] rollback failed:', cleanupErr);
       }
+    }
+
+    if (err instanceof HttpError) {
+      return sendError(res, err);
     }
 
     return res.status(500).json({ error: err.message || 'Internal error' });

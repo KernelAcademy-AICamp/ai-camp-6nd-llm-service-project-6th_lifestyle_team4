@@ -5,6 +5,32 @@ import { initAnalytics, track, identify, setUserProps, resetUser } from '/assets
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 
+function safeStorageGet(key, fallback = null) {
+  try {
+    const value = localStorage.getItem(key);
+    return value == null ? fallback : value;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeStorageRemove(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* noop */
+  }
+}
+
 // ---------- DOM ----------
 const topBarHome = $('#top-bar-home');
 const topBarSettings = $('#top-bar-settings');
@@ -177,8 +203,8 @@ const state = {
   replyingToNickname: '',
   editingCommentId: null,      // 현재 인라인 수정 중인 comment_id (null = 수정 모드 아님)
   feedCategory: (() => {
-    try { const v = localStorage.getItem('ds.feedCategory'); return v === 'highlight' ? 'highlight' : 'today'; }
-    catch { return 'today'; }
+    const v = safeStorageGet('ds.feedCategory', 'today');
+    return v === 'highlight' ? 'highlight' : 'today';
   })(),                          // 피드 내부 카테고리 (새로고침에도 유지): 'today' | 'highlight'
   feedPosts: [],               // (오늘의 한줄) feed_posts 조인 rows. 없으면 FEED_SAMPLES 폴백.
   feedLoaded: false,           // loadFeedPosts 1회 호출 여부
@@ -316,12 +342,14 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
 // 참조하기 때문에, 선언이 그보다 뒤에 있으면 TDZ 에러('Cannot access ... before
 // initialization')로 부팅이 실패한다. 그래서 init 이전 module-top 에 둔다.
 const MIN_BOOKMARKS_FOR_TASTE = 10;
+const RECENT_EXCLUDE_SIZE = 10;
+const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
 
 // ---------- Init ----------
 (async () => {
   try {
     initAnalytics();  // 설정 fetch + SDK 로드를 백그라운드로 시작 (앱 부팅 막지 않음)
-    state.pushEnabled = localStorage.getItem('ds.push') === '1';
+    state.pushEnabled = safeStorageGet('ds.push') === '1';
     paintPushToggle();
     paintTasteToggle();
     paintThemeToggle();
@@ -359,7 +387,11 @@ const MIN_BOOKMARKS_FOR_TASTE = 10;
     });
   } catch (err) {
     console.error('[m] bootstrap failed:', err);
-    homeLoading.innerHTML = `<p class="t-body-md c-cta">초기화 실패: ${escapeHtml(err.message || String(err))}</p>`;
+    if (homeLoading) {
+      homeLoading.innerHTML = `<p class="t-body-md c-cta">초기화 실패: ${escapeHtml(err.message || String(err))}</p>`;
+    } else {
+      alert('초기화 실패: ' + (err.message || String(err)));
+    }
   }
 })();
 
@@ -661,7 +693,7 @@ async function bootstrapAuth() {
     return;
   }
   // 신규 user — 이전 익명 닉네임(있다면) 또는 OAuth 이름 또는 자동 닉네임
-  const carriedNickname = localStorage.getItem('ds.carryNickname') || '';
+  const carriedNickname = safeStorageGet('ds.carryNickname', '') || '';
   const startingNickname = carriedNickname || state.authName || randomCuteNickname();
   const { data: inserted, error: insErr } = await sb
     .from('users')
@@ -674,22 +706,22 @@ async function bootstrapAuth() {
   state.userId = inserted.user_id;
   state.userNickname = inserted.nickname || startingNickname;
   // 이전 닉네임 carry over 완료 → 정리
-  if (carriedNickname) localStorage.removeItem('ds.carryNickname');
+  if (carriedNickname) safeStorageRemove('ds.carryNickname');
 
   // 소셜 로그인 직후라면 이전 익명 user_id의 북마크를 옮긴다
   if (!state.isAnonymous) {
     // 회원가입 직후라면 저장해둔 프로필(로그인 ID·성별·나이대)을 새 행에 기록
     await applySignupProfile(sb, state.userId);
-    const prevAnonUserId = localStorage.getItem('ds.prevAnonUserId');
+    const prevAnonUserId = safeStorageGet('ds.prevAnonUserId');
     if (prevAnonUserId && prevAnonUserId !== String(state.userId)) {
       await migrateAnonymousBookmarks(parseInt(prevAnonUserId, 10), state.userId);
-      localStorage.removeItem('ds.prevAnonUserId');
+      safeStorageRemove('ds.prevAnonUserId');
     }
     // === 중복 로그인 감지/방지 (last-login-wins) ===
     await enforceSingleSession(sb);
   } else {
     // 익명 user_id 기억 — 나중에 소셜 로그인 시 이전 익명 데이터 이전용
-    localStorage.setItem('ds.prevAnonUserId', String(state.userId));
+    safeStorageSet('ds.prevAnonUserId', String(state.userId));
   }
 }
 
@@ -701,7 +733,7 @@ async function bootstrapAuth() {
  */
 async function enforceSingleSession(sb) {
   if (state.isAnonymous || !state.userId) return;
-  const localSid = localStorage.getItem(SESSION_KEY);
+  const localSid = safeStorageGet(SESSION_KEY);
   try {
     const { data, error } = await sb.from('users')
       .select('session_id')
@@ -717,14 +749,14 @@ async function enforceSingleSession(sb) {
       // 방금 로그인 — 새 sessionId 발급해서 DB와 local 동기화
       const newSid = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
       await sb.from('users').update({ session_id: newSid }).eq('user_id', state.userId);
-      localStorage.setItem(SESSION_KEY, newSid);
+      safeStorageSet(SESSION_KEY, newSid);
       return;
     }
     if (dbSid && dbSid !== localSid) {
       // 다른 기기에서 새 로그인 발생 — 이쪽 세션 종료
       console.warn('[m] another device took over the session');
       toast('다른 기기에서 로그인됨. 자동 로그아웃합니다.');
-      localStorage.removeItem(SESSION_KEY);
+      safeStorageRemove(SESSION_KEY);
       clearRememberedCreds();
       await sb.auth.signOut();
       setTimeout(() => location.reload(), 2000);
@@ -758,7 +790,7 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
 // 핵심 행 생성과 분리해 별도 update — 실패해도 앱 동작에는 지장 없게 처리.
 async function applySignupProfile(sb, userId) {
   let profile = null;
-  try { profile = JSON.parse(localStorage.getItem('ds.signupProfile') || 'null'); } catch {}
+  try { profile = JSON.parse(safeStorageGet('ds.signupProfile', 'null') || 'null'); } catch {}
   if (!profile) return;
   try {
     await sb.from('users').update({
@@ -772,7 +804,7 @@ async function applySignupProfile(sb, userId) {
   } catch (e) {
     console.warn('[m] signup profile write failed:', e);
   }
-  localStorage.removeItem('ds.signupProfile');
+  safeStorageRemove('ds.signupProfile');
 }
 
 // ---------- Data ----------
@@ -816,7 +848,7 @@ async function loadBookmarkCounts() {
 // ---------- Today's card / 추천 ----------
 
 function isTasteEnabled() {
-  return localStorage.getItem('ds.taste') === '1';
+  return safeStorageGet('ds.taste') === '1';
 }
 
 // MIN_BOOKMARKS_FOR_TASTE 는 IIFE Init 보다 앞쪽 module-top 에 선언돼 있음 (TDZ 회피).
@@ -922,12 +954,9 @@ function pickByTasteRandom() {
 }
 
 // 셔플 시 최근 10개에 있는 카드는 제외 + localStorage 영구 저장
-const RECENT_EXCLUDE_SIZE = 10;
-const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
-
 function loadRecentlyShownFromStorage() {
   try {
-    const raw = localStorage.getItem(RECENT_STORAGE_KEY);
+    const raw = safeStorageGet(RECENT_STORAGE_KEY);
     if (!raw) {
       console.log('[m] recent storage empty — fresh start');
       return;
@@ -948,7 +977,7 @@ function loadRecentlyShownFromStorage() {
 
 function saveRecentlyShownToStorage() {
   try {
-    localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(state.recentlyShownIds));
+    safeStorageSet(RECENT_STORAGE_KEY, JSON.stringify(state.recentlyShownIds));
   } catch (err) {
     console.warn('[m] saveRecentlyShown failed:', err);
   }
@@ -1090,6 +1119,7 @@ function paintBookmarkBtn(btn, filled) {
 
 // ---------- Home ----------
 function renderHome() {
+  if (!homeLoading || !homeContent || !todayCard) return;
   homeLoading.style.display = 'none';
   homeContent.style.display = 'block';
 
@@ -1106,8 +1136,13 @@ function renderHome() {
   state.todayCard = card;
   if (!card) {
     todayCard.style.display = 'none';
+    if (homeError) {
+      homeError.textContent = '표시할 명대사를 불러오지 못했어요. 잠시 후 다시 시도해주세요.';
+      homeError.style.display = 'block';
+    }
     return;
   }
+  if (homeError) homeError.style.display = 'none';
   todayCard.style.display = '';
   applyTodayCard(card);
   renderHomeBookmarks();
@@ -1175,6 +1210,7 @@ function applyTodayCard(card) {
 // '지난 기록' — 새로고침 전 표시됐던 카드 최대 3개
 // state.recentlyShownIds 큐에서 현재(맨 뒤)를 제외한 직전 카드들을 가져와 가장 최근 순으로 노출
 function renderHomeBookmarks() {
+  if (!homeBookmarksList) return;
   homeBookmarksList.innerHTML = '';
   const ids = state.recentlyShownIds;
   if (!ids || ids.length <= 1) {
@@ -1660,7 +1696,7 @@ function paintPushToggle() {
 }
 pushToggle.addEventListener('click', () => {
   state.pushEnabled = !state.pushEnabled;
-  localStorage.setItem('ds.push', state.pushEnabled ? '1' : '0');
+  safeStorageSet('ds.push', state.pushEnabled ? '1' : '0');
   paintPushToggle();
 });
 pushToggle.addEventListener('keydown', (e) => {
@@ -2260,7 +2296,7 @@ function paintTasteProfile() {
 
 tasteToggle.addEventListener('click', () => {
   const newEnabled = !isTasteEnabled();
-  localStorage.setItem('ds.taste', newEnabled ? '1' : '0');
+  safeStorageSet('ds.taste', newEnabled ? '1' : '0');
   paintTasteToggle();
   // 즉시 효과 — 새 추천 카드 한 장 뽑기
   if (state.currentView === 'home') {
@@ -2284,7 +2320,7 @@ function getCurrentTheme() {
 function applyTheme(theme) {
   if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
   else document.documentElement.removeAttribute('data-theme');
-  localStorage.setItem('ds.theme', theme);
+  safeStorageSet('ds.theme', theme);
   // theme-color meta 태그도 동기화 — iOS status bar 영역 색
   let meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) {
@@ -2477,8 +2513,8 @@ signOutBtn.addEventListener('click', async () => {
   } catch {}
   await sb.auth.signOut();
   resetUser();  // Amplitude userId/deviceId 초기화 (회원 분석 깔끔하게 분리)
-  localStorage.removeItem('ds.prevAnonUserId');
-  localStorage.removeItem(SESSION_KEY);
+  safeStorageRemove('ds.prevAnonUserId');
+  safeStorageRemove(SESSION_KEY);
   // 자격증명 기억은 유지 (다음 로그인 편의)
   location.reload();
 });
@@ -2488,7 +2524,7 @@ async function startOAuth(provider) {
   try {
     const sb = await getSupabase();
     // 현재 익명 user_id를 마이그레이션용으로 백업
-    if (state.userId) localStorage.setItem('ds.prevAnonUserId', String(state.userId));
+    if (state.userId) safeStorageSet('ds.prevAnonUserId', String(state.userId));
     const { error } = await sb.auth.signInWithOAuth({
       provider,
       options: {
@@ -2589,14 +2625,14 @@ function todayStr() {
 }
 function getRefreshState() {
   try {
-    const raw = JSON.parse(localStorage.getItem(REFRESH_COUNT_KEY) || 'null');
+    const raw = JSON.parse(safeStorageGet(REFRESH_COUNT_KEY, 'null') || 'null');
     if (raw && raw.date === todayStr() && Number.isInteger(raw.count)) return raw;
   } catch {}
   return { date: todayStr(), count: 0 };
 }
 function bumpRefreshCount() {
   const next = { date: todayStr(), count: getRefreshState().count + 1 };
-  try { localStorage.setItem(REFRESH_COUNT_KEY, JSON.stringify(next)); } catch {}
+  safeStorageSet(REFRESH_COUNT_KEY, JSON.stringify(next));
   return next.count;
 }
 
@@ -2604,8 +2640,8 @@ function bumpRefreshCount() {
 const LANDING_SEEN_KEY = 'ds.landingSeen';
 function maybeShowLanding() {
   if (!state.isAnonymous) return;
-  if (localStorage.getItem(LANDING_SEEN_KEY) === '1') return;
-  const markSeen = () => { try { localStorage.setItem(LANDING_SEEN_KEY, '1'); } catch {} };
+  if (safeStorageGet(LANDING_SEEN_KEY) === '1') return;
+  const markSeen = () => { safeStorageSet(LANDING_SEEN_KEY, '1'); };
   openPromptModal({
     title: '오늘의 명대사',
     message: '로그인하면 마음에 든 명대사를 내 서재에 보관 할 수 있어요.',
@@ -2624,19 +2660,19 @@ const FEEDBACK_NUDGE_KEY = 'ds.feedbackNudgeSeen';
 const FEEDBACK_NUDGE_THRESHOLD = 15;
 
 function feedbackNudgeSeen() {
-  try { return localStorage.getItem(FEEDBACK_NUDGE_KEY) === '1'; } catch { return false; }
+  return safeStorageGet(FEEDBACK_NUDGE_KEY) === '1';
 }
 function bumpCardsViewed() {
   let n = 0;
-  try { n = (parseInt(localStorage.getItem(CARDS_VIEWED_KEY), 10) || 0) + 1; } catch { n = 0; }
-  try { localStorage.setItem(CARDS_VIEWED_KEY, String(n)); } catch {}
+  n = (parseInt(safeStorageGet(CARDS_VIEWED_KEY, '0'), 10) || 0) + 1;
+  safeStorageSet(CARDS_VIEWED_KEY, String(n));
   return n;
 }
 
 const feedbackNudgeModal = $('#feedback-nudge-modal');
 function maybeShowFeedbackNudge() {
   if (!feedbackNudgeModal || feedbackNudgeSeen()) return;
-  try { localStorage.setItem(FEEDBACK_NUDGE_KEY, '1'); } catch {}  // 표시 즉시 영구 1회 보장
+  safeStorageSet(FEEDBACK_NUDGE_KEY, '1');  // 표시 즉시 영구 1회 보장
   feedbackNudgeModal.style.display = 'flex';
 }
 function closeFeedbackNudge() {
@@ -2656,7 +2692,7 @@ const REMEMBER_KEY = 'ds.rememberCreds';
 const SESSION_KEY = 'ds.sessionId';
 function loadRememberedCreds() {
   try {
-    const raw = localStorage.getItem(REMEMBER_KEY);
+    const raw = safeStorageGet(REMEMBER_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') return parsed;
@@ -2665,11 +2701,11 @@ function loadRememberedCreds() {
 }
 function saveRememberedCreds(id, password) {
   try {
-    localStorage.setItem(REMEMBER_KEY, JSON.stringify({ id, password, savedAt: Date.now() }));
+    safeStorageSet(REMEMBER_KEY, JSON.stringify({ id, password, savedAt: Date.now() }));
   } catch {}
 }
 function clearRememberedCreds() {
-  try { localStorage.removeItem(REMEMBER_KEY); } catch {}
+  safeStorageRemove(REMEMBER_KEY);
 }
 
 function setSigninMode(mode) {
@@ -2797,10 +2833,10 @@ async function submitSignin() {
   try {
     const sb = await getSupabase();
     // 익명 사용자의 user_id 백업 (가입/로그인 직후 북마크 이전용)
-    if (state.userId) localStorage.setItem('ds.prevAnonUserId', String(state.userId));
+    if (state.userId) safeStorageSet('ds.prevAnonUserId', String(state.userId));
     // 현재 익명 닉네임도 보존
     const carryNickname = state.userNickname || '';
-    localStorage.setItem('ds.carryNickname', carryNickname);
+    safeStorageSet('ds.carryNickname', carryNickname);
 
     if (signinMode === 'signup') {
       const { data: signUpData, error: signUpError } = await sb.auth.signUp({ email, password });
@@ -2814,7 +2850,7 @@ async function submitSignin() {
         }
       }
       // 가입 프로필 보존 — reload 후 bootstrapAuth가 새 user 행에 기록
-      localStorage.setItem('ds.signupProfile', JSON.stringify({
+      safeStorageSet('ds.signupProfile', JSON.stringify({
         login_id: id,
         gender: signupGender?.value || null,
         age_group: signupAge?.value || null,
@@ -3629,7 +3665,7 @@ function buildFeedItem(post) {
 document.querySelectorAll('#feed-chips .a-chip').forEach((btn) => {
   btn.addEventListener('click', () => {
     state.feedCategory = btn.dataset.feedCat || 'today';
-    try { localStorage.setItem('ds.feedCategory', state.feedCategory); } catch {}
+    safeStorageSet('ds.feedCategory', state.feedCategory);
     renderFeed();
   });
 });
@@ -4499,6 +4535,10 @@ function boldSpeakerLines(cleanedText, characterNames) {
 
 let toastTimer = null;
 function toast(msg) {
+  if (!toastEl) {
+    console.warn('[toast]', msg);
+    return;
+  }
   toastEl.textContent = msg;
   toastEl.classList.add('show');
   if (toastTimer) clearTimeout(toastTimer);

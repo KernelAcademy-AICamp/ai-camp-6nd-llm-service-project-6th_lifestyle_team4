@@ -1,13 +1,6 @@
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { runTranslate } from '../lib/anthropic.js';
-
-async function readJsonBody(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
-}
+import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -16,10 +9,18 @@ export default async function handler(req, res) {
   try {
     await requireAdmin(req);
 
-    const body = await readJsonBody(req);
+    const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
     const card = body?.card;
     if (!card || typeof card !== 'object') {
-      return res.status(400).json({ error: 'card object is required' });
+      throw new HttpError('card object is required', 400);
+    }
+    const quote = String(card.quote || '');
+    const script = String(card.script_excerpt || '');
+    if (!quote.trim() || !script.trim()) {
+      throw new HttpError('card.quote and card.script_excerpt are required', 400);
+    }
+    if (quote.length > 2000 || script.length > 10000) {
+      throw new HttpError('card text is too large', 413);
     }
 
     const result = await runTranslate(card);
@@ -27,6 +28,9 @@ export default async function handler(req, res) {
   } catch (err) {
     if (err instanceof AuthError) {
       return res.status(err.status || 401).json({ error: err.message });
+    }
+    if (err instanceof HttpError) {
+      return sendError(res, err);
     }
     console.error('[translate] error:', err);
     if (err?.status === 529 || err?.status === 429) {
