@@ -540,8 +540,12 @@ export async function runTranslate(work, card) {
   if (!result || typeof result.quote !== 'string') {
     throw new Error('Translation response missing quote');
   }
+  const confidence = result.confidence === 'low' ? 'low' : 'high';
+  const note = typeof result.note === 'string' ? result.note : '';
   return {
     quote_translated: result.quote,
     script_excerpt_translated: result.script_excerpt,
+    confidence,
+    note,
   };
 }
