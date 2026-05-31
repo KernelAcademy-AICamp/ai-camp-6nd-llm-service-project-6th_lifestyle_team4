@@ -3,7 +3,7 @@ import { supabaseAdmin } from '../lib/supabase-admin.js';
 import { runKoreanizeAuthor } from '../lib/anthropic.js';
 import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
-const ALLOWED_FORMATS = new Set(['movie', 'drama', 'play', 'musical', 'opera', 'novel', 'poem', 'essay']);
+const ALLOWED_FORMATS = new Set(['movie', 'drama', 'play', 'musical', 'opera', 'novel', 'poem', 'essay', 'prose']);
 
 const MAX_CARDS_PER_SAVE = 150;
 const MAX_FULL_SCRIPT_CHARS = 5000000;
@@ -13,7 +13,7 @@ function normalizeWork(work, fullScriptText) {
   if (!work || typeof work !== 'object') throw new HttpError('work is required', 400);
   if (!work.title) throw new HttpError('work.title is required', 400);
   if (!ALLOWED_FORMATS.has(work.format)) {
-    throw new HttpError('work.format must be one of movie | drama | play | musical | opera | novel | poem | essay', 400);
+    throw new HttpError('work.format must be one of movie | drama | play | musical | opera | novel | poem | essay | prose', 400);
   }
   const script = String(fullScriptText || '');
   if (!script.trim()) throw new HttpError('full_script_text is required', 400);

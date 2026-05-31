@@ -374,7 +374,7 @@ function dedupe(arr) {
 
 // 메인 진입점.
 // title: 사용자 입력 작품명
-// category: 'screen' | 'opera' | 'play' | 'novel' | 'poem' | 'essay'
+// category: 'screen' | 'opera' | 'play' | 'novel' | 'poem' | 'essay' | 'prose'
 // 반환: { sources: [{source, lang, srcTitle, quotes}], resolvedTitles: {lang: title} }
 export async function fetchWikiquoteSeeds(title, category) {
   if (!title || !title.trim()) return { sources: [], resolvedTitles: {} };
