@@ -1990,7 +1990,7 @@ function resetFeedbackForm() {
   const submit = $('#fb-submit'); if (submit) { submit.disabled = false; submit.textContent = '보내기'; }
 }
 
-// 회원이면 성별·연령대·이메일 프리필 (state 값 → 폼 라벨)
+// 회원이면 성별·연령대 프리필 (state 값 → 폼 라벨). 이메일은 자동 채우지 않는다.
 function prefillFeedback() {
   const genderMap = { male: '남성', female: '여성', other: '기타' };
   const g = document.getElementById('fb-gender');
@@ -2001,8 +2001,7 @@ function prefillFeedback() {
     const label = n >= 60 ? '60대 이상' : (n >= 10 ? n + '대' : '');
     if (label && [...a.options].some((o) => o.value === label)) a.value = label;
   }
-  const em = document.getElementById('fb-email');
-  if (em && state.authEmail) em.value = state.authEmail;
+  // 이메일은 프리필/자동완성하지 않는다 — 빈 칸 + placeholder("you@example.com")만 노출.
 }
 
 function openFeedbackScreen() {
