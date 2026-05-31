@@ -39,6 +39,7 @@ const headerHairline = $('#header-hairline');
 const viewHome = $('#view-home');
 const viewArchive = $('#view-archive');
 const viewFeed = $('#view-feed');
+const viewNotice = $('#view-notice');
 const viewSettings = $('#view-settings');
 
 const homeLoading = $('#home-loading');
@@ -220,6 +221,8 @@ const state = {
   myFeedHighlights: [],        // card_highlights WHERE user_id=me
   editingMyFeedId: null,
   editingMyFeedKind: null,     // 'comment' | 'highlight'
+  notices: [],                 // 공지사항 (Supabase notices 테이블)
+  noticesLoaded: false,
 };
 let detailCommentsChannel = null;
 
@@ -379,6 +382,8 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
     history.replaceState({ tab: state.currentView }, '', '#' + state.currentView);
     // 비회원이면 랜딩 로그인 유도 (최초 1회) — 홈이 렌더된 위에 띄움
     maybeShowLanding();
+    // 공지를 불러와 새 공지가 있으면 NOTICE 탭에 안 읽음 점 표시 (부팅을 막지 않게 백그라운드)
+    loadNotices().then(paintNoticeBadge);
     // 데이터 변경을 실시간으로 받아 즉시 반영
     subscribeToChanges();
     // 앱이 포그라운드로 돌아올 때마다 최신화 (실시간 누락 안전망)
@@ -397,7 +402,7 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
 
 function getInitialView() {
   const hash = (location.hash || '').replace('#', '');
-  return ['home','archive','feed','settings'].includes(hash) ? hash : 'home';
+  return ['home','archive','feed','notice','settings'].includes(hash) ? hash : 'home';
 }
 window.addEventListener('hashchange', () => setView(getInitialView()));
 
@@ -489,6 +494,12 @@ async function subscribeToChanges() {
         console.log('[m] realtime works event:', payload.eventType);
         await loadAllCards();
         rerenderActiveView();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notices' }, async (payload) => {
+        console.log('[m] realtime notices event:', payload.eventType);
+        await loadNotices();
+        if (state.currentView === 'notice') renderNotice();
+        paintNoticeBadge();
       });
     if (state.userId != null) {
       ch = ch.on('postgres_changes',
@@ -4313,6 +4324,94 @@ function renderHighlights() {
 // popstate 처리 — hl-compose 도 우선순위에 포함
 // (기존 popstate 핸들러는 별도로 detail/chats/book modal 처리. 여기서 보완)
 
+// ---------- Notice (공지사항) ----------
+// 공지는 Supabase `notices` 테이블에서 불러온다. 어드민(upload_web)이 작성/수정/삭제하고,
+// 소비자 앱은 published=true 인 공지만 읽는다(RLS). 새 공지가 생기면 하단 NOTICE 탭에
+// 빨간 점이 뜨고(localStorage로 마지막으로 본 notice_id 추적), 탭을 열어보면 사라진다.
+const NOTICE_SEEN_KEY = 'ds.lastSeenNotice';
+const NOTICE_TAG_LABEL = { update: 'UPDATE', notice: 'NOTICE', event: 'EVENT' };
+
+async function loadNotices() {
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('notices')
+      .select('notice_id, tag, title, body, pinned, created_at')
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    state.notices = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('[m] loadNotices failed:', err);
+    state.notices = [];
+  } finally {
+    state.noticesLoaded = true;
+  }
+}
+
+// 안 읽음 판정은 '가장 최근 생성된 공지' 기준 — notice_id 는 시퀀스라 최댓값이 최신.
+function latestNoticeId() {
+  const items = state.notices || [];
+  if (!items.length) return null;
+  let maxId = items[0].notice_id;
+  for (const n of items) if (n.notice_id > maxId) maxId = n.notice_id;
+  return String(maxId);
+}
+function hasUnreadNotice() {
+  const latest = latestNoticeId();
+  return !!latest && safeStorageGet(NOTICE_SEEN_KEY) !== latest;
+}
+function markNoticesSeen() {
+  const latest = latestNoticeId();
+  if (latest) safeStorageSet(NOTICE_SEEN_KEY, latest);
+}
+function paintNoticeBadge() {
+  const dot = document.getElementById('notice-unread-dot');
+  if (dot) dot.classList.toggle('show', hasUnreadNotice());
+}
+function formatNoticeDate(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}`;
+  } catch { return ''; }
+}
+function renderNotice() {
+  const listEl = document.getElementById('notice-list');
+  const emptyEl = document.getElementById('notice-empty');
+  if (!listEl) return;
+  const items = state.notices || [];
+  if (items.length === 0) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    // 아직 안 불러왔으면 한 번 로드한 뒤 다시 렌더
+    if (!state.noticesLoaded) {
+      loadNotices().then(() => { if (state.currentView === 'notice') renderNotice(); });
+    }
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  listEl.innerHTML = '';
+  for (const n of items) {
+    const tag = String(n.tag || 'notice').toLowerCase();
+    const card = document.createElement('article');
+    card.className = 'notice-card';
+    card.innerHTML = `
+      <div class="notice-head">
+        <span class="notice-tag t-${escapeHtml(tag)}">${escapeHtml(NOTICE_TAG_LABEL[tag] || tag.toUpperCase())}</span>
+        <span class="notice-date">${escapeHtml(formatNoticeDate(n.created_at))}</span>
+      </div>
+      <h2 class="notice-title">${escapeHtml(n.title || '')}</h2>
+      <div class="notice-body">${escapeHtml(n.body || '')}</div>
+    `;
+    listEl.appendChild(card);
+  }
+  // 탭을 열어 봤으니 최신 공지를 읽음 처리하고 배지 제거
+  markNoticesSeen();
+  paintNoticeBadge();
+}
+
 // ---------- View switching ----------
 function setView(view) {
   // 익명 사용자는 보관함 진입 차단 — 안내 후 home으로 보정 (재귀 없이 1패스)
@@ -4327,6 +4426,7 @@ function setView(view) {
   viewHome.style.display = (view === 'home') ? 'block' : 'none';
   viewArchive.style.display = (view === 'archive') ? 'block' : 'none';
   if (viewFeed) viewFeed.style.display = (view === 'feed') ? 'block' : 'none';
+  if (viewNotice) viewNotice.style.display = (view === 'notice') ? 'block' : 'none';
   viewSettings.style.display = (view === 'settings') ? 'block' : 'none';
   if (feedFab) feedFab.style.display = (view === 'feed') ? 'flex' : 'none';
 
@@ -4345,6 +4445,7 @@ function setView(view) {
     renderFeed();
     if (!state.feedLoaded) loadFeedPosts();  // 읽기는 공개 — 익명도 실제 피드 로드
   }
+  if (view === 'notice') renderNotice();
   if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); paintMyFeedEntry(); }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)

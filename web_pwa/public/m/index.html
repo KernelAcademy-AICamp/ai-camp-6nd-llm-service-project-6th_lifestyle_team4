@@ -267,6 +267,7 @@
   }
   .bottom-nav .nav-item {
     flex: 1;
+    position: relative;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 6px 0;
     color: var(--walnut);
@@ -1058,6 +1059,40 @@
     border-bottom: 0.5px solid var(--latte);
   }
   .feed-pick-row .arrow { font-size: 16px; color: var(--sand); flex: 0 0 auto; }
+
+  /* ===== Notice (공지사항) ===== */
+  .notice-card {
+    border: 0.5px solid var(--latte);
+    border-radius: 12px;
+    background: var(--card-warm);
+    padding: 20px 18px;
+    margin-bottom: 14px;
+  }
+  .notice-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .notice-tag {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+    padding: 3px 9px; border-radius: 4px; text-transform: uppercase;
+    background: var(--espresso); color: var(--paper);
+  }
+  .notice-tag.t-update { background: var(--cta); color: #fff; }
+  .notice-tag.t-event  { background: var(--highlight); color: #2C2620; }
+  .notice-date { font-size: 11px; letter-spacing: 0.1em; color: var(--walnut); }
+  .notice-title {
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
+    font-size: 18px; line-height: 1.4; color: var(--espresso);
+    margin-bottom: 10px; word-break: keep-all;
+  }
+  .notice-body {
+    font-size: 14px; line-height: 1.8; color: var(--roast);
+    white-space: pre-line; word-break: keep-all;
+  }
+  /* 하단 네비 '안 읽음' 점 */
+  #notice-unread-dot {
+    position: absolute; top: 6px; left: 50%; margin-left: 7px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--cta); display: none;
+  }
+  #notice-unread-dot.show { display: block; }
 </style>
 </head>
 <body>
@@ -1231,6 +1266,23 @@
   <button id="feed-fab" aria-label="한줄 리뷰 작성">
     <span class="material-symbols-outlined">add</span>
   </button>
+
+  <!-- ===== Notice view (공지사항) ===== -->
+  <section id="view-notice" style="display:none;">
+    <div style="height:24px;"></div>
+    <h1 class="t-display-md c-espresso">공지사항</h1>
+    <p class="t-label-sm c-walnut" style="margin-top:6px;">업데이트와 소식</p>
+
+    <div id="notice-list" style="margin-top:24px;"></div>
+
+    <div id="notice-empty" style="display:none;padding:60px 0;text-align:center;">
+      <span class="material-symbols-outlined c-sand" style="font-size:56px;">campaign</span>
+      <p class="t-headline-sm c-espresso" style="margin-top:14px;">아직 공지가 없어요</p>
+      <p class="t-body-md c-walnut" style="margin-top:6px;">새로운 소식이 올라오면 여기에 표시됩니다.</p>
+    </div>
+
+    <div style="height:40px;"></div>
+  </section>
 
   <!-- ===== Settings view ===== -->
   <section id="view-settings" style="display:none;">
@@ -1406,6 +1458,12 @@
     <span class="material-symbols-outlined nav-icon">dynamic_feed</span>
     <span class="t-label-sm">FEED</span>
     <span class="nav-dot"></span>
+  </button>
+  <button data-nav="notice" class="nav-item">
+    <span class="material-symbols-outlined nav-icon">campaign</span>
+    <span class="t-label-sm">NOTICE</span>
+    <span class="nav-dot"></span>
+    <span id="notice-unread-dot"></span>
   </button>
   <button data-nav="settings" class="nav-item">
     <span class="material-symbols-outlined nav-icon">settings</span>
