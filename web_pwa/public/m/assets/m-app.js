@@ -572,8 +572,14 @@ async function refreshAll() {
   let refreshing = false;
   // 모달이 열려있을 땐 PTR 비활성
   function isLocked() {
-    return refreshing
-      || document.getElementById('detail-screen')?.classList.contains('open');
+    if (refreshing) return true;
+    // 풀스크린 오버레이(detail·feedback·myfeed·chats·hl-compose)가 하나라도 열려 있으면 PTR 비활성.
+    // 모두 .detail-screen '클래스'를 공유하므로 클래스로 잡는다.
+    // (기존 버그: id로만('detail-screen') 검사해 의견 남기기 등 다른 오버레이에서 PTR이 오발동 → 작성 중 로딩·튕김)
+    if (document.querySelector('.detail-screen.open')) return true;
+    // 백드롭으로 화면을 덮는 모달이 body 스크롤을 잠근 동안에도 비활성
+    if (document.body.style.overflow === 'hidden') return true;
+    return false;
   }
 
   document.addEventListener('touchstart', (e) => {
