@@ -25,7 +25,7 @@ async function apiFetch(url, options = {}) {
 const state = {
   work: null,
   fullScriptText: '',   // works.full_script_text 컬럼이 NOT NULL이라 저장 시 함께 전송
-  category: 'screen',   // 'screen' 영화/드라마, 'opera' 오페라/뮤지컬, 'play' 연극, 'novel' 소설, 'poem' 시, 'essay' 에세이
+  category: 'screen',   // 'screen' 영화/드라마, 'opera' 오페라/뮤지컬, 'play' 연극, 'novel' 소설, 'poem' 시, 'essay' 에세이, 'prose' 산문
   model: 'haiku',       // AI 모델: 'haiku' | 'sonnet' | 'opus' (extract 시 전송)
   // each card: { ...llmCard, selected, translated?: { quote_translated, ... }, showingTranslation }
   cards: [],
@@ -133,6 +133,7 @@ function paintCategory() {
       novel: '소설 전용 프롬프트로 분석됩니다 (산문 단락·인물 보존).',
       poem: '시 전용 프롬프트로 분석됩니다 (행·연 구조 보존).',
       essay: '에세이 전용 프롬프트로 분석됩니다 (산문 논점·정조 보존).',
+      prose: '산문 전용 프롬프트로 분석됩니다 (산문시·콩트·편지 등 일반 산문).',
     };
     categoryHint.textContent = hints[state.category] || '';
   }

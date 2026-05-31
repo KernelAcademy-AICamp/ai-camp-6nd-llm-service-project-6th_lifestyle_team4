@@ -75,7 +75,7 @@ function readMultipart(req) {
   });
 }
 
-const ALLOWED_CATEGORIES = new Set(['screen', 'opera', 'play', 'novel', 'poem', 'essay']);
+const ALLOWED_CATEGORIES = new Set(['screen', 'opera', 'play', 'novel', 'poem', 'essay', 'prose']);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

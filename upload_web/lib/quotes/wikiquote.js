@@ -36,6 +36,10 @@ const CATEGORY_KEYWORDS = {
     'essay', 'memoir',
     '에세이', '수필', '随筆', 'essai', 'mémoire',
   ],
+  prose: [
+    'prose', 'prose poem', 'letters', 'letter', 'diary', 'journal', 'sketch',
+    '산문', '산문시', '편지', '서간', '일기', '콩트', 'lettres', 'prosa',
+  ],
 };
 
 // 명언 섹션 헤딩 (다국어). 일부 wiki 페이지(특히 영화)는 페이지 전체가 인용 모음이라

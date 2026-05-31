@@ -200,10 +200,10 @@ function refreshWorkFilterOptions() {
 }
 
 // 형식(works.format) 한글 라벨 + 표시 순서 (모바일 m-app.js GENRE_LABEL 과 동일).
-const FORMAT_ORDER = ['movie', 'drama', 'musical', 'opera', 'play', 'novel', 'poem', 'essay'];
+const FORMAT_ORDER = ['movie', 'drama', 'musical', 'opera', 'play', 'novel', 'poem', 'essay', 'prose'];
 const FORMAT_LABEL = {
   movie: '영화', drama: '드라마', musical: '뮤지컬', opera: '오페라',
-  play: '연극', novel: '소설', poem: '시', essay: '에세이',
+  play: '연극', novel: '소설', poem: '시', essay: '에세이', prose: '산문',
 };
 
 // 형식 필터 옵션을 현재 로드된 카드들의 distinct format 으로 채운다.
@@ -1267,7 +1267,7 @@ function escapeHtml(s) {
 // 위·아래 빈 줄을 넣어 별도 단락으로 분리한다. 그 외 서술은 문장 끝(. ! ? …)마다
 // 줄을 끊어 '한 문장 = 한 줄'로 만든다. (강조용 짧은 따옴표 "정의"처럼 끝에 문장부호가 없으면 분리 안 함.)
 // 단락(빈 줄) 구분은 보존. (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로.)
-const PROSE_FORMATS = new Set(['novel', 'essay']);
+const PROSE_FORMATS = new Set(['novel', 'essay', 'prose']);
 function isProseFormat(fmt) {
   return PROSE_FORMATS.has(String(fmt || '').toLowerCase());
 }

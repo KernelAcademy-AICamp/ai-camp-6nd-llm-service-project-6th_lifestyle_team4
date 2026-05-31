@@ -1362,7 +1362,7 @@ homeRefresh.addEventListener('click', () => {
 
 // ---------- Archive ----------
 // ---------- Archive: bookshelf grouped by genre ----------
-const GENRE_ORDER = ['movie', 'drama', 'musical', 'opera', 'play', 'novel', 'poem', 'essay'];
+const GENRE_ORDER = ['movie', 'drama', 'musical', 'opera', 'play', 'novel', 'poem', 'essay', 'prose'];
 const GENRE_LABEL = {
   movie: '영화',
   drama: '드라마',
@@ -1372,6 +1372,7 @@ const GENRE_LABEL = {
   novel: '소설',
   poem: '시',
   essay: '에세이',
+  prose: '산문',
 };
 // 작품 제목 해시 → 고정 가죽 색상 (같은 작품엔 항상 같은 책등 색)
 const LEATHER_PALETTE = [
@@ -4540,7 +4541,7 @@ function escapeHtml(s) {
 // 위·아래 빈 줄을 넣어 별도 단락으로 분리한다. 그 외 서술은 문장 끝(. ! ? …)마다
 // 줄을 끊어 '한 문장 = 한 줄'로 만든다. (강조용 짧은 따옴표 "정의"처럼 끝에 문장부호가 없으면 분리 안 함.)
 // 단락(빈 줄) 구분은 보존. (시/대본은 줄바꿈이 의미를 가지므로 제외 — 기존 cleanForDisplay 경로.)
-const PROSE_FORMATS = new Set(['novel', 'essay']);
+const PROSE_FORMATS = new Set(['novel', 'essay', 'prose']);
 function isProseFormat(fmt) {
   return PROSE_FORMATS.has(String(fmt || '').toLowerCase());
 }
