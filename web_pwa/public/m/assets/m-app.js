@@ -380,8 +380,8 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
     setView(getInitialView());
     suppressPushState = false;
     history.replaceState({ tab: state.currentView }, '', '#' + state.currentView);
-    // 비회원이면 랜딩 로그인 유도 (최초 1회) — 홈이 렌더된 위에 띄움
-    maybeShowLanding();
+    // 첫 접속/첫 로그인 시 사용법 안내 1회. 안내가 떴으면 로그인 유도는 다음 기회로 미룬다.
+    if (!maybeShowGuide()) maybeShowLanding();
     // 공지를 불러와 새 공지가 있으면 NOTICE 탭에 안 읽음 점 표시 (부팅을 막지 않게 백그라운드)
     loadNotices().then(paintNoticeBadge);
     // 데이터 변경을 실시간으로 받아 즉시 반영
@@ -2589,7 +2589,7 @@ const promptModalSubnote = $('#prompt-modal-subnote');
 const DISMISS_LINK_STYLE = 'width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);';
 let _promptOnDismiss = null;
 
-function openPromptModal({ title, message, confirmLabel = '로그인', dismissLabel = '닫기', subNote = '', dismissAsButton = false, onConfirm = null, onDismiss = null }) {
+function openPromptModal({ title, message, confirmLabel = '로그인', dismissLabel = '닫기', subNote = '', dismissAsButton = false, onConfirm = null, onDismiss = null, openSigninOnConfirm = true }) {
   if (!promptModal) return;
   promptModalTitle.textContent = title;
   promptModalMsg.textContent = message;
@@ -2607,6 +2607,7 @@ function openPromptModal({ title, message, confirmLabel = '로그인', dismissLa
     promptModalDismiss.style.cssText = DISMISS_LINK_STYLE;
   }
   promptModal._onConfirm = onConfirm;
+  promptModal._openSigninOnConfirm = openSigninOnConfirm;
   _promptOnDismiss = onDismiss;
   promptModal.style.display = 'flex';
 }
@@ -2615,9 +2616,10 @@ function closePromptModal() {
 }
 promptModalConfirm?.addEventListener('click', () => {
   const cb = promptModal?._onConfirm;
+  const openSignin = promptModal?._openSigninOnConfirm !== false;
   closePromptModal();
   cb?.();
-  openSigninModal();
+  if (openSignin) openSigninModal();
 });
 promptModalDismiss?.addEventListener('click', () => {
   const cb = _promptOnDismiss;
@@ -2650,6 +2652,24 @@ function bumpRefreshCount() {
   const next = { date: todayStr(), count: getRefreshState().count + 1 };
   safeStorageSet(REFRESH_COUNT_KEY, JSON.stringify(next));
   return next.count;
+}
+
+// ---------- 사용법 안내 (첫 접속/첫 로그인 1회) ----------
+const GUIDE_SEEN_KEY = 'ds.guideSeen';
+// 사용 설명 페이지로 1회 유도. 모달을 띄웠으면 true 반환 → 같은 부팅에서 랜딩 로그인 유도는 미룬다.
+function maybeShowGuide() {
+  if (safeStorageGet(GUIDE_SEEN_KEY) === '1') return false;
+  safeStorageSet(GUIDE_SEEN_KEY, '1');  // 표시 즉시 영구 1회 보장
+  openPromptModal({
+    title: '환영합니다 👋',
+    message: '주요 기능을 빠르게 살펴볼 수 있는 사용 설명을 준비했어요.',
+    confirmLabel: '사용법 보러가기',
+    dismissLabel: '다음에',
+    subNote: '설정 → 앱 사용법에서 언제든 다시 볼 수 있어요.',
+    openSigninOnConfirm: false,
+    onConfirm: () => { location.href = '/m/guide.html'; },
+  });
+  return true;
 }
 
 // ---------- 랜딩 로그인 유도 (최초 1회) ----------
