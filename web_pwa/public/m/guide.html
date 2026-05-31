@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+<title>사용법 — Daily Script</title>
+<meta name="theme-color" content="#FAF8F2" />
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<script>
+  /* FOUC 방지 — index.html 과 동일한 테마 토큰 적용 */
+  (function(){
+    try {
+      var t = localStorage.getItem('ds.theme') || 'light';
+      if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    } catch (e) {}
+  })();
+</script>
+<style>
+  :root {
+    --espresso: #0E0C0A;
+    --roast:    #2C2620;
+    --walnut:   #6B5D4F;
+    --paper:    #FAF8F2;
+    --latte:    #E8E1D3;
+    --sand:     #C9B89A;
+    --cta:      #D85A30;
+    --card-warm:#FFFDF7;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --espresso: #FAF8F2;
+    --roast:    #E8E1D3;
+    --walnut:   #9C8B79;
+    --paper:    #0E0C0A;
+    --latte:    #2C2620;
+    --sand:     #6B5D4F;
+    --card-warm:#15120E;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--espresso); }
+  body {
+    font-family: 'Noto Sans KR', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    padding-bottom: 64px;
+    line-height: 1.7;
+  }
+  .serif { font-family: 'Nanum Myeongjo', Georgia, serif; }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    vertical-align: middle;
+  }
+  .top-bar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top));
+    background: var(--paper);
+    border-bottom: 0.5px solid var(--latte);
+  }
+  .back-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--espresso); border-radius: 8px;
+  }
+  .top-bar h1 { font-size: 16px; font-weight: 700; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 0; }
+
+  .doc-title { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+  .intro { font-size: 14px; color: var(--roast); margin-bottom: 28px; }
+
+  /* 기능 카드 */
+  .guide-card {
+    border: 0.5px solid var(--latte);
+    border-radius: 14px;
+    background: var(--card-warm);
+    padding: 20px 18px;
+    margin-bottom: 16px;
+  }
+  .guide-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .icon-badge {
+    width: 42px; height: 42px; border-radius: 11px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--espresso); color: var(--paper);
+    flex-shrink: 0;
+  }
+  .icon-badge .material-symbols-outlined { font-size: 23px; }
+  .gh-title { font-size: 18px; font-weight: 700; line-height: 1.3; }
+  .tag {
+    margin-left: auto; flex-shrink: 0;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    padding: 4px 9px; border-radius: 999px;
+    background: var(--latte); color: var(--walnut);
+    text-transform: uppercase;
+  }
+  .tag.member { background: var(--cta); color: #fff; }
+
+  .guide-card > p { font-size: 14px; color: var(--roast); margin-bottom: 12px; }
+  .guide-card > p:last-child { margin-bottom: 0; }
+
+  /* 번호 단계 */
+  ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 4px 0 0; }
+  ol.steps li {
+    position: relative; padding-left: 32px; margin-bottom: 11px;
+    font-size: 14px; color: var(--roast); line-height: 1.65;
+  }
+  ol.steps li:last-child { margin-bottom: 0; }
+  ol.steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 1px;
+    width: 21px; height: 21px; border-radius: 50%;
+    background: var(--espresso); color: var(--paper);
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* 본문 안에서 버튼·아이콘을 키캡처럼 표기 */
+  .k {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 7px; border: 0.5px solid var(--sand); border-radius: 6px;
+    font-size: 12.5px; font-weight: 700; color: var(--espresso);
+    vertical-align: middle; white-space: nowrap;
+  }
+  .k .material-symbols-outlined { font-size: 15px; }
+  strong { color: var(--espresso); font-weight: 700; }
+
+  .note {
+    display: flex; gap: 10px; align-items: flex-start;
+    margin: 28px 0 8px; padding: 16px 16px;
+    border: 0.5px solid var(--latte); border-radius: 12px;
+    background: var(--paper);
+  }
+  .note .material-symbols-outlined { color: var(--cta); font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+  .note p { font-size: 13px; color: var(--roast); margin: 0; line-height: 1.6; }
+
+  .footer-note {
+    margin-top: 32px; padding-top: 20px;
+    border-top: 0.5px solid var(--latte);
+    font-size: 13px; color: var(--walnut);
+  }
+  .footer-note a { color: var(--cta); }
+</style>
+</head>
+<body>
+  <header class="top-bar">
+    <button class="back-btn" aria-label="뒤로" onclick="if(history.length>1){history.back()}else{location.href='/m/'}">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </button>
+    <h1>사용법</h1>
+  </header>
+
+  <main class="wrap">
+    <p class="doc-title serif">Daily Script 사용법</p>
+    <p class="intro">
+      매일 한 장의 명대사로 하루를 시작하세요. 주요 기능을 아래에서 빠르게 익힐 수 있어요.
+      <strong>북마크·댓글·하이라이트·오늘의 한 줄</strong>은 로그인 후 사용할 수 있습니다.
+    </p>
+
+    <!-- 1. 새로고침 -->
+    <section class="guide-card">
+      <div class="guide-head">
+        <span class="icon-badge"><span class="material-symbols-outlined">refresh</span></span>
+        <span class="gh-title serif">오늘의 명대사 · 새로고침</span>
+        <span class="tag">누구나</span>
+      </div>
+      <p>홈에서 매일 한 장의 명대사 카드를 만나요. 다른 명대사를 보고 싶다면 카드 위쪽의 <span class="k"><span class="material-symbols-outlined">refresh</span></span> 버튼을 누르세요.</p>
+      <ol class="steps">
+        <li>홈 화면 <span class="k">오늘의 명대사</span> 옆 <span class="k"><span class="material-symbols-outlined">refresh</span></span> 버튼을 탭하면 새로운 카드가 나와요.</li>
+        <li>비회원은 <strong>하루 3번</strong>까지, 로그인하면 <strong>무제한</strong>으로 받아볼 수 있어요.</li>
+        <li>방금 본 카드는 아래 <strong>지난 기록</strong>에 쌓여 다시 펼쳐볼 수 있어요.</li>
+        <li>설정에서 <strong>맞춤 추천</strong>을 켜면 북마크와 비슷한 카드를 우선 보여줘요. (북마크 10개 이상부터 적용)</li>
+      </ol>
+    </section>
+
+    <!-- 2. 읽기 -->
+    <section class="guide-card">
+      <div class="guide-head">
+        <span class="icon-badge"><span class="material-symbols-outlined">menu_book</span></span>
+        <span class="gh-title serif">전문 읽기</span>
+        <span class="tag">누구나</span>
+      </div>
+      <p>한 줄 명대사뿐 아니라 그 장면의 대본·지문 전체를 읽을 수 있어요.</p>
+      <ol class="steps">
+        <li>카드를 탭하거나 <span class="k">Read Full Script</span> 버튼을 누르면 상세 화면이 열려요.</li>
+        <li>장면 설명(<strong>SCENE</strong>), 대본·지문 전문, <strong>작품의 의의</strong>, 작가·발표연도·조회수가 함께 나와요.</li>
+        <li>위로 쓸어내리거나 <span class="k"><span class="material-symbols-outlined">arrow_back</span></span> 로 닫아요.</li>
+      </ol>
+    </section>
+
+    <!-- 3. 북마크 -->
+    <section class="guide-card">
+      <div class="guide-head">
+        <span class="icon-badge"><span class="material-symbols-outlined">bookmark</span></span>
+        <span class="gh-title serif">북마크 · 내 서재</span>
+        <span class="tag member">회원 전용</span>
+      </div>
+      <p>마음에 든 명대사를 보관해 <strong>라이브러리</strong>(내 서재)에 모아두세요.</p>
+      <ol class="steps">
+        <li>카드 또는 상세 화면의 <span class="k"><span class="material-symbols-outlined">bookmark</span></span> 아이콘, 혹은 <span class="k">Collect Script Artifact</span> 버튼을 눌러 보관해요.</li>
+        <li>보관한 명대사는 <span class="k"><span class="material-symbols-outlined">menu_book</span> LIBRARY</span> 탭에서 작품별 <strong>책</strong>으로 꽂혀 모여요.</li>
+        <li>장르 칩으로 거르거나 작품 제목으로 검색할 수 있어요.</li>
+      </ol>
+    </section>
+
+    <!-- 4. 댓글 -->
+    <section class="guide-card">
+      <div class="guide-head">
+        <span class="icon-badge"><span class="material-symbols-outlined">forum</span></span>
+        <span class="gh-title serif">댓글 · 좋아요 · 답글</span>
+        <span class="tag member">회원 전용</span>
+      </div>
+      <p>상세 화면 맨 아래 <strong>READER NOTES</strong>에서 명대사에 대한 생각을 나눠요. (댓글 읽기는 누구나 가능)</p>
+      <ol class="steps">
+        <li>상세 화면을 끝까지 내려 입력창에 생각을 적고 <span class="k">남기기</span>를 눌러요.</li>
+        <li>다른 사람 댓글에 <span class="k"><span class="material-symbols-outlined">favorite</span> 좋아요</span>로 공감하거나, <span class="k">Reply</span>로 답글을 달 수 있어요.</li>
+        <li>내가 쓴 댓글은 <span class="k">Edit</span>·<span class="k">Delete</span>로 고치거나 지울 수 있어요.</li>
+        <li>마이페이지 → <strong>내 댓글</strong>에서 내가 남긴 글을 모아볼 수 있어요.</li>
+      </ol>
+    </section>
+
+    <!-- 5. 하이라이트 -->
+    <section class="guide-card">
+      <div class="guide-head">
+        <span class="icon-badge"><span class="material-symbols-outlined">auto_awesome</span></span>
+        <span class="gh-title serif">하이라이트</span>
+        <span class="tag member">회원 전용</span>
+      </div>
+      <p>대본 본문에서 마음에 남은 <strong>한 구절</strong>을 골라 카드로 간직하세요.</p>
+      <ol class="steps">
+        <li>상세 화면 본문에서 원하는 구절을 <strong>길게 눌러</strong>(모바일) 또는 <strong>드래그</strong>(PC)해 선택해요.</li>
+        <li>선택하면 나타나는 <span class="k">+ HL</span> 버튼을 눌러요.</li>
+        <li>작품 정보와 함께 미리 보고 <span class="k">SAVE</span>로 저장해요.</li>
+        <li>저장한 구절은 <strong>피드 → 하이라이트</strong>와 마이페이지 → <strong>내 피드 → HIGHLIGHT</strong>에서 볼 수 있어요.</li>
+      </ol>
+    </section>
+
+    <!-- 6. 오늘의 한 줄 -->
+    <section class="guide-card">
+      <div class="guide-head">
+        <span class="icon-badge"><span class="material-symbols-outlined">rate_review</span></span>
+        <span class="gh-title serif">오늘의 한 줄</span>
+        <span class="tag member">회원 전용</span>
+      </div>
+      <p>북마크한 명대사에 <strong>한 줄 감상</strong>을 남겨 피드에 공유해요. (피드 읽기는 누구나 가능)</p>
+      <ol class="steps">
+        <li><span class="k"><span class="material-symbols-outlined">dynamic_feed</span> FEED</span> 탭에서 우측 아래 <span class="k"><span class="material-symbols-outlined">add</span></span> 버튼을 눌러요.</li>
+        <li>북마크한 명대사 중 하나를 골라요.</li>
+        <li>한 줄 감상을 적고 <span class="k">등록 하기</span>를 누르면 <strong>피드 → 오늘의 한줄</strong>에 올라가요.</li>
+        <li>내가 쓴 한 줄은 마이페이지 → <strong>내 피드 → ONE LINERS</strong>에서 고치거나 지울 수 있어요.</li>
+      </ol>
+    </section>
+
+    <div class="note">
+      <span class="material-symbols-outlined">lock_open</span>
+      <p>북마크·댓글·하이라이트·오늘의 한 줄은 <strong>로그인</strong> 후 사용할 수 있어요. 홈 우측 상단 또는 설정에서 로그인·회원가입할 수 있고, 익명으로 담아둔 기록은 가입 시 새 계정으로 자동 옮겨집니다.</p>
+    </div>
+
+    <p class="footer-note">
+      더 궁금한 점은 설정 → <strong>의견 남기기</strong>로 알려주세요. · <a href="/m/">홈으로 돌아가기</a>
+    </p>
+  </main>
+</body>
+</html>
