@@ -25,7 +25,7 @@ async function apiFetch(url, options = {}) {
 const state = {
   work: null,
   fullScriptText: '',   // works.full_script_text 컬럼이 NOT NULL이라 저장 시 함께 전송
-  category: 'screen',   // 'screen' 영화/드라마, 'opera' 오페라/뮤지컬, 'play' 연극, 'literature' 소설/시/에세이
+  category: 'screen',   // 'screen' 영화/드라마, 'opera' 오페라/뮤지컬, 'play' 연극, 'novel' 소설, 'poem' 시, 'essay' 에세이
   model: 'haiku',       // AI 모델: 'haiku' | 'sonnet' | 'opus' (extract 시 전송)
   // each card: { ...llmCard, selected, translated?: { quote_translated, ... }, showingTranslation }
   cards: [],
@@ -130,7 +130,9 @@ function paintCategory() {
       screen: '기본 프롬프트로 분석됩니다 (영화·드라마용).',
       opera: '오페라·뮤지컬 전용 프롬프트로 분석됩니다 (libretto 화자 표기 보존).',
       play: '연극 전용 프롬프트로 분석됩니다 (speaker_label·상황 단서 포함).',
-      literature: '소설·시·에세이 전용 프롬프트로 분석됩니다 (산문/운문 형식 보존).',
+      novel: '소설 전용 프롬프트로 분석됩니다 (산문 단락·인물 보존).',
+      poem: '시 전용 프롬프트로 분석됩니다 (행·연 구조 보존).',
+      essay: '에세이 전용 프롬프트로 분석됩니다 (산문 논점·정조 보존).',
     };
     categoryHint.textContent = hints[state.category] || '';
   }
@@ -329,7 +331,7 @@ function buildCardNode(card, idx) {
 // (library.js 의 cleanForDisplay 와 동일 로직)
 // 처리하는 패턴:
 //   "이름: 대사"  /  "이름\n대사"  /  "이름 대사"  /  "이름 (지문) 대사"
-function cleanForDisplay(s) {
+function cleanForDisplay(s, characterNames) {
   let text = String(s ?? '');
   text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
 
@@ -342,8 +344,21 @@ function cleanForDisplay(s) {
     if (name) speakers.add(name);
   }
 
-  // (b) 줄 머리 첫 단어 빈도 (조사 끝 narrative 주어 제외)
-  const PARTICLE_END = /(가|이|은|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  // (b) 줄 머리 첫 단어 빈도 (조사 끝 narrative 주어 제외). 께/께서는 존경형 격조사.
+  const PARTICLE_END = /(가|이|은|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에|께|께서|께선)$/;
+  // 접속·시간·양태 부사 — 줄 첫 단어로 자주 등장하지만 화자가 아님.
+  // characters 목록이 비어있을 때의 안전망으로만 사용한다.
+  const CONNECTIVE_DENY = new Set([
+    '그리고','그러나','그래서','하지만','그런데','그러면','그러니까','그러므로','따라서',
+    '또한','또는','그래도','그럼에도','한편','결국','마침내','다만','물론','사실',
+    '아무튼','그때','이때','이윽고','갑자기','천천히','잠시','다시','이미','이제',
+    '지금','드디어','문득','잠깐','순간',
+  ]);
+  const characterSet = new Set(
+    (Array.isArray(characterNames) ? characterNames : [])
+      .map((n) => String(n).trim())
+      .filter(Boolean)
+  );
   const headCounts = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
@@ -357,7 +372,12 @@ function cleanForDisplay(s) {
     }
   }
   Object.entries(headCounts).forEach(([word, count]) => {
-    if (count >= 2) speakers.add(word);
+    if (count < 2) return;
+    // 접속·부사는 인물 목록에 잘못 섞여 있어도 화자로 보지 않는다(인물 데이터 오염 방어).
+    if (CONNECTIVE_DENY.has(word)) return;
+    // 등장인물 목록이 있으면 실제 인물에 한해 화자로 승격.
+    if (characterSet.size > 0 && !characterSet.has(word)) return;
+    speakers.add(word);
   });
 
   // "이름:" → "이름\n"
@@ -416,7 +436,7 @@ function buildCardViewNode(card, idx) {
   node.querySelector('.card-tag').textContent =
     (card.keywords && card.keywords[0]) || `Card #${idx + 1}`;
   node.querySelector('.card-quote').textContent = quote ? `"${cleanForDisplay(quote)}"` : '';
-  node.querySelector('.card-excerpt').textContent = cleanForDisplay(excerpt || '');
+  node.querySelector('.card-excerpt').textContent = cleanForDisplay(excerpt || '', state.work?.characters);
   node.querySelector('.card-description').textContent = cleanForDisplay(desc || '');
 
   // significance — 있으면 표시, 없으면 안내 문구

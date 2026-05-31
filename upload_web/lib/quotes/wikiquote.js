@@ -1,4 +1,4 @@
-// Wikipedia opensearch 로 입력 작품명에 대한 정확한 페이지를 카테고리(film/opera/play/literature)
+// Wikipedia opensearch 로 입력 작품명에 대한 정확한 페이지를 카테고리(screen/opera/play/novel/poem/essay)
 // 기반으로 식별 → langlinks 로 다국어 페이지명 맵 확보 → 각 언어 Wikiquote 에서 명대사 추출.
 // 외부 의존성 없음 — Node 20 글로벌 fetch + 정규식.
 
@@ -23,10 +23,18 @@ const CATEGORY_KEYWORDS = {
     'play', 'theatre', 'theater', 'stage play', 'tragedy', 'comedy', 'drama',
     '연극', '희곡', 'pièce', 'théâtre', '戯曲', '舞台',
   ],
-  literature: [
-    'novel', 'short story', 'novella', 'poem', 'poetry', 'essay', 'collection', 'book', 'memoir',
-    '소설', '시', '에세이', '수필', '시집', '단편', '장편', 'roman', 'nouvelle', 'recueil',
-    '小説', '詩', '随筆', 'novela', 'cuento',
+  novel: [
+    'novel', 'short story', 'novella', 'collection', 'book',
+    '소설', '단편', '장편', 'roman', 'nouvelle', 'recueil',
+    '小説', 'novela', 'cuento',
+  ],
+  poem: [
+    'poem', 'poetry', 'verse',
+    '시', '시집', '詩', 'poème', 'poésie', 'poesía',
+  ],
+  essay: [
+    'essay', 'memoir',
+    '에세이', '수필', '随筆', 'essai', 'mémoire',
   ],
 };
 
@@ -362,7 +370,7 @@ function dedupe(arr) {
 
 // 메인 진입점.
 // title: 사용자 입력 작품명
-// category: 'screen' | 'opera' | 'play' | 'literature'
+// category: 'screen' | 'opera' | 'play' | 'novel' | 'poem' | 'essay'
 // 반환: { sources: [{source, lang, srcTitle, quotes}], resolvedTitles: {lang: title} }
 export async function fetchWikiquoteSeeds(title, category) {
   if (!title || !title.trim()) return { sources: [], resolvedTitles: {} };

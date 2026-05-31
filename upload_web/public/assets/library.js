@@ -23,6 +23,7 @@ const confirmMessage = $('#confirm-message');
 const confirmCancelBtn = $('#confirm-cancel');
 const confirmDeleteBtn = $('#confirm-delete');
 const libraryWorkFilter = $('#library-work-filter');
+const libraryFormatFilter = $('#library-format-filter');
 const librarySearchInput = $('#library-search');
 const libraryRefreshBtn = $('#library-refresh');
 const libraryKeywordFreqBtn = $('#library-keyword-freq-btn');
@@ -45,6 +46,7 @@ const toastEl = $('#toast');
 const state = {
   rows: [],           // 카드 + 작품 정보
   workFilter: '',     // 작품 제목 문자열 (이전엔 work_id)
+  formatFilter: '',   // 작품 형식(works.format) — '' = 전체
   searchText: '',
   editing: null,      // editing card_id
   selectedIds: new Set(), // 그리드 전체 선택용 card_id Set
@@ -159,6 +161,7 @@ async function loadLibrary() {
 
     state.rows = Array.isArray(data) ? data : [];
     refreshWorkFilterOptions();
+    refreshFormatFilterOptions();
     renderLibrary();
     if (libraryKeywordFreq && !libraryKeywordFreq.classList.contains('hidden')) renderKeywordFreq();
     libraryStatus.textContent = `총 ${state.rows.length}장 로드됨.`;
@@ -196,9 +199,50 @@ function refreshWorkFilterOptions() {
   }
 }
 
+// 형식(works.format) 한글 라벨 + 표시 순서 (모바일 m-app.js GENRE_LABEL 과 동일).
+const FORMAT_ORDER = ['movie', 'drama', 'musical', 'opera', 'play', 'novel', 'poem', 'essay'];
+const FORMAT_LABEL = {
+  movie: '영화', drama: '드라마', musical: '뮤지컬', opera: '오페라',
+  play: '연극', novel: '소설', poem: '시', essay: '에세이',
+};
+
+// 형식 필터 옵션을 현재 로드된 카드들의 distinct format 으로 채운다.
+// 정해진 순서(FORMAT_ORDER) 우선, 목록에 없는 format 은 뒤에 그대로 덧붙인다.
+function refreshFormatFilterOptions() {
+  if (!libraryFormatFilter) return;
+  const present = new Set();
+  state.rows.forEach((c) => {
+    const fmt = String(c.works?.format || '').toLowerCase();
+    if (fmt) present.add(fmt);
+  });
+
+  const ordered = [
+    ...FORMAT_ORDER.filter((f) => present.has(f)),
+    ...[...present].filter((f) => !FORMAT_ORDER.includes(f)).sort(),
+  ];
+
+  const current = libraryFormatFilter.value;
+  libraryFormatFilter.innerHTML = '<option value="">모든 형식</option>';
+  ordered.forEach((fmt) => {
+    const opt = document.createElement('option');
+    opt.value = fmt;
+    opt.textContent = FORMAT_LABEL[fmt] || fmt;
+    libraryFormatFilter.appendChild(opt);
+  });
+  if (current && present.has(current)) {
+    libraryFormatFilter.value = current;
+  } else {
+    libraryFormatFilter.value = '';
+    state.formatFilter = '';
+  }
+}
+
 function filteredRows() {
   const q = state.searchText.trim().toLowerCase();
   return state.rows.filter((c) => {
+    if (state.formatFilter) {
+      if (String(c.works?.format || '').toLowerCase() !== state.formatFilter) return false;
+    }
     if (state.workFilter) {
       const cSeries = extractSeries(c.works || {}).series;
       if (cSeries !== state.workFilter) return false;
@@ -870,6 +914,7 @@ async function bulkDeleteCards(targetIds) {
     state.spineSelectedIds.clear();
 
     refreshWorkFilterOptions();
+    refreshFormatFilterOptions();
     renderLibrary();
     refreshPullout();
     toast(`${data.length}장 삭제 완료`, 'success');
@@ -914,6 +959,7 @@ async function deleteWorkGroup(group) {
     }
 
     refreshWorkFilterOptions();
+    refreshFormatFilterOptions();
     renderLibrary();
     refreshPullout();
     const uploadInfo = workIds.length > 1 ? ` (${workIds.length}개 업로드 통합)` : '';
@@ -974,9 +1020,12 @@ function buildViewNode(card) {
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
   node.querySelector('.lib-quote').textContent = card.quote ? `"${cleanForDisplay(card.quote)}"` : '';
-  node.querySelector('.lib-excerpt').innerHTML = isProseFormat(work.format)
-    ? escapeHtml(flowProseScript(card.script_excerpt || ''))
-    : boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters);
+  node.querySelector('.lib-excerpt').innerHTML =
+    String(work.format || '').toLowerCase() === 'poem'
+      ? escapeHtml(formatPoemScript(card.script_excerpt || ''))
+      : isProseFormat(work.format)
+        ? escapeHtml(flowProseScript(card.script_excerpt || ''))
+        : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', work.characters), work.characters);
   node.querySelector('.lib-description').textContent = cleanForDisplay(card.excerpt_description || '');
 
   const kwEl = node.querySelector('.lib-keywords');
@@ -1129,6 +1178,11 @@ libraryWorkFilter.addEventListener('change', () => {
   renderLibrary();
 });
 
+libraryFormatFilter?.addEventListener('change', () => {
+  state.formatFilter = libraryFormatFilter.value;
+  renderLibrary();
+});
+
 let searchDebounce = null;
 librarySearchInput.addEventListener('input', () => {
   clearTimeout(searchDebounce);
@@ -1245,7 +1299,16 @@ function flowProseScript(text) {
     .join('\n\n');
 }
 
-function cleanForDisplay(s) {
+// 시(poem)는 행·연이 곧 의미다. 산문처럼 단락을 잇거나 화자를 굵게 만들지 않고,
+// 줄바꿈만 정규화해(3줄 이상 빈 줄 → 연 구분 1줄) 행·연 구조를 그대로 보존한다.
+function formatPoemScript(text) {
+  return String(text ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+|\n+$/g, '');
+}
+
+function cleanForDisplay(s, characterNames) {
   let text = String(s ?? '');
 
   // 1) em-dash 변형 일괄 제거
@@ -1265,7 +1328,21 @@ function cleanForDisplay(s) {
   // (b) 줄 머리 첫 단어 빈도 — "이름" 단독 또는 "이름 + 공백 + 내용" 패턴
   //     2회 이상 등장하면 화자 후보
   //     단, 명사+조사로 끝나는 narrative 주어는 제외 (강재가/강재의/강재에게…)
-  const PARTICLE_END = /(가|이|은|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에)$/;
+  //     께/께서는 존경형 격조사.
+  const PARTICLE_END = /(가|이|은|는|을|를|도|의|에|에게|에서|와|과|으로|로|만|보다|처럼|마저|조차|밖에|께|께서|께선)$/;
+  // 접속·시간·양태 부사 — 줄 첫 단어로 자주 등장하지만 화자가 아님.
+  // characters 목록이 비어있을 때의 안전망으로만 사용한다.
+  const CONNECTIVE_DENY = new Set([
+    '그리고','그러나','그래서','하지만','그런데','그러면','그러니까','그러므로','따라서',
+    '또한','또는','그래도','그럼에도','한편','결국','마침내','다만','물론','사실',
+    '아무튼','그때','이때','이윽고','갑자기','천천히','잠시','다시','이미','이제',
+    '지금','드디어','문득','잠깐','순간',
+  ]);
+  const characterSet = new Set(
+    (Array.isArray(characterNames) ? characterNames : [])
+      .map((n) => String(n).trim())
+      .filter(Boolean)
+  );
   const headCounts = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
@@ -1281,7 +1358,12 @@ function cleanForDisplay(s) {
     }
   }
   Object.entries(headCounts).forEach(([word, count]) => {
-    if (count >= 2) speakers.add(word);
+    if (count < 2) return;
+    // 접속·부사는 인물 목록에 잘못 섞여 있어도 화자로 보지 않는다(인물 데이터 오염 방어).
+    if (CONNECTIVE_DENY.has(word)) return;
+    // 등장인물 목록이 있으면 실제 인물에 한해 화자로 승격.
+    if (characterSet.size > 0 && !characterSet.has(word)) return;
+    speakers.add(word);
   });
 
   // 3) "이름:" → "이름\n" (콜론 제거)
@@ -1445,7 +1527,7 @@ function renderAppCardHtml(card) {
         <p class="app-work-title">${escapeHtml(workLine)}</p>
         <p class="app-quote">${escapeHtml(cleanQuote)}</p>
         ${card.excerpt_description ? `<p class="app-desc">${escapeHtml(cleanForDisplay(card.excerpt_description))}</p>` : ''}
-        <div class="app-excerpt">${isProseFormat(work.format) ? escapeHtml(flowProseScript(card.script_excerpt || '')) : boldSpeakerLines(cleanForDisplay(card.script_excerpt || ''), work.characters)}</div>
+        <div class="app-excerpt">${String(work.format || '').toLowerCase() === 'poem' ? escapeHtml(formatPoemScript(card.script_excerpt || '')) : isProseFormat(work.format) ? escapeHtml(flowProseScript(card.script_excerpt || '')) : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', work.characters), work.characters)}</div>
         ${keywords ? `<div class="app-keywords">${keywords}</div>` : ''}
         <div class="app-meters">
           <div class="app-meter">

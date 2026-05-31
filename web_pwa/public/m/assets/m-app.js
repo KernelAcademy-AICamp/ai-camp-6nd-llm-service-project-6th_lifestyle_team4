@@ -3067,11 +3067,15 @@ function openDetail(card) {
     detailDescSpacer.style.height = '0';
   }
 
-  // script_excerpt — 산문(novel/essay)은 단락으로 흘려보내고(화자 볼드 없음),
-  // 그 외(대본/시)는 기존 화자 라인 볼드 처리 (admin library.js와 동일).
-  detailScript.innerHTML = isProseFormat(w.format)
-    ? escapeHtml(flowProseScript(card.script_excerpt || ''))
-    : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', w.characters), w.characters);
+  // script_excerpt — 시(poem)는 행·연 구조를 그대로 보존하고,
+  // 산문(novel/essay)은 단락으로 흘려보내고(화자 볼드 없음),
+  // 그 외(대본 등)는 기존 화자 라인 볼드 처리 (admin library.js와 동일).
+  detailScript.innerHTML =
+    String(w.format || '').toLowerCase() === 'poem'
+      ? escapeHtml(formatPoemScript(card.script_excerpt || ''))
+      : isProseFormat(w.format)
+        ? escapeHtml(flowProseScript(card.script_excerpt || ''))
+        : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', w.characters), w.characters);
 
   // significance — 네 프롬프트(screen/opera/play/literature) 모두 생성하므로
   // format 게이팅 없이 값이 있으면 표시.
@@ -4568,6 +4572,15 @@ function flowProseScript(text) {
     .join('\n\n');
 }
 
+// 시(poem)는 행·연이 곧 의미다. 산문처럼 단락을 잇거나 화자를 굵게 만들지 않고,
+// 줄바꿈만 정규화해(3줄 이상 빈 줄 → 연 구분 1줄) 행·연 구조를 그대로 보존한다.
+function formatPoemScript(text) {
+  return String(text ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+|\n+$/g, '');
+}
+
 function cleanForDisplay(s, characterNames) {
   let text = String(s ?? '');
   text = text.replace(/[—–―─━‐‑‒ㅡー﹘﹣－]/g, ' ');
@@ -4607,12 +4620,10 @@ function cleanForDisplay(s, characterNames) {
   }
   Object.entries(headCounts).forEach(([word, count]) => {
     if (count < 2) return;
-    // 등장인물 목록이 있으면 실제 인물에 한해 화자로 승격, 없으면 접속부사 denylist로 거른다.
-    if (characterSet.size > 0) {
-      if (!characterSet.has(word)) return;
-    } else {
-      if (CONNECTIVE_DENY.has(word)) return;
-    }
+    // 접속·부사는 인물 목록에 잘못 섞여 있어도 화자로 보지 않는다(인물 데이터 오염 방어).
+    if (CONNECTIVE_DENY.has(word)) return;
+    // 등장인물 목록이 있으면 실제 인물에 한해 화자로 승격.
+    if (characterSet.size > 0 && !characterSet.has(word)) return;
     speakers.add(word);
   });
   text = text.replace(/^([^:：()\n]{1,14})[:：][ \t]*\n?/gm, '$1\n');
