@@ -3,6 +3,7 @@ package com.lifestyle.dailyscript.ui.feed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,21 +11,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,15 +37,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.data.model.Highlight
 import com.lifestyle.dailyscript.ui.components.EditorialField
+import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.detail.relativeTime
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -51,7 +64,10 @@ import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.FeedCard
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
+import com.lifestyle.dailyscript.ui.theme.Roast
+import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.displayTitle
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import kotlin.math.absoluteValue
@@ -66,6 +82,12 @@ fun FeedScreen(
     val vm: FeedViewModel = viewModel()
     val state by vm.state.collectAsState()
     LaunchedEffect(userId) { vm.load(userId) }
+
+    // Tapping a "오늘의 한줄" card pops up just the card's quote (not the full detail).
+    var quotePopup by remember { mutableStateOf<CardDto?>(null) }
+    // Bookmark pickers: today → compose a one-liner; highlight → open that card's detail.
+    var todayPickerOpen by remember { mutableStateOf(false) }
+    var hlPickerOpen by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -106,11 +128,11 @@ fun FeedScreen(
                 ) {
                     if (state.category == FEED_TODAY) {
                         items(state.posts, key = { it.postId }) { post ->
-                            FeedPostCard(post, onClick = { post.cards?.let { onOpenCard(it.cardId) } })
+                            FeedPostCard(post, onClick = { post.cards?.let { quotePopup = it } })
                         }
                     } else {
                         items(state.highlights, key = { it.highlightId }) { hl ->
-                            HighlightCard(hl, onClick = { hl.cards?.let { onOpenCard(it.cardId) } })
+                            HighlightCard(hl)
                         }
                     }
                     item { Box(modifier = Modifier.height(72.dp)) }
@@ -125,23 +147,250 @@ fun FeedScreen(
                     .align(Alignment.BottomEnd)
                     .padding(20.dp)
                     .size(56.dp)
-                    .background(Cta, RoundedCornerShape(28.dp))
-                    .clickable { vm.openCompose() },
+                    .background(Espresso, RoundedCornerShape(28.dp))
+                    .clickable {
+                        if (state.category == FEED_HIGHLIGHT) hlPickerOpen = true else todayPickerOpen = true
+                    },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "오늘의 한줄 작성", tint = Color.White)
+                Icon(Icons.Filled.Add, contentDescription = "작성", tint = Paper)
             }
         }
     }
 
-    if (state.composeOpen) {
-        ComposeDialog(
+    quotePopup?.let { card ->
+        QuotePopup(card = card, onDismiss = { quotePopup = null })
+    }
+
+    if (todayPickerOpen) {
+        BookmarkPickerSheet(
+            title = "어떤 명대사에 한줄을 남길까요?",
             bookmarkCards = state.bookmarkCards,
+            onDismiss = { todayPickerOpen = false },
+            onPick = { card -> todayPickerOpen = false; vm.openComposeFor(card) },
+        )
+    }
+
+    if (hlPickerOpen) {
+        BookmarkPickerSheet(
+            title = "어떤 카드에 하이라이트를 남길까요?",
+            bookmarkCards = state.bookmarkCards,
+            onDismiss = { hlPickerOpen = false },
+            onPick = { card -> hlPickerOpen = false; onOpenCard(card.cardId) },
+        )
+    }
+
+    state.composeCard?.let { card ->
+        FeedComposeSheet(
+            card = card,
             submitting = state.submitting,
             error = state.error,
             onDismiss = { vm.closeCompose() },
-            onSubmit = { cardId, body -> vm.submitPost(userId, myNickname, cardId, body) },
+            onSubmit = { body -> vm.submitPost(userId, myNickname, card.cardId, body) },
         )
+    }
+}
+
+/** Tapping a feed one-liner pops up just the card's quote (mirrors openFeedQuote). */
+@Composable
+private fun QuotePopup(card: CardDto, onDismiss: () -> Unit) {
+    val source = listOfNotNull(card.works.displayTitle().ifBlank { null }, card.works?.author)
+        .joinToString(" · ")
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
+                .padding(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 420.dp)
+                    .fillMaxWidth()
+                    .background(Paper)
+                    .border(0.5.dp, Latte)
+                    .padding(horizontal = 28.dp, vertical = 34.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = Markdown.quote(card.quote),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Espresso,
+                    textAlign = TextAlign.Center,
+                )
+                if (source.isNotBlank()) {
+                    Box(modifier = Modifier.height(18.dp))
+                    Text(
+                        text = "— $source",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.1.em),
+                        color = Walnut,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Bottom-sheet bookmark picker (mirrors the PWA feed picker). Each row shows
+ * GENRE · YEAR / title / quote + a chevron. Used by both the one-liner and
+ * highlight flows; the caller decides what happens on pick.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BookmarkPickerSheet(
+    title: String,
+    bookmarkCards: List<CardDto>,
+    onDismiss: () -> Unit,
+    onPick: (CardDto) -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Paper) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineMedium, color = Espresso)
+            Box(modifier = Modifier.height(8.dp))
+            if (bookmarkCards.isEmpty()) {
+                Text(
+                    text = "아직 북마크한 명대사가 없어요.\n마음에 드는 명대사를 먼저 보관해보세요.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Walnut,
+                    modifier = Modifier.padding(vertical = 32.dp),
+                )
+            } else {
+                LazyColumn(modifier = Modifier.heightIn(max = 440.dp)) {
+                    items(bookmarkCards, key = { it.cardId }) { c ->
+                        PickRow(c) { onPick(c) }
+                        Box(Modifier.fillMaxWidth().height(0.5.dp).background(Latte))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickRow(card: CardDto, onClick: () -> Unit) {
+    val w = card.works
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            val meta = listOfNotNull(w?.format?.let { genreLabel(it) }, w?.releaseYear?.toString())
+                .joinToString(" · ").uppercase()
+            if (meta.isNotBlank()) {
+                Text(meta, style = MaterialTheme.typography.labelSmall, color = Walnut)
+                Box(modifier = Modifier.height(6.dp))
+            }
+            Text(
+                text = w.displayTitle().ifBlank { "—" },
+                style = MaterialTheme.typography.titleLarge,
+                color = Espresso,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Box(modifier = Modifier.height(4.dp))
+            Text(
+                text = Markdown.oneLine(card.quote),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Walnut,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Box(modifier = Modifier.width(12.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+            contentDescription = null,
+            tint = Sand,
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
+
+/** Compose step for a one-liner on the picked card (mirrors the PWA feed-compose modal). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FeedComposeSheet(
+    card: CardDto,
+    submitting: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onSubmit: (String) -> Unit,
+) {
+    var body by remember(card.cardId) { mutableStateOf("") }
+    val w = card.works
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Paper) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+                .imePadding(),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = w.displayTitle().ifBlank { "—" },
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Espresso,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Text("#${card.cardId}", style = MaterialTheme.typography.labelSmall, color = Walnut)
+            }
+            val meta = listOfNotNull(
+                w?.format?.let { genreLabel(it) },
+                w?.author,
+                w?.releaseYear?.toString(),
+            ).joinToString(" · ").uppercase()
+            if (meta.isNotBlank()) {
+                Box(modifier = Modifier.height(6.dp))
+                Text(meta, style = MaterialTheme.typography.labelSmall, color = Walnut)
+            }
+            Box(modifier = Modifier.height(14.dp))
+            Box(Modifier.fillMaxWidth().height(0.5.dp).background(Latte))
+            Box(modifier = Modifier.height(14.dp))
+            EditorialField(
+                value = body,
+                onValueChange = { body = it },
+                placeholder = "이 명대사에 대한 한줄을 남겨보세요…",
+                minHeight = 120.dp,
+                maxLength = 300,
+            )
+            Box(modifier = Modifier.height(6.dp))
+            Text(
+                text = "${body.length}/300자",
+                style = MaterialTheme.typography.bodySmall,
+                color = Walnut,
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            error?.let {
+                Box(modifier = Modifier.height(8.dp))
+                Text(text = it, color = Cta, style = MaterialTheme.typography.bodySmall)
+            }
+            Box(modifier = Modifier.height(14.dp))
+            SharpButton(
+                label = if (submitting) "등록 중⋯" else "등록 하기",
+                onClick = { if (!submitting && body.isNotBlank()) onSubmit(body) },
+                enabled = !submitting && body.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
@@ -160,6 +409,22 @@ private fun leatherColorFor(title: String?): Color {
     return FeedLeathers[key.hashCode().absoluteValue % FeedLeathers.size]
 }
 
+/** Cylindrical leather sheen — lit down the centre, darker at both edges (mirrors the spine gradient). */
+private fun leatherSheen(base: Color): Brush = Brush.horizontalGradient(
+    0f to lerp(base, Color.Black, 0.34f),
+    0.5f to lerp(base, Color.White, 0.08f),
+    1f to lerp(base, Color.Black, 0.40f),
+)
+
+// Glossy raised gilt band — bright gold center fading to dark edges (PWA .feed-book-band).
+private val GiltBandBrush = Brush.verticalGradient(
+    0.0f to Color.Transparent,
+    0.28f to Color(0x99000000),
+    0.5f to FeedGold,
+    0.72f to Color(0x99000000),
+    1.0f to Color.Transparent,
+)
+
 @Composable
 private fun FeedChip(text: String, active: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(4.dp)
@@ -177,7 +442,9 @@ private fun FeedChip(text: String, active: Boolean, onClick: () -> Unit) {
 /** "오늘의 한줄" — a paper note resting on a leather book strip. */
 @Composable
 private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
-    val w = post.cards?.works
+    val card = post.cards
+    val w = card?.works
+    val overlapPx = with(LocalDensity.current) { 18.dp.roundToPx() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -190,24 +457,25 @@ private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(post.authorNickname ?: "익명", style = MaterialTheme.typography.bodySmall, color = Espresso)
-            Text(relativeTime(post.createdAt), style = MaterialTheme.typography.labelSmall, color = Walnut)
+            Text(post.authorNickname ?: "익명", style = MaterialTheme.typography.bodyMedium, color = Roast)
+            Text(relativeTime(post.createdAt), style = MaterialTheme.typography.labelSmall, color = Roast)
         }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp)
-                .height(0.5.dp)
+                .height(1.dp)
                 .background(Latte),
         )
         Box(modifier = Modifier.height(14.dp))
         // paper note
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.80f)
+                .fillMaxWidth(0.82f)
                 .align(Alignment.CenterHorizontally)
+                .shadow(8.dp)
                 .background(BookCream)
-                .padding(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 30.dp),
+                .padding(start = 16.dp, top = 22.dp, end = 16.dp, bottom = 36.dp),
         ) {
             Text(
                 text = post.body,
@@ -217,42 +485,86 @@ private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        // leather book strip, pulled up to overlap the paper bottom
+        // leather book — pulled up to tuck under the paper, with no trailing gap.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset(y = (-20).dp)
-                .background(leatherColorFor(w?.title))
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    layout(placeable.width, (placeable.height - overlapPx).coerceAtLeast(0)) {
+                        placeable.place(0, -overlapPx)
+                    }
+                }
+                .background(leatherSheen(leatherColorFor(w?.title))),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .background(FeedGold),
-            )
-            Box(modifier = Modifier.height(8.dp))
-            Text(
-                text = w.displayTitle().ifBlank { "—" },
-                style = MaterialTheme.typography.titleMedium.copy(fontFamily = EditorialSerif),
-                color = FeedGoldBright,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            // glossy gilt band (full-bleed) with raised highlight + shadow edges
+            Column(modifier = Modifier.fillMaxWidth().padding(top = 7.dp)) {
+                Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x66E6CCB4)))
+                Box(Modifier.fillMaxWidth().height(13.dp).background(GiltBandBrush))
+                Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xB3000000)))
+            }
+            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 11.dp, bottom = 16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = w.displayTitle().ifBlank { "—" },
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = EditorialSerif,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            color = FeedGoldBright,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        w?.releaseYear?.let {
+                            Text(
+                                text = it.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = FeedGold,
+                            )
+                        }
+                    }
+                    card?.cardId?.let {
+                        Text(
+                            text = "#$it",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = FeedGold,
+                        )
+                    }
+                }
+                val bottom = listOfNotNull(
+                    w?.format?.let { genreLabel(it) },
+                    w?.author,
+                ).joinToString("  ·  ")
+                if (bottom.isNotBlank()) {
+                    Box(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = bottom,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = FeedGold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
 
 /** "하이라이트" — a leather book cover + the saved excerpt below. */
 @Composable
-private fun HighlightCard(hl: Highlight, onClick: () -> Unit) {
+private fun HighlightCard(hl: Highlight) {
     val w = hl.cards?.works
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .border(0.5.dp, Latte)
             .background(CardWarm)
-            .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -268,10 +580,13 @@ private fun HighlightCard(hl: Highlight, onClick: () -> Unit) {
 
         Box(modifier = Modifier.height(20.dp))
         // book cover
+        val coverShape = RoundedCornerShape(4.dp)
         Column(
             modifier = Modifier
                 .size(width = 132.dp, height = 188.dp)
-                .background(leatherColorFor(w?.title), RoundedCornerShape(4.dp))
+                .shadow(10.dp, coverShape)
+                .background(leatherSheen(leatherColorFor(w?.title)), coverShape)
+                .border(0.5.dp, BookCream.copy(alpha = 0.18f), coverShape)
                 .padding(horizontal = 14.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -308,94 +623,6 @@ private fun HighlightCard(hl: Highlight, onClick: () -> Unit) {
             Text(hl.userNote, style = MaterialTheme.typography.bodyMedium, color = Walnut, textAlign = TextAlign.Center)
         }
     }
-}
-
-@Composable
-private fun ComposeDialog(
-    bookmarkCards: List<CardDto>,
-    submitting: Boolean,
-    error: String?,
-    onDismiss: () -> Unit,
-    onSubmit: (cardId: Long, body: String) -> Unit,
-) {
-    var selected by remember { mutableStateOf(bookmarkCards.firstOrNull()) }
-    var body by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                enabled = !submitting && selected != null && body.isNotBlank(),
-                onClick = { selected?.let { onSubmit(it.cardId, body) } },
-            ) { Text(if (submitting) "등록 중⋯" else "등록", color = Cta) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소", color = Walnut) } },
-        title = { Text("오늘의 한줄", color = Espresso) },
-        text = {
-            Column {
-                if (bookmarkCards.isEmpty()) {
-                    Text(
-                        text = "북마크한 카드가 없어요. 먼저 마음에 드는 명대사를 수집해보세요.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Walnut,
-                    )
-                } else {
-                    Text("카드 선택", style = MaterialTheme.typography.labelSmall, color = Walnut)
-                    Box(modifier = Modifier.height(6.dp))
-                    Box {
-                        val shape = RoundedCornerShape(8.dp)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Paper, shape)
-                                .border(0.5.dp, Latte, shape)
-                                .clickable { expanded = true }
-                                .padding(14.dp),
-                        ) {
-                            Text(
-                                text = selected?.let { "“${it.quote}”" } ?: "카드를 선택하세요",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Espresso,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            bookmarkCards.forEach { c ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            "“${c.quote}”",
-                                            color = Espresso,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    },
-                                    onClick = { selected = c; expanded = false },
-                                )
-                            }
-                        }
-                    }
-                    Box(modifier = Modifier.height(12.dp))
-                    EditorialField(
-                        value = body,
-                        onValueChange = { body = it },
-                        placeholder = "이 명대사에 대한 한줄…",
-                        minHeight = 80.dp,
-                        maxLength = 300,
-                    )
-                    Box(modifier = Modifier.height(4.dp))
-                    Text("${body.length} / 300", style = MaterialTheme.typography.labelSmall, color = Walnut)
-                }
-                error?.let {
-                    Box(modifier = Modifier.height(8.dp))
-                    Text(text = it, color = Cta, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        },
-        containerColor = Paper,
-    )
 }
 
 @Composable

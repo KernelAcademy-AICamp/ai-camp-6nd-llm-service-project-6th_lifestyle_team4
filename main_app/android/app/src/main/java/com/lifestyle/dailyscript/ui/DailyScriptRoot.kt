@@ -92,11 +92,10 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     Column(modifier = Modifier.fillMaxSize()) {
         if (showTopBar) {
             when (currentRoute) {
-                Routes.HOME -> HomeTopBar(onMyPageClick = {
+                Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(onMyPageClick = {
                     navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
                 })
-                Routes.SETTINGS, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE ->
-                    SettingsTopBar(initials = initials)
+                Routes.SETTINGS -> SettingsTopBar(initials = initials)
                 else -> Unit
             }
         }

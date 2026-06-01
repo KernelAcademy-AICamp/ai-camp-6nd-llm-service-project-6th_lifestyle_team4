@@ -59,9 +59,10 @@ import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.ScreenplayMono
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.util.Markdown
+import com.lifestyle.dailyscript.ui.util.ScriptFormat
 import com.lifestyle.dailyscript.ui.util.descriptionFor
 import com.lifestyle.dailyscript.ui.util.displayAuthor
-import com.lifestyle.dailyscript.ui.util.scriptFor
 import com.lifestyle.dailyscript.ui.util.significanceFor
 
 @Composable
@@ -155,7 +156,7 @@ fun DetailScreen(
                         )
                         Box(modifier = Modifier.height(8.dp))
                         Text(
-                            text = description,
+                            text = Markdown.prose(description),
                             style = MaterialTheme.typography.bodyLarge,
                             color = Walnut,
                             textAlign = TextAlign.Start,
@@ -183,7 +184,7 @@ fun DetailScreen(
                     )
                     Box(modifier = Modifier.height(12.dp))
                     Text(
-                        text = significance,
+                        text = Markdown.prose(significance),
                         style = MaterialTheme.typography.bodyLarge,
                         color = Espresso,
                     )
@@ -293,7 +294,9 @@ private fun boldSpeakerLines(text: String, characterNames: List<String>): Annota
         lines.forEachIndexed { index, line ->
             val trimmed = line.trim()
             val namePart = trimmed.substringBefore("(").trim()
-            val isSpeaker = trimmed.isNotEmpty() && (trimmed in nameSet || namePart in nameSet)
+            // A speaker name only appears at a block start (first line, or after a blank line).
+            val isBlockStart = index == 0 || lines[index - 1].trim().isEmpty()
+            val isSpeaker = isBlockStart && trimmed.isNotEmpty() && (trimmed in nameSet || namePart in nameSet)
             if (isSpeaker) {
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(line) }
             } else {
@@ -316,10 +319,15 @@ private fun ScriptBody(
     isAnonymous: Boolean,
     onSaveHighlight: (String, String) -> Unit,
 ) {
+    val format = card.works?.format
     val names = card.works?.characterList().orEmpty()
-    var tfv by remember(card.cardId, english) { mutableStateOf(TextFieldValue(card.scriptFor(english))) }
+    var tfv by remember(card.cardId, english) {
+        mutableStateOf(TextFieldValue(ScriptFormat.displayScript(card, english)))
+    }
     var composeText by remember { mutableStateOf<String?>(null) }
-    val transformation = remember(names) { SpeakerBoldTransformation(names) }
+    val transformation = remember(names, format) {
+        if (ScriptFormat.usesSpeakerBold(format)) SpeakerBoldTransformation(names) else VisualTransformation.None
+    }
     val sel = tfv.selection
     val selected = if (!sel.collapsed) tfv.text.substring(sel.min, sel.max).trim() else ""
 

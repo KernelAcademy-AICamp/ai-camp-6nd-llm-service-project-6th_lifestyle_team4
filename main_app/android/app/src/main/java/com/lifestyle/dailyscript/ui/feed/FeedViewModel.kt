@@ -52,8 +52,9 @@ class FeedViewModel : ViewModel() {
         viewModelScope.launch { AppPreferences.setFeedCategory(cat) }
     }
 
-    fun openCompose() { _state.value = _state.value.copy(composeOpen = true) }
-    fun closeCompose() { _state.value = _state.value.copy(composeOpen = false) }
+    /** Picked a bookmarked card for a "오늘의 한줄" — opens the compose step for it. */
+    fun openComposeFor(card: CardDto) { _state.value = _state.value.copy(composeCard = card, error = null) }
+    fun closeCompose() { _state.value = _state.value.copy(composeCard = null) }
 
     fun submitPost(userId: Long, nickname: String, cardId: Long, body: String) {
         if (_state.value.submitting) return
@@ -67,7 +68,7 @@ class FeedViewModel : ViewModel() {
                     AppPreferences.setFeedCategory(FEED_TODAY)
                     _state.value = _state.value.copy(
                         submitting = false,
-                        composeOpen = false,
+                        composeCard = null,
                         category = FEED_TODAY,
                         posts = posts,
                     )
@@ -86,6 +87,6 @@ data class FeedState(
     val highlights: List<Highlight> = emptyList(),
     val bookmarkCards: List<CardDto> = emptyList(),
     val submitting: Boolean = false,
-    val composeOpen: Boolean = false,
+    val composeCard: CardDto? = null,
     val error: String? = null,
 )

@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.LocalLibrary
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,7 +67,7 @@ fun BottomNavBar(
             NavItem(
                 route = Routes.ARCHIVE,
                 label = stringResource(R.string.nav_archive),
-                icon = Icons.Outlined.LocalLibrary,
+                icon = LibraryShelfIcon,
                 active = currentRoute == Routes.ARCHIVE,
                 onClick = onSelect,
                 modifier = Modifier.weight(1f),

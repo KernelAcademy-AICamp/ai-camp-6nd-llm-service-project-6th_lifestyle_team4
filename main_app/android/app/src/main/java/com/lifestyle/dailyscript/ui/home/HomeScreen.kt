@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
@@ -55,6 +56,7 @@ import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.displayTitle
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import com.lifestyle.dailyscript.ui.util.keywordsFor
@@ -246,8 +248,8 @@ private fun TodayCard(
         }
         Box(modifier = Modifier.height(28.dp))
         Text(
-            text = card?.quoteFor(english)?.let { "“$it”" }
-                ?: if (loading) stringResource(R.string.loading) else "—",
+            text = card?.let { Markdown.quote(it.quoteFor(english)) }
+                ?: AnnotatedString(if (loading) stringResource(R.string.loading) else "—"),
             style = MaterialTheme.typography.headlineMedium,
             color = Espresso,
         )
@@ -309,7 +311,7 @@ private fun RecentRowItem(card: CardDto, onClick: () -> Unit) {
             )
             Box(modifier = Modifier.height(4.dp))
             Text(
-                text = card.quote,
+                text = Markdown.oneLine(card.quote),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Walnut,
                 maxLines = 1,

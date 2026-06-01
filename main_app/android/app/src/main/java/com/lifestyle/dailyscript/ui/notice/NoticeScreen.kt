@@ -2,7 +2,6 @@ package com.lifestyle.dailyscript.ui.notice
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,13 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lifestyle.dailyscript.data.model.Notice
 import com.lifestyle.dailyscript.ui.detail.relativeTime
@@ -36,7 +32,9 @@ import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Highlight
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
+import com.lifestyle.dailyscript.ui.theme.Roast
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.util.Markdown
 
 @Composable
 fun NoticeScreen(vm: NoticeViewModel) {
@@ -79,14 +77,12 @@ fun NoticeScreen(vm: NoticeViewModel) {
 
 @Composable
 private fun NoticeCard(notice: Notice) {
-    var expanded by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(CardWarm, shape)
             .border(0.5.dp, Latte, shape)
-            .clickable { expanded = !expanded }
             .padding(horizontal = 18.dp, vertical = 20.dp),
     ) {
         Row(
@@ -106,20 +102,62 @@ private fun NoticeCard(notice: Notice) {
                 color = Walnut,
             )
         }
-        Box(modifier = Modifier.height(10.dp))
+        Box(modifier = Modifier.height(12.dp))
         Text(
             text = notice.title,
             style = MaterialTheme.typography.titleLarge,
             color = Espresso,
         )
-        Box(modifier = Modifier.height(6.dp))
-        Text(
-            text = notice.body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Walnut,
-            maxLines = if (expanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Box(modifier = Modifier.height(10.dp))
+        NoticeBody(notice.body)
+    }
+}
+
+/**
+ * Renders the notice body's markdown subset (mirrors the PWA renderNoticeBodyHtml):
+ *  **bold**, `## heading`, `-`/`•` bullets, blank-line paragraph gaps.
+ * Image lines (`![alt](https://…)`) are skipped (no image loader bundled).
+ */
+@Composable
+private fun NoticeBody(body: String) {
+    val heading = Regex("^#{1,3}\\s+(.+)$")
+    val bullet = Regex("^[-•]\\s+(.+)$")
+    val image = Regex("^!\\[.*]\\(https://.*\\)$")
+    Column(modifier = Modifier.fillMaxWidth()) {
+        body.split("\n").forEach { rawLine ->
+            val t = rawLine.trim()
+            when {
+                t.isEmpty() -> Box(modifier = Modifier.height(10.dp))
+                image.matches(t) -> Unit // skip images
+                heading.matches(t) -> {
+                    val text = heading.find(t)!!.groupValues[1]
+                    Box(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = Markdown.bold(text),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Espresso,
+                    )
+                    Box(modifier = Modifier.height(2.dp))
+                }
+                bullet.matches(t) -> {
+                    val text = bullet.find(t)!!.groupValues[1]
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                        Text("•  ", style = MaterialTheme.typography.bodyMedium, color = Roast)
+                        Text(
+                            text = Markdown.bold(text),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Roast,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                else -> Text(
+                    text = Markdown.bold(t),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Roast,
+                )
+            }
+        }
     }
 }
 
