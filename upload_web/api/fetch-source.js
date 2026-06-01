@@ -12,6 +12,7 @@
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 import { searchWikisourceKr, fetchWikisourceKrPage } from '../lib/sources/wikisource-kr.js';
+import { searchGutenberg, fetchGutenbergText } from '../lib/sources/gutenberg.js';
 
 const MAX_BODY = 8 * 1024;
 
@@ -51,7 +52,39 @@ export default async function handler(req, res) {
       throw new HttpError(`unknown op: ${op} (expected search | fetch)`, 400);
     }
 
-    throw new HttpError(`unknown kind: ${kind} (supported: wikisource_kr)`, 400);
+    if (kind === 'gutenberg') {
+      if (op === 'search') {
+        const query = String(body.query || body.title || '').trim();
+        if (!query) throw new HttpError('query (or title) required', 400);
+        const results = await searchGutenberg(query, body.limit || 8);
+        return res.status(200).json({ kind, op, query, results });
+      }
+      if (op === 'fetch') {
+        const bookId = body.bookId != null
+          ? Number.parseInt(String(body.bookId).replace(/^#/, ''), 10)
+          : null;
+        const plainTextUrl = body.plainTextUrl ? String(body.plainTextUrl) : null;
+        if (!Number.isInteger(bookId) && !plainTextUrl) {
+          throw new HttpError('bookId or plainTextUrl required', 400);
+        }
+        const r = await fetchGutenbergText({ bookId, plainTextUrl });
+        return res.status(200).json({
+          kind, op,
+          bookId: r.bookId,
+          title: r.title,
+          authors: r.authors,
+          languages: r.languages,
+          text: r.text,
+          length: r.length,
+          truncated: r.truncated,
+          url: r.pageUrl,
+          sourceUrl: r.sourceUrl,
+        });
+      }
+      throw new HttpError(`unknown op: ${op} (expected search | fetch)`, 400);
+    }
+
+    throw new HttpError(`unknown kind: ${kind} (supported: wikisource_kr | gutenberg)`, 400);
   } catch (err) {
     if (err instanceof AuthError) {
       return res.status(err.status || 401).json({ error: err.message });

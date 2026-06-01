@@ -4,7 +4,7 @@ import { requireAdmin, AuthError } from '../lib/auth.js';
 import { runExtract } from '../lib/anthropic.js';
 import { extractText } from '../lib/parse-document.js';
 import { fetchQuoteSeeds, formatSeedBlock } from '../lib/quotes/index.js';
-import { HttpError, sendError } from '../lib/http.js';
+import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
 export const config = {
   api: { bodyParser: false },
@@ -84,17 +84,39 @@ export default async function handler(req, res) {
   try {
     await requireAdmin(req);
 
-    const { file: fileBuffer, filename, mimetype, fields } = await readMultipart(req);
-    const rawCategory = (fields.category || '').trim();
-    const category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'screen';
-    const titleHint = (fields.title || '').trim().slice(0, 200);
-    // AI 모델 ('haiku' | 'sonnet' | 'opus'). 잘못된 값은 anthropic.js 에서 fallback.
-    const modelKey = (fields.model || '').trim().toLowerCase();
+    // 입력 두 가지 형태:
+    //  (1) multipart/form-data  — 파일 업로드 (PDF/DOCX/HWP/TXT). 기존 경로.
+    //  (2) application/json     — { text, category, model, title } —
+    //      Wikisource KR / Gutenberg 등 외부 PD 소스에서 이미 추출된 본문.
+    const contentType = String(req.headers?.['content-type'] || '');
+    let scriptText = '';
+    let category = 'screen';
+    let titleHint = '';
+    let modelKey = '';
 
-    const extracted = await extractText(fileBuffer, filename, mimetype);
-    let scriptText = (extracted || '').trim();
-    if (!scriptText) {
-      throw new HttpError('Could not extract text from the file. Scanned PDFs may need OCR first.', 400);
+    if (contentType.includes('application/json')) {
+      const body = await readJsonBody(req, { maxBytes: 8 * 1024 * 1024 });
+      scriptText = String(body.text || '').trim();
+      const rawCategory = String(body.category || '').trim();
+      category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'screen';
+      titleHint = String(body.title || '').trim().slice(0, 200);
+      modelKey = String(body.model || '').trim().toLowerCase();
+      if (!scriptText) {
+        throw new HttpError('text is required (application/json body)', 400);
+      }
+    } else {
+      const { file: fileBuffer, filename, mimetype, fields } = await readMultipart(req);
+      const rawCategory = (fields.category || '').trim();
+      category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'screen';
+      titleHint = (fields.title || '').trim().slice(0, 200);
+      // AI 모델 ('haiku' | 'sonnet' | 'opus'). 잘못된 값은 anthropic.js 에서 fallback.
+      modelKey = (fields.model || '').trim().toLowerCase();
+
+      const extracted = await extractText(fileBuffer, filename, mimetype);
+      scriptText = (extracted || '').trim();
+      if (!scriptText) {
+        throw new HttpError('Could not extract text from the file. Scanned PDFs may need OCR first.', 400);
+      }
     }
 
     // 폼에서 작품명을 받았으면 웹(Wikiquote 다국어 + 나무위키)에서 명대사 시드를 끌어와

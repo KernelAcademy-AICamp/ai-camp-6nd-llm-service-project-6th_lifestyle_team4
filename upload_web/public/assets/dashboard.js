@@ -182,6 +182,20 @@ paintModel();
 // 업로드 허용 형식
 const ALLOWED_EXTENSIONS = ['pdf', 'txt', 'docx', 'hwp', 'hwpx'];
 
+// works.format / cards.format DB enum → 화면 표시용 한국어 라벨.
+// 정의되지 않은 값은 원본 그대로 표시 (graceful fallback).
+const FORMAT_LABEL = {
+  movie:   '영화',
+  drama:   '드라마',
+  play:    '연극',
+  musical: '뮤지컬',
+  opera:   '오페라',
+  novel:   '소설',
+  poem:    '시',
+  essay:   '에세이',
+  prose:   '산문',
+};
+
 pdfInput.addEventListener('change', (e) => {
   const file = e.target.files?.[0];
   if (file) handleFile(file);
@@ -343,9 +357,10 @@ async function onWsSearch() {
 
 async function onWsPickResult(item) {
   setWsStatus(`"${item.title}" 본문 가져오는 중⋯`, 'info');
+  setDropzoneBusy('위키문헌 본문 추출 중⋯', '본문을 가져와 LLM이 분석하고 있습니다. 최대 1분 소요됩니다.');
   try {
     const token = await getAccessToken();
-    const j = await apiFetch('/api/fetch-source', {
+    const fetchJson = await apiFetch('/api/fetch-source', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -353,7 +368,7 @@ async function onWsPickResult(item) {
       },
       body: JSON.stringify({ kind: 'wikisource_kr', op: 'fetch', title: item.title }),
     });
-    const text = String(j.text || '');
+    const text = String(fetchJson.text || '');
     if (!text.trim()) {
       setWsStatus('본문이 비어있습니다.', 'err');
       return;
@@ -361,14 +376,38 @@ async function onWsPickResult(item) {
     setWsStatus(`${text.length.toLocaleString()}자 가져옴 — 추출 시작합니다.`, 'ok');
     // 위 #title-input 이 비어있다면 가져온 페이지명으로 채워준다 (extract 시드용).
     const titleInput = document.querySelector('#title-input');
-    if (titleInput && !titleInput.value.trim()) titleInput.value = j.title || item.title;
-    // 본문을 합성 .txt File 로 만들어 기존 업로드 경로 재사용.
-    const safeName = (j.title || item.title || 'wikisource').replace(/[\s\\/:*?"<>|]+/g, '_').slice(0, 80);
-    const file = new File([text], `wikisource_${safeName}.txt`, { type: 'text/plain' });
-    await handleFile(file);
+    const finalTitle = (titleInput?.value.trim()) || fetchJson.title || item.title;
+    if (titleInput && !titleInput.value.trim()) titleInput.value = finalTitle;
+
+    // 파일 업로드 경로 (multipart) 가 아닌 JSON 경로로 /api/extract 호출.
+    // 외부 PD 소스에서 가져온 본문은 이미 텍스트라 multipart 래핑이 불필요 + Busboy
+    // 가 합성 File 의 Korean 파일명에서 "Unexpected end of form" 으로 떨어지는 문제 회피.
+    const extractJson = await apiFetch('/api/extract', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        category: state.category,
+        model: state.model,
+        title: finalTitle,
+      }),
+    });
+    applyExtraction(extractJson);
+    if (extractJson?._truncated) {
+      toast('추출 완료 — 단, 본문이 너무 길어 일부만(앞 400K글자) 분석했어요.', 'info');
+    } else {
+      toast('추출 완료', 'success');
+    }
+    setWsStatus('', 'info');
   } catch (err) {
     console.error('[ws] fetch failed', err);
-    setWsStatus(`가져오기 실패: ${err.message || err}`, 'err');
+    setWsStatus(`실패: ${err.message || err}`, 'err');
+    toast(err.message || '추출 실패', 'error');
+  } finally {
+    resetDropzone();
   }
 }
 
@@ -377,6 +416,162 @@ if (wsSearchBtn) wsSearchBtn.addEventListener('click', onWsSearch);
 document.querySelector('#title-input')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); onWsSearch(); }
 });
+
+// ---------------------------------------------------------------------------
+// Project Gutenberg — Wikisource KR 과 동일한 패턴. 다만 작품명이 숫자만이면
+// 검색을 건너뛰고 해당 책 ID 로 바로 fetch (Gutendex 카탈로그 search 가 종종
+// 느리거나 502 라 ID-direct 경로가 안전).
+// ---------------------------------------------------------------------------
+const gbSearchBtn = document.querySelector('#gb-search-btn');
+const gbResultsEl = document.querySelector('#gb-results');
+const gbStatusEl  = document.querySelector('#gb-status');
+
+function setGbStatus(message, kind = 'info') {
+  if (!gbStatusEl) return;
+  if (!message) {
+    gbStatusEl.classList.add('hidden');
+    gbStatusEl.textContent = '';
+    return;
+  }
+  gbStatusEl.classList.remove('hidden');
+  gbStatusEl.textContent = message;
+  gbStatusEl.classList.remove('text-error', 'text-on-surface-variant', 'text-primary');
+  if (kind === 'err') gbStatusEl.classList.add('text-error');
+  else if (kind === 'ok') gbStatusEl.classList.add('text-primary');
+  else gbStatusEl.classList.add('text-on-surface-variant');
+}
+
+function renderGbResults(results) {
+  if (!gbResultsEl) return;
+  gbResultsEl.innerHTML = '';
+  if (!results || results.length === 0) {
+    gbResultsEl.classList.add('hidden');
+    return;
+  }
+  gbResultsEl.classList.remove('hidden');
+  for (const r of results) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'text-left p-3 rounded-lg border border-outline-variant hover:border-primary hover:bg-primary/5 transition-colors flex items-center justify-between gap-3';
+    const authors = (r.authors || []).join(', ');
+    const langs = (r.languages || []).join(', ');
+    const hasPlain = !!r.plainTextUrl;
+    row.innerHTML = `
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold truncate">${escapeHtmlBasic(r.title)}</p>
+        <p class="text-xs text-on-surface-variant truncate">
+          ${authors ? escapeHtmlBasic(authors) + ' · ' : ''}#${r.bookId}${langs ? ' · ' + escapeHtmlBasic(langs) : ''}${hasPlain ? '' : ' · (no plain text)'}
+        </p>
+        <a class="text-xs text-primary underline truncate inline-block max-w-full"
+           href="${escapeAttr(r.url)}" target="_blank" rel="noopener noreferrer"
+           onclick="event.stopPropagation()">${escapeHtmlBasic(r.url)}</a>
+      </div>
+      <span class="material-symbols-outlined text-on-surface-variant">${hasPlain ? 'download' : 'block'}</span>
+    `;
+    if (hasPlain) row.addEventListener('click', () => onGbPickResult(r));
+    else { row.disabled = true; row.classList.add('opacity-50', 'cursor-not-allowed'); }
+    gbResultsEl.appendChild(row);
+  }
+}
+
+async function onGbSearch() {
+  const titleInput = document.querySelector('#title-input');
+  const query = (titleInput?.value || '').trim();
+  if (!query) {
+    setGbStatus('위쪽 "작품명" 칸에 검색어를 입력하세요 (제목 또는 Gutenberg 책 ID).', 'err');
+    titleInput?.focus();
+    return;
+  }
+  // 숫자만 입력했으면 책 ID 로 바로 fetch (검색 endpoint 가 느릴 때 유용)
+  if (/^#?\d+$/.test(query)) {
+    const bookId = Number.parseInt(query.replace(/^#/, ''), 10);
+    setGbStatus(`Gutenberg #${bookId} 로 바로 가져옵니다…`, 'info');
+    renderGbResults([]);
+    await gbFetchAndExtract({ bookId, title: null });
+    return;
+  }
+  setGbStatus(`Gutendex 카탈로그 검색 중: "${query}" (느릴 수 있음, 최대 60초)`, 'info');
+  renderGbResults([]);
+  try {
+    const token = await getAccessToken();
+    const j = await apiFetch('/api/fetch-source', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ kind: 'gutenberg', op: 'search', query }),
+    });
+    const results = Array.isArray(j.results) ? j.results : [];
+    if (results.length === 0) {
+      setGbStatus(`"${query}" 검색 결과 없음. (Gutenberg 책 ID 를 직접 입력해도 됨)`, 'err');
+      return;
+    }
+    setGbStatus(`${results.length}개 결과 — 가져올 항목 클릭.`, 'ok');
+    renderGbResults(results);
+  } catch (err) {
+    console.error('[gb] search failed', err);
+    setGbStatus(`검색 실패: ${err.message || err}. 책 ID 를 직접 입력해 보세요.`, 'err');
+  }
+}
+
+async function onGbPickResult(item) {
+  await gbFetchAndExtract({ bookId: item.bookId, plainTextUrl: item.plainTextUrl, title: item.title });
+}
+
+async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
+  setGbStatus(`#${bookId} 본문 가져오는 중⋯`, 'info');
+  setDropzoneBusy('Gutenberg 본문 추출 중⋯', '본문을 가져와 LLM이 분석하고 있습니다. 최대 1분 소요됩니다.');
+  try {
+    const token = await getAccessToken();
+    const fetchJson = await apiFetch('/api/fetch-source', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ kind: 'gutenberg', op: 'fetch', bookId, plainTextUrl }),
+    });
+    const text = String(fetchJson.text || '');
+    if (!text.trim()) {
+      setGbStatus('본문이 비어있습니다.', 'err');
+      return;
+    }
+    const truncMsg = fetchJson.truncated ? ' (1MB 한계로 잘림)' : '';
+    setGbStatus(`${text.length.toLocaleString()}자 가져옴${truncMsg} — 추출 시작.`, 'ok');
+
+    const titleInput = document.querySelector('#title-input');
+    const finalTitle = (titleInput?.value.trim() && !/^#?\d+$/.test(titleInput.value.trim()))
+      ? titleInput.value.trim()
+      : (fetchJson.title || title || `Gutenberg #${bookId}`);
+    if (titleInput) titleInput.value = finalTitle;
+
+    const extractJson = await apiFetch('/api/extract', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        category: state.category,
+        model: state.model,
+        title: finalTitle,
+      }),
+    });
+    applyExtraction(extractJson);
+    toast('추출 완료 — 영문 카드. 카드별 번역 버튼으로 한국어 변환 가능.', 'success');
+    setGbStatus('', 'info');
+  } catch (err) {
+    console.error('[gb] fetch/extract failed', err);
+    setGbStatus(`실패: ${err.message || err}`, 'err');
+    toast(err.message || '추출 실패', 'error');
+  } finally {
+    resetDropzone();
+  }
+}
+
+if (gbSearchBtn) gbSearchBtn.addEventListener('click', onGbSearch);
 
 // ---------------------------------------------------------------------------
 // State -> View
@@ -406,7 +601,7 @@ function renderSummary() {
   summary.classList.add('flex');
 
   $('#work-title').textContent = state.work.title || '(제목 없음)';
-  $('#work-format').textContent = state.work.format || '';
+  $('#work-format').textContent = FORMAT_LABEL[state.work.format] || state.work.format || '';
 
   const authorWrap = $('#work-author-wrap');
   if (state.work.author) {
