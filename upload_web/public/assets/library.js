@@ -25,8 +25,10 @@ const confirmDeleteBtn = $('#confirm-delete');
 const libraryWorkFilter = $('#library-work-filter');
 const libraryFormatFilter = $('#library-format-filter');
 const librarySearchInput = $('#library-search');
+const libraryMissingEnFilterBtn = $('#library-missing-en-filter');
 const libraryRefreshBtn = $('#library-refresh');
 const libraryBackfillEnBtn = $('#library-backfill-en-btn');
+const libraryBackfillCommentaryBtn = $('#library-backfill-commentary-btn');
 const libraryKeywordFreqBtn = $('#library-keyword-freq-btn');
 const libraryKeywordFreq = $('#library-keyword-freq');
 const libraryKeywordFreqClose = $('#library-keyword-freq-close');
@@ -49,6 +51,7 @@ const state = {
   workFilter: '',     // 작품 제목 문자열 (이전엔 work_id)
   formatFilter: '',   // 작품 형식(works.format) — '' = 전체
   searchText: '',
+  missingEnOnly: false,  // 영문 누락 카드만 표시 (제목/부제/작가/명대사/발췌/설명/의의/키워드 중 하나라도 빈 카드)
   editing: null,      // editing card_id
   selectedIds: new Set(), // 그리드 전체 선택용 card_id Set
   viewMode: 'shelf',  // 'shelf' (책꽂이) | 'grid' (격자)
@@ -165,10 +168,9 @@ async function loadLibrary() {
     refreshFormatFilterOptions();
     renderLibrary();
     if (libraryKeywordFreq && !libraryKeywordFreq.classList.contains('hidden')) renderKeywordFreq();
-    libraryStatus.textContent = `총 ${state.rows.length}장 로드됨.`;
-    // 자동 영문 백필 — admin 이 EN 토글을 누르지 않아도 모든 카드의 *_original 가
-    // 미리 채워지도록 백그라운드에서 순차 ensureEnglishOriginals 호출. fire-and-forget.
-    autoBackfillBilingual().catch((e) => console.warn('[library] backfill error:', e));
+    // renderLibrary 가 총/현재 표시 카운트를 직접 갱신하므로 여기선 별도 메시지 안 씀.
+    // 자동 백필은 비활성화 — '전체 영문 백필' 버튼으로만 수동 실행.
+    // (이전엔 loadLibrary 마다 autoBackfillBilingual 가 백그라운드에서 돌아 API 비용·체감 부담)
   } catch (err) {
     console.error('[library] load error:', err);
     libraryStatus.textContent = `불러오기 실패: ${err.message || err}`;
@@ -241,6 +243,23 @@ function refreshFormatFilterOptions() {
   }
 }
 
+// 카드의 영문 원본(*_original) 중 하나라도 빠진 게 있으면 true.
+// 한국어 본은 있는데 영문이 없는 필드만 카운트 (KO 도 빈 필드는 백필 대상이 아니므로 제외).
+function cardMissingEnOriginal(c) {
+  const w = c.works || {};
+  return (
+    (!w.title_original    && w.title) ||
+    (!w.subtitle_original && w.subtitle) ||
+    (!w.author_original   && w.author) ||
+    (!c.quote_original          && c.quote) ||
+    (!c.script_excerpt_original && c.script_excerpt) ||
+    (!c.excerpt_description_original && c.excerpt_description) ||
+    (!c.significance_original   && c.significance) ||
+    ((!Array.isArray(c.keywords_original) || !c.keywords_original.length) &&
+     Array.isArray(c.keywords) && c.keywords.length)
+  );
+}
+
 function filteredRows() {
   const q = state.searchText.trim().toLowerCase();
   return state.rows.filter((c) => {
@@ -255,6 +274,7 @@ function filteredRows() {
       const hay = `${c.quote || ''} ${c.excerpt_description || ''} ${(c.keywords || []).join(' ')}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
+    if (state.missingEnOnly && !cardMissingEnOriginal(c)) return false;
     return true;
   });
 }
@@ -576,12 +596,24 @@ function renderLibrary() {
   libraryShelf.innerHTML = '';
   const rows = filteredRows();
 
+  // 상태 표시 — 총 카드 / 현재 화면(필터 적용 후) 갯수.
+  // 별도의 백필 진행 상태 표시 중에는 덮지 않음 (libraryStatus 에 '백필 중⋯' 가 떠 있으면 유지).
+  if (libraryStatus && !/백필 중|채우는 중|불러오는 중/.test(libraryStatus.textContent)) {
+    const total = state.rows.length;
+    const visible = rows.length;
+    libraryStatus.textContent = (total === visible)
+      ? `총 ${total}장`
+      : `총 ${total}장 · 현재 ${visible}장 표시`;
+  }
+
   if (rows.length === 0) {
     libraryEmpty.classList.remove('hidden');
     librarySelectionBar.classList.add('hidden');
     librarySelectionBar.classList.remove('flex');
     libraryGrid.classList.add('hidden');
     libraryShelf.classList.add('hidden');
+    // 빈 결과 분기에서도 카운트는 위에서 갱신됨 (총 N장 · 현재 0장)
+    window.scrollTo(0, prevScrollY);
     return;
   }
   libraryEmpty.classList.add('hidden');
@@ -1223,6 +1255,39 @@ function buildEditNode(card) {
   // ↻ KO — 영문 칸의 텍스트를 한국어로 재번역해서 좌측에 채우기
   wireTranslateButtons(node, work);
 
+  // ↻ 영문 일괄 채우기 — 이 카드의 빠진 *_original 필드만 KO→EN 번역해서 채움.
+  // 전체 백필이 일부 실패한 카드를 admin 이 편집 화면에서 바로 보충하는 용도.
+  const fillEnBtn = node.querySelector('.lib-fill-en-btn');
+  if (fillEnBtn) {
+    fillEnBtn.addEventListener('click', async () => {
+      fillEnBtn.disabled = true;
+      const origHtml = fillEnBtn.innerHTML;
+      fillEnBtn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> 채우는 중⋯';
+      try {
+        await ensureEnglishOriginals(card, card.works || work || {});
+        // 메모리에 채워진 *_original 을 빈 폼 칸에 다시 반영 (admin 이 이미 입력한 값은 보존)
+        const w2 = card.works || work || {};
+        if (titleOrigEl    && !titleOrigEl.value.trim()    && w2.title_original)    titleOrigEl.value    = w2.title_original;
+        if (subtitleOrigEl && !subtitleOrigEl.value.trim() && w2.subtitle_original) subtitleOrigEl.value = w2.subtitle_original;
+        if (authorOrigEl   && !authorOrigEl.value.trim()   && w2.author_original)   authorOrigEl.value   = w2.author_original;
+        if (quoteOrigEl    && !quoteOrigEl.value.trim()    && card.quote_original)    quoteOrigEl.value    = card.quote_original;
+        if (excerptOrigEl  && !excerptOrigEl.value.trim()  && card.script_excerpt_original) excerptOrigEl.value = card.script_excerpt_original;
+        if (descOrigEl     && !descOrigEl.value.trim()     && card.excerpt_description_original) descOrigEl.value = card.excerpt_description_original;
+        if (sigOrigEl      && !sigOrigEl.value.trim()      && card.significance_original)       sigOrigEl.value  = card.significance_original;
+        if (kwOrigEl       && !kwOrigEl.value.trim()       && Array.isArray(card.keywords_original) && card.keywords_original.length) {
+          kwOrigEl.value = card.keywords_original.join(', ');
+        }
+        toast('영문 일괄 채우기 완료 — 저장(✓) 누르면 DB 반영', 'success');
+      } catch (e) {
+        console.error('[library] fill EN failed:', e);
+        toast(`영문 채우기 실패: ${e.message || e}`, 'error');
+      } finally {
+        fillEnBtn.disabled = false;
+        fillEnBtn.innerHTML = origHtml;
+      }
+    });
+  }
+
   node.querySelector('.lib-save-edit-btn').addEventListener('click', async () => {
     const kwList = parseKeywords(kwEl.value);
     const kwCheck = validateKeywords(kwList);
@@ -1327,6 +1392,129 @@ async function clearStaleLongEnTranslations() {
     }
   }
   if (cleared) console.log(`[library] cleared ${cleared} over-long EN translations for re-translation`);
+}
+
+// 의의(significance) · 상황 설명(excerpt_description) 영문 누락 카드만 집중 백필.
+// 일반 backfillAllCards 에서 자주 누락되는 두 필드를 더 공격적으로 처리:
+//  · 재시도 5회 (기본 3회 대비 강화)
+//  · 두 필드만 처리하므로 동시성 늘려도 안전 (작품 메타·다른 필드 안 건드림)
+//  · 카드별 성공/실패를 상세 콘솔 로그 + 실패한 card_id 목록을 최종 토스트
+async function backfillCommentary() {
+  const sb = await getSupabase();
+  const token = await getAccessToken();
+
+  if (libraryStatus) libraryStatus.textContent = 'DB 카드 목록 조회 중⋯';
+
+  // 1) 의의 또는 설명 영문이 비어 있는 카드만 직접 조회 — *_original 이 null 이면서 KO 가 있는 경우.
+  const COLS = 'card_id, work_id, excerpt_description, significance, excerpt_description_original, significance_original, works(title, subtitle, author, format)';
+  const PAGE = 1000;
+  let all = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await sb
+      .from('cards')
+      .select(COLS)
+      .order('card_id', { ascending: false })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break;
+  }
+
+  const candidates = all.filter((c) =>
+    (!c.excerpt_description_original && c.excerpt_description) ||
+    (!c.significance_original && c.significance)
+  );
+
+  if (!candidates.length) {
+    if (libraryStatus) libraryStatus.textContent = `의의·설명 영문 모두 채워져 있음 (총 ${all.length}장 검사).`;
+    toast('의의·설명 영문 누락 카드 없음', 'info');
+    return { total: all.length, processed: 0 };
+  }
+
+  toast(`의의·설명 영문 누락 ${candidates.length}장 발견 — 채우기 시작`, 'info');
+  console.log(`[library] backfill commentary candidates:`, candidates.map((c) => c.card_id));
+
+  // 강화된 재시도 (5회 + 더 긴 백오프) — Anthropic 일시 과부하 더 끈질기게 통과
+  async function callTranslate(text, field, workCtx) {
+    if (!text || !String(text).trim()) return null;
+    let lastErr;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        const res = await fetch('/api/translate-field', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ text, field, work: workCtx, direction: 'ko2en' }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) return String(body?.translated || '').trim() || null;
+        const retryable = [408, 429, 500, 502, 503, 504].includes(res.status);
+        if (!retryable || attempt === 5) throw new Error(body?.error || `HTTP ${res.status}`);
+        await new Promise((r) => setTimeout(r, 1000 * attempt + Math.random() * 500));
+      } catch (e) {
+        lastErr = e;
+        if (attempt === 5) throw e;
+        await new Promise((r) => setTimeout(r, 1000 * attempt + Math.random() * 500));
+      }
+    }
+    throw lastErr;
+  }
+
+  let done = 0, failedCards = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const card = candidates[i];
+    const w = card.works || {};
+    const workCtx = { title: w.title || '', subtitle: w.subtitle || '', author: w.author || '', format: w.format || '' };
+    if (libraryStatus) {
+      libraryStatus.textContent =
+        `의의·설명 채우는 중⋯ (${i + 1}/${candidates.length}) — 실패 ${failedCards.length}장`;
+    }
+    const update = {};
+    const failures = [];
+    if (!card.excerpt_description_original && card.excerpt_description) {
+      try {
+        const v = await callTranslate(card.excerpt_description, 'excerpt_description', workCtx);
+        if (v) update.excerpt_description_original = v;
+        else failures.push('desc:빈응답');
+      } catch (e) { failures.push(`desc:${e.message || e}`); }
+    }
+    if (!card.significance_original && card.significance) {
+      try {
+        const v = await callTranslate(card.significance, 'significance', workCtx);
+        if (v) update.significance_original = v;
+        else failures.push('sig:빈응답');
+      } catch (e) { failures.push(`sig:${e.message || e}`); }
+    }
+    if (Object.keys(update).length > 0) {
+      try {
+        await sb.from('cards').update(update).eq('card_id', card.card_id);
+        done++;
+      } catch (e) {
+        failures.push(`db:${e.message || e}`);
+      }
+    }
+    if (failures.length) {
+      failedCards.push({ id: card.card_id, reasons: failures });
+      console.warn(`[library] commentary backfill failed card_id=${card.card_id}:`, failures.join(' | '));
+    }
+  }
+
+  if (libraryStatus) {
+    libraryStatus.textContent =
+      `의의·설명 백필 완료 — 성공 ${done} / 실패 ${failedCards.length} / 전체 ${candidates.length}장` +
+      (failedCards.length ? ` (콘솔에 실패 ID 출력)` : '');
+  }
+  if (failedCards.length) {
+    console.warn('[library] failed cards:', failedCards);
+    toast(`백필 완료: 성공 ${done} · 실패 ${failedCards.length} (콘솔 확인)`, 'info');
+  } else {
+    toast(`의의·설명 영문 백필 완료: ${done}장`, 'success');
+  }
+  loadLibrary().catch((e) => console.warn('[library] reload failed:', e));
+  return { total: all.length, candidates: candidates.length, done, failed: failedCards };
 }
 
 // 수동 트리거 — DB 의 모든 카드(500 한도 무시) 를 페이지네이션으로 가져와 영문 누락분 백필.
@@ -1686,6 +1874,35 @@ librarySearchInput.addEventListener('input', () => {
 });
 
 libraryRefreshBtn.addEventListener('click', () => loadLibrary());
+
+// '영문 없음' 필터 — 영문 원본이 하나라도 빠진 카드만 표시. 토글.
+libraryMissingEnFilterBtn?.addEventListener('click', () => {
+  state.missingEnOnly = !state.missingEnOnly;
+  libraryMissingEnFilterBtn.setAttribute('aria-pressed', state.missingEnOnly ? 'true' : 'false');
+  // 활성화 시 강조 (amber 톤 — 백필 버튼과 시각적으로 연관)
+  libraryMissingEnFilterBtn.classList.toggle('bg-amber-100', state.missingEnOnly);
+  libraryMissingEnFilterBtn.classList.toggle('border-amber-600', state.missingEnOnly);
+  libraryMissingEnFilterBtn.classList.toggle('text-amber-800', state.missingEnOnly);
+  libraryMissingEnFilterBtn.classList.toggle('font-semibold', state.missingEnOnly);
+  renderLibrary();
+});
+
+// 의의·설명 영문만 집중 백필 — 강화된 재시도 + 상세 실패 로그
+libraryBackfillCommentaryBtn?.addEventListener('click', async () => {
+  if (!confirm('의의·설명 영문이 비어있는 카드를 모두 찾아 채웁니다.\n재시도 5회로 끈질기게 처리합니다. 진행하시겠어요?')) return;
+  libraryBackfillCommentaryBtn.disabled = true;
+  const prev = libraryBackfillCommentaryBtn.innerHTML;
+  libraryBackfillCommentaryBtn.innerHTML = '<span class="material-symbols-outlined text-base animate-spin">progress_activity</span> 채우는 중⋯';
+  try {
+    await backfillCommentary();
+  } catch (err) {
+    console.error('[library] backfill commentary error:', err);
+    toast(`의의·설명 백필 실패: ${err.message || err}`, 'error');
+  } finally {
+    libraryBackfillCommentaryBtn.disabled = false;
+    libraryBackfillCommentaryBtn.innerHTML = prev;
+  }
+});
 
 // 전체 영문 백필 — DB 의 모든 카드에서 *_original 빠진 곳 자동 번역.
 libraryBackfillEnBtn?.addEventListener('click', async () => {
