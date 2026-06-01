@@ -117,7 +117,17 @@ function buildCandidateMeta(card, normalizedCard, fullScriptText, extractedBy) {
     && typeof normalizedCard.quote === 'string'
     && fullScriptText.includes(normalizedCard.quote);
 
-  // 원본 LLM 출력을 그대로 보관 — 인라인 편집 후 비교/감사용
+  // 이중 언어 컬럼(*_original)은 cards 테이블에는 있지만 card_candidates 에는 없다
+  // (마이그레이션 021/022/023 은 cards 만 확장). normalizedCard 에 섞여 있으면 candidate
+  // insert 가 schema cache 에러로 500. 분리해서 original_payload JSONB 안에 보존 →
+  // 향후 promote_candidate RPC 가 cards 로 다시 복원할 수 있게 한다.
+  const {
+    quote_original,
+    script_excerpt_original,
+    ...candidateFields
+  } = normalizedCard;
+
+  // 원본 LLM 출력 + 이중 언어 원본을 그대로 보관 — 인라인 편집 후 비교/감사 + bilingual 복원용
   const originalPayload = {
     quote: card.quote ?? null,
     script_excerpt: card.script_excerpt ?? null,
@@ -128,10 +138,13 @@ function buildCandidateMeta(card, normalizedCard, fullScriptText, extractedBy) {
     significance: card.significance ?? null,
     translated: card.translated ?? null,
     showingTranslation: !!card.showingTranslation,
+    // bilingual originals — candidate schema 에는 컬럼이 없어서 JSONB 안에 보존.
+    quote_original:          quote_original          ?? null,
+    script_excerpt_original: script_excerpt_original ?? null,
   };
 
   return {
-    ...normalizedCard,
+    ...candidateFields,
     status: 'pending',
     source_kind: 'uploaded_doc',
     source_url: null,
