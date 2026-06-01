@@ -168,7 +168,7 @@ async function loadLibrary() {
     refreshFormatFilterOptions();
     renderLibrary();
     if (libraryKeywordFreq && !libraryKeywordFreq.classList.contains('hidden')) renderKeywordFreq();
-    libraryStatus.textContent = `총 ${state.rows.length}장 로드됨.`;
+    // renderLibrary 가 총/현재 표시 카운트를 직접 갱신하므로 여기선 별도 메시지 안 씀.
     // 자동 백필은 비활성화 — '전체 영문 백필' 버튼으로만 수동 실행.
     // (이전엔 loadLibrary 마다 autoBackfillBilingual 가 백그라운드에서 돌아 API 비용·체감 부담)
   } catch (err) {
@@ -596,12 +596,24 @@ function renderLibrary() {
   libraryShelf.innerHTML = '';
   const rows = filteredRows();
 
+  // 상태 표시 — 총 카드 / 현재 화면(필터 적용 후) 갯수.
+  // 별도의 백필 진행 상태 표시 중에는 덮지 않음 (libraryStatus 에 '백필 중⋯' 가 떠 있으면 유지).
+  if (libraryStatus && !/백필 중|채우는 중|불러오는 중/.test(libraryStatus.textContent)) {
+    const total = state.rows.length;
+    const visible = rows.length;
+    libraryStatus.textContent = (total === visible)
+      ? `총 ${total}장`
+      : `총 ${total}장 · 현재 ${visible}장 표시`;
+  }
+
   if (rows.length === 0) {
     libraryEmpty.classList.remove('hidden');
     librarySelectionBar.classList.add('hidden');
     librarySelectionBar.classList.remove('flex');
     libraryGrid.classList.add('hidden');
     libraryShelf.classList.add('hidden');
+    // 빈 결과 분기에서도 카운트는 위에서 갱신됨 (총 N장 · 현재 0장)
+    window.scrollTo(0, prevScrollY);
     return;
   }
   libraryEmpty.classList.add('hidden');
