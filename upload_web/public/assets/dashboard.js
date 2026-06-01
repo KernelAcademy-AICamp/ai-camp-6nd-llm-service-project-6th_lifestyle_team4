@@ -351,6 +351,56 @@ progressStopBtn?.addEventListener('click', () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Leave-page guard
+//   추출 진행 중이거나 저장하지 않은 카드가 있을 때 사이드바 클릭 / 새로고침 /
+//   탭 닫기 → 확인 후 진행. 잃어버릴 게 없으면 (state.cards 비어있고 추출 중 아님)
+//   확인 안내 안 함.
+//   /api/save 가 의도적으로 location.href 를 바꿀 때는 intentionallyNavigating
+//   플래그로 차단 해제.
+// ---------------------------------------------------------------------------
+let intentionallyNavigating = false;
+
+function isExtracting() { return currentExtractAbort != null; }
+function hasUnsavedCards() { return Array.isArray(state.cards) && state.cards.length > 0; }
+function guardActive() { return isExtracting() || hasUnsavedCards(); }
+
+function guardMessage() {
+  if (isExtracting()) {
+    return '추출이 진행 중입니다. 이동하면 작업이 취소됩니다. 계속하시겠어요?';
+  }
+  return '저장하지 않은 카드가 있습니다. 이동하면 잃어버립니다. 계속하시겠어요?';
+}
+
+// 1) Reload / 탭 닫기 / 주소창 직접 입력 — 브라우저 기본 confirm 다이얼로그
+window.addEventListener('beforeunload', (e) => {
+  if (intentionallyNavigating) return;
+  if (!guardActive()) return;
+  e.preventDefault();
+  // 일부 브라우저는 returnValue 가 truthy 인지만 본다 (메시지 자체는 무시되고 기본 문구 표시)
+  e.returnValue = '';
+});
+
+// 2) 사이드바 nav 링크 클릭 — 우리 confirm 다이얼로그
+function wireNavGuard() {
+  document.querySelectorAll('aside a[href]').forEach((a) => {
+    const href = a.getAttribute('href') || '';
+    // # 으로 시작하는 disabled 링크는 스킵 (히스토리 Coming soon 등)
+    if (!href || href === '#') return;
+    a.addEventListener('click', (e) => {
+      if (!guardActive()) return; // 잃을 게 없으면 통과
+      e.preventDefault();
+      if (confirm(guardMessage())) {
+        // 사용자가 확인 — 추출 중이면 abort 도 같이 해서 서버 부담 줄임
+        if (currentExtractAbort) currentExtractAbort.abort();
+        intentionallyNavigating = true;
+        window.location.href = href;
+      }
+    });
+  });
+}
+wireNavGuard();
+
 // V2 NDJSON 스트리밍 호출 — /api/extract 가 진행 이벤트를 1줄 JSON 으로 흘려준다.
 // 각 이벤트는 progress 패널의 stage/log 로 그대로 반영. 'result' 이벤트가 최종 응답.
 // 사용자가 [중단] 누르면 fetch 가 abort → 서버 IncomingMessage 'close' 가 발화 →
@@ -1439,12 +1489,11 @@ saveBtn.addEventListener('click', async () => {
     // 저장 성공 — 더 이상 복원할 필요 없음, autosave 초안 정리.
     clearDraft();
 
-    // 검토 페이지로 자동 이동 (잠깐 토스트 보여주고).
-    setTimeout(() => { location.href = '/review.html'; }, 1500);
-
-    // Reset selection so user can re-curate or upload a new file
-    state.cards.forEach((c) => (c.selected = false));
+    // 검토 페이지로 자동 이동 — guard 가 막지 않도록 의도적 이동 플래그 + cards 비움.
+    intentionallyNavigating = true;
+    state.cards = [];
     render();
+    setTimeout(() => { location.href = '/review.html'; }, 1500);
   } catch (err) {
     console.error(err);
     toast(err.message || '저장 실패', 'error');
