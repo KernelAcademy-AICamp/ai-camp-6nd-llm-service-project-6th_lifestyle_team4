@@ -1,10 +1,11 @@
 // Lazy-initialized browser Supabase client.
 // Loads anon key from /api/config so we don't need a build step to inline env vars.
-// SDK는 정적 import 대신 동적 import + 타임아웃으로 로드한다.
-// 정적 import면 esm.sh(크로스도메인)가 멈출 때 m-app.js 모듈 그래프 전체가 함께
-// 멈춰 "무한 스피너"가 되지만, 동적 import면 앱은 실행되고 SDK 로드 실패가
-// getSupabase의 reject로 표면화돼 부팅 에러 UI/워치독이 복구할 수 있다.
-const SDK_URL = 'https://esm.sh/@supabase/supabase-js@2.45.4';
+// SDK는 self-host한 단일 번들(/assets/vendor/supabase-js.js)을 동적 import + 타임아웃으로 로드.
+//  - self-host: esm.sh(크로스도메인 ~10요청)를 동일 출처 1파일로 대체 → 첫 방문 폭포·행 제거,
+//    서비스워커가 precache. (번들 재생성법은 그 파일 상단 배너 참고.)
+//  - 동적 import: m-app.js 모듈 그래프를 SDK에 묶지 않아, 파일 로드 실패/지연도
+//    getSupabase의 reject로 표면화돼 부팅 에러 UI/워치독이 복구할 수 있다.
+const SDK_URL = '/assets/vendor/supabase-js.js';
 const SDK_TIMEOUT_MS = 8000;
 
 let clientPromise = null;

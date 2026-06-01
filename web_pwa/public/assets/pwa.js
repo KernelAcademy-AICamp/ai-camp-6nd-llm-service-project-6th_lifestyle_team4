@@ -23,10 +23,14 @@ if ('serviceWorker' in navigator) {
       })
       .catch((err) => console.warn('[pwa] sw register failed:', err));
 
-    // 새 SW가 컨트롤러로 활성화되면 페이지를 한 번 리로드 (단, 무한 루프 방지)
+    // 새 SW가 컨트롤러로 활성화되면 페이지를 한 번 리로드 (단, 무한 루프 방지).
+    // 단, 첫 설치(로드 시 컨트롤러 없음)의 controllerchange는 reload하지 않는다 —
+    // 페이지는 이미 정상 동작하며, 첫 방문 reload는 모듈 로드 폭포를 ×2로 키운다.
+    // 이전 컨트롤러가 있던 상태에서 새 SW가 인계받은 '업데이트' 때만 1회 reload.
     let reloaded = false;
+    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (reloaded) return;
+      if (reloaded || !hadController) return;
       reloaded = true;
       location.reload();
     });
