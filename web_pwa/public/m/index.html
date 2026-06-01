@@ -25,6 +25,25 @@
     } catch (e) {}
   })();
 </script>
+<script>
+  /* 부팅 워치독 — 모듈(esm.sh 등)이 안 떠도 무조건 실행되는 인라인 안전망.
+     일정 시간 내 홈이 안 뜨면 무한 스피너 대신 재시도 UI로 교체한다.
+     성공 시 m-app.js의 renderHome()이 clearTimeout으로 해제.
+     (15초는 조정 가능 — 부팅이 늦게 성공하면 renderHome이 스피너를 숨겨 자동 회복) */
+  window.__bootWatchdog = setTimeout(function () {
+    var content = document.getElementById('home-content');
+    if (content && content.style.display !== 'none') return; // 이미 부팅 완료
+    var loading = document.getElementById('home-loading');
+    if (!loading) return;
+    loading.innerHTML =
+      '<p class="t-body-md c-walnut" style="text-align:center;line-height:1.6;margin:0 0 16px;">' +
+      '연결이 지연되고 있어요.<br>네트워크 상태를 확인하고 다시 시도해 주세요.</p>' +
+      '<button onclick="location.reload()" ' +
+      'style="padding:10px 22px;border:1px solid var(--espresso,#3a2e26);' +
+      'background:var(--espresso,#3a2e26);color:#fff;-webkit-text-fill-color:#fff;' +
+      'border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;">다시 시도</button>';
+  }, 15000);
+</script>
 <style>
   /* ===== LongBlack tokens (Android Color.kt mirror) ===== */
   :root {

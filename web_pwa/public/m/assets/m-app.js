@@ -392,6 +392,8 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
     });
   } catch (err) {
     console.error('[m] bootstrap failed:', err);
+    // 부팅이 에러로 종결됨 — 워치독 해제(에러 메시지를 워치독 UI가 덮어쓰지 않게)
+    if (window.__bootWatchdog) { clearTimeout(window.__bootWatchdog); window.__bootWatchdog = null; }
     if (homeLoading) {
       homeLoading.innerHTML = `<p class="t-body-md c-cta">초기화 실패: ${escapeHtml(err.message || String(err))}</p>`;
     } else {
@@ -1137,6 +1139,8 @@ function paintBookmarkBtn(btn, filled) {
 // ---------- Home ----------
 function renderHome() {
   if (!homeLoading || !homeContent || !todayCard) return;
+  // 부팅 성공 — 인라인 워치독(index.html) 해제
+  if (window.__bootWatchdog) { clearTimeout(window.__bootWatchdog); window.__bootWatchdog = null; }
   homeLoading.style.display = 'none';
   homeContent.style.display = 'block';
 
