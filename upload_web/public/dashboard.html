@@ -225,6 +225,24 @@
                accept=".pdf,.txt,.docx,.hwp,.hwpx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                class="hidden" />
       </label>
+
+      <!-- 추출 진행 패널 — extract 진행 중에만 보임. 현재 단계 + 경과 시간 + 중단 버튼. -->
+      <div id="progress-panel" class="hidden bg-surface-container-lowest border border-primary/40 rounded-xl p-4 flex flex-col gap-3 shadow-sm">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <span class="material-symbols-outlined text-primary animate-spin flex-shrink-0">progress_activity</span>
+            <span id="progress-stage" class="text-sm font-semibold truncate">시작 중⋯</span>
+            <span id="progress-time" class="text-xs text-on-surface-variant whitespace-nowrap"></span>
+          </div>
+          <button id="progress-stop-btn" type="button"
+                  class="px-3 py-1.5 rounded-lg border-2 border-error text-error text-sm font-semibold hover:bg-error hover:text-white transition-colors flex items-center gap-1 flex-shrink-0">
+            <span class="material-symbols-outlined" style="font-size:18px;">stop</span>
+            <span>중단</span>
+          </button>
+        </div>
+        <!-- 단계별 로그 — 시각 + 메시지 -->
+        <div id="progress-log" class="flex flex-col gap-0.5 text-xs text-on-surface-variant max-h-32 overflow-y-auto custom-scrollbar"></div>
+      </div>
     </section>
 
     <!-- Result Summary (hidden until extracted) -->
