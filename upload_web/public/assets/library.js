@@ -154,7 +154,7 @@ async function loadLibrary() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
       .order('card_id', { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -1087,6 +1087,7 @@ function buildViewNode(card) {
       node.querySelector('.lib-description').innerHTML = renderDescription(currentLang);
       const sigEl = node.querySelector('.lib-significance');
       if (sigEl) sigEl.innerHTML = renderSignificance(currentLang);
+      renderKeywordChips(currentLang);
 
       langToggleBtn.textContent = currentLang === 'ko' ? 'EN' : 'KO';
       langToggleBtn.title = currentLang === 'ko' ? '영문 원본으로 보기' : '한국어로 돌아가기';
@@ -1094,13 +1095,22 @@ function buildViewNode(card) {
     });
   }
 
+  // 키워드 칩 렌더 — 토글 시 다시 그릴 수 있도록 함수화
   const kwEl = node.querySelector('.lib-keywords');
-  (card.keywords || []).forEach((k) => {
-    const chip = document.createElement('span');
-    chip.className = 'px-2 py-1 bg-surface-container rounded-full text-xs text-on-surface-variant';
-    chip.textContent = `#${k}`;
-    kwEl.appendChild(chip);
-  });
+  function renderKeywordChips(lang) {
+    if (!kwEl) return;
+    kwEl.innerHTML = '';
+    const list = (lang === 'en' && Array.isArray(card.keywords_original) && card.keywords_original.length)
+      ? card.keywords_original
+      : (card.keywords || []);
+    list.forEach((k) => {
+      const chip = document.createElement('span');
+      chip.className = 'px-2 py-1 bg-surface-container rounded-full text-xs text-on-surface-variant';
+      chip.textContent = `#${k}`;
+      kwEl.appendChild(chip);
+    });
+  }
+  renderKeywordChips('ko');
 
   fillMeter(node.querySelector('.lib-temp-bar'), node.querySelector('.lib-temp-num'), card.temperature, 'bg-primary');
   fillMeter(node.querySelector('.lib-intensity-bar'), node.querySelector('.lib-intensity-num'), card.intensity, 'bg-secondary');
@@ -1159,10 +1169,16 @@ function buildEditNode(card) {
   const excerptEl     = node.querySelector('.lib-edit-excerpt');
   const excerptOrigEl = node.querySelector('.lib-edit-excerpt-original');
 
-  // 단일 (한국어 해설)
+  // 해설 (좌: KO / 우: EN)
   const descEl       = node.querySelector('.lib-edit-description');
-  const kwEl         = node.querySelector('.lib-edit-keywords');
+  const descOrigEl   = node.querySelector('.lib-edit-description-original');
   const sigEl        = node.querySelector('.lib-edit-significance');
+  const sigOrigEl    = node.querySelector('.lib-edit-significance-original');
+
+  // 키워드 (좌: KO / 우: EN)
+  const kwEl         = node.querySelector('.lib-edit-keywords');
+  const kwOrigEl     = node.querySelector('.lib-edit-keywords-original');
+
   const tempEl       = node.querySelector('.lib-edit-temperature');
   const intensityEl  = node.querySelector('.lib-edit-intensity');
 
@@ -1180,8 +1196,11 @@ function buildEditNode(card) {
   excerptEl.value     = card.script_excerpt || '';
   excerptOrigEl.value = card.script_excerpt_original || '';
   descEl.value        = card.excerpt_description || '';
+  if (descOrigEl) descOrigEl.value = card.excerpt_description_original || '';
   kwEl.value          = (card.keywords || []).join(', ');
+  if (kwOrigEl) kwOrigEl.value = (card.keywords_original || []).join(', ');
   if (sigEl) sigEl.value = card.significance || '';
+  if (sigOrigEl) sigOrigEl.value = card.significance_original || '';
   tempEl.value        = card.temperature ?? 3;
   intensityEl.value   = card.intensity ?? 3;
 
@@ -1198,6 +1217,11 @@ function buildEditNode(card) {
     const over = overLongKeywords(kwList);
     if (over.length) toast(`8자 초과 키워드: ${over.join(', ')} — 더 짧게 권장합니다.`, 'info');
 
+    // 키워드 영문(쉼표 구분) → 배열
+    const kwOrigList = kwOrigEl
+      ? kwOrigEl.value.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean)
+      : [];
+
     // 카드 단위 업데이트
     const cardUpdates = {
       quote: quoteEl.value.trim(),
@@ -1208,8 +1232,11 @@ function buildEditNode(card) {
       temperature: Math.max(1, Math.min(5, Number(tempEl.value) || 3)),
       intensity: Math.max(1, Math.min(5, Number(intensityEl.value) || 3)),
       // 이중 언어 — 영문 원본 (NULL 허용)
-      quote_original:          (quoteOrigEl.value.trim() || null),
-      script_excerpt_original: (excerptOrigEl.value.trim() || null),
+      quote_original:                (quoteOrigEl.value.trim() || null),
+      script_excerpt_original:       (excerptOrigEl.value.trim() || null),
+      excerpt_description_original:  (descOrigEl && descOrigEl.value.trim()) || null,
+      significance_original:         (sigOrigEl && sigOrigEl.value.trim()) || null,
+      keywords_original:             kwOrigList.length ? kwOrigList : null,
     };
 
     // 작품 단위 업데이트 — 값이 실제로 바뀌었을 때만
@@ -1306,6 +1333,15 @@ async function ensureEnglishOriginals(card, work) {
       cardJobs.push(callTranslate(card.excerpt_description, 'excerpt_description').then((v) => { if (v) card.excerpt_description_original = v; return ['excerpt_description_original', v]; }));
     if (!card.significance_original && card.significance)
       cardJobs.push(callTranslate(card.significance, 'significance').then((v) => { if (v) card.significance_original = v; return ['significance_original', v]; }));
+    // 키워드 — 배열 → 쉼표 join → 번역 → 다시 split. 같은 개수·순서 가정.
+    if ((!card.keywords_original || !card.keywords_original.length) && Array.isArray(card.keywords) && card.keywords.length) {
+      cardJobs.push(callTranslate(card.keywords.join(', '), 'keywords').then((v) => {
+        if (!v) return ['keywords_original', null];
+        const arr = v.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
+        if (arr.length) card.keywords_original = arr;
+        return ['keywords_original', arr.length ? arr : null];
+      }));
+    }
 
     const [workResults, cardResults] = await Promise.all([Promise.all(workJobs), Promise.all(cardJobs)]);
 

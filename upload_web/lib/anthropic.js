@@ -583,6 +583,7 @@ export async function runTranslateField({ text, field, work, direction = 'en2ko'
     script_excerpt: '대본 발췌. 화자: 형식과 지문 줄바꿈을 유지. 인물 관계에 맞는 위계 어투(반말/존댓말/하오체)로. 옛 철자 금지.',
     excerpt_description: '짧은 산문 해설(상황 설명). 자연스러운 한국어로 한 단락.',
     significance: '작품 의의 해설. 자연스러운 한국어 산문.',
+    keywords: '쉼표로 구분된 짧은 태그 목록. 입력과 동일한 개수·순서를 유지하고, 각 태그를 그대로 한국어 단어로 옮긴다. 다른 글자(따옴표, 옥스퍼드 쉼표 금지). 예: "love, betrayal, faith" → "사랑, 배신, 신앙".',
   };
 
   const FIELD_GUIDE_EN = {
@@ -593,6 +594,7 @@ export async function runTranslateField({ text, field, work, direction = 'en2ko'
     script_excerpt: 'A scene excerpt. Preserve speaker labels (e.g., "VICTOR:") and stage direction linebreaks. Keep tone and register.',
     excerpt_description: 'A short prose description of the scene situation. Natural English, single paragraph.',
     significance: 'A commentary on the work\'s significance. Natural English prose, 1-3 sentences.',
+    keywords: 'A comma-separated list of short tags. Keep EXACTLY the same number and order as input. Translate each tag as a single English word or short phrase. No quotes, no Oxford commas. Example: "사랑, 배신, 신앙" → "love, betrayal, faith".',
   };
 
   let prompt, system;

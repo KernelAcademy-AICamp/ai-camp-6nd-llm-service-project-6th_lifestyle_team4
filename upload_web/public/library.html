@@ -785,30 +785,68 @@
       </div>
     </div>
 
-    <!-- 상황 설명 (한국어 해설 — 토글 대상 아님) -->
-    <div class="flex flex-col gap-1 border-t border-outline-variant/40 pt-3">
-      <div class="flex items-center justify-between">
-        <label class="text-xs font-semibold text-on-surface-variant">상황 설명 <span class="text-[10px] text-on-surface-variant/60 font-normal">· 한국어 해설</span></label>
-        <button type="button" data-bold-for=".lib-edit-description"
-                class="lib-bold-btn font-bold text-xs px-2 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors">B</button>
+    <!-- 상황 설명 (좌: KO / 우: EN) -->
+    <div class="edit-bilingual-row border-t border-outline-variant/40 pt-3">
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-on-surface-variant">상황 설명 (한국어)</label>
+          <button type="button" data-bold-for=".lib-edit-description"
+                  class="lib-bold-btn font-bold text-xs px-2 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors">B</button>
+        </div>
+        <textarea class="lib-edit-description w-full p-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm resize-y" rows="3"></textarea>
       </div>
-      <textarea class="lib-edit-description w-full p-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm resize-y" rows="3"></textarea>
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-amber-700">Description (영문)</label>
+          <div class="flex items-center gap-1">
+            <button type="button" data-bold-for=".lib-edit-description-original"
+                    class="lib-bold-btn font-bold text-xs px-2 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors">B</button>
+            <button type="button" data-translate-for=".lib-edit-description-original" data-field="excerpt_description"
+                    class="lib-translate-btn text-[11px] px-2 py-0.5 rounded border border-blue-500 text-blue-600 hover:bg-blue-50 transition-colors">↻ KO</button>
+          </div>
+        </div>
+        <textarea class="lib-edit-description-original w-full p-2 rounded-lg border border-outline-variant bg-amber-50/30 text-sm resize-y" rows="3" placeholder="(영문 없음 — EN 토글 첫 클릭 시 자동 채워짐)"></textarea>
+      </div>
     </div>
 
-    <!-- 의의 (한국어 해설) -->
-    <div class="flex flex-col gap-1">
-      <div class="flex items-center justify-between">
-        <label class="text-xs font-semibold text-on-surface-variant">의의 <span class="text-[10px] text-on-surface-variant/60 font-normal">· 한국어 해설</span></label>
-        <button type="button" data-bold-for=".lib-edit-significance"
-                class="lib-bold-btn font-bold text-xs px-2 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors">B</button>
+    <!-- 의의 (좌: KO / 우: EN) -->
+    <div class="edit-bilingual-row">
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-on-surface-variant">의의 (한국어)</label>
+          <button type="button" data-bold-for=".lib-edit-significance"
+                  class="lib-bold-btn font-bold text-xs px-2 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors">B</button>
+        </div>
+        <textarea class="lib-edit-significance w-full p-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm resize-y" rows="3" placeholder="이 장면이 말하고자 하는 의의 한 가지 (80~200자)"></textarea>
       </div>
-      <textarea class="lib-edit-significance w-full p-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm resize-y" rows="3" placeholder="이 장면이 말하고자 하는 의의 한 가지 (80~200자)"></textarea>
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-amber-700">Significance (영문)</label>
+          <div class="flex items-center gap-1">
+            <button type="button" data-bold-for=".lib-edit-significance-original"
+                    class="lib-bold-btn font-bold text-xs px-2 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors">B</button>
+            <button type="button" data-translate-for=".lib-edit-significance-original" data-field="significance"
+                    class="lib-translate-btn text-[11px] px-2 py-0.5 rounded border border-blue-500 text-blue-600 hover:bg-blue-50 transition-colors">↻ KO</button>
+          </div>
+        </div>
+        <textarea class="lib-edit-significance-original w-full p-2 rounded-lg border border-outline-variant bg-amber-50/30 text-sm resize-y" rows="3" placeholder="(영문 없음 — EN 토글 첫 클릭 시 자동 채워짐)"></textarea>
+      </div>
     </div>
 
-    <!-- 키워드 -->
-    <div class="flex flex-col gap-1">
-      <label class="text-xs font-semibold text-on-surface-variant">키워드 (쉼표로 구분 · 정확히 3개 · 각 8자 이하 권장)</label>
-      <input type="text" class="lib-edit-keywords w-full p-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" placeholder="키워드1, 키워드2, 키워드3" />
+    <!-- 키워드 (좌: KO / 우: EN) -->
+    <div class="edit-bilingual-row">
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-semibold text-on-surface-variant">키워드 (한국어) <span class="text-[10px] text-on-surface-variant/60 font-normal">· 쉼표 구분 · 정확히 3개</span></label>
+        <input type="text" class="lib-edit-keywords w-full p-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" placeholder="키워드1, 키워드2, 키워드3" />
+      </div>
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-amber-700">Keywords (영문)</label>
+          <button type="button" data-translate-for=".lib-edit-keywords-original" data-field="keywords"
+                  class="lib-translate-btn text-[11px] px-2 py-0.5 rounded border border-blue-500 text-blue-600 hover:bg-blue-50 transition-colors">↻ KO</button>
+        </div>
+        <input type="text" class="lib-edit-keywords-original w-full p-2 rounded-lg border border-outline-variant bg-amber-50/30 text-sm" placeholder="keyword1, keyword2, keyword3" />
+      </div>
     </div>
 
     <!-- Temperature / Intensity -->

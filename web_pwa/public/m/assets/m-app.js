@@ -888,7 +888,7 @@ function loadAllCards() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
       .order('card_id', { ascending: false }).limit(500);
     if (error) throw error;
     state.allCards = Array.isArray(data) ? data : [];
@@ -1304,7 +1304,7 @@ function applyTodayCard(card) {
   }
 }
 
-// 홈 오늘의 한줄 — 언어 토글 시 명대사·작품 라인을 한 번에 스왑
+// 홈 오늘의 한줄 — 언어 토글 시 명대사·작품 라인·키워드를 한 번에 스왑
 function applyTodayLang(lang) {
   const card = state.todayCard;
   if (!card) return;
@@ -1324,6 +1324,20 @@ function applyTodayLang(lang) {
     const sub = subtitleSrc ? String(subtitleSrc).trim() : '';
     const titleBlock = sub ? `<${workTitle}> ${sub}` : `<${workTitle}>`;
     todayWork.textContent = genreLabel ? `— ${genreLabel} ${titleBlock}` : `— ${titleBlock}`;
+  }
+
+  // 키워드 칩 — 토글에 따라 KO/EN 배열 선택
+  if (todayKeywords) {
+    const kws = (useEn && Array.isArray(card.keywords_original) && card.keywords_original.length)
+      ? card.keywords_original
+      : (Array.isArray(card.keywords) ? card.keywords : []);
+    todayKeywords.innerHTML = '';
+    kws.forEach((k) => {
+      const span = document.createElement('span');
+      span.className = 't-label-sm c-sand';
+      span.textContent = `#${k}`;
+      todayKeywords.appendChild(span);
+    });
   }
 }
 
@@ -1440,13 +1454,23 @@ todayBookmark.addEventListener('click', (e) => {
   if (!state.todayCard) return;
   toggleBookmark(state.todayCard.card_id);
 });
-// EN 토글 — 오늘의 한줄
+// ENG 토글 — 오늘의 한줄
 todayLangToggle?.addEventListener('click', (e) => {
   e.stopPropagation();
   state.todayLang = state.todayLang === 'ko' ? 'en' : 'ko';
   applyTodayLang(state.todayLang);
-  todayLangToggle.textContent = state.todayLang === 'ko' ? 'EN' : 'KO';
+  todayLangToggle.textContent = state.todayLang === 'ko' ? 'ENG' : 'KR';
   todayLangToggle.setAttribute('aria-label', state.todayLang === 'ko' ? '영문 원본 보기' : '한국어로 돌아가기');
+  // 활성 상태 — espresso(짙은 톤)로 채움, 비활성은 outline
+  if (state.todayLang === 'en') {
+    todayLangToggle.style.background = 'var(--espresso)';
+    todayLangToggle.style.color = 'var(--paper)';
+    todayLangToggle.style.borderColor = 'var(--espresso)';
+  } else {
+    todayLangToggle.style.background = 'transparent';
+    todayLangToggle.style.color = 'var(--walnut)';
+    todayLangToggle.style.borderColor = 'var(--walnut)';
+  }
 });
 todayCard.addEventListener('click', () => {
   if (state.todayCard) openDetail(state.todayCard);
@@ -3246,33 +3270,38 @@ function openDetail(card) {
   detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
     + renderCounts(card);
 
-  // 상세 EN 토글 — 영문 원본이 있을 때만 메타 행 위에 버튼 노출
-  const detailLangRow = document.getElementById('detail-lang-toggle-row');
+  // 상세 ENG 토글 — top-bar 안 북마크 옆 (요청: 자연스러운 위치 + 앱 톤 색상 + ENG 라벨)
   const detailLangBtn = document.getElementById('detail-lang-toggle');
-  if (detailLangRow && detailLangBtn) {
+  if (detailLangBtn) {
+    // 항상 노출 — 영문 원본이 없으면 lazy 번역 호출이 admin 권한이라 PWA 에선 불가.
+    // 그래서 *_original 이 한 곳이라도 있을 때만 토글 노출.
     const hasEn = !!(card.quote_original || card.script_excerpt_original ||
+                     card.excerpt_description_original || card.significance_original ||
+                     (Array.isArray(card.keywords_original) && card.keywords_original.length) ||
                      w.title_original || w.subtitle_original || w.author_original);
-    detailLangRow.style.display = hasEn ? 'flex' : 'none';
-    detailLangBtn.textContent = 'EN 보기';
-    detailLangBtn.style.background = '#fff';
-    detailLangBtn.style.color = '#2563eb';
-    detailLangBtn.style.borderColor = '#2563eb';
-    // 핸들러는 매번 새로 바인딩 (이전 카드 핸들러를 제거하기 위해 노드 교체)
+    detailLangBtn.style.display = hasEn ? '' : 'none';
+    // 초기 상태(KO) — outline walnut
+    detailLangBtn.textContent = 'ENG';
+    detailLangBtn.style.background = 'transparent';
+    detailLangBtn.style.color = 'var(--walnut)';
+    detailLangBtn.style.borderColor = 'var(--walnut)';
+    // 핸들러는 매번 새로 바인딩 — 노드 교체로 이전 핸들러 제거
     const fresh = detailLangBtn.cloneNode(true);
     detailLangBtn.parentNode.replaceChild(fresh, detailLangBtn);
     fresh.addEventListener('click', (e) => {
       e.stopPropagation();
       state.detailLang = state.detailLang === 'ko' ? 'en' : 'ko';
       applyDetailLang(state.detailLang);
-      fresh.textContent = state.detailLang === 'ko' ? 'EN 보기' : '한국어 보기';
+      fresh.textContent = state.detailLang === 'ko' ? 'ENG' : 'KR';
+      // 활성(EN) — espresso 채움 / 비활성(KO) — walnut outline
       if (state.detailLang === 'en') {
-        fresh.style.background = '#fff7ed';
-        fresh.style.color = '#c2410c';
-        fresh.style.borderColor = '#fb923c';
+        fresh.style.background = 'var(--espresso)';
+        fresh.style.color = 'var(--paper)';
+        fresh.style.borderColor = 'var(--espresso)';
       } else {
-        fresh.style.background = '#fff';
-        fresh.style.color = '#2563eb';
-        fresh.style.borderColor = '#2563eb';
+        fresh.style.background = 'transparent';
+        fresh.style.color = 'var(--walnut)';
+        fresh.style.borderColor = 'var(--walnut)';
       }
     });
   }

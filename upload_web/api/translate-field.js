@@ -8,7 +8,7 @@ import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
 const ALLOWED_FIELDS = new Set([
   'quote', 'script_excerpt', 'title', 'subtitle', 'author',
-  'excerpt_description', 'significance',
+  'excerpt_description', 'significance', 'keywords',
 ]);
 const ALLOWED_DIRECTIONS = new Set(['en2ko', 'ko2en']);
 
