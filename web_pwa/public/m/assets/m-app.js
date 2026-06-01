@@ -1690,6 +1690,16 @@ function renderArchive() {
   }
   archiveNoResult.style.display = 'none';
   archiveShelves.style.display = 'block';
+
+  // 사용자가 책꽂이를 옆으로 스크롤한 위치를 realtime/폴링 재렌더 후에도 유지하기 위해
+  // 장르별 shelf-row 의 scrollLeft 를 미리 저장 → 재구성 후 복원.
+  const prevScrolls = new Map();
+  archiveShelves.querySelectorAll('.genre-section').forEach((sec) => {
+    const genre = sec.dataset.genre;
+    const row = sec.querySelector('.shelf-row');
+    if (genre && row) prevScrolls.set(genre, row.scrollLeft);
+  });
+
   archiveShelves.innerHTML = '';
 
   for (const genre of GENRE_ORDER) {
@@ -1701,11 +1711,28 @@ function renderArchive() {
   if (otherItems.length > 0) {
     archiveShelves.appendChild(buildGenreShelf('other', otherItems));
   }
+
+  // 저장된 scrollLeft 복원 — RAF 한 번 추가로 layout 완료 후 적용.
+  if (prevScrolls.size > 0) {
+    const restore = () => {
+      archiveShelves.querySelectorAll('.genre-section').forEach((sec) => {
+        const g = sec.dataset.genre;
+        const r = sec.querySelector('.shelf-row');
+        if (g && r && prevScrolls.has(g)) {
+          r.scrollLeft = prevScrolls.get(g);
+        }
+      });
+    };
+    restore();
+    requestAnimationFrame(restore);
+  }
 }
 
 function buildGenreShelf(genre, items) {
   const section = document.createElement('section');
   section.className = 'genre-section';
+  // realtime 재렌더 후 장르별 책꽂이 스크롤 위치를 복원하기 위한 키
+  section.dataset.genre = genre;
   const label = GENRE_LABEL[genre] || '기타';
   const shelfClass = GENRE_ORDER.includes(genre) ? `g-${genre}` : 'g-movie';
 
