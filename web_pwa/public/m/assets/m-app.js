@@ -5,7 +5,8 @@ import { initAnalytics, track, identify, setUserProps, resetUser } from '/assets
 // 로드 실패해 "무한 스피너"가 된다. 동적 import + 무해한 폴백으로 부팅을 막지 않게 한다.
 // (현재 리포지토리에 onboarding.js가 없어도 앱은 정상 부팅, 코치마크 투어만 비활성)
 let startCoachmarkTour = () => false;
-import('./onboarding.js')
+// 첫 진입 온보딩을 확실히 띄우려면 이 로드 완료를 기다려야 한다(onboardingReady).
+const onboardingReady = import('./onboarding.js')
   .then((m) => { if (m && typeof m.startCoachmarkTour === 'function') startCoachmarkTour = m.startCoachmarkTour; })
   .catch((e) => console.warn('[m] onboarding 모듈 없음 — 코치마크 투어 비활성:', e));
 
@@ -389,7 +390,7 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
     suppressPushState = false;
     history.replaceState({ tab: state.currentView }, '', '#' + state.currentView);
     // 첫 접속/첫 로그인 시 사용법 안내 1회. 안내가 떴으면 로그인 유도는 다음 기회로 미룬다.
-    if (!maybeShowGuide()) maybeShowLanding();
+    if (!(await maybeShowGuide())) maybeShowLanding();
     // 공지를 불러와 새 공지가 있으면 NOTICE 탭에 안 읽음 점 표시 (부팅을 막지 않게 백그라운드)
     loadNotices().then(paintNoticeBadge);
     // 데이터 변경을 실시간으로 받아 즉시 반영
@@ -2900,12 +2901,12 @@ function launchTour() {
 }
 
 // 첫 진입 시 1회 자동 노출. 띄웠으면 true 반환 → 같은 부팅에서 랜딩 로그인 유도는 미룬다.
-function maybeShowGuide() {
+async function maybeShowGuide() {
   if (safeStorageGet(GUIDE_SEEN_KEY) === '1') return false;
   if (!document.querySelector('#coachmark')) return false;
   if (state.currentView !== 'home' || !state.todayCard) return false;  // 홈·오늘 카드 준비됐을 때만
+  await onboardingReady;  // 동적 import 완료까지 대기 → 첫 진입 사용자에게 무조건 노출
   const started = launchTour();
-  // onboarding.js가 동적 import라 아직 로드 전이면 started=false → '본 것'으로 기록하지 않고 다음 기회에 재시도
   if (started) { safeStorageSet(GUIDE_SEEN_KEY, '1'); track('onboarding_start'); }
   return started;
 }

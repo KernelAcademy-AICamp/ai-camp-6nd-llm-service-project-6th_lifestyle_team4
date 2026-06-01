@@ -215,12 +215,13 @@ function parseJson(text) {
   throw new Error('LLM did not return valid JSON (all repair attempts failed)');
 }
 
-// 청크 크기 — Claude 4 계열의 200K 토큰 한도에 맞춰 보수적으로.
-// 한국어 1글자 ≈ 1.5~2 토큰. 80K 글자 ≈ 최대 160K 토큰 (input 측). 시스템 프롬프트
-// + 추출 프롬프트 + 시드 블록 + 출력 예약(~16K) 합쳐도 200K 안에 안전하게 들어간다.
-// 이전 값(300K)은 영문 위주(1글자≈0.25토큰)였을 때 동작했으나 한국어 PDF에서 413 빈발.
-const EXTRACT_CHUNK_TARGET_CHARS = 80000;
-const EXTRACT_CHUNK_WINDOW_CHARS = 15000;
+// 청크 크기 — Claude 4 계열 200K 토큰 한도에 맞춰 보수적으로.
+// 한국어 1글자 ≈ 1.5~2 토큰. 80K + 15K (이전값) 은 worst case 190K 토큰까지 부풀어
+// 시스템·추출·시드·출력 예약(~25K) 더하면 200K 직격 → 413 발생.
+// 현행: 50K + 10K = 최대 60K 글자 = 한국어 worst 120K 토큰 → 한도까지 80K 마진.
+// 청크 수가 좀 늘어도 병렬(동시 3) 처리로 wall-clock 영향 작음.
+const EXTRACT_CHUNK_TARGET_CHARS = 50000;
+const EXTRACT_CHUNK_WINDOW_CHARS = 10000;
 const EXTRACT_CHUNK_OVERLAP_CHARS = 3000;
 const EXTRACT_FINAL_INPUT_CARDS = 80;
 const EXTRACT_FINAL_OUTPUT_CARDS = 40;
@@ -430,15 +431,26 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
     `chunks=${chunks.length} target=${EXTRACT_CHUNK_TARGET_CHARS} overlap=${EXTRACT_CHUNK_OVERLAP_CHARS}`
   );
 
-  const results = [];
-  for (const chunk of chunks) {
-    console.log(`[anthropic] extracting chunk ${chunk.index}/${chunk.total} chars=${chunk.text.length}`);
-    results.push(await runExtractSingle(chunk.text, category, seedBlock, model, {
-      index: chunk.index,
-      total: chunk.total,
-      overlapChars: EXTRACT_CHUNK_OVERLAP_CHARS,
-    }));
+  // 청크 병렬 처리 — 순차로 돌면 6~7개 청크 × 30~60초 = Vercel 300s 한도 초과.
+  // 동시 3개씩 처리해 wall-clock 을 1/3 로 단축. Anthropic 레이트는 SDK 가 자동 관리.
+  const CHUNK_CONCURRENCY = 3;
+  const results = new Array(chunks.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < chunks.length) {
+      const i = cursor++;
+      const chunk = chunks[i];
+      console.log(`[anthropic] extracting chunk ${chunk.index}/${chunk.total} chars=${chunk.text.length}`);
+      results[i] = await runExtractSingle(chunk.text, category, seedBlock, model, {
+        index: chunk.index,
+        total: chunk.total,
+        overlapChars: EXTRACT_CHUNK_OVERLAP_CHARS,
+      });
+    }
   }
+  await Promise.all(
+    Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, worker)
+  );
 
   const merged = mergeExtractResults(results);
   let finalResult = merged;

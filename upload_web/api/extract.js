@@ -8,6 +8,9 @@ import { HttpError, sendError } from '../lib/http.js';
 
 export const config = {
   api: { bodyParser: false },
+  // 큰 영문 PDF(예: 드라큘라) 는 80K 글자 청크가 6~7 개 생기고,
+  // 각 청크 LLM 호출이 30~60초 걸려 기본 60s 제한을 넘김. Pro 한도 300s 까지 허용.
+  maxDuration: 300,
 };
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;

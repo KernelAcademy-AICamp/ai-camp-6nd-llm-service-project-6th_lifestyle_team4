@@ -1372,8 +1372,36 @@ async function autoBackfillBilingual() {
 
 // 보기 토글에서 영문 칸이 비어 있는 필드를 즉시 KO→EN 번역해서 채운다 (lazy).
 // 카드(card) 와 작품(work) 메모리 객체에 결과를 즉시 반영하고, DB에도 백필 저장해 다음 진입부터는 캐시 히트.
-// 누락된 필드만 호출하므로 비용 최소화. 병렬 처리로 빠르게.
+//
+// 한 번에 다 안 되고 두세 번씩 눌러야 했던 원인 (수정 완료):
+//  ① 8개 동시 /api/translate-field 호출 → Anthropic 레이트 제한·일시 과부하로 일부 실패
+//  ② Promise.all 이 첫 실패에서 전체 reject → 성공한 것까지 DB 저장이 안 됨
+//  ③ 다음 클릭에서 다시 같은 일 반복 → 매번 일부만 채워짐
+//
+// 수정:
+//  ① 동시 호출 제한 (concurrency 3) — 레이트 직격 방지
+//  ② 재시도 + 지수 백오프 (429/503/504/5xx) — 일시 과부하 자동 복구
+//  ③ Promise.allSettled — 한 필드 실패해도 나머지는 즉시 DB 저장 → 다음 클릭 필요 없음
 const _inFlightOriginals = new Map(); // card_id → Promise (중복 호출 방지)
+
+// 단순 동시성 제한 — N 개 worker 가 큐 공유. 모든 결과(성공/실패) 를 settled 형태로 반환.
+async function _runWithConcurrency(jobs, concurrency) {
+  const results = new Array(jobs.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < jobs.length) {
+      const i = cursor++;
+      try {
+        results[i] = { status: 'fulfilled', value: await jobs[i]() };
+      } catch (e) {
+        results[i] = { status: 'rejected', reason: e };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length) }, worker));
+  return results;
+}
+
 async function ensureEnglishOriginals(card, work) {
   if (_inFlightOriginals.has(card.card_id)) return _inFlightOriginals.get(card.card_id);
 
@@ -1387,38 +1415,56 @@ async function ensureEnglishOriginals(card, work) {
       author: work.author || '', format: work.format || '',
     };
 
+    // 일시 오류(429/503/504/5xx) 는 백오프 후 최대 3회 재시도. 영구 오류(400/401/403) 는 즉시 throw.
     const callTranslate = async (text, field) => {
       if (!text || !String(text).trim()) return null;
-      const res = await fetch('/api/translate-field', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ text, field, work: workCtx, direction: 'ko2en' }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || `HTTP ${res.status} (${field})`);
-      return String(body?.translated || '').trim() || null;
+      const MAX_ATTEMPTS = 3;
+      let lastErr;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          const res = await fetch('/api/translate-field', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ text, field, work: workCtx, direction: 'ko2en' }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (res.ok) return String(body?.translated || '').trim() || null;
+          const isRetryable = [408, 429, 500, 502, 503, 504].includes(res.status);
+          if (!isRetryable || attempt === MAX_ATTEMPTS) {
+            throw new Error(body?.error || `HTTP ${res.status} (${field})`);
+          }
+          // 지수 백오프 + 약간의 jitter
+          await new Promise((r) => setTimeout(r, 600 * attempt + Math.random() * 400));
+        } catch (e) {
+          lastErr = e;
+          // 네트워크 에러(fetch 자체 실패) 도 재시도
+          if (attempt === MAX_ATTEMPTS) throw e;
+          await new Promise((r) => setTimeout(r, 600 * attempt + Math.random() * 400));
+        }
+      }
+      throw lastErr;
     };
 
-    // 작품 메타 — 비어 있는 *_original 만 병렬 채움
+    // 작품 메타 — 비어 있는 *_original 만 채움 (썽크 함수로 감싸 동시성 제어에 넘김)
     const workJobs = [];
-    if (!work.title_original    && work.title)    workJobs.push(callTranslate(work.title,    'title')   .then((v) => { if (v) work.title_original    = v; return ['title_original', v]; }));
-    if (!work.subtitle_original && work.subtitle) workJobs.push(callTranslate(work.subtitle, 'subtitle').then((v) => { if (v) work.subtitle_original = v; return ['subtitle_original', v]; }));
-    if (!work.author_original   && work.author)   workJobs.push(callTranslate(work.author,   'author')  .then((v) => { if (v) work.author_original   = v; return ['author_original', v]; }));
+    if (!work.title_original    && work.title)    workJobs.push(() => callTranslate(work.title,    'title')   .then((v) => { if (v) work.title_original    = v; return ['title_original',    v]; }));
+    if (!work.subtitle_original && work.subtitle) workJobs.push(() => callTranslate(work.subtitle, 'subtitle').then((v) => { if (v) work.subtitle_original = v; return ['subtitle_original', v]; }));
+    if (!work.author_original   && work.author)   workJobs.push(() => callTranslate(work.author,   'author')  .then((v) => { if (v) work.author_original   = v; return ['author_original',   v]; }));
 
-    // 카드 본문 — 비어 있는 *_original 만 병렬 채움
+    // 카드 본문 — 비어 있는 *_original 만 채움
     const cardJobs = [];
-    if (!card.quote_original          && card.quote)          cardJobs.push(callTranslate(card.quote,          'quote')         .then((v) => { if (v) card.quote_original          = v; return ['quote_original', v]; }));
-    if (!card.script_excerpt_original && card.script_excerpt) cardJobs.push(callTranslate(card.script_excerpt, 'script_excerpt').then((v) => { if (v) card.script_excerpt_original = v; return ['script_excerpt_original', v]; }));
+    if (!card.quote_original          && card.quote)          cardJobs.push(() => callTranslate(card.quote,          'quote')         .then((v) => { if (v) card.quote_original          = v; return ['quote_original',          v]; }));
+    if (!card.script_excerpt_original && card.script_excerpt) cardJobs.push(() => callTranslate(card.script_excerpt, 'script_excerpt').then((v) => { if (v) card.script_excerpt_original = v; return ['script_excerpt_original', v]; }));
     if (!card.excerpt_description_original && card.excerpt_description)
-      cardJobs.push(callTranslate(card.excerpt_description, 'excerpt_description').then((v) => { if (v) card.excerpt_description_original = v; return ['excerpt_description_original', v]; }));
+      cardJobs.push(() => callTranslate(card.excerpt_description, 'excerpt_description').then((v) => { if (v) card.excerpt_description_original = v; return ['excerpt_description_original', v]; }));
     if (!card.significance_original && card.significance)
-      cardJobs.push(callTranslate(card.significance, 'significance').then((v) => { if (v) card.significance_original = v; return ['significance_original', v]; }));
+      cardJobs.push(() => callTranslate(card.significance, 'significance').then((v) => { if (v) card.significance_original = v; return ['significance_original', v]; }));
     // 키워드 — 배열 → 쉼표 join → 번역 → 다시 split. 같은 개수·순서 가정.
     if ((!card.keywords_original || !card.keywords_original.length) && Array.isArray(card.keywords) && card.keywords.length) {
-      cardJobs.push(callTranslate(card.keywords.join(', '), 'keywords').then((v) => {
+      cardJobs.push(() => callTranslate(card.keywords.join(', '), 'keywords').then((v) => {
         if (!v) return ['keywords_original', null];
         const arr = v.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
         if (arr.length) card.keywords_original = arr;
@@ -1426,19 +1472,35 @@ async function ensureEnglishOriginals(card, work) {
       }));
     }
 
-    const [workResults, cardResults] = await Promise.all([Promise.all(workJobs), Promise.all(cardJobs)]);
+    // 동시 3개씩 처리 (Anthropic 레이트 보호). 개별 실패해도 settled 로 결과 수집.
+    const allJobs = [...workJobs, ...cardJobs];
+    const settled = await _runWithConcurrency(allJobs, 3);
+    const workCount = workJobs.length;
 
-    // DB 백필 — 같은 work_id 다른 카드들도 즉시 영문 메타 공유하도록 메모리 동기화
-    const workUpdate = Object.fromEntries(workResults.filter(([_, v]) => v));
+    // 성공한 것만 골라 DB 백필 (실패는 다음 클릭에서 다시 시도하면 됨)
+    const fulfilled = (arr) => arr.filter((r) => r && r.status === 'fulfilled' && r.value && r.value[1]).map((r) => r.value);
+    const workUpdate = Object.fromEntries(fulfilled(settled.slice(0, workCount)));
+    const cardUpdate = Object.fromEntries(fulfilled(settled.slice(workCount)));
+
     if (Object.keys(workUpdate).length > 0) {
-      await sb.from('works').update(workUpdate).eq('work_id', card.work_id);
-      state.rows.forEach((r) => {
-        if (r.work_id === card.work_id && r.works) Object.assign(r.works, workUpdate);
-      });
+      try {
+        await sb.from('works').update(workUpdate).eq('work_id', card.work_id);
+        state.rows.forEach((r) => {
+          if (r.work_id === card.work_id && r.works) Object.assign(r.works, workUpdate);
+        });
+      } catch (e) { console.warn('[library] works update failed:', e?.message); }
     }
-    const cardUpdate = Object.fromEntries(cardResults.filter(([_, v]) => v));
     if (Object.keys(cardUpdate).length > 0) {
-      await sb.from('cards').update(cardUpdate).eq('card_id', card.card_id);
+      try {
+        await sb.from('cards').update(cardUpdate).eq('card_id', card.card_id);
+      } catch (e) { console.warn('[library] cards update failed:', e?.message); }
+    }
+
+    // 실패한 필드는 콘솔에 남겨 디버깅 용이 (사용자에겐 노출 안 함 — 다음 클릭이나 다음 로드에 자연 보충)
+    const failed = settled.filter((r) => r && r.status === 'rejected');
+    if (failed.length) {
+      console.warn(`[library] ${failed.length}/${settled.length} translations failed (will retry on next click/load):`,
+        failed.map((r) => r.reason?.message || r.reason).join(' | '));
     }
   })();
 
