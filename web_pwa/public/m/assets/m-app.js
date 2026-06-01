@@ -1,7 +1,13 @@
 // Daily Script SPA — Android HomeScreen/ArchiveScreen/SettingsScreen/DetailScreen port
 import { getSupabase } from '/assets/supabase-client.js';
 import { initAnalytics, track, identify, setUserProps, resetUser } from '/assets/analytics.js';
-import { startCoachmarkTour } from './onboarding.js';
+// onboarding.js는 선택적 기능 — 정적 import면 파일 누락/404 시 m-app.js 전체가
+// 로드 실패해 "무한 스피너"가 된다. 동적 import + 무해한 폴백으로 부팅을 막지 않게 한다.
+// (현재 리포지토리에 onboarding.js가 없어도 앱은 정상 부팅, 코치마크 투어만 비활성)
+let startCoachmarkTour = () => false;
+import('./onboarding.js')
+  .then((m) => { if (m && typeof m.startCoachmarkTour === 'function') startCoachmarkTour = m.startCoachmarkTour; })
+  .catch((e) => console.warn('[m] onboarding 모듈 없음 — 코치마크 투어 비활성:', e));
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
