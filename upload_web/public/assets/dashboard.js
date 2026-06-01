@@ -251,6 +251,134 @@ function resetDropzone() {
 }
 
 // ---------------------------------------------------------------------------
+// Wikisource KR — 위 #title-input 의 값으로 ko.wikisource.org 검색 → 본문 가져오기.
+// 본문은 합성 .txt File 로 만들어 기존 handleFile() 에 흘려보낸다 — 파일 업로드와
+// 동일 경로로 extract → render 가 진행된다.
+// ---------------------------------------------------------------------------
+const wsSearchBtn = document.querySelector('#ws-search-btn');
+const wsResultsEl = document.querySelector('#ws-results');
+const wsStatusEl  = document.querySelector('#ws-status');
+
+function setWsStatus(message, kind = 'info') {
+  if (!wsStatusEl) return;
+  if (!message) {
+    wsStatusEl.classList.add('hidden');
+    wsStatusEl.textContent = '';
+    return;
+  }
+  wsStatusEl.classList.remove('hidden');
+  wsStatusEl.textContent = message;
+  wsStatusEl.classList.remove('text-error', 'text-on-surface-variant', 'text-primary');
+  if (kind === 'err') wsStatusEl.classList.add('text-error');
+  else if (kind === 'ok') wsStatusEl.classList.add('text-primary');
+  else wsStatusEl.classList.add('text-on-surface-variant');
+}
+
+function renderWsResults(results) {
+  if (!wsResultsEl) return;
+  wsResultsEl.innerHTML = '';
+  if (!results || results.length === 0) {
+    wsResultsEl.classList.add('hidden');
+    return;
+  }
+  wsResultsEl.classList.remove('hidden');
+  for (const r of results) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'text-left p-3 rounded-lg border border-outline-variant hover:border-primary hover:bg-primary/5 transition-colors flex items-center justify-between gap-3';
+    row.innerHTML = `
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold truncate">${escapeHtmlBasic(r.title)}</p>
+        ${r.description ? `<p class="text-xs text-on-surface-variant truncate">${escapeHtmlBasic(r.description)}</p>` : ''}
+        <a class="text-xs text-primary underline truncate inline-block max-w-full"
+           href="${escapeAttr(r.url)}" target="_blank" rel="noopener noreferrer"
+           onclick="event.stopPropagation()">${escapeHtmlBasic(r.url)}</a>
+      </div>
+      <span class="material-symbols-outlined text-on-surface-variant">download</span>
+    `;
+    row.addEventListener('click', () => onWsPickResult(r));
+    wsResultsEl.appendChild(row);
+  }
+}
+
+function escapeHtmlBasic(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function escapeAttr(s) { return escapeHtmlBasic(s); }
+
+async function onWsSearch() {
+  const titleInput = document.querySelector('#title-input');
+  const query = (titleInput?.value || '').trim();
+  if (!query) {
+    setWsStatus('위쪽 "작품명" 칸에 검색어를 입력하세요.', 'err');
+    titleInput?.focus();
+    return;
+  }
+  setWsStatus(`검색 중: "${query}"`, 'info');
+  renderWsResults([]);
+  try {
+    const token = await getAccessToken();
+    const j = await apiFetch('/api/fetch-source', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ kind: 'wikisource_kr', op: 'search', query }),
+    });
+    const results = Array.isArray(j.results) ? j.results : [];
+    if (results.length === 0) {
+      setWsStatus(`"${query}" 검색 결과가 없습니다.`, 'err');
+      return;
+    }
+    setWsStatus(`${results.length}개 결과 — 가져올 항목을 클릭하세요.`, 'ok');
+    renderWsResults(results);
+  } catch (err) {
+    console.error('[ws] search failed', err);
+    setWsStatus(`검색 실패: ${err.message || err}`, 'err');
+  }
+}
+
+async function onWsPickResult(item) {
+  setWsStatus(`"${item.title}" 본문 가져오는 중⋯`, 'info');
+  try {
+    const token = await getAccessToken();
+    const j = await apiFetch('/api/fetch-source', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ kind: 'wikisource_kr', op: 'fetch', title: item.title }),
+    });
+    const text = String(j.text || '');
+    if (!text.trim()) {
+      setWsStatus('본문이 비어있습니다.', 'err');
+      return;
+    }
+    setWsStatus(`${text.length.toLocaleString()}자 가져옴 — 추출 시작합니다.`, 'ok');
+    // 위 #title-input 이 비어있다면 가져온 페이지명으로 채워준다 (extract 시드용).
+    const titleInput = document.querySelector('#title-input');
+    if (titleInput && !titleInput.value.trim()) titleInput.value = j.title || item.title;
+    // 본문을 합성 .txt File 로 만들어 기존 업로드 경로 재사용.
+    const safeName = (j.title || item.title || 'wikisource').replace(/[\s\\/:*?"<>|]+/g, '_').slice(0, 80);
+    const file = new File([text], `wikisource_${safeName}.txt`, { type: 'text/plain' });
+    await handleFile(file);
+  } catch (err) {
+    console.error('[ws] fetch failed', err);
+    setWsStatus(`가져오기 실패: ${err.message || err}`, 'err');
+  }
+}
+
+if (wsSearchBtn) wsSearchBtn.addEventListener('click', onWsSearch);
+// 작품명 입력칸에서 Enter 키도 위키문헌 검색을 트리거 (이미 검색 결과를 가지고 있지 않을 때만).
+document.querySelector('#title-input')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); onWsSearch(); }
+});
+
+// ---------------------------------------------------------------------------
 // State -> View
 // ---------------------------------------------------------------------------
 function applyExtraction(payload) {
