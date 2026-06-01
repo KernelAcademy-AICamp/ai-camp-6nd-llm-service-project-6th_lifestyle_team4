@@ -503,11 +503,14 @@ async function onGbSearch() {
       body: JSON.stringify({ kind: 'gutenberg', op: 'search', query }),
     });
     const results = Array.isArray(j.results) ? j.results : [];
+    const transBadge = (j.translatedFrom && j.effectiveQuery && j.effectiveQuery !== j.translatedFrom)
+      ? ` (검색어 변환: "${j.translatedFrom}" → "${j.effectiveQuery}")`
+      : '';
     if (results.length === 0) {
-      setGbStatus(`"${query}" 검색 결과 없음. (Gutenberg 책 ID 를 직접 입력해도 됨)`, 'err');
+      setGbStatus(`"${query}" 검색 결과 없음${transBadge}. (Gutenberg 책 ID 를 직접 입력해도 됨)`, 'err');
       return;
     }
-    setGbStatus(`${results.length}개 결과 — 가져올 항목 클릭.`, 'ok');
+    setGbStatus(`${results.length}개 결과${transBadge} — 가져올 항목 클릭.`, 'ok');
     renderGbResults(results);
   } catch (err) {
     console.error('[gb] search failed', err);

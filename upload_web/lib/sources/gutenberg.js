@@ -9,9 +9,15 @@
 // 다시 400K 로 잘라내므로 의미 있는 한계.
 
 const GUTENDEX_BASE = 'https://gutendex.com/books';
+const WIKIPEDIA_KO_API = 'https://ko.wikipedia.org/w/api.php';
 const UA = 'CurtaincallScraperGB/0.1 (admin tool; contact: yub)';
 const FETCH_TIMEOUT_MS = 60_000;  // Gutendex /books?search 가 종종 느림 — 직접 ID 조회는 보통 5~10s.
 const MAX_FETCH_CHARS = 1_000_000; // ~1MB plain text
+
+// 입력에 한글 음절이 하나라도 있으면 Korean 으로 간주.
+function containsKorean(s) {
+  return /[가-힯]/.test(String(s || ''));
+}
 
 async function getJson(url) {
   const ctrl = new AbortController();
@@ -43,16 +49,81 @@ async function getText(url) {
   }
 }
 
+// 한국어 작품명 → 영어 작품명. ko.wikipedia 의 langlinks(lllang=en) 사용.
+//  - 1차: action=query + titles=<query> + redirects=1 → 정확 일치 페이지의 영문 링크
+//  - 2차(1차 실패시): opensearch 로 가장 가까운 ko 페이지 찾아서 다시 langlinks
+//  - 모두 실패하면 null 반환 (호출자가 원문 그대로 검색)
+export async function translateKoreanTitleToEnglish(query) {
+  const q = String(query || '').trim();
+  if (!q) return null;
+
+  const directEn = await fetchEnLangLink(q);
+  if (directEn) return directEn;
+
+  // 정확 일치 페이지가 없으면 opensearch 로 후보를 받는다
+  const osUrl = new URL(WIKIPEDIA_KO_API);
+  ['action=opensearch', `search=${encodeURIComponent(q)}`, 'limit=5', 'namespace=0', 'format=json']
+    .forEach((p) => { const [k, v] = p.split('='); osUrl.searchParams.set(k, v); });
+  let osTitles = [];
+  try {
+    const osJson = await getJson(osUrl.toString());
+    if (Array.isArray(osJson?.[1])) osTitles = osJson[1];
+  } catch { /* swallow */ }
+
+  for (const candidate of osTitles) {
+    if (candidate === q) continue; // 이미 위에서 시도
+    const en = await fetchEnLangLink(candidate);
+    if (en) return en;
+  }
+  return null;
+}
+
+async function fetchEnLangLink(koTitle) {
+  const url = new URL(WIKIPEDIA_KO_API);
+  url.searchParams.set('action', 'query');
+  url.searchParams.set('titles', koTitle);
+  url.searchParams.set('prop', 'langlinks');
+  url.searchParams.set('lllang', 'en');
+  url.searchParams.set('lllimit', '1');
+  url.searchParams.set('redirects', '1');
+  url.searchParams.set('format', 'json');
+  try {
+    const j = await getJson(url.toString());
+    const pages = j?.query?.pages || {};
+    for (const pid of Object.keys(pages)) {
+      const page = pages[pid];
+      if (page?.missing != null) continue;
+      const links = Array.isArray(page?.langlinks) ? page.langlinks : [];
+      const en = links.find((l) => l?.lang === 'en')?.['*'];
+      if (en) return String(en);
+    }
+  } catch { /* swallow */ }
+  return null;
+}
+
 // Gutendex 검색 → 카탈로그 항목 목록
 //   author 정보까지 함께 돌려주므로 UI 에서 풍부한 리스트를 그릴 수 있다.
 //   languages 가 'ko' 인 PD 한국 문학도 일부 있지만, 본 어댑터는 영문 (en) 기본.
+//   한국어로 입력하면 ko.wikipedia 의 langlinks 로 자동 영문 변환 후 검색.
 export async function searchGutenberg(query, limit = 8) {
-  if (!query || !String(query).trim()) return [];
+  const original = String(query || '').trim();
+  if (!original) return { results: [], originalQuery: '', effectiveQuery: '', translatedFrom: null };
+
+  let effective = original;
+  let translatedFrom = null;
+  if (containsKorean(original)) {
+    const en = await translateKoreanTitleToEnglish(original);
+    if (en) {
+      translatedFrom = original;
+      effective = en;
+    }
+  }
+
   const url = new URL(GUTENDEX_BASE);
-  url.searchParams.set('search', String(query).trim());
+  url.searchParams.set('search', effective);
   const j = await getJson(url.toString());
-  const results = Array.isArray(j?.results) ? j.results : [];
-  return results.slice(0, Math.max(1, Math.min(20, limit))).map((b) => ({
+  const items = Array.isArray(j?.results) ? j.results : [];
+  const results = items.slice(0, Math.max(1, Math.min(20, limit))).map((b) => ({
     bookId: b.id,
     title: b.title || '',
     authors: Array.isArray(b.authors)
@@ -64,6 +135,7 @@ export async function searchGutenberg(query, limit = 8) {
     // formats 안에 다양한 mime → URL 매핑. text/plain (utf-8) 우선 선택.
     plainTextUrl: pickPlainTextUrl(b.formats || {}),
   }));
+  return { results, originalQuery: original, effectiveQuery: effective, translatedFrom };
 }
 
 function pickPlainTextUrl(formats) {

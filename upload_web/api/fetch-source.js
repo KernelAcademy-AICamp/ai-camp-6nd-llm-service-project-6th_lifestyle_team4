@@ -56,8 +56,14 @@ export default async function handler(req, res) {
       if (op === 'search') {
         const query = String(body.query || body.title || '').trim();
         if (!query) throw new HttpError('query (or title) required', 400);
-        const results = await searchGutenberg(query, body.limit || 8);
-        return res.status(200).json({ kind, op, query, results });
+        const { results, effectiveQuery, translatedFrom } = await searchGutenberg(query, body.limit || 8);
+        return res.status(200).json({
+          kind, op,
+          query,                  // 원본 (사용자 입력)
+          effectiveQuery,         // 실제 Gutendex 에 보낸 검색어 (한영 변환 후)
+          translatedFrom,         // 한영 변환 발생한 경우 원본, 아니면 null
+          results,
+        });
       }
       if (op === 'fetch') {
         const bookId = body.bookId != null
