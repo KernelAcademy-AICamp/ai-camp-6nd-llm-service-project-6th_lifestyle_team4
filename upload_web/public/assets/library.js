@@ -166,9 +166,8 @@ async function loadLibrary() {
     renderLibrary();
     if (libraryKeywordFreq && !libraryKeywordFreq.classList.contains('hidden')) renderKeywordFreq();
     libraryStatus.textContent = `총 ${state.rows.length}장 로드됨.`;
-    // 자동 영문 백필 — admin 이 EN 토글을 누르지 않아도 모든 카드의 *_original 가
-    // 미리 채워지도록 백그라운드에서 순차 ensureEnglishOriginals 호출. fire-and-forget.
-    autoBackfillBilingual().catch((e) => console.warn('[library] backfill error:', e));
+    // 자동 백필은 비활성화 — '전체 영문 백필' 버튼으로만 수동 실행.
+    // (이전엔 loadLibrary 마다 autoBackfillBilingual 가 백그라운드에서 돌아 API 비용·체감 부담)
   } catch (err) {
     console.error('[library] load error:', err);
     libraryStatus.textContent = `불러오기 실패: ${err.message || err}`;
