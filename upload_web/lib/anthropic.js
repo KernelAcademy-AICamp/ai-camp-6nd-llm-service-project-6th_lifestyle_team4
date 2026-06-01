@@ -275,15 +275,36 @@ function findBestSplit(text, start, desired, searchStart, searchEnd) {
   return candidates[0].pos;
 }
 
+// 한국어 비율을 측정해 청크 크기를 동적으로 정한다.
+// 한국어: 1글자 ≈ 1.5~2 토큰 (보수적으로 50K + 10K 가 안전)
+// 영어:   1글자 ≈ 0.25 토큰 (드라큘라 같은 큰 영문 PDF 는 150K + 25K 까지 안전)
+function _detectChunkSize(sampleText) {
+  const sample = String(sampleText || '').slice(0, 8000);
+  if (!sample.length) return { target: EXTRACT_CHUNK_TARGET_CHARS, window: EXTRACT_CHUNK_WINDOW_CHARS };
+  const koreanCount = (sample.match(/[가-힣]/g) || []).length;
+  const koRatio = koreanCount / sample.length;
+  if (koRatio < 0.20) {
+    // 주로 영어/라틴 — 큰 청크 사용해 청크 수 ↓ → 시간 초과 방지
+    return { target: 150000, window: 25000 };
+  }
+  if (koRatio < 0.50) {
+    // 혼합 (영문 인용·인명 다수) — 중간
+    return { target: 80000, window: 15000 };
+  }
+  // 한국어 위주 — 보수적
+  return { target: EXTRACT_CHUNK_TARGET_CHARS, window: EXTRACT_CHUNK_WINDOW_CHARS };
+}
+
 export function splitScriptIntoChunks(
   scriptText,
-  {
-    targetChars = EXTRACT_CHUNK_TARGET_CHARS,
-    windowChars = EXTRACT_CHUNK_WINDOW_CHARS,
-    overlapChars = EXTRACT_CHUNK_OVERLAP_CHARS,
-  } = {}
+  opts = {}
 ) {
   const text = String(scriptText || '');
+  // 호출자가 명시 안 했으면 언어 비율로 자동 결정.
+  const auto = _detectChunkSize(text);
+  const targetChars  = opts.targetChars  ?? auto.target;
+  const windowChars  = opts.windowChars  ?? auto.window;
+  const overlapChars = opts.overlapChars ?? EXTRACT_CHUNK_OVERLAP_CHARS;
   if (text.length <= targetChars + windowChars) {
     return [{ index: 1, total: 1, start: 0, end: text.length, text }];
   }
@@ -426,9 +447,11 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
     return runExtractSingle(scriptText, category, seedBlock, model);
   }
 
+  // 자동 결정된 실제 청크 사이즈 — 영문 PDF 는 더 큼.
+  const sampleSize = chunks[0]?.text?.length || 0;
   console.log(
     `[anthropic] chunked extract chars=${String(scriptText || '').length} ` +
-    `chunks=${chunks.length} target=${EXTRACT_CHUNK_TARGET_CHARS} overlap=${EXTRACT_CHUNK_OVERLAP_CHARS}`
+    `chunks=${chunks.length} firstChunkChars=${sampleSize} overlap=${EXTRACT_CHUNK_OVERLAP_CHARS}`
   );
 
   // 청크 병렬 처리 — 순차로 돌면 6~7개 청크 × 30~60초 = Vercel 300s 한도 초과.

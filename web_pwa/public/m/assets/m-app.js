@@ -418,7 +418,8 @@ function getInitialView() {
 window.addEventListener('hashchange', () => setView(getInitialView()));
 
 // ===== Hardware/swipe back (Android edge swipe, iOS swipe-from-edge) =====
-// 우선순위: detail screen 닫기 → book modal 닫기 → tab 이동
+// 우선순위: 가장 안쪽(스택 최상단) 오버레이부터 닫고, 아무것도 없으면 tab 이동.
+// feed 모달(quote/compose/picker) 도 포함해야 feed 탭에서 back 시 메인 화면이 뒤로 가는 버그 방지.
 window.addEventListener('popstate', () => {
   if (hlComposeScreen && hlComposeScreen.classList.contains('open')) {
     closeHlComposeInternal();
@@ -442,6 +443,19 @@ window.addEventListener('popstate', () => {
   }
   if (bookModal && bookModal.classList.contains('open')) {
     closeBookModalInternal();
+    return;
+  }
+  // 피드 모달들 (오늘의 한줄 카드 탭 / 작성 플로우 / 북마크 피커)
+  if (typeof feedQuoteModal !== 'undefined' && feedQuoteModal && feedQuoteModal.style.display === 'flex') {
+    closeFeedQuoteInternal();
+    return;
+  }
+  if (typeof feedComposeModal !== 'undefined' && feedComposeModal && feedComposeModal.style.display === 'flex') {
+    closeFeedComposeInternal();
+    return;
+  }
+  if (typeof feedPickerModal !== 'undefined' && feedPickerModal && feedPickerModal.style.display === 'flex') {
+    closeFeedPickerInternal();
     return;
   }
   // tab 이동 — pushState 중복 방지
@@ -1690,6 +1704,16 @@ function renderArchive() {
   }
   archiveNoResult.style.display = 'none';
   archiveShelves.style.display = 'block';
+
+  // 사용자가 책꽂이를 옆으로 스크롤한 위치를 realtime/폴링 재렌더 후에도 유지하기 위해
+  // 장르별 shelf-row 의 scrollLeft 를 미리 저장 → 재구성 후 복원.
+  const prevScrolls = new Map();
+  archiveShelves.querySelectorAll('.genre-section').forEach((sec) => {
+    const genre = sec.dataset.genre;
+    const row = sec.querySelector('.shelf-row');
+    if (genre && row) prevScrolls.set(genre, row.scrollLeft);
+  });
+
   archiveShelves.innerHTML = '';
 
   for (const genre of GENRE_ORDER) {
@@ -1701,11 +1725,28 @@ function renderArchive() {
   if (otherItems.length > 0) {
     archiveShelves.appendChild(buildGenreShelf('other', otherItems));
   }
+
+  // 저장된 scrollLeft 복원 — RAF 한 번 추가로 layout 완료 후 적용.
+  if (prevScrolls.size > 0) {
+    const restore = () => {
+      archiveShelves.querySelectorAll('.genre-section').forEach((sec) => {
+        const g = sec.dataset.genre;
+        const r = sec.querySelector('.shelf-row');
+        if (g && r && prevScrolls.has(g)) {
+          r.scrollLeft = prevScrolls.get(g);
+        }
+      });
+    };
+    restore();
+    requestAnimationFrame(restore);
+  }
 }
 
 function buildGenreShelf(genre, items) {
   const section = document.createElement('section');
   section.className = 'genre-section';
+  // realtime 재렌더 후 장르별 책꽂이 스크롤 위치를 복원하기 위한 키
+  section.dataset.genre = genre;
   const label = GENRE_LABEL[genre] || '기타';
   const shelfClass = GENRE_ORDER.includes(genre) ? `g-${genre}` : 'g-movie';
 
@@ -2863,9 +2904,16 @@ function injectDemoHighlight() {
   list.prepend(item);
 }
 
+// 온보딩 고정 카드 — 비교적 짧은 햄릿(141번)으로 진행해 Read Full Script 화면이 길어지지 않게.
+const ONBOARDING_CARD_ID = 141;
+
 // 홈 → 전문 → 피드를 넘나드는 투어. 각 전환은 실제 화면을 열고 레이아웃이 준비되면 resolve.
 function launchTour() {
   const savedFeedCat = state.feedCategory;
+  // 온보딩 동안 홈·전문·피드 데모를 모두 141번 카드로 고정 (없으면 현재 카드 유지)
+  const tourCard = (state.allCards || []).find((c) => Number(c.card_id) === ONBOARDING_CARD_ID);
+  const prevCard = state.todayCard;
+  if (tourCard && tourCard !== state.todayCard) { state.todayCard = tourCard; applyTodayCard(tourCard); }
   return startCoachmarkTour({
     // 홈 5단계: 전문 화면 열기 (슬라이드인 0.25s 뒤 측정)
     onOpenDetail: () => new Promise((resolve) => {
@@ -2890,11 +2938,12 @@ function launchTour() {
       injectDemoHighlight();
       setTimeout(resolve, 360);  // 전문 슬라이드아웃(0.25s) 뒤 피드/데모 측정
     }),
-    // 마침/건너뛰기: 데모 정리 후 홈으로
+    // 마침/건너뛰기: 데모 정리 + 홈 카드 원복 후 홈으로
     onEnd: () => {
       document.getElementById('cm-demo-hl')?.remove();
       if (detailScreen.classList.contains('open')) closeDetailInternal();
       state.feedCategory = savedFeedCat;
+      if (tourCard && prevCard && prevCard !== tourCard) { state.todayCard = prevCard; applyTodayCard(prevCard); }
       setView('home');
     },
   });
@@ -4105,9 +4154,19 @@ function openFeedPicker() {
   renderFeedPicker();
   feedPickerModal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  // 하드웨어/스와이프 백 으로 피커가 닫히게끔 history 에 entry 한 칸 push
+  history.pushState({ overlay: 'feedPicker' }, '');
 }
 
+// 외부에서 호출되는 close — back 트리거. 실제 hide 는 popstate 핸들러가 closeFeedPickerInternal 호출.
 function closeFeedPicker() {
+  if (feedPickerModal.style.display === 'flex' && history.state?.overlay === 'feedPicker') {
+    history.back();
+  } else {
+    closeFeedPickerInternal();
+  }
+}
+function closeFeedPickerInternal() {
   feedPickerModal.style.display = 'none';
   restoreScrollIfClosed();
 }
@@ -4143,8 +4202,13 @@ function buildFeedPickerRow(row) {
   node.addEventListener('click', () => {
     // 카테고리에 따라 라우팅: 오늘의 한줄=compose, 하이라이트=상세화면 열고 본문 길게 누르기
     if (state.feedCategory === 'highlight') {
-      closeFeedPicker();
-      // bookmark.cards 의 card 는 일부 컬럼만 join 돼 있을 수 있어 allCards 에서 풀로 다시 찾는다
+      // picker 를 내부적으로 닫고 (history 변경 없음), picker 의 overlay state 를
+      // 비워둔 채 openDetail 이 자기 state 를 push 하게 함.
+      // 이렇게 하면 back 한 번에 detail 닫고 feed 탭으로 깔끔하게 돌아감.
+      closeFeedPickerInternal();
+      if (history.state?.overlay === 'feedPicker') {
+        history.replaceState(null, '');
+      }
       const full = (state.allCards || []).find((c) => c.card_id === card.card_id) || card;
       setTimeout(() => openDetail(full), 200);
     } else {
@@ -4164,13 +4228,27 @@ function openFeedCompose(card) {
   fcEdition.textContent = card.card_id != null ? `#${card.card_id}` : '';
   fcInput.value = '';
   updateFcCounter();
-  closeFeedPicker();            // picker 닫되 compose가 곧 열리므로 스크롤락 유지
+  // picker 가 떠 있던 상태 → picker 내부적으로만 hide (history 변경 없음).
+  closeFeedPickerInternal();
   feedComposeModal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  // picker 의 history state 를 compose 로 교체 — back 한 번에 compose 만 닫고 feed 탭으로 돌아감.
+  if (history.state?.overlay === 'feedPicker') {
+    history.replaceState({ overlay: 'feedCompose' }, '');
+  } else {
+    history.pushState({ overlay: 'feedCompose' }, '');
+  }
   setTimeout(() => { try { fcInput.focus(); } catch {} }, 60);
 }
 
 function closeFeedCompose() {
+  if (feedComposeModal.style.display === 'flex' && history.state?.overlay === 'feedCompose') {
+    history.back();
+  } else {
+    closeFeedComposeInternal();
+  }
+}
+function closeFeedComposeInternal() {
   feedComposeModal.style.display = 'none';
   state.composeCard = null;
   restoreScrollIfClosed();
@@ -4208,7 +4286,12 @@ async function submitFeedPost() {
     // insert 응답엔 조인이 없으므로 작성에 쓴 카드 정보를 붙여 즉시 렌더
     const enriched = { ...data, cards: { card_id: card.card_id, quote: card.quote, works: card.works } };
     state.feedPosts.unshift(enriched);
-    closeFeedCompose();
+    // 제출 성공 → history back 으로 자연스럽게 닫기 (state 정리 포함)
+    if (feedComposeModal.style.display === 'flex' && history.state?.overlay === 'feedCompose') {
+      history.back();
+    } else {
+      closeFeedComposeInternal();
+    }
     state.feedCategory = 'today';
     renderFeed();
     toast('피드에 올렸어요');
@@ -4230,8 +4313,17 @@ function openFeedQuote(card) {
   fqSource.textContent = src ? `— ${src}` : '';
   feedQuoteModal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  // back 으로 닫히게 history 한 칸 push
+  history.pushState({ overlay: 'feedQuote' }, '');
 }
 function closeFeedQuote() {
+  if (feedQuoteModal.style.display === 'flex' && history.state?.overlay === 'feedQuote') {
+    history.back();
+  } else {
+    closeFeedQuoteInternal();
+  }
+}
+function closeFeedQuoteInternal() {
   feedQuoteModal.style.display = 'none';
   document.body.style.overflow = '';
 }

@@ -26,6 +26,7 @@ const libraryWorkFilter = $('#library-work-filter');
 const libraryFormatFilter = $('#library-format-filter');
 const librarySearchInput = $('#library-search');
 const libraryRefreshBtn = $('#library-refresh');
+const libraryBackfillEnBtn = $('#library-backfill-en-btn');
 const libraryKeywordFreqBtn = $('#library-keyword-freq-btn');
 const libraryKeywordFreq = $('#library-keyword-freq');
 const libraryKeywordFreqClose = $('#library-keyword-freq-close');
@@ -1328,6 +1329,79 @@ async function clearStaleLongEnTranslations() {
   if (cleared) console.log(`[library] cleared ${cleared} over-long EN translations for re-translation`);
 }
 
+// 수동 트리거 — DB 의 모든 카드(500 한도 무시) 를 페이지네이션으로 가져와 영문 누락분 백필.
+// admin 이 '전체 영문 백필' 버튼 클릭 시 호출. 진행률을 status 영역에 실시간 표시.
+async function backfillAllCards() {
+  const sb = await getSupabase();
+
+  if (libraryStatus) libraryStatus.textContent = 'DB 카드 목록 조회 중⋯';
+
+  // 1) 모든 카드를 페이지네이션으로 가져옴 (한 번에 1000장씩, *_original 컬럼 포함)
+  const SELECT_COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)';
+  const PAGE = 1000;
+  let all = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await sb
+      .from('cards')
+      .select(SELECT_COLS)
+      .order('card_id', { ascending: false })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break;
+  }
+  console.log(`[library] backfill all: fetched ${all.length} cards`);
+
+  // 2) 영문 누락된 카드만 골라내기
+  const candidates = all.filter((c) => {
+    const w = c.works || {};
+    return (
+      (!w.title_original    && w.title) ||
+      (!w.subtitle_original && w.subtitle) ||
+      (!w.author_original   && w.author) ||
+      (!c.quote_original          && c.quote) ||
+      (!c.script_excerpt_original && c.script_excerpt) ||
+      (!c.excerpt_description_original && c.excerpt_description) ||
+      (!c.significance_original   && c.significance) ||
+      ((!Array.isArray(c.keywords_original) || !c.keywords_original.length) &&
+       Array.isArray(c.keywords) && c.keywords.length)
+    );
+  });
+
+  if (!candidates.length) {
+    if (libraryStatus) libraryStatus.textContent = `이미 모든 카드에 영문 원본이 채워져 있어요 (총 ${all.length}장).`;
+    toast('백필할 카드가 없습니다 — 이미 모두 완료', 'info');
+    return { total: all.length, processed: 0 };
+  }
+
+  toast(`${candidates.length}장 백필 시작 — 잠시만요`, 'info');
+
+  // 3) 순차 처리 — 같은 작품 메타 중복 번역 회피 + 레이트 보호.
+  //    카드 안의 8개 필드는 ensureEnglishOriginals 내부에서 동시 3개 처리되므로 충분히 빠름.
+  let done = 0, failed = 0;
+  for (const card of candidates) {
+    if (libraryStatus) {
+      libraryStatus.textContent =
+        `전체 영문 백필 중⋯ (${done + 1}/${candidates.length}) — 실패 ${failed}장`;
+    }
+    try {
+      await ensureEnglishOriginals(card, card.works || {});
+      done++;
+    } catch (e) {
+      failed++;
+      console.warn('[library] backfill all failed card', card.card_id, e?.message || e);
+    }
+  }
+  if (libraryStatus) {
+    libraryStatus.textContent = `전체 영문 백필 완료 — 성공 ${done} / 실패 ${failed} / 전체 ${candidates.length}장`;
+  }
+  toast(`백필 완료: 성공 ${done} · 실패 ${failed}`, failed ? 'info' : 'success');
+  // 메모리 state 갱신을 위해 라이브러리 다시 로드
+  loadLibrary().catch((e) => console.warn('[library] reload after backfill failed:', e));
+  return { total: all.length, candidates: candidates.length, done, failed };
+}
+
 // 라이브러리 진입 시 누락된 *_original 을 자동으로 채워 admin 이 EN 클릭하지 않아도
 // 토글이 즉시 동작하도록 한다. 순차 처리(동시 호출 1) — 같은 work 의 카드들이 work 메타를
 // 중복 번역하는 걸 피하고, Anthropic API 레이트도 보호.
@@ -1612,6 +1686,23 @@ librarySearchInput.addEventListener('input', () => {
 });
 
 libraryRefreshBtn.addEventListener('click', () => loadLibrary());
+
+// 전체 영문 백필 — DB 의 모든 카드에서 *_original 빠진 곳 자동 번역.
+libraryBackfillEnBtn?.addEventListener('click', async () => {
+  if (!confirm('영문 원본이 빠진 모든 카드에 자동 번역을 추가합니다.\n\n시간이 오래 걸릴 수 있습니다 (카드당 ~5~10초). 진행하시겠어요?')) return;
+  libraryBackfillEnBtn.disabled = true;
+  const prev = libraryBackfillEnBtn.innerHTML;
+  libraryBackfillEnBtn.innerHTML = '<span class="material-symbols-outlined text-base animate-spin">progress_activity</span> 백필 중⋯';
+  try {
+    await backfillAllCards();
+  } catch (err) {
+    console.error('[library] backfill all error:', err);
+    toast(`전체 백필 실패: ${err.message || err}`, 'error');
+  } finally {
+    libraryBackfillEnBtn.disabled = false;
+    libraryBackfillEnBtn.innerHTML = prev;
+  }
+});
 
 // 전체 선택 체크박스 — 현재 필터된 카드들의 선택 상태를 토글
 librarySelectAll.addEventListener('change', (e) => {
