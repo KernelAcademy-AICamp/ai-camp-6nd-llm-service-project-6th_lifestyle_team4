@@ -1279,8 +1279,10 @@
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div id="today-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <button id="today-lang-toggle" type="button" aria-label="언어 전환"
-                    style="background:transparent;border:1px solid var(--walnut);color:var(--walnut);border-radius:999px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:0.1em;cursor:pointer;line-height:1;transition:all .15s;">ENG</button>
+            <span id="today-lang-label" class="c-walnut" style="display:none;font-size:10px;font-weight:700;letter-spacing:0.1em;line-height:1;">ENG</span>
+            <div id="today-lang-toggle" class="editorial-toggle" role="switch" aria-checked="false" tabindex="0" aria-label="영문 보기 전환" style="display:none;">
+              <div class="knob"></div>
+            </div>
             <button id="today-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:0;">
               <span class="material-symbols-outlined c-walnut" style="font-size:24px;">bookmark</span>
             </button>
@@ -1737,19 +1739,24 @@
       <span id="detail-work-title" class="t-headline-lg c-espresso" style="text-align:center;margin-top:6px;"></span>
       <span id="detail-work-subtitle" class="t-label-sm c-walnut" style="display:none;text-align:center;margin-top:2px;"></span>
     </div>
-    <div style="display:flex;align-items:center;gap:4px;">
-      <button id="detail-lang-toggle" type="button" aria-label="언어 전환"
-              style="background:transparent;border:1px solid var(--walnut);color:var(--walnut);border-radius:999px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:0.1em;cursor:pointer;line-height:1;transition:all .15s;">ENG</button>
-      <button id="detail-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:8px;">
-        <span class="material-symbols-outlined c-walnut" style="font-size:24px;">bookmark</span>
-      </button>
-    </div>
+    <button id="detail-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-walnut" style="font-size:24px;">bookmark</span>
+    </button>
   </header>
   <div class="hairline"></div>
 
   <div class="detail-body">
     <div id="detail-meta" style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;"></div>
-    <div style="height:28px;"></div>
+    <div style="height:24px;"></div>
+
+    <!-- 영문 보기 전환 — 푸시알림 토글과 동일한 editorial-toggle 스타일, 장면 설명 위에 가로 행으로 배치 -->
+    <div id="detail-lang-toggle-row" style="display:none;align-items:center;justify-content:space-between;padding:14px 0;border-top:1px solid var(--latte);border-bottom:1px solid var(--latte);">
+      <span class="t-body-md c-espresso" style="font-weight:500;">원문(영문)으로 보기</span>
+      <div id="detail-lang-toggle" class="editorial-toggle" role="switch" aria-checked="false" tabindex="0" aria-label="영문 보기 전환">
+        <div class="knob"></div>
+      </div>
+    </div>
+    <div id="detail-lang-spacer" style="display:none;height:20px;"></div>
 
     <div id="detail-description-block" class="scene-block" style="display:none;">
       <span class="scene-label t-label-sm c-walnut">SCENE</span>

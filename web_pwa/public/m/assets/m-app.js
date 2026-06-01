@@ -1295,12 +1295,15 @@ function applyTodayCard(card) {
 
   paintBookmarkBtn(todayBookmark, state.todayBookmarked);
 
-  // EN 토글 표시/숨김 — 영문 원본이 있을 때만 노출
+  // ENG 토글 표시/숨김 — 영문 원본이 있을 때만 노출 + 새 카드 진입 시 KR(off) 로 리셋
   if (todayLangToggle) {
     const hasEn = !!(card.quote_original || card.works?.title_original ||
                      card.works?.subtitle_original || card.works?.author_original);
     todayLangToggle.style.display = hasEn ? '' : 'none';
-    todayLangToggle.textContent = 'EN';
+    todayLangToggle.classList.remove('on');
+    todayLangToggle.setAttribute('aria-checked', 'false');
+    const lbl = document.getElementById('today-lang-label');
+    if (lbl) lbl.style.display = hasEn ? '' : 'none';
   }
 }
 
@@ -1455,23 +1458,14 @@ todayBookmark.addEventListener('click', (e) => {
   if (!state.todayCard) return;
   toggleBookmark(state.todayCard.card_id);
 });
-// ENG 토글 — 오늘의 한줄
+// ENG 토글 — 오늘의 한줄 (editorial-toggle 스타일: 활성/비활성)
 todayLangToggle?.addEventListener('click', (e) => {
   e.stopPropagation();
   state.todayLang = state.todayLang === 'ko' ? 'en' : 'ko';
   applyTodayLang(state.todayLang);
-  todayLangToggle.textContent = state.todayLang === 'ko' ? 'ENG' : 'KR';
-  todayLangToggle.setAttribute('aria-label', state.todayLang === 'ko' ? '영문 원본 보기' : '한국어로 돌아가기');
-  // 활성 상태 — espresso(짙은 톤)로 채움, 비활성은 outline
-  if (state.todayLang === 'en') {
-    todayLangToggle.style.background = 'var(--espresso)';
-    todayLangToggle.style.color = 'var(--paper)';
-    todayLangToggle.style.borderColor = 'var(--espresso)';
-  } else {
-    todayLangToggle.style.background = 'transparent';
-    todayLangToggle.style.color = 'var(--walnut)';
-    todayLangToggle.style.borderColor = 'var(--walnut)';
-  }
+  const isEn = state.todayLang === 'en';
+  todayLangToggle.classList.toggle('on', isEn);
+  todayLangToggle.setAttribute('aria-checked', isEn ? 'true' : 'false');
 });
 todayCard.addEventListener('click', () => {
   if (state.todayCard) openDetail(state.todayCard);
@@ -3283,39 +3277,30 @@ function openDetail(card) {
   detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
     + renderCounts(card);
 
-  // 상세 ENG 토글 — top-bar 안 북마크 옆 (요청: 자연스러운 위치 + 앱 톤 색상 + ENG 라벨)
+  // 상세 ENG 토글 — 장면 설명 위 가로 행 (editorial-toggle 스타일, push 알림과 동일 느낌)
+  const detailLangRow = document.getElementById('detail-lang-toggle-row');
+  const detailLangSpacer = document.getElementById('detail-lang-spacer');
   const detailLangBtn = document.getElementById('detail-lang-toggle');
-  if (detailLangBtn) {
-    // 항상 노출 — 영문 원본이 없으면 lazy 번역 호출이 admin 권한이라 PWA 에선 불가.
-    // 그래서 *_original 이 한 곳이라도 있을 때만 토글 노출.
+  if (detailLangRow && detailLangBtn) {
     const hasEn = !!(card.quote_original || card.script_excerpt_original ||
                      card.excerpt_description_original || card.significance_original ||
                      (Array.isArray(card.keywords_original) && card.keywords_original.length) ||
                      w.title_original || w.subtitle_original || w.author_original);
-    detailLangBtn.style.display = hasEn ? '' : 'none';
-    // 초기 상태(KO) — outline walnut
-    detailLangBtn.textContent = 'ENG';
-    detailLangBtn.style.background = 'transparent';
-    detailLangBtn.style.color = 'var(--walnut)';
-    detailLangBtn.style.borderColor = 'var(--walnut)';
-    // 핸들러는 매번 새로 바인딩 — 노드 교체로 이전 핸들러 제거
+    detailLangRow.style.display = hasEn ? 'flex' : 'none';
+    if (detailLangSpacer) detailLangSpacer.style.display = hasEn ? '' : 'none';
+    // 매번 OFF(KR) 상태로 리셋 — 새 카드 진입 시 한국어부터
+    detailLangBtn.classList.remove('on');
+    detailLangBtn.setAttribute('aria-checked', 'false');
+    // 핸들러는 매번 새로 바인딩 — 노드 교체로 이전 카드 핸들러 제거
     const fresh = detailLangBtn.cloneNode(true);
     detailLangBtn.parentNode.replaceChild(fresh, detailLangBtn);
     fresh.addEventListener('click', (e) => {
       e.stopPropagation();
       state.detailLang = state.detailLang === 'ko' ? 'en' : 'ko';
       applyDetailLang(state.detailLang);
-      fresh.textContent = state.detailLang === 'ko' ? 'ENG' : 'KR';
-      // 활성(EN) — espresso 채움 / 비활성(KO) — walnut outline
-      if (state.detailLang === 'en') {
-        fresh.style.background = 'var(--espresso)';
-        fresh.style.color = 'var(--paper)';
-        fresh.style.borderColor = 'var(--espresso)';
-      } else {
-        fresh.style.background = 'transparent';
-        fresh.style.color = 'var(--walnut)';
-        fresh.style.borderColor = 'var(--walnut)';
-      }
+      const isEn = state.detailLang === 'en';
+      fresh.classList.toggle('on', isEn);
+      fresh.setAttribute('aria-checked', isEn ? 'true' : 'false');
     });
   }
 
