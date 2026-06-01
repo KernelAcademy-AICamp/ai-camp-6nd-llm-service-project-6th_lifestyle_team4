@@ -225,6 +225,7 @@ async function handleFile(file) {
     return;
   }
   setDropzoneBusy(`업로드 중: ${file.name}`, '대본을 LLM이 분석하고 있습니다. 최대 1분 소요됩니다.');
+  const signal = startProgress(`파일 업로드 중: ${file.name}`);
   try {
     const token = await getAccessToken();
     const fd = new FormData();
@@ -233,22 +234,31 @@ async function handleFile(file) {
     fd.append('model', state.model);
     const titleHint = document.querySelector('#title-input')?.value?.trim();
     if (titleHint) fd.append('title', titleHint);
+    setProgressStage('LLM 으로 카드 추출 중 ⋯ (Haiku 과부하 시 자동 재시도)');
     const json = await apiFetch('/api/extract', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
+      signal,
     });
     applyExtraction(json);
+    setProgressStage(`완료 — 카드 ${Array.isArray(json?.cards) ? json.cards.length : 0}장`);
     if (json?._truncated) {
       toast('추출 완료 — 단, 대본이 너무 길어 일부만(앞 400K글자) 분석했어요.', 'info');
     } else {
       toast('추출 완료', 'success');
     }
   } catch (err) {
-    console.error(err);
-    toast(err.message || '추출 실패', 'error');
+    if (isAbortError(err)) {
+      logProgress('중단됨');
+      toast('중단됨', 'info');
+    } else {
+      console.error(err);
+      toast(err.message || '추출 실패', 'error');
+    }
   } finally {
     resetDropzone();
+    endProgress();
   }
 }
 
@@ -263,6 +273,77 @@ function resetDropzone() {
   dropzone.classList.remove('pointer-events-none', 'opacity-70');
   pdfInput.value = '';
 }
+
+// ---------------------------------------------------------------------------
+// Extract progress + abort
+//   - 현재 extract 작업의 AbortController 를 보관해서 사용자가 [중단] 버튼을
+//     누르면 client fetch 를 즉시 끊는다.
+//   - 단계별 메시지 + 경과 시간 + 로그 표시. 서버사이드 LLM 호출까지 멈추지는
+//     않지만, UI 가 풀리고 새 시도가 가능해진다.
+// ---------------------------------------------------------------------------
+const progressPanel = $('#progress-panel');
+const progressStageEl = $('#progress-stage');
+const progressTimeEl = $('#progress-time');
+const progressStopBtn = $('#progress-stop-btn');
+const progressLogEl = $('#progress-log');
+
+let currentExtractAbort = null;
+let extractStartedAt = 0;
+let extractTimerHandle = null;
+
+function startProgress(initialStage) {
+  // 이전 진행이 남아있으면 청소
+  endProgress({ silent: true });
+  currentExtractAbort = new AbortController();
+  extractStartedAt = Date.now();
+  progressPanel.classList.remove('hidden');
+  progressLogEl.innerHTML = '';
+  progressStageEl.textContent = initialStage;
+  progressTimeEl.textContent = '(0초)';
+  logProgress(initialStage);
+  extractTimerHandle = setInterval(() => {
+    const sec = Math.floor((Date.now() - extractStartedAt) / 1000);
+    progressTimeEl.textContent = `(${sec}초 경과)`;
+  }, 500);
+  return currentExtractAbort.signal;
+}
+
+function setProgressStage(message) {
+  if (!progressPanel || progressPanel.classList.contains('hidden')) return;
+  progressStageEl.textContent = message;
+  logProgress(message);
+}
+
+function logProgress(message) {
+  if (!progressLogEl) return;
+  const sec = Math.floor((Date.now() - extractStartedAt) / 1000);
+  const line = document.createElement('div');
+  line.textContent = `[${String(sec).padStart(2, ' ')}s]  ${message}`;
+  progressLogEl.appendChild(line);
+  progressLogEl.scrollTop = progressLogEl.scrollHeight;
+}
+
+function endProgress({ silent = false } = {}) {
+  if (extractTimerHandle) { clearInterval(extractTimerHandle); extractTimerHandle = null; }
+  if (progressPanel) progressPanel.classList.add('hidden');
+  currentExtractAbort = null;
+  extractStartedAt = 0;
+  if (!silent && progressTimeEl) progressTimeEl.textContent = '';
+}
+
+function isAbortError(err) {
+  if (!err) return false;
+  if (err.name === 'AbortError') return true;
+  // apiFetch 가 AbortError 를 일반 Error 로 wrapping 할 수도 있어 메시지로도 체크
+  return /aborted|signal/i.test(String(err.message || ''));
+}
+
+progressStopBtn?.addEventListener('click', () => {
+  if (currentExtractAbort) {
+    logProgress('사용자가 중단함');
+    currentExtractAbort.abort();
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Wikisource KR — 위 #title-input 의 값으로 ko.wikisource.org 검색 → 본문 가져오기.
@@ -358,6 +439,7 @@ async function onWsSearch() {
 async function onWsPickResult(item) {
   setWsStatus(`"${item.title}" 본문 가져오는 중⋯`, 'info');
   setDropzoneBusy('위키문헌 본문 추출 중⋯', '본문을 가져와 LLM이 분석하고 있습니다. 최대 1분 소요됩니다.');
+  const signal = startProgress(`Wikisource KR: "${item.title}" 본문 가져오는 중 ⋯`);
   try {
     const token = await getAccessToken();
     const fetchJson = await apiFetch('/api/fetch-source', {
@@ -367,6 +449,7 @@ async function onWsPickResult(item) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ kind: 'wikisource_kr', op: 'fetch', title: item.title }),
+      signal,
     });
     const text = String(fetchJson.text || '');
     if (!text.trim()) {
@@ -374,11 +457,13 @@ async function onWsPickResult(item) {
       return;
     }
     setWsStatus(`${text.length.toLocaleString()}자 가져옴 — 추출 시작합니다.`, 'ok');
+    logProgress(`본문 ${text.length.toLocaleString()}자 받음`);
     // 위 #title-input 이 비어있다면 가져온 페이지명으로 채워준다 (extract 시드용).
     const titleInput = document.querySelector('#title-input');
     const finalTitle = (titleInput?.value.trim()) || fetchJson.title || item.title;
     if (titleInput && !titleInput.value.trim()) titleInput.value = finalTitle;
 
+    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, Haiku 과부하 시 자동 재시도)`);
     // 파일 업로드 경로 (multipart) 가 아닌 JSON 경로로 /api/extract 호출.
     // 외부 PD 소스에서 가져온 본문은 이미 텍스트라 multipart 래핑이 불필요 + Busboy
     // 가 합성 File 의 Korean 파일명에서 "Unexpected end of form" 으로 떨어지는 문제 회피.
@@ -394,8 +479,10 @@ async function onWsPickResult(item) {
         model: state.model,
         title: finalTitle,
       }),
+      signal,
     });
     applyExtraction(extractJson);
+    setProgressStage(`완료 — 카드 ${Array.isArray(extractJson?.cards) ? extractJson.cards.length : 0}장`);
     if (extractJson?._truncated) {
       toast('추출 완료 — 단, 본문이 너무 길어 일부만(앞 400K글자) 분석했어요.', 'info');
     } else {
@@ -403,11 +490,18 @@ async function onWsPickResult(item) {
     }
     setWsStatus('', 'info');
   } catch (err) {
+    if (isAbortError(err)) {
+      logProgress('중단됨');
+      setWsStatus('중단됨', 'err');
+      toast('중단됨', 'info');
+      return;
+    }
     console.error('[ws] fetch failed', err);
     setWsStatus(`실패: ${err.message || err}`, 'err');
     toast(err.message || '추출 실패', 'error');
   } finally {
     resetDropzone();
+    endProgress();
   }
 }
 
@@ -525,6 +619,7 @@ async function onGbPickResult(item) {
 async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
   setGbStatus(`#${bookId} 본문 가져오는 중⋯`, 'info');
   setDropzoneBusy('Gutenberg 본문 추출 중⋯', '본문을 가져와 LLM이 분석하고 있습니다. 최대 1분 소요됩니다.');
+  const signal = startProgress(`Gutenberg #${bookId} 본문 가져오는 중 ⋯`);
   try {
     const token = await getAccessToken();
     const fetchJson = await apiFetch('/api/fetch-source', {
@@ -534,6 +629,7 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ kind: 'gutenberg', op: 'fetch', bookId, plainTextUrl }),
+      signal,
     });
     const text = String(fetchJson.text || '');
     if (!text.trim()) {
@@ -542,6 +638,7 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
     }
     const truncMsg = fetchJson.truncated ? ' (1MB 한계로 잘림)' : '';
     setGbStatus(`${text.length.toLocaleString()}자 가져옴${truncMsg} — 추출 시작.`, 'ok');
+    logProgress(`본문 ${text.length.toLocaleString()}자 받음${truncMsg}`);
 
     const titleInput = document.querySelector('#title-input');
     const finalTitle = (titleInput?.value.trim() && !/^#?\d+$/.test(titleInput.value.trim()))
@@ -549,6 +646,7 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
       : (fetchJson.title || title || `Gutenberg #${bookId}`);
     if (titleInput) titleInput.value = finalTitle;
 
+    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, Haiku 과부하 시 자동 재시도)`);
     const extractJson = await apiFetch('/api/extract', {
       method: 'POST',
       headers: {
@@ -561,16 +659,25 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
         model: state.model,
         title: finalTitle,
       }),
+      signal,
     });
     applyExtraction(extractJson);
+    setProgressStage(`완료 — 카드 ${Array.isArray(extractJson?.cards) ? extractJson.cards.length : 0}장`);
     toast('추출 완료 — 영문 카드. 카드별 번역 버튼으로 한국어 변환 가능.', 'success');
     setGbStatus('', 'info');
   } catch (err) {
+    if (isAbortError(err)) {
+      logProgress('중단됨');
+      setGbStatus('중단됨', 'err');
+      toast('중단됨', 'info');
+      return;
+    }
     console.error('[gb] fetch/extract failed', err);
     setGbStatus(`실패: ${err.message || err}`, 'err');
     toast(err.message || '추출 실패', 'error');
   } finally {
     resetDropzone();
+    endProgress();
   }
 }
 
