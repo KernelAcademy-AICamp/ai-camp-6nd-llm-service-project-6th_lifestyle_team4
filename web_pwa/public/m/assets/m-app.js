@@ -888,7 +888,7 @@ function loadAllCards() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
       .order('card_id', { ascending: false }).limit(500);
     if (error) throw error;
     state.allCards = Array.isArray(data) ? data : [];
@@ -2847,9 +2847,9 @@ function maybeShowGuide() {
   if (safeStorageGet(GUIDE_SEEN_KEY) === '1') return false;
   if (!document.querySelector('#coachmark')) return false;
   if (state.currentView !== 'home' || !state.todayCard) return false;  // 홈·오늘 카드 준비됐을 때만
-  safeStorageSet(GUIDE_SEEN_KEY, '1');  // 표시 즉시 영구 1회 보장
   const started = launchTour();
-  if (started) track('onboarding_start');
+  // onboarding.js가 동적 import라 아직 로드 전이면 started=false → '본 것'으로 기록하지 않고 다음 기회에 재시도
+  if (started) { safeStorageSet(GUIDE_SEEN_KEY, '1'); track('onboarding_start'); }
   return started;
 }
 
@@ -3378,8 +3378,7 @@ function applyDetailLang(lang) {
   detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
     + renderCounts(card);
 
-  // 인용구 + 발췌 — 인용구는 detailQuote가 없으니 detail 화면에는 quote가 표시되지 않을 수 있음.
-  // 실제로 detailScript만 있고 quote는 헤더 위에 없는 듯. 발췌만 스왑.
+  // 발췌 (script_excerpt) 스왑
   {
     const baseHtml =
       String(w.format || '').toLowerCase() === 'poem'
@@ -3388,6 +3387,17 @@ function applyDetailLang(lang) {
           ? escapeHtml(flowProseScript(scriptSrc || ''))
           : boldSpeakerLines(cleanForDisplay(scriptSrc || '', w.characters), w.characters);
     detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
+  }
+
+  // 상황 설명 (excerpt_description) + 의의 (significance) 스왑
+  const flowProse = (s) => String(s ?? '').replace(/\s*\n+\s*/g, ' ').trim();
+  const descSrc = useEn && card.excerpt_description_original ? card.excerpt_description_original : card.excerpt_description;
+  if (descSrc && detailDescription) {
+    detailDescription.innerHTML = renderMarkdownBold(flowProse(descSrc));
+  }
+  const sigSrc = useEn && card.significance_original ? card.significance_original : card.significance;
+  if (sigSrc && detailSignificance) {
+    detailSignificance.innerHTML = renderMarkdownBold(flowProse(sigSrc));
   }
 }
 
