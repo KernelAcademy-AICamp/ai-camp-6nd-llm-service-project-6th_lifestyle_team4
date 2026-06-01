@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,9 +38,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.AppPreferences
@@ -50,6 +60,7 @@ import com.lifestyle.dailyscript.ui.components.LangSegmented
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.onboarding.CoachmarkOverlay
 import kotlinx.coroutines.launch
+import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
@@ -57,10 +68,13 @@ import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.Markdown
+import com.lifestyle.dailyscript.ui.util.ScriptFormat
 import com.lifestyle.dailyscript.ui.util.displayTitle
+import com.lifestyle.dailyscript.ui.util.genreChipColor
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import com.lifestyle.dailyscript.ui.util.keywordsFor
 import com.lifestyle.dailyscript.ui.util.quoteFor
+import com.lifestyle.dailyscript.ui.util.scriptFor
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -98,31 +112,27 @@ fun HomeScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
       ) {
-        Box(modifier = Modifier.height(32.dp))
+        Box(modifier = Modifier.height(24.dp))
         Text(
             text = todayString().uppercase(),
             style = MaterialTheme.typography.labelSmall,
             color = Walnut,
-        )
-        Box(modifier = Modifier.height(8.dp))
-        Row(
+            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
+        )
+        Box(modifier = Modifier.height(10.dp))
+        Box(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = stringResource(R.string.today_script),
-                style = MaterialTheme.typography.displayMedium,
+                text = todayTitleAnnotated(),
+                style = MaterialTheme.typography.displayMedium.copy(fontSize = 28.sp, lineHeight = 38.sp),
                 color = Espresso,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().align(Alignment.Center),
             )
-            Icon(
-                imageVector = Icons.Outlined.Refresh,
-                contentDescription = "Refresh",
-                tint = Walnut,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clickable(enabled = !state.loading) { vm.refresh(userId, isAnonymous) }
-                    .padding(8.dp),
+            RefreshButton(
+                enabled = !state.loading,
+                onClick = { vm.refresh(userId, isAnonymous) },
+                modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
         Box(modifier = Modifier.height(20.dp))
@@ -221,7 +231,9 @@ private fun TodayCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val format = card?.works?.format
-                if (!format.isNullOrBlank()) ChipTag(text = genreLabel(format, english), filled = true)
+                if (!format.isNullOrBlank()) {
+                    ChipTag(text = format, filled = true, fillColor = genreChipColor(format)?.let { Color(it) })
+                }
                 if (card != null) {
                     CardCounts(viewCount = card.viewCount, bookmarkCount = bookmarkCount)
                 }
@@ -247,6 +259,22 @@ private fun TodayCard(
             }
         }
         Box(modifier = Modifier.height(28.dp))
+        // Speaker (bold) above the quote, when extractable — mirrors the PWA.
+        val speaker = card?.let {
+            ScriptFormat.extractSpeaker(it.scriptFor(english), it.works?.characterList().orEmpty(), it.quoteFor(english))
+        }.orEmpty()
+        if (speaker.isNotBlank()) {
+            Text(
+                text = speaker,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    letterSpacing = 0.02.em,
+                ),
+                color = Espresso,
+            )
+            Box(modifier = Modifier.height(12.dp))
+        }
         Text(
             text = card?.let { Markdown.quote(it.quoteFor(english)) }
                 ?: AnnotatedString(if (loading) stringResource(R.string.loading) else "—"),
@@ -336,6 +364,34 @@ private fun SectionDivider() {
             .height(0.5.dp)
             .background(Latte),
     )
+}
+
+/** "오늘의 명대사" with "의" at 0.7em (mirrors the PWA home title). */
+private fun todayTitleAnnotated(): AnnotatedString = buildAnnotatedString {
+    append("오늘")
+    withStyle(SpanStyle(fontSize = 20.sp, letterSpacing = (-0.02).em)) { append("의") }
+    append(" 명대사")
+}
+
+/** Circular, raised "다른 명대사" refresh button (mirrors the PWA .home-random-btn). */
+@Composable
+private fun RefreshButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .shadow(2.dp, CircleShape)
+            .background(CardWarm, CircleShape)
+            .border(0.5.dp, Color(0x0F000000), CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Refresh,
+            contentDescription = "다른 명대사 보기",
+            tint = Walnut,
+            modifier = Modifier.size(18.dp),
+        )
+    }
 }
 
 /** "— 장르 <제목> 부제" line under the quote (mirrors the PWA's todayWork, applyTodayLang). */

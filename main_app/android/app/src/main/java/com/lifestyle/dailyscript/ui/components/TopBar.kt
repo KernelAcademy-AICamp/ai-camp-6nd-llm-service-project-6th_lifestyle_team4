@@ -81,6 +81,7 @@ fun HomeTopBar(onMyPageClick: () -> Unit) {
 @Composable
 fun DetailTopBar(
     title: String,
+    subtitle: String? = null,
     bookmarked: Boolean,
     bookmarkEnabled: Boolean = true,
     onBack: () -> Unit,
@@ -114,6 +115,16 @@ fun DetailTopBar(
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Walnut,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
         Icon(
             imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,

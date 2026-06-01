@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -100,6 +102,7 @@ fun DetailScreen(
     ) {
         DetailTopBar(
             title = topTitle,
+            subtitle = subtitle,
             bookmarked = state.bookmarked,
             bookmarkEnabled = state.card != null && !state.bookmarkActionInFlight,
             onBack = onBack,
@@ -124,20 +127,11 @@ fun DetailScreen(
                 )
             } else {
                 MetadataChipsRow(card = card, english = english, bookmarkCount = state.bookmarkCount)
-                if (!subtitle.isNullOrBlank()) {
-                    Box(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Walnut,
-                        textAlign = TextAlign.Center,
-                    )
-                }
                 Box(modifier = Modifier.height(24.dp))
 
                 if (hasEn) {
                     LangRow(english = english, onToggle = { english = !english })
-                    Box(modifier = Modifier.height(24.dp))
+                    Box(modifier = Modifier.height(20.dp))
                 }
 
                 val description = card.descriptionFor(english)
@@ -178,15 +172,19 @@ fun DetailScreen(
                     Hairline()
                     Box(modifier = Modifier.height(24.dp))
                     Text(
-                        text = stringResource(R.string.significance_label).uppercase(),
+                        text = stringResource(R.string.significance_label),
                         style = MaterialTheme.typography.labelSmall,
                         color = Walnut,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     Box(modifier = Modifier.height(12.dp))
                     Text(
                         text = Markdown.prose(significance),
                         style = MaterialTheme.typography.bodyLarge,
                         color = Espresso,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
 
@@ -219,12 +217,14 @@ fun DetailScreen(
                     text = "${stringResource(R.string.edition_note)} #${"%04d".format(card.cardId)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = Walnut,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 // ---------- Comments ----------
                 Box(modifier = Modifier.height(40.dp))
                 Hairline()
-                Box(modifier = Modifier.height(28.dp))
+                Box(modifier = Modifier.height(24.dp))
                 CommentsSection(
                     comments = state.comments,
                     likes = state.likes,
@@ -413,11 +413,14 @@ private fun HighlightComposeDialog(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MetadataChipsRow(card: CardDto, english: Boolean, bookmarkCount: Int) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    // Centered, wrapping row: FORMAT · AUTHOR · YEAR · 👁 views · 🔖 bookmarks (mirrors #detail-meta).
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         val items = listOfNotNull(
             card.works?.format?.uppercase(),
@@ -429,8 +432,13 @@ private fun MetadataChipsRow(card: CardDto, english: Boolean, bookmarkCount: Int
                 text = value,
                 style = MaterialTheme.typography.labelSmall,
                 color = Walnut,
+                modifier = Modifier.align(Alignment.CenterVertically),
             )
         }
-        CardCounts(viewCount = card.viewCount, bookmarkCount = bookmarkCount)
+        CardCounts(
+            viewCount = card.viewCount,
+            bookmarkCount = bookmarkCount,
+            modifier = Modifier.align(Alignment.CenterVertically),
+        )
     }
 }

@@ -6,7 +6,7 @@
     <string name="today_script">오늘의 명대사</string>
     <string name="read_full_script">Read Full Script</string>
     <string name="past_records">지난 기록</string>
-    <string name="view_archive">VIEW ARCHIVE</string>
+    <string name="view_archive">VIEW LIBRARY</string>
     <string name="empty_bookmarks">아직 북마크한 카드가 없습니다.</string>
     <string name="collect_artifact">Collect Script Artifact</string>
     <string name="collected_artifact">Collected</string>

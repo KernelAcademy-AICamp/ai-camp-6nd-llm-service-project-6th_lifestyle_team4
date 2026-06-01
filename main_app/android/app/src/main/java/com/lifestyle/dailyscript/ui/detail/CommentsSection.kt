@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import com.lifestyle.dailyscript.data.model.Comment
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -61,8 +62,8 @@ fun CommentsSection(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "댓글 ${comments.size}",
-            style = MaterialTheme.typography.labelSmall,
+            text = "READER NOTES",
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
             color = Walnut,
         )
         Box(modifier = Modifier.height(16.dp))
