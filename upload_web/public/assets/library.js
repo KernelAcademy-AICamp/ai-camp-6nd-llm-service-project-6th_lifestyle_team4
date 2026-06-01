@@ -25,6 +25,7 @@ const confirmDeleteBtn = $('#confirm-delete');
 const libraryWorkFilter = $('#library-work-filter');
 const libraryFormatFilter = $('#library-format-filter');
 const librarySearchInput = $('#library-search');
+const libraryMissingEnFilterBtn = $('#library-missing-en-filter');
 const libraryRefreshBtn = $('#library-refresh');
 const libraryBackfillEnBtn = $('#library-backfill-en-btn');
 const libraryBackfillCommentaryBtn = $('#library-backfill-commentary-btn');
@@ -50,6 +51,7 @@ const state = {
   workFilter: '',     // 작품 제목 문자열 (이전엔 work_id)
   formatFilter: '',   // 작품 형식(works.format) — '' = 전체
   searchText: '',
+  missingEnOnly: false,  // 영문 누락 카드만 표시 (제목/부제/작가/명대사/발췌/설명/의의/키워드 중 하나라도 빈 카드)
   editing: null,      // editing card_id
   selectedIds: new Set(), // 그리드 전체 선택용 card_id Set
   viewMode: 'shelf',  // 'shelf' (책꽂이) | 'grid' (격자)
@@ -241,6 +243,23 @@ function refreshFormatFilterOptions() {
   }
 }
 
+// 카드의 영문 원본(*_original) 중 하나라도 빠진 게 있으면 true.
+// 한국어 본은 있는데 영문이 없는 필드만 카운트 (KO 도 빈 필드는 백필 대상이 아니므로 제외).
+function cardMissingEnOriginal(c) {
+  const w = c.works || {};
+  return (
+    (!w.title_original    && w.title) ||
+    (!w.subtitle_original && w.subtitle) ||
+    (!w.author_original   && w.author) ||
+    (!c.quote_original          && c.quote) ||
+    (!c.script_excerpt_original && c.script_excerpt) ||
+    (!c.excerpt_description_original && c.excerpt_description) ||
+    (!c.significance_original   && c.significance) ||
+    ((!Array.isArray(c.keywords_original) || !c.keywords_original.length) &&
+     Array.isArray(c.keywords) && c.keywords.length)
+  );
+}
+
 function filteredRows() {
   const q = state.searchText.trim().toLowerCase();
   return state.rows.filter((c) => {
@@ -255,6 +274,7 @@ function filteredRows() {
       const hay = `${c.quote || ''} ${c.excerpt_description || ''} ${(c.keywords || []).join(' ')}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
+    if (state.missingEnOnly && !cardMissingEnOriginal(c)) return false;
     return true;
   });
 }
@@ -1842,6 +1862,18 @@ librarySearchInput.addEventListener('input', () => {
 });
 
 libraryRefreshBtn.addEventListener('click', () => loadLibrary());
+
+// '영문 없음' 필터 — 영문 원본이 하나라도 빠진 카드만 표시. 토글.
+libraryMissingEnFilterBtn?.addEventListener('click', () => {
+  state.missingEnOnly = !state.missingEnOnly;
+  libraryMissingEnFilterBtn.setAttribute('aria-pressed', state.missingEnOnly ? 'true' : 'false');
+  // 활성화 시 강조 (amber 톤 — 백필 버튼과 시각적으로 연관)
+  libraryMissingEnFilterBtn.classList.toggle('bg-amber-100', state.missingEnOnly);
+  libraryMissingEnFilterBtn.classList.toggle('border-amber-600', state.missingEnOnly);
+  libraryMissingEnFilterBtn.classList.toggle('text-amber-800', state.missingEnOnly);
+  libraryMissingEnFilterBtn.classList.toggle('font-semibold', state.missingEnOnly);
+  renderLibrary();
+});
 
 // 의의·설명 영문만 집중 백필 — 강화된 재시도 + 상세 실패 로그
 libraryBackfillCommentaryBtn?.addEventListener('click', async () => {

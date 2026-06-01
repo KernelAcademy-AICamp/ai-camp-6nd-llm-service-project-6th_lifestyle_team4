@@ -476,6 +476,10 @@
             <option value="">모든 작품</option>
           </select>
           <input id="library-search" type="search" placeholder="명대사 검색⋯" class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm w-48" />
+          <button type="button" id="library-missing-en-filter" class="px-3 py-2 rounded-lg border border-outline-variant text-sm hover:bg-surface-container-low flex items-center gap-1" title="영문 원본이 빠진 카드만 보기 (제목·부제·작가·명대사·발췌·설명·의의·키워드 중 하나라도 빈 카드)" aria-pressed="false">
+            <span class="material-symbols-outlined text-base">filter_alt</span>
+            영문 없음
+          </button>
           <button type="button" id="library-keyword-freq-btn" class="px-3 py-2 rounded-lg border border-outline-variant text-sm hover:bg-surface-container-low flex items-center gap-1" title="키워드 빈도 집계">
             <span class="material-symbols-outlined text-base">tag</span>
             키워드 빈도

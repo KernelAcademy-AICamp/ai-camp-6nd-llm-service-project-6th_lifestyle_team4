@@ -6,7 +6,7 @@
 //  - API/Supabase/Anthropic → 항상 네트워크 패스스루
 //  - 업데이트는 즉시 활성화 (skipWaiting + clients.claim)
 const CACHE_PREFIX = 'sq-';
-const CACHE_VERSION = 'sq-v61-commentary-backfill';
+const CACHE_VERSION = 'sq-v62-missing-en-filter';
 const STATIC_ASSETS = [
   '/index.html',
   '/dashboard.html',
