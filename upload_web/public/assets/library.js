@@ -564,6 +564,10 @@ if (libraryKeywordFreqReclassify) libraryKeywordFreqReclassify.addEventListener(
 // Render
 // ---------------------------------------------------------------------------
 function renderLibrary() {
+  // 책꽂이 모드에서 스파인 클릭(골라 삭제 선택)으로 재렌더되면 DOM 전체가 새로 그려져
+  // 브라우저가 스크롤 위치를 잃고 맨 위로 점프하는 문제가 있다. 미리 저장 후 복원.
+  const prevScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+
   libraryGrid.innerHTML = '';
   libraryShelf.innerHTML = '';
   const rows = filteredRows();
@@ -600,6 +604,11 @@ function renderLibrary() {
     librarySelectionBar.classList.remove('flex');
     renderShelf(rows);
   }
+
+  // 스크롤 복원 — DOM 재구성 직후 동기적 setter 가 가장 확실하다.
+  // 일부 브라우저는 한 프레임 뒤에야 새 contentHeight 가 반영되므로 RAF 한 번 더.
+  window.scrollTo(0, prevScrollY);
+  requestAnimationFrame(() => window.scrollTo(0, prevScrollY));
 }
 
 // ---------------------------------------------------------------------------
