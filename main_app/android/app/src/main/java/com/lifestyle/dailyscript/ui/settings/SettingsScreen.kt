@@ -17,9 +17,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,7 +60,9 @@ fun SettingsScreen(
     onSignIn: (id: String, password: String, signUp: Boolean) -> Unit,
     onSignOut: () -> Unit,
     onUpdateProfile: (nickname: String, gender: String?, ageGroup: String?) -> Unit,
-    onOpenFeedback: () -> Unit,
+    onOpenMyComments: () -> Unit,
+    onOpenMyFeed: () -> Unit,
+    onReplayGuide: () -> Unit,
     onConsumeMessage: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel()
@@ -69,6 +74,9 @@ fun SettingsScreen(
     LaunchedEffect(session.userId) { vm.loadTasteProfile(session.userId) }
 
     var showProfileDialog by remember { mutableStateOf(false) }
+    var showSignInDialog by remember { mutableStateOf(false) }
+    // Once login succeeds the account is no longer anonymous → close the dialog.
+    LaunchedEffect(session.isAnonymous) { if (!session.isAnonymous) showSignInDialog = false }
 
     Column(
         modifier = Modifier
@@ -77,61 +85,94 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
     ) {
-        Box(modifier = Modifier.height(40.dp))
+        Box(modifier = Modifier.height(24.dp))
 
         // --- Identity ---
-        val title = if (session.isAnonymous) {
-            stringResource(R.string.anonymous_user)
-        } else {
-            session.nickname.ifBlank { stringResource(R.string.anonymous_user) }
-        }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(text = title, style = MaterialTheme.typography.displayMedium, color = Espresso)
-            if (!session.isAnonymous) {
+            Text(
+                text = session.nickname.ifBlank { stringResource(R.string.anonymous_user) },
+                style = MaterialTheme.typography.displayMedium,
+                color = Espresso,
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                modifier = Modifier
+                    .padding(top = 8.dp, start = 12.dp)
+                    .border(0.5.dp, Walnut)
+                    .clickable { showProfileDialog = true }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            ) {
                 Text(
-                    text = "EDIT",
+                    text = stringResource(R.string.edit_profile),
                     style = MaterialTheme.typography.labelSmall,
                     color = Walnut,
-                    modifier = Modifier
-                        .clickable { showProfileDialog = true }
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
                 )
             }
         }
         Box(modifier = Modifier.height(10.dp))
         Text(
             text = stringResource(R.string.profile_bio),
-            style = MaterialTheme.typography.bodyLarge,
-            color = Walnut,
+            style = MaterialTheme.typography.bodySmall,
+            color = Walnut.copy(alpha = 0.55f),
         )
-
-        // --- Sign-in (anonymous only) ---
-        if (session.isAnonymous) {
-            Box(modifier = Modifier.height(28.dp))
-            SignInBlock(
-                inProgress = authInProgress,
-                onSignIn = onSignIn,
-            )
-        }
 
         authMessage?.let { msg ->
             Box(modifier = Modifier.height(12.dp))
             Text(text = msg, style = MaterialTheme.typography.bodySmall, color = Cta)
-            // Clear the message the next time settings recomposes via a button press.
             LaunchedEffect(msg) {
                 kotlinx.coroutines.delay(2500)
                 onConsumeMessage()
             }
         }
 
-        Box(modifier = Modifier.height(32.dp))
+        Box(modifier = Modifier.height(16.dp))
         Hairline()
 
-        // --- General Preferences ---
+        if (session.isAnonymous) {
+            // --- ACCOUNT (anonymous) ---
+            Box(modifier = Modifier.height(20.dp))
+            SectionLabel(text = stringResource(R.string.account))
+            Text(
+                text = stringResource(R.string.account_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = Walnut,
+            )
+            Box(modifier = Modifier.height(14.dp))
+            SharpButton(
+                label = stringResource(R.string.login_or_signup),
+                onClick = { showSignInDialog = true },
+                variant = SharpButtonVariant.Outline,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Box(modifier = Modifier.height(14.dp))
+            Text(
+                text = stringResource(R.string.signup_migrate_note),
+                style = MaterialTheme.typography.labelSmall,
+                color = Walnut,
+            )
+        } else {
+            // --- 내 활동 (logged-in) ---
+            Box(modifier = Modifier.height(20.dp))
+            SectionLabel(text = stringResource(R.string.my_activity))
+            SettingRow(
+                title = stringResource(R.string.my_comments),
+                subtitle = stringResource(R.string.my_comments_desc),
+                onClick = onOpenMyComments,
+                trailingArrow = true,
+            )
+            SettingRow(
+                title = stringResource(R.string.my_feed_entry),
+                subtitle = stringResource(R.string.my_feed_entry_desc),
+                onClick = onOpenMyFeed,
+                trailingArrow = true,
+            )
+        }
+
+        // --- 일반 설정 ---
         Box(modifier = Modifier.height(40.dp))
         SectionLabel(text = stringResource(R.string.general_preferences))
         SettingRow(
@@ -140,40 +181,30 @@ fun SettingsScreen(
             trailing = { EditorialToggle(checked = pushEnabled, onChange = vm::setPushEnabled) },
         )
         SettingRow(
-            title = stringResource(R.string.taste_recommendation),
-            subtitle = if (tasteEnabled) tasteProfile ?: stringResource(R.string.taste_recommendation_desc)
-            else stringResource(R.string.taste_recommendation_desc),
-            trailing = {
-                EditorialToggle(
-                    checked = tasteEnabled,
-                    onChange = { vm.setTasteEnabled(it, session.userId) },
-                )
-            },
-        )
-        SettingRow(
             title = stringResource(R.string.theme_settings),
             subtitle = stringResource(if (darkTheme) R.string.theme_dark_desc else R.string.theme_light_desc),
             trailing = { EditorialToggle(checked = darkTheme, onChange = vm::setDarkTheme) },
         )
+        SettingRow(
+            title = stringResource(R.string.taste_recommendation),
+            subtitle = if (tasteEnabled) tasteProfile ?: stringResource(R.string.taste_recommendation_desc)
+            else stringResource(R.string.taste_recommendation_desc),
+            trailing = {
+                EditorialToggle(checked = tasteEnabled, onChange = { vm.setTasteEnabled(it, session.userId) })
+            },
+        )
 
-        // --- Legal & About ---
+        // --- 약관 및 정보 ---
         Box(modifier = Modifier.height(40.dp))
         SectionLabel(text = stringResource(R.string.legal_about))
-        SettingRow(
-            title = stringResource(R.string.send_feedback),
-            subtitle = stringResource(R.string.send_feedback_desc),
-            onClick = onOpenFeedback,
-        )
-        SettingRow(title = stringResource(R.string.terms_of_service))
-        SettingRow(
-            title = stringResource(R.string.version_info),
-            trailingText = "v${BuildConfig.VERSION_NAME}",
-        )
+        SettingRow(title = stringResource(R.string.app_guide), onClick = onReplayGuide, trailingArrow = true)
+        SettingRow(title = stringResource(R.string.terms_of_service), trailingArrow = true)
+        SettingRow(title = stringResource(R.string.privacy_policy), trailingArrow = true)
+        SettingRow(title = stringResource(R.string.version_info), trailingText = "v${BuildConfig.VERSION_NAME}")
 
         Box(modifier = Modifier.height(40.dp))
         SharpButton(
-            label = if (session.isAnonymous) stringResource(R.string.reset_anonymous)
-            else stringResource(R.string.sign_out),
+            label = stringResource(R.string.sign_out),
             onClick = onSignOut,
             variant = SharpButtonVariant.Outline,
             modifier = Modifier.fillMaxWidth(),
@@ -193,53 +224,68 @@ fun SettingsScreen(
             },
         )
     }
+
+    if (showSignInDialog) {
+        SignInDialog(
+            inProgress = authInProgress,
+            message = authMessage,
+            onSignIn = onSignIn,
+            onDismiss = { showSignInDialog = false },
+        )
+    }
 }
 
 @Composable
-private fun SignInBlock(
+private fun SignInDialog(
     inProgress: Boolean,
+    message: String?,
     onSignIn: (id: String, password: String, signUp: Boolean) -> Unit,
+    onDismiss: () -> Unit,
 ) {
     var id by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var signUp by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        SectionLabel(text = stringResource(R.string.sign_in))
-        Text(
-            text = stringResource(R.string.sign_in_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = Walnut,
-        )
-        Box(modifier = Modifier.height(12.dp))
-        FieldBox(value = id, placeholder = stringResource(R.string.sign_in_id), onChange = { id = it })
-        Box(modifier = Modifier.height(8.dp))
-        FieldBox(
-            value = password,
-            placeholder = stringResource(R.string.sign_in_password),
-            onChange = { password = it },
-            isPassword = true,
-        )
-        Box(modifier = Modifier.height(12.dp))
-        SharpButton(
-            label = if (inProgress) "⋯"
-            else if (signUp) stringResource(R.string.sign_up_action)
-            else stringResource(R.string.sign_in_action),
-            onClick = { if (!inProgress) onSignIn(id, password, signUp) },
-            enabled = !inProgress && id.isNotBlank() && password.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Box(modifier = Modifier.height(10.dp))
-        Text(
-            text = if (signUp) stringResource(R.string.have_account_sign_in)
-            else stringResource(R.string.no_account_sign_up),
-            style = MaterialTheme.typography.labelSmall,
-            color = Walnut,
-            modifier = Modifier
-                .clickable { signUp = !signUp }
-                .padding(vertical = 4.dp),
-        )
-    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                enabled = !inProgress && id.isNotBlank() && password.isNotBlank(),
+                onClick = { onSignIn(id, password, signUp) },
+            ) {
+                Text(
+                    text = if (inProgress) "⋯" else if (signUp) stringResource(R.string.sign_up_action) else stringResource(R.string.sign_in_action),
+                    color = Cta,
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소", color = Walnut) } },
+        title = {
+            Text(
+                text = if (signUp) stringResource(R.string.sign_up_action) else stringResource(R.string.sign_in_action),
+                color = Espresso,
+            )
+        },
+        text = {
+            Column {
+                FieldBox(value = id, placeholder = stringResource(R.string.sign_in_id), onChange = { id = it })
+                Box(modifier = Modifier.height(8.dp))
+                FieldBox(value = password, placeholder = stringResource(R.string.sign_in_password), onChange = { password = it }, isPassword = true)
+                Box(modifier = Modifier.height(10.dp))
+                Text(
+                    text = if (signUp) stringResource(R.string.have_account_sign_in) else stringResource(R.string.no_account_sign_up),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Walnut,
+                    modifier = Modifier.clickable { signUp = !signUp }.padding(vertical = 4.dp),
+                )
+                message?.let {
+                    Box(modifier = Modifier.height(8.dp))
+                    Text(text = it, style = MaterialTheme.typography.bodySmall, color = Cta)
+                }
+            }
+        },
+        containerColor = Paper,
+    )
 }
 
 // (value, display) — null value means "선택 안 함" (clears nothing; just leaves unset).
@@ -375,6 +421,7 @@ private fun SettingRow(
     title: String,
     subtitle: String? = null,
     trailingText: String? = null,
+    trailingArrow: Boolean = false,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
@@ -399,6 +446,12 @@ private fun SettingRow(
                 text = trailingText.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
                 color = Walnut,
+            )
+            trailingArrow -> Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                contentDescription = null,
+                tint = Walnut,
+                modifier = Modifier.size(16.dp),
             )
         }
     }

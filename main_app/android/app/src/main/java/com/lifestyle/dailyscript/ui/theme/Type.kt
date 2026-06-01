@@ -1,25 +1,38 @@
+@file:OptIn(ExperimentalTextApi::class)
+
 package com.lifestyle.dailyscript.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.lifestyle.dailyscript.R
 
-// LongBlack typography
-//
-//  Korean headlines/quotes → 명조체 (NanumMyeongjo, res/font에 번들)
-//  Body / UI / labels       → 시스템 sans (Pretendard 번들 시 교체 가능)
-//  Screenplay (Detail body) → 시스템 monospace
-//
-// Weight policy: never go above 500. 위젯/iOS와 동일한 폰트 사용.
+// LongBlack typography — bundled to match the PWA (web_pwa) exactly:
+//  Headlines/quotes (명조) → Nanum Myeongjo
+//  Wordmark "Daily Script." → IM Fell DW Pica
+//  Body / UI / labels      → Noto Sans KR (variable; 400/500/700)
+//  Screenplay (Detail body) → JetBrains Mono (variable; 400/500)
 val EditorialSerif: FontFamily = FontFamily(Font(R.font.nanum_myeongjo))
-val EditorialSans:  FontFamily = FontFamily.Default
-val ScreenplayMono: FontFamily = FontFamily.Monospace
+
+val WordmarkSerif: FontFamily = FontFamily(Font(R.font.im_fell_dw_pica))
+
+val EditorialSans: FontFamily = FontFamily(
+    Font(R.font.noto_sans_kr, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.noto_sans_kr, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.noto_sans_kr, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+)
+
+val ScreenplayMono: FontFamily = FontFamily(
+    Font(R.font.jetbrains_mono, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.jetbrains_mono, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+)
 
 // Reusable styles
 val MetaCaps = TextStyle(

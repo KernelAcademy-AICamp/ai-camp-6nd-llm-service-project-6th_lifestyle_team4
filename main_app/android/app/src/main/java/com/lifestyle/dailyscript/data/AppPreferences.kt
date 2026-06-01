@@ -99,4 +99,5 @@ object AppPreferences {
     // --- Onboarding coachmark (shown once) ---
     val guideSeen: Flow<Boolean> get() = store.data.map { it[GUIDE_SEEN] ?: false }
     suspend fun setGuideSeen() { store.edit { it[GUIDE_SEEN] = true } }
+    suspend fun resetGuideSeen() { store.edit { it[GUIDE_SEEN] = false } }
 }

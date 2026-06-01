@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,6 +33,7 @@ import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.theme.WordmarkSerif
 
 private val TopBarHeight = 64.dp
 
@@ -62,20 +62,11 @@ private fun TopBarContainer(content: @Composable RowScope.() -> Unit) {
 @Composable
 fun HomeTopBar(onMyPageClick: () -> Unit) {
     TopBarContainer {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Outlined.MenuBook,
-                contentDescription = null,
-                tint = Espresso,
-                modifier = Modifier.size(20.dp),
-            )
-            Text(
-                text = stringResource(R.string.app_brand),
-                style = MaterialTheme.typography.headlineMedium,
-                color = Espresso,
-                modifier = Modifier.padding(start = 10.dp),
-            )
-        }
+        Text(
+            text = stringResource(R.string.app_brand),
+            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = WordmarkSerif),
+            color = Espresso,
+        )
         Text(
             text = stringResource(R.string.my_page),
             style = MaterialTheme.typography.labelSmall,
@@ -137,24 +128,24 @@ fun DetailTopBar(
 }
 
 @Composable
-fun SettingsTopBar(initials: String) {
+fun SettingsTopBar(onFeedback: () -> Unit) {
     TopBarContainer {
         Text(
             text = stringResource(R.string.app_brand),
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = WordmarkSerif),
             color = Espresso,
         )
+        // 의견 남기기 — filled espresso chip, matching the PWA settings top bar.
         Box(
             modifier = Modifier
-                .size(36.dp)
-                .border(0.5.dp, Walnut)
-                .background(Color.Transparent),
-            contentAlignment = Alignment.Center,
+                .background(Espresso)
+                .clickable(onClick = onFeedback)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
         ) {
             Text(
-                text = initials.uppercase(),
+                text = stringResource(R.string.send_feedback),
                 style = MaterialTheme.typography.labelSmall,
-                color = Espresso,
+                color = Paper,
             )
         }
     }

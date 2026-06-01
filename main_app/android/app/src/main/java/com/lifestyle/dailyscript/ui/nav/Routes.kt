@@ -7,6 +7,8 @@ object Routes {
     const val NOTICE = "notice"
     const val SETTINGS = "settings"
     const val FEEDBACK = "feedback"
+    const val MY_COMMENTS = "my_comments"
+    const val MY_FEED = "my_feed"
     const val DETAIL = "detail/{cardId}"
     fun detail(cardId: Long) = "detail/$cardId"
 }

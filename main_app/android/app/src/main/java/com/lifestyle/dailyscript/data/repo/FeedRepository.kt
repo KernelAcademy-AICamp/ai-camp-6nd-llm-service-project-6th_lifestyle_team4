@@ -39,6 +39,36 @@ class FeedRepository {
             }
             .decodeList()
 
+    suspend fun loadMyPosts(userId: Long): List<FeedPost> =
+        client.postgrest["feed_posts"]
+            .select(postSelect) {
+                filter { eq("user_id", userId) }
+                order("created_at", Order.DESCENDING)
+                limit(100)
+            }
+            .decodeList()
+
+    suspend fun loadMyHighlights(userId: Long): List<Highlight> =
+        client.postgrest["card_highlights"]
+            .select(highlightSelect) {
+                filter { eq("user_id", userId) }
+                order("created_at", Order.DESCENDING)
+                limit(100)
+            }
+            .decodeList()
+
+    suspend fun deletePost(postId: Long, userId: Long) {
+        client.postgrest["feed_posts"].delete {
+            filter { eq("post_id", postId); eq("user_id", userId) }
+        }
+    }
+
+    suspend fun deleteHighlight(highlightId: Long, userId: Long) {
+        client.postgrest["card_highlights"].delete {
+            filter { eq("highlight_id", highlightId); eq("user_id", userId) }
+        }
+    }
+
     suspend fun addPost(cardId: Long, userId: Long, body: String, authorNickname: String?) {
         client.postgrest["feed_posts"].insert(
             FeedPostInsert(cardId = cardId, userId = userId, authorNickname = authorNickname, body = body)

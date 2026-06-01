@@ -14,6 +14,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -25,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.repo.UserSession
 import com.lifestyle.dailyscript.ui.archive.ArchiveScreen
 import com.lifestyle.dailyscript.ui.components.BottomNavBar
@@ -38,6 +41,8 @@ import com.lifestyle.dailyscript.ui.home.HomeScreen
 import com.lifestyle.dailyscript.ui.nav.Routes
 import com.lifestyle.dailyscript.ui.notice.NoticeScreen
 import com.lifestyle.dailyscript.ui.notice.NoticeViewModel
+import com.lifestyle.dailyscript.ui.settings.MyCommentsScreen
+import com.lifestyle.dailyscript.ui.settings.MyFeedScreen
 import com.lifestyle.dailyscript.ui.settings.SettingsScreen
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Walnut
@@ -82,12 +87,13 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val noticeVm: NoticeViewModel = viewModel()
     val noticeBadge by noticeVm.unread.collectAsState()
 
+    val scope = rememberCoroutineScope()
     val mainTabs = setOf(Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE, Routes.SETTINGS)
     val isDetail = currentRoute?.startsWith("detail/") == true || currentRoute == Routes.DETAIL
-    val isFullScreen = isDetail || currentRoute == Routes.FEEDBACK
+    val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED)
+    val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
     val showBottomBar = !isFullScreen && currentRoute in mainTabs
-    val initials = session.nickname.trim().take(2).ifBlank { "DS" }
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (showTopBar) {
@@ -95,7 +101,9 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(onMyPageClick = {
                     navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
                 })
-                Routes.SETTINGS -> SettingsTopBar(initials = initials)
+                Routes.SETTINGS -> SettingsTopBar(onFeedback = {
+                    navController.navigate(Routes.FEEDBACK)
+                })
                 else -> Unit
             }
         }
@@ -133,7 +141,15 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onSignIn = { id, pw, signUp -> sessionVm.signIn(id, pw, signUp) },
                         onSignOut = sessionVm::signOutAndReauth,
                         onUpdateProfile = sessionVm::updateProfile,
-                        onOpenFeedback = { navController.navigate(Routes.FEEDBACK) },
+                        onOpenMyComments = { navController.navigate(Routes.MY_COMMENTS) },
+                        onOpenMyFeed = { navController.navigate(Routes.MY_FEED) },
+                        onReplayGuide = {
+                            scope.launch { AppPreferences.resetGuideSeen() }
+                            navController.navigate(Routes.HOME) {
+                                popUpTo(Routes.HOME) { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        },
                         onConsumeMessage = sessionVm::consumeAuthMessage,
                     )
                 }
@@ -142,6 +158,20 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         initialGender = session.gender,
                         initialAge = session.ageGroup,
                         onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(Routes.MY_COMMENTS) {
+                    MyCommentsScreen(
+                        userId = session.userId,
+                        onBack = { navController.popBackStack() },
+                        onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                    )
+                }
+                composable(Routes.MY_FEED) {
+                    MyFeedScreen(
+                        userId = session.userId,
+                        onBack = { navController.popBackStack() },
+                        onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
                 composable(

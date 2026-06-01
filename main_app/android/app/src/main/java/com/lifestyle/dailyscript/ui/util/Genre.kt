@@ -30,6 +30,21 @@ private val GENRE_LABEL_EN = mapOf(
 fun genreLabel(format: String?): String =
     GENRE_LABEL[format?.lowercase()] ?: "기타"
 
+// Genre badge fill colors (leather tones) for the filled format chip. Mirrors the PWA .chip.filled.g-*.
+private val GENRE_CHIP_COLOR = mapOf(
+    "movie" to 0xFF4A2A18L,
+    "drama" to 0xFF6B4A2AL,
+    "musical" to 0xFF5A2818L,
+    "opera" to 0xFF4A2B1AL,
+    "play" to 0xFF5A2A24L,
+    "novel" to 0xFF3E585AL,
+    "poem" to 0xFF27393BL,
+    "essay" to 0xFF3A4030L,
+)
+
+/** ARGB color (Long) for the genre badge, or null → use the default filled (espresso) chip. */
+fun genreChipColor(format: String?): Long? = GENRE_CHIP_COLOR[format?.lowercase()]
+
 /** Genre label honoring the KO/EN toggle (mirrors GENRE_LABEL / GENRE_LABEL_EN). */
 fun genreLabel(format: String?, english: Boolean): String {
     val key = format?.lowercase()

@@ -4,6 +4,7 @@ import com.lifestyle.dailyscript.data.SupabaseProvider
 import com.lifestyle.dailyscript.data.model.Comment
 import com.lifestyle.dailyscript.data.model.CommentInsert
 import com.lifestyle.dailyscript.data.model.CommentLikeRow
+import com.lifestyle.dailyscript.data.model.MyComment
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
@@ -15,6 +16,22 @@ class CommentRepository {
     private val commentSelect = Columns.raw(
         "comment_id, card_id, user_id, parent_comment_id, author_nickname, body, created_at"
     )
+
+    private val myCommentSelect = Columns.raw(
+        "comment_id, card_id, body, created_at, " +
+            "cards ( card_id, work_id, quote, script_excerpt, keywords, temperature, intensity, " +
+            "works ( work_id, title, subtitle, format, author, release_year ) )"
+    )
+
+    /** A user's own comments, newest first (for the "내 댓글" screen). */
+    suspend fun loadByUser(userId: Long): List<MyComment> =
+        client.postgrest["card_comments"]
+            .select(myCommentSelect) {
+                filter { eq("user_id", userId) }
+                order("created_at", Order.DESCENDING)
+                limit(100)
+            }
+            .decodeList()
 
     suspend fun loadComments(cardId: Long): List<Comment> =
         client.postgrest["card_comments"]

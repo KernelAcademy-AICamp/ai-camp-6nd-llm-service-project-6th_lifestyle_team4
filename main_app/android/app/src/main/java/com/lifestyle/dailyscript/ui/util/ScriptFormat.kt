@@ -69,6 +69,68 @@ object ScriptFormat {
     private val COLON_LINE = Regex("^([^:：()\\n]{1,14})[:：][ \\t]*", RegexOption.MULTILINE)
     private val COLON_LINE_NL = Regex("^([^:：()\\n]{1,14})[:：][ \\t]*\\n?", RegexOption.MULTILINE)
 
+    private val SPEAKER_COLON = Regex("^([^\\n:：—\\-]{1,20})[:：]\\s*(.*)$")
+    private val TRAILING_PAREN = Regex("\\s*[(（].*?[)）]\\s*$")
+    private val WS = Regex("\\s+")
+    private val QUOTE_CHARS = Regex("[\"“”'`’]")
+
+    /**
+     * The speaker of [quote] within [scriptExcerpt], using [characters] (mirrors the PWA's
+     * extractSpeaker). Returns "" when ambiguous / not found.
+     */
+    fun extractSpeaker(scriptExcerpt: String?, characters: List<String>, quote: String?): String {
+        if (scriptExcerpt.isNullOrBlank()) return ""
+        val names = characters.map { it.trim() }.filter { it.isNotEmpty() }.sortedByDescending { it.length }
+
+        fun speakerOf(raw: String): Pair<String, String>? {
+            val t = raw.trim()
+            if (t.isEmpty()) return null
+            for (name in names) {
+                if (!t.startsWith(name)) continue
+                val tt = t.substring(name.length).trim()
+                if (tt.isEmpty()) return name to ""
+                when (tt[0]) {
+                    ':', '：' -> return name to tt.substring(1).trim()
+                    '(', '（' -> return name to tt
+                }
+            }
+            val m = SPEAKER_COLON.find(t)
+            if (m != null) {
+                val nm = m.groupValues[1].replace(TRAILING_PAREN, "").trim()
+                if (nm.isNotEmpty()) return nm to m.groupValues[2]
+            }
+            return null
+        }
+
+        fun norm(s: String?): String = (s ?: "").replace(WS, "").replace(QUOTE_CHARS, "")
+
+        data class Block(val speaker: String, var text: String)
+        val blocks = mutableListOf<Block>()
+        var cur: Block? = null
+        for (raw in scriptExcerpt.split("\n")) {
+            val sp = speakerOf(raw)
+            if (sp != null) {
+                cur = Block(sp.first, sp.second)
+                blocks.add(cur)
+            } else if (cur != null) {
+                cur.text += "\n" + raw
+            }
+        }
+        if (blocks.isEmpty()) return ""
+
+        val qn = norm(quote)
+        if (qn.isNotEmpty()) {
+            for (b in blocks) if (norm(b.text).contains(qn)) return b.speaker
+            val firstLine = (quote ?: "").split("\n").map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: ""
+            val fln = norm(firstLine)
+            if (fln.length >= 4) {
+                for (b in blocks) if (norm(b.text).contains(fln)) return b.speaker
+            }
+        }
+        val distinct = blocks.map { it.speaker }.toSet()
+        return if (distinct.size == 1) blocks[0].speaker else ""
+    }
+
     private fun cleanForDisplay(s: String, characterNames: List<String>): String {
         var text = s.replace(DASH, " ")
         val speakers = mutableSetOf<String>()

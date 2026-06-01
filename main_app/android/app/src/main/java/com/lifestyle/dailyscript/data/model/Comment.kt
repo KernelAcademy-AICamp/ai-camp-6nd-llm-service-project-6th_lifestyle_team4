@@ -30,3 +30,13 @@ data class CommentLikeRow(
     @SerialName("comment_id") val commentId: Long,
     @SerialName("user_id") val userId: Long,
 )
+
+/** A user's own comment joined with its card (for the "내 댓글" screen). */
+@Serializable
+data class MyComment(
+    @SerialName("comment_id") val commentId: Long,
+    @SerialName("card_id") val cardId: Long,
+    val body: String,
+    @SerialName("created_at") val createdAt: String,
+    val cards: CardDto? = null,
+)

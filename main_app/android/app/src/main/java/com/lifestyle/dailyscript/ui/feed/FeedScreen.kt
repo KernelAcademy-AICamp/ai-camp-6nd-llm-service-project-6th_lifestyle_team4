@@ -8,17 +8,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
@@ -37,17 +40,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -89,6 +95,10 @@ fun FeedScreen(
     var todayPickerOpen by remember { mutableStateOf(false) }
     var hlPickerOpen by remember { mutableStateOf(false) }
 
+    // One list reused for both categories — reset to the top whenever the category flips.
+    val listState = rememberLazyListState()
+    LaunchedEffect(state.category) { listState.scrollToItem(0) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -122,20 +132,23 @@ fun FeedScreen(
                     else "아직 하이라이트가 없어요. 명대사 본문을 길게 눌러 저장해보세요."
                 )
                 else -> LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (state.category == FEED_TODAY) {
-                        items(state.posts, key = { it.postId }) { post ->
+                        // Type-prefixed keys so a highlight_id never collides with a post_id
+                        // (a raw-id collision made the LazyColumn jump to the wrong card on tab switch).
+                        items(state.posts, key = { "post-${it.postId}" }) { post ->
                             FeedPostCard(post, onClick = { post.cards?.let { quotePopup = it } })
                         }
                     } else {
-                        items(state.highlights, key = { it.highlightId }) { hl ->
+                        items(state.highlights, key = { "hl-${it.highlightId}" }) { hl ->
                             HighlightCard(hl)
                         }
                     }
-                    item { Box(modifier = Modifier.height(72.dp)) }
+                    item(key = "tail-spacer") { Box(modifier = Modifier.height(72.dp)) }
                 }
             }
         }
@@ -556,7 +569,7 @@ private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
     }
 }
 
-/** "하이라이트" — a leather book cover + the saved excerpt below. */
+/** "하이라이트" — matches the PWA .hl-card: head(닉네임·장르·날짜) → 책표지 → 발췌 → 일련번호. */
 @Composable
 private fun HighlightCard(hl: Highlight) {
     val w = hl.cards?.works
@@ -565,64 +578,162 @@ private fun HighlightCard(hl: Highlight) {
             .fillMaxWidth()
             .border(0.5.dp, Latte)
             .background(CardWarm)
-            .padding(horizontal = 18.dp, vertical = 24.dp),
+            .padding(start = 18.dp, top = 28.dp, end = 18.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(hl.authorNickname ?: "익명", style = MaterialTheme.typography.titleMedium, color = Espresso)
+        // head — nickname + (genre · date·time)
+        Text(
+            text = hl.authorNickname ?: "익명",
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = Espresso,
+        )
         val meta = listOfNotNull(
-            w?.format?.let { genreLabel(it).uppercase() },
-            w.displayTitle().ifBlank { null },
+            w?.format?.let { genreLabel(it) },
+            formatBookmarkDate(hl.createdAt).ifBlank { null },
         ).joinToString("  ·  ")
         if (meta.isNotBlank()) {
             Box(modifier = Modifier.height(6.dp))
-            Text(meta, style = MaterialTheme.typography.labelSmall, color = Walnut, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.18.em),
+                color = Walnut,
+            )
         }
 
-        Box(modifier = Modifier.height(20.dp))
-        // book cover
-        val coverShape = RoundedCornerShape(4.dp)
+        Box(modifier = Modifier.height(22.dp))
+        HlBookCover(w)
+
+        Box(modifier = Modifier.height(22.dp))
+        HlQuote(hl.selectedText)
+
+        Box(modifier = Modifier.height(18.dp))
+        Text(
+            text = "#${"%05d".format(hl.cardId)}",
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.18.em),
+            color = Sand,
+        )
+    }
+}
+
+/** Solid leather cover with an inset white-line rectangle + a left spine line (PWA .hl-bookcover). */
+@Composable
+private fun HlBookCover(w: com.lifestyle.dailyscript.data.model.WorkDto?) {
+    val shape = RoundedCornerShape(4.dp)
+    Box(
+        modifier = Modifier
+            .size(width = 132.dp, height = 188.dp)
+            .shadow(10.dp, shape)
+            .clip(shape)
+            .background(leatherColorFor(w?.title)),
+    ) {
+        // left spine shadow line
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(5.dp)
+                .align(Alignment.CenterStart)
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color(0x59000000),
+                        0.5f to Color(0x1A000000),
+                        1f to Color(0x59000000),
+                    )
+                ),
+        )
+        // inset white-line border rectangle
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(7.dp)
+                .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(2.dp)),
+        )
+        // title / subtitle / author, centered
         Column(
             modifier = Modifier
-                .size(width = 132.dp, height = 188.dp)
-                .shadow(10.dp, coverShape)
-                .background(leatherSheen(leatherColorFor(w?.title)), coverShape)
-                .border(0.5.dp, BookCream.copy(alpha = 0.18f), coverShape)
+                .fillMaxSize()
                 .padding(horizontal = 14.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = (w?.title ?: hl.selectedText.take(20)),
-                style = MaterialTheme.typography.titleLarge.copy(fontFamily = EditorialSerif),
+                text = w?.title ?: "—",
+                style = TextStyle(
+                    fontFamily = EditorialSerif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    lineHeight = 22.sp,
+                ),
                 color = BookCream,
                 textAlign = TextAlign.Center,
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
             )
+            val sub = w?.subtitle
+            if (!sub.isNullOrBlank()) {
+                Box(modifier = Modifier.height(10.dp))
+                Text(
+                    text = sub,
+                    style = TextStyle(fontFamily = EditorialSerif, fontSize = 12.sp, lineHeight = 17.sp),
+                    color = BookCream.copy(alpha = 0.90f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             val author = w?.author
             if (!author.isNullOrBlank()) {
                 Box(modifier = Modifier.height(14.dp))
                 Text(
-                    text = author.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
+                    text = author,
+                    style = TextStyle(fontFamily = EditorialSerif, fontSize = 10.sp, letterSpacing = 0.08.em),
                     color = BookCream.copy(alpha = 0.78f),
                     textAlign = TextAlign.Center,
                 )
             }
         }
+    }
+}
 
-        Box(modifier = Modifier.height(20.dp))
+/** Centered excerpt with wide serif quote marks at the corners (PWA .hl-quote). */
+@Composable
+private fun HlQuote(text: String) {
+    Box(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "“${hl.selectedText}”",
-            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = EditorialSerif),
+            text = "“",
+            style = TextStyle(fontFamily = EditorialSerif, fontSize = 22.sp),
+            color = Sand,
+            modifier = Modifier.align(Alignment.TopStart).offset(y = (-6).dp),
+        )
+        Text(
+            text = text,
+            style = TextStyle(fontFamily = EditorialSerif, fontSize = 15.sp, lineHeight = 28.sp),
             color = Espresso,
             textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp),
         )
-        if (!hl.userNote.isNullOrBlank()) {
-            Box(modifier = Modifier.height(8.dp))
-            Text(hl.userNote, style = MaterialTheme.typography.bodyMedium, color = Walnut, textAlign = TextAlign.Center)
-        }
+        Text(
+            text = "”",
+            style = TextStyle(fontFamily = EditorialSerif, fontSize = 22.sp),
+            color = Sand,
+            modifier = Modifier.align(Alignment.BottomEnd).offset(y = 12.dp),
+        )
     }
+}
+
+private fun formatBookmarkDate(iso: String): String {
+    val instant = runCatching { java.time.OffsetDateTime.parse(iso).toInstant() }.getOrNull()
+        ?: runCatching { java.time.Instant.parse(iso) }.getOrNull()
+        ?: runCatching { java.time.LocalDateTime.parse(iso).toInstant(java.time.ZoneOffset.UTC) }.getOrNull()
+        ?: return ""
+    val dt = java.time.OffsetDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
+    var h = dt.hour
+    val min = "%02d".format(dt.minute)
+    val ampm = if (h < 12) "오전" else "오후"
+    h %= 12
+    if (h == 0) h = 12
+    return "${dt.monthValue}. ${dt.dayOfMonth}  $ampm $h:$min"
 }
 
 @Composable
