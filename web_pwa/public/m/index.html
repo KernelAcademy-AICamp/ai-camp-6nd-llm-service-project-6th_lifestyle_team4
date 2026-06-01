@@ -1103,8 +1103,23 @@
   }
   .notice-body {
     font-size: 14px; line-height: 1.8; color: var(--roast);
-    white-space: pre-line; word-break: keep-all;
+    word-break: keep-all;
   }
+  .notice-body .nb-p { margin: 0; }
+  .notice-body .nb-h {
+    font-weight: 700; color: var(--espresso);
+    font-size: 15px; line-height: 1.5; margin: 16px 0 6px;
+  }
+  .notice-body .nb-h:first-child { margin-top: 0; }
+  .notice-body .nb-ul { margin: 6px 0; padding-left: 18px; }
+  .notice-body .nb-ul li { margin: 3px 0; }
+  .notice-body .nb-gap { height: 14px; }
+  .notice-body .nb-img {
+    display: block; width: 100%; height: auto;
+    border-radius: 10px; margin: 14px 0;
+    border: 0.5px solid var(--latte);
+  }
+  .notice-body strong { font-weight: 700; color: var(--espresso); }
   /* 하단 네비 '안 읽음' 점 */
   #notice-unread-dot {
     position: absolute; top: 6px; left: 50%; margin-left: 7px;
@@ -1112,6 +1127,94 @@
     background: var(--cta); display: none;
   }
   #notice-unread-dot.show { display: block; }
+
+  /* ===== 사용법 코치마크 투어 (홈 위 스포트라이트) ===== */
+  #coachmark { position: fixed; inset: 0; z-index: 200; display: none; pointer-events: none; }
+  #coachmark.open { display: block; animation: cm-fade 0.3s ease both; }
+  #coachmark.final { background: rgba(14,12,10,0.68); }  /* 최종 단계는 구멍 없이 전체 딤 */
+  /* +HL 단계 동안 버튼 강제 노출 — 앱의 selection 핸들러가 인라인으로 숨겨도 유지 */
+  html.cm-show-hl #hl-add-btn { display: block !important; }
+  @keyframes cm-fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* 스포트라이트 구멍 — 거대한 box-shadow로 주변을 어둡게, 대상만 환하게 */
+  #cm-hole {
+    position: fixed; border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(14,12,10,0.68);
+    transition: left 0.36s cubic-bezier(0.22,1,0.36,1), top 0.36s cubic-bezier(0.22,1,0.36,1),
+                width 0.36s cubic-bezier(0.22,1,0.36,1), height 0.36s cubic-bezier(0.22,1,0.36,1);
+    pointer-events: none;
+  }
+  #cm-hole::after {
+    content: ''; position: absolute; inset: -3px; border-radius: 14px;
+    border: 2px solid var(--cta);
+    animation: cm-pulse 1.5s ease-out infinite;
+  }
+  @keyframes cm-pulse {
+    0%   { transform: scale(1);    opacity: 0.85; }
+    100% { transform: scale(1.14); opacity: 0; }
+  }
+
+  /* 단계 번호 배지 — 구멍 좌상단 */
+  #cm-badge {
+    position: fixed; width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--cta); color: #fff; -webkit-text-fill-color: #fff;
+    font-family: 'Noto Sans KR', sans-serif; font-weight: 900; font-size: 15px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35); z-index: 2;
+    transition: left 0.36s cubic-bezier(0.22,1,0.36,1), top 0.36s cubic-bezier(0.22,1,0.36,1);
+    pointer-events: none;
+  }
+
+  /* 설명 툴팁 */
+  #cm-tip {
+    position: fixed; left: 16px; right: 16px; z-index: 3;
+    background: var(--paper); border: 0.5px solid var(--latte); border-radius: 14px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 22px 55px -22px rgba(0,0,0,0.55);
+    pointer-events: auto;
+    transition: top 0.36s cubic-bezier(0.22,1,0.36,1);
+  }
+  #coachmark.final #cm-tip { max-width: 360px; left: 50%; right: auto; transform: translate(-50%, -50%); text-align: center; }
+  #cm-tip.cm-in { animation: cm-tip-in 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+  @keyframes cm-tip-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  #coachmark.final #cm-tip.cm-in { animation: none; }
+
+  #cm-eyebrow { font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cta); font-weight: 700; margin-bottom: 8px; }
+  #cm-title {
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
+    font-size: 19px; line-height: 1.4; color: var(--espresso); margin-bottom: 7px; word-break: keep-all;
+  }
+  #cm-desc { font-size: 14px; line-height: 1.65; color: var(--roast); word-break: keep-all; }
+  #cm-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+  #cm-progress { font-size: 11px; letter-spacing: 0.16em; color: var(--walnut); font-weight: 700; }
+  #cm-hint {
+    display: flex; align-items: center; gap: 5px;
+    margin-top: 12px; font-size: 12px; color: var(--cta); font-weight: 500;
+  }
+  #cm-hint .material-symbols-outlined { font-size: 16px; font-variation-settings: 'FILL' 1, 'wght' 400; }
+  #coachmark.final #cm-hint { display: none; }
+  #cm-skip {
+    background: transparent; border: none; cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--walnut); padding: 4px 2px;
+  }
+  /* 최종 CTA */
+  #cm-cta {
+    display: none; width: 100%; margin-top: 16px; padding: 14px 12px;
+    background: var(--espresso); color: var(--paper); -webkit-text-fill-color: var(--paper);
+    border: 0.5px solid var(--espresso); border-radius: 8px; cursor: pointer;
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
+    font-size: 17px; line-height: 1.45;
+  }
+  #coachmark.final #cm-foot { justify-content: center; margin-top: 16px; }
+  #coachmark.final #cm-progress { display: none; }
+  #coachmark.final #cm-hint { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #coachmark.open, #cm-tip.cm-in { animation: none !important; }
+    #cm-hole, #cm-badge, #cm-tip { transition: none !important; }
+    #cm-hole::after { animation: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -1419,7 +1522,7 @@
     <div style="height:40px;"></div>
     <p class="t-label-sm c-walnut" style="margin-bottom:12px;font-weight:700;">약관 및 정보</p>
 
-    <a href="/m/guide.html" class="setting-row" style="text-decoration:none;">
+    <a id="guide-replay" href="/m/guide.html" class="setting-row" style="text-decoration:none;">
       <p class="t-title-lg c-espresso">앱 사용법</p>
       <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
     </a>
@@ -1964,6 +2067,23 @@
   <div style="background:var(--paper);width:100%;max-width:420px;padding:34px 28px;border:0.5px solid var(--latte);text-align:center;">
     <p id="fq-quote" class="quote-22" style="text-align:center;"></p>
     <p id="fq-source" class="t-label-sm c-walnut" style="margin-top:18px;letter-spacing:0.1em;"></p>
+  </div>
+</div>
+
+<!-- ===== 사용법 코치마크 투어 (홈 위 스포트라이트) ===== -->
+<div id="coachmark" role="dialog" aria-modal="true" aria-label="앱 사용법 안내">
+  <div id="cm-hole"></div>
+  <div id="cm-badge">1</div>
+  <div id="cm-tip">
+    <p id="cm-eyebrow">사용법</p>
+    <h2 id="cm-title"></h2>
+    <p id="cm-desc"></p>
+    <p id="cm-hint"><span class="material-symbols-outlined">touch_app</span> 강조된 버튼을 눌러보세요</p>
+    <button id="cm-cta" type="button"></button>
+    <div id="cm-foot">
+      <span id="cm-progress">1 / 6</span>
+      <button id="cm-skip" type="button">건너뛰기</button>
+    </div>
   </div>
 </div>
 

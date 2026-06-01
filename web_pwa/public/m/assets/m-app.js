@@ -1,6 +1,7 @@
 // Daily Script SPA — Android HomeScreen/ArchiveScreen/SettingsScreen/DetailScreen port
 import { getSupabase } from '/assets/supabase-client.js';
 import { initAnalytics, track, identify, setUserProps, resetUser } from '/assets/analytics.js';
+import { startCoachmarkTour } from './onboarding.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -2703,23 +2704,100 @@ function bumpRefreshCount() {
   return next.count;
 }
 
-// ---------- 사용법 안내 (첫 접속/첫 로그인 1회) ----------
+// ---------- 사용법 코치마크 투어 (첫 접속/첫 로그인 1회) ----------
 const GUIDE_SEEN_KEY = 'ds.guideSeen';
-// 사용 설명 페이지로 1회 유도. 모달을 띄웠으면 true 반환 → 같은 부팅에서 랜딩 로그인 유도는 미룬다.
+
+// 투어 데모용 하이라이트 카드 — 오늘 카드를 '방금 하이라이트한 것'처럼 피드에 보여준다.
+function injectDemoHighlight() {
+  const list = document.getElementById('highlights-list');
+  const card = state.todayCard;
+  if (!list || !card) return;
+  document.getElementById('cm-demo-hl')?.remove();
+  const w = card.works || {};
+  const title = displayTitle(w.title) || '';
+  const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
+  const author = w.author || '';
+  const formatLabel = GENRE_LABEL[w.format] || w.format || '';
+  const nickname = (!state.isAnonymous && state.userNickname) ? state.userNickname : '나';
+  const metaLine = [formatLabel, '방금'].filter(Boolean).join(' · ');
+  const coverColor = leatherColorFor(w.title || title);
+  const item = document.createElement('div');
+  item.className = 'hl-card';
+  item.id = 'cm-demo-hl';
+  item.innerHTML = `
+    <div class="hl-card-head">
+      <p class="nickname">${escapeHtml(nickname)}</p>
+      ${metaLine ? `<p class="meta">${escapeHtml(metaLine)}</p>` : ''}
+    </div>
+    <div class="hl-bookcover" style="background:${coverColor};">
+      <p class="bc-title">${escapeHtml(title)}</p>
+      ${subtitle ? `<p class="bc-subtitle">${escapeHtml(subtitle)}</p>` : ''}
+      ${author ? `<p class="bc-author">${escapeHtml(author)}</p>` : ''}
+    </div>
+    <div class="hl-quote">
+      <span class="open-q">“</span>
+      <p>${escapeHtml(cleanQuote(card.quote))}</p>
+      <span class="close-q">”</span>
+    </div>
+    <p class="hl-card-foot">#${String(card.card_id).padStart(5, '0')}</p>`;
+  list.prepend(item);
+}
+
+// 홈 → 전문 → 피드를 넘나드는 투어. 각 전환은 실제 화면을 열고 레이아웃이 준비되면 resolve.
+function launchTour() {
+  const savedFeedCat = state.feedCategory;
+  return startCoachmarkTour({
+    // 홈 5단계: 전문 화면 열기 (슬라이드인 0.25s 뒤 측정)
+    onOpenDetail: () => new Promise((resolve) => {
+      if (state.todayCard) openDetail(state.todayCard);
+      setTimeout(resolve, 360);
+    }),
+    // 전문 5단계: 전문을 닫고 피드 하이라이트 탭(+데모 카드)으로
+    onOpenFeed: () => new Promise((resolve) => {
+      if (history.state && history.state.overlay === 'detail') {
+        history.replaceState({ tab: 'feed' }, '', '#feed');  // 남은 overlay 히스토리 정리
+      }
+      if (detailScreen.classList.contains('open')) closeDetailInternal();
+      state.feedCategory = 'today';  // setView→renderFeed 의 async 하이라이트 로드 회피
+      setView('feed');
+      document.querySelectorAll('#feed-chips .a-chip').forEach((b) => b.classList.toggle('active', b.dataset.feedCat === 'highlight'));
+      const today = document.getElementById('feed-today');
+      const hl = document.getElementById('feed-highlight');
+      const empty = document.getElementById('highlights-empty');
+      if (today) today.style.display = 'none';
+      if (hl) hl.style.display = 'block';
+      if (empty) empty.style.display = 'none';
+      injectDemoHighlight();
+      setTimeout(resolve, 360);  // 전문 슬라이드아웃(0.25s) 뒤 피드/데모 측정
+    }),
+    // 마침/건너뛰기: 데모 정리 후 홈으로
+    onEnd: () => {
+      document.getElementById('cm-demo-hl')?.remove();
+      if (detailScreen.classList.contains('open')) closeDetailInternal();
+      state.feedCategory = savedFeedCat;
+      setView('home');
+    },
+  });
+}
+
+// 첫 진입 시 1회 자동 노출. 띄웠으면 true 반환 → 같은 부팅에서 랜딩 로그인 유도는 미룬다.
 function maybeShowGuide() {
   if (safeStorageGet(GUIDE_SEEN_KEY) === '1') return false;
+  if (!document.querySelector('#coachmark')) return false;
+  if (state.currentView !== 'home' || !state.todayCard) return false;  // 홈·오늘 카드 준비됐을 때만
   safeStorageSet(GUIDE_SEEN_KEY, '1');  // 표시 즉시 영구 1회 보장
-  openPromptModal({
-    title: '환영합니다 👋',
-    message: '주요 기능을 빠르게 살펴볼 수 있는 사용 설명을 준비했어요.',
-    confirmLabel: '사용법 보러가기',
-    dismissLabel: '다음에',
-    subNote: '설정 → 앱 사용법에서 언제든 다시 볼 수 있어요.',
-    openSigninOnConfirm: false,
-    onConfirm: () => { location.href = '/m/guide.html'; },
-  });
-  return true;
+  const started = launchTour();
+  if (started) track('onboarding_start');
+  return started;
 }
+
+// 설정 → 앱 사용법: 같은 코치마크 투어를 다시 보여준다 (정적 페이지 이동 대신).
+$('#guide-replay')?.addEventListener('click', (e) => {
+  if (!document.querySelector('#coachmark')) return;  // 없으면 href 그대로 이동
+  e.preventDefault();
+  setView('home');
+  requestAnimationFrame(launchTour);  // 홈 레이아웃 반영 후 시작
+});
 
 // ---------- 랜딩 로그인 유도 (최초 1회) ----------
 const LANDING_SEEN_KEY = 'ds.landingSeen';
@@ -4564,7 +4642,7 @@ function renderNotice() {
         <span class="notice-date">${escapeHtml(formatNoticeDate(n.created_at))}</span>
       </div>
       <h2 class="notice-title">${escapeHtml(n.title || '')}</h2>
-      <div class="notice-body">${escapeHtml(n.body || '')}</div>
+      <div class="notice-body">${renderNoticeBodyHtml(n.body || '')}</div>
     `;
     listEl.appendChild(card);
   }
@@ -4678,6 +4756,43 @@ function renderMarkdownBold(text) {
 // 이미 escape 가 끝난 HTML 위에 ** 만 추가로 변환 (boldSpeakerLines 결과 등에 사용)
 function applyMarkdownBoldOnHtml(html) {
   return String(html).replace(/\*\*([^*\n][^*]*?)\*\*/g, '<strong>$1</strong>');
+}
+
+// 공지 본문을 안전한 HTML 로 렌더 (관리자가 작성한 마크다운 소부분집합).
+//   **굵게**          → <strong>
+//   ## 소제목          → 강조 라인
+//   - 항목 / • 항목     → 불릿 목록
+//   ![설명](https://…) → 이미지 (https 만 허용)
+//   빈 줄              → 문단 간격
+// 모든 텍스트는 escapeHtml 을 먼저 거치고, 이미지 URL 은 https 로 제한 + escape 하므로 XSS 안전.
+function renderNoticeBodyHtml(raw) {
+  const inline = (s) => escapeHtml(s).replace(/\*\*([^*\n][^*]*?)\*\*/g, '<strong>$1</strong>');
+  const lines = String(raw ?? '').split('\n');
+  const out = [];
+  let inList = false;
+  const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+  for (const line of lines) {
+    const t = line.trim();
+    let m;
+    if ((m = t.match(/^!\[([^\]]*)\]\((https:\/\/[^\s)]+)\)$/))) {
+      closeList();
+      out.push(`<img class="nb-img" src="${escapeHtml(m[2])}" alt="${escapeHtml(m[1])}" loading="lazy">`);
+    } else if ((m = t.match(/^#{1,3}\s+(.+)$/))) {
+      closeList();
+      out.push(`<p class="nb-h">${inline(m[1])}</p>`);
+    } else if ((m = t.match(/^[-•]\s+(.+)$/))) {
+      if (!inList) { out.push('<ul class="nb-ul">'); inList = true; }
+      out.push(`<li>${inline(m[1])}</li>`);
+    } else if (t === '') {
+      closeList();
+      out.push('<div class="nb-gap"></div>');
+    } else {
+      closeList();
+      out.push(`<p class="nb-p">${inline(line)}</p>`);
+    }
+  }
+  closeList();
+  return out.join('');
 }
 
 // 발췌문 표시용 정리. admin library.js와 동일 로직 — 화자/대사 라인 재조립.
