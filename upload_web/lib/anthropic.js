@@ -549,3 +549,52 @@ export async function runTranslate(work, card) {
     note,
   };
 }
+
+// 단일 필드 EN→KO 재번역. 편집 화면에서 영문 원본 한 칸을 수정한 뒤
+// "↻ KO" 버튼으로 한국어 번역만 다시 받기 위한 가벼운 호출.
+// field 별로 톤·길이를 약간 다르게 안내한다.
+export async function runTranslateField({ text, field, work }) {
+  const src = String(text ?? '').trim();
+  if (!src) throw new Error('text is required');
+
+  const w = work && typeof work === 'object' ? work : {};
+  const ctx = [
+    w.title    ? `작품 제목: ${w.title}`        : null,
+    w.subtitle ? `부제: ${w.subtitle}`          : null,
+    w.author   ? `작가: ${w.author}`            : null,
+    w.format   ? `형식: ${w.format}`            : null,
+  ].filter(Boolean).join('\n');
+
+  const FIELD_GUIDE = {
+    title: '작품 제목. 한국 통용 표기가 있으면 그것을 사용. 부제는 빼고 본 제목만.',
+    subtitle: '작품 부제(시리즈 편명 등). 자연스러운 한국어로.',
+    author: '작가 인명. 한국 통용 표기 우선. 음역 시 한국 표준 표기. 한자/영문 그대로 두지 말 것.',
+    quote: '인물의 명대사 한 줄. 무대 위 배우가 한 호흡에 말할 수 있게. 번역체("~인 것이다", "당신", "그/그녀" 남용) 금지.',
+    script_excerpt: '대본 발췌. 화자: 형식과 지문 줄바꿈을 유지. 인물 관계에 맞는 위계 어투(반말/존댓말/하오체)로. 옛 철자 금지.',
+  };
+
+  const prompt = `너는 한국어 정전 감각을 가진 번역가다. 다음 영문을 한국어로 옮긴다.
+
+[작품 컨텍스트]
+${ctx || '(없음)'}
+
+[필드: ${field}]
+${FIELD_GUIDE[field] || '자연스러운 한국어로.'}
+
+[영문 원본]
+${src}
+
+응답: JSON 한 줄, 다른 키·설명 금지.
+{"text":"한국어 번역"}`;
+
+  const result = await callClaude(prompt, {
+    maxTokens: field === 'script_excerpt' ? 8000 : 1024,
+    system: TRANSLATE_SYSTEM,
+    temperature: 0.3,
+    topP: 0.9,
+    prefill: '{"text":"',
+  });
+  const out = String(result?.text ?? '').trim();
+  if (!out) throw new Error('Translation response missing text');
+  return out;
+}

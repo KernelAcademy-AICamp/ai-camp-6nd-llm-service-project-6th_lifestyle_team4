@@ -56,6 +56,7 @@ const todayWorkSpacer = $('#today-work-spacer');
 const todayQuote = $('#today-quote');
 const todayKeywords = $('#today-keywords');
 const todayBookmark = $('#today-bookmark');
+const todayLangToggle = $('#today-lang-toggle');
 const todayRead = $('#today-read');
 const homeBookmarksList = $('#home-bookmarks-list');
 
@@ -829,7 +830,7 @@ async function loadAllCards() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('cards')
-    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, works(work_id, title, subtitle, format, author, release_year, characters)')
+    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
     .order('card_id', { ascending: false }).limit(500);
   if (error) throw error;
   state.allCards = Array.isArray(data) ? data : [];
@@ -1172,6 +1173,9 @@ function applyTodayCard(card) {
   // 최근 표시 큐에 추가 (rememberShown이 dedupe + localStorage 저장 처리)
   rememberShown(card.card_id);
 
+  // EN 토글 — 새 카드로 갱신될 때마다 한국어로 리셋
+  state.todayLang = 'ko';
+
   // Quote with curly quotes (mirror Android: "“$it”").
   // 관리자가 ** 로 굵게 표시한 부분도 함께 렌더.
   todayQuote.innerHTML = `“${renderMarkdownBold(cleanQuote(card.quote))}”`;
@@ -1223,6 +1227,37 @@ function applyTodayCard(card) {
   });
 
   paintBookmarkBtn(todayBookmark, state.todayBookmarked);
+
+  // EN 토글 표시/숨김 — 영문 원본이 있을 때만 노출
+  if (todayLangToggle) {
+    const hasEn = !!(card.quote_original || card.works?.title_original ||
+                     card.works?.subtitle_original || card.works?.author_original);
+    todayLangToggle.style.display = hasEn ? '' : 'none';
+    todayLangToggle.textContent = 'EN';
+  }
+}
+
+// 홈 오늘의 한줄 — 언어 토글 시 명대사·작품 라인을 한 번에 스왑
+function applyTodayLang(lang) {
+  const card = state.todayCard;
+  if (!card) return;
+  const w = card.works || {};
+  const useEn = lang === 'en';
+
+  const quoteSrc    = useEn && card.quote_original    ? card.quote_original    : card.quote;
+  const titleSrc    = useEn && w.title_original       ? w.title_original       : w.title;
+  const subtitleSrc = useEn && w.subtitle_original    ? w.subtitle_original    : w.subtitle;
+
+  todayQuote.innerHTML = `“${renderMarkdownBold(cleanQuote(quoteSrc))}”`;
+
+  const workTitle = displayTitle(titleSrc || '');
+  if (workTitle) {
+    const fmt = w.format || '';
+    const genreLabel = GENRE_LABEL[fmt] || '';
+    const sub = subtitleSrc ? String(subtitleSrc).trim() : '';
+    const titleBlock = sub ? `<${workTitle}> ${sub}` : `<${workTitle}>`;
+    todayWork.textContent = genreLabel ? `— ${genreLabel} ${titleBlock}` : `— ${titleBlock}`;
+  }
 }
 
 // '지난 기록' — 새로고침 전 표시됐던 카드 최대 3개
@@ -1337,6 +1372,14 @@ todayBookmark.addEventListener('click', (e) => {
   e.stopPropagation();
   if (!state.todayCard) return;
   toggleBookmark(state.todayCard.card_id);
+});
+// EN 토글 — 오늘의 한줄
+todayLangToggle?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  state.todayLang = state.todayLang === 'ko' ? 'en' : 'ko';
+  applyTodayLang(state.todayLang);
+  todayLangToggle.textContent = state.todayLang === 'ko' ? 'EN' : 'KO';
+  todayLangToggle.setAttribute('aria-label', state.todayLang === 'ko' ? '영문 원본 보기' : '한국어로 돌아가기');
 });
 todayCard.addEventListener('click', () => {
   if (state.todayCard) openDetail(state.todayCard);
@@ -3030,12 +3073,16 @@ function openDetail(card) {
     sameInAllCards.view_count = card.view_count;
   }
   state.detailCardId = card.card_id;
+  state.detailCard = card;
   const w = card.works || {};
   const title = displayTitle(w.title) || '';
   const subtitle = w.subtitle ? String(w.subtitle).trim() : '';
 
   detailWorkTitle.textContent = title;
   // 시리즈물 부제 — 있으면 작은 글자로 타이틀 아래 표시
+  // 상세 화면 EN 토글 — 새 카드 진입 시 한국어로 리셋
+  state.detailLang = 'ko';
+
   const detailWorkSubtitle = document.getElementById('detail-work-subtitle');
   if (detailWorkSubtitle) {
     if (subtitle) {
@@ -3054,6 +3101,37 @@ function openDetail(card) {
   ].filter(Boolean);
   detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
     + renderCounts(card);
+
+  // 상세 EN 토글 — 영문 원본이 있을 때만 메타 행 위에 버튼 노출
+  const detailLangRow = document.getElementById('detail-lang-toggle-row');
+  const detailLangBtn = document.getElementById('detail-lang-toggle');
+  if (detailLangRow && detailLangBtn) {
+    const hasEn = !!(card.quote_original || card.script_excerpt_original ||
+                     w.title_original || w.subtitle_original || w.author_original);
+    detailLangRow.style.display = hasEn ? 'flex' : 'none';
+    detailLangBtn.textContent = 'EN 보기';
+    detailLangBtn.style.background = '#fff';
+    detailLangBtn.style.color = '#2563eb';
+    detailLangBtn.style.borderColor = '#2563eb';
+    // 핸들러는 매번 새로 바인딩 (이전 카드 핸들러를 제거하기 위해 노드 교체)
+    const fresh = detailLangBtn.cloneNode(true);
+    detailLangBtn.parentNode.replaceChild(fresh, detailLangBtn);
+    fresh.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.detailLang = state.detailLang === 'ko' ? 'en' : 'ko';
+      applyDetailLang(state.detailLang);
+      fresh.textContent = state.detailLang === 'ko' ? 'EN 보기' : '한국어 보기';
+      if (state.detailLang === 'en') {
+        fresh.style.background = '#fff7ed';
+        fresh.style.color = '#c2410c';
+        fresh.style.borderColor = '#fb923c';
+      } else {
+        fresh.style.background = '#fff';
+        fresh.style.color = '#2563eb';
+        fresh.style.borderColor = '#2563eb';
+      }
+    });
+  }
 
   // 좁은 폰 화면에서 LLM이 끼워 넣은 \n이 어색하게 wrap되는 걸 막기 위해
   // 산문 필드(설명·의의)는 줄바꿈을 공백으로 펴서 한 단락처럼 흐르게 한다.
@@ -3121,6 +3199,54 @@ function openDetail(card) {
   track('script_opened', { card_id: card.card_id, work_title: w.title || null, format: w.format || null });
 }
 
+// 상세 화면 EN 토글 — 5필드(제목·부제·작가·명대사·발췌) 한 번에 스왑.
+// 해설(설명·의의)은 한국어 그대로.
+function applyDetailLang(lang) {
+  const card = state.detailCard;
+  if (!card) return;
+  const w = card.works || {};
+  const useEn = lang === 'en';
+
+  const titleSrc    = useEn && w.title_original    ? w.title_original    : w.title;
+  const subtitleSrc = useEn && w.subtitle_original ? w.subtitle_original : w.subtitle;
+  const authorSrc   = useEn && w.author_original   ? w.author_original   : w.author;
+  const quoteSrc    = useEn && card.quote_original ? card.quote_original : card.quote;
+  const scriptSrc   = useEn && card.script_excerpt_original ? card.script_excerpt_original : card.script_excerpt;
+
+  // 헤더 — 제목/부제
+  if (detailWorkTitle) detailWorkTitle.textContent = displayTitle(titleSrc || '');
+  const subtitleEl = document.getElementById('detail-work-subtitle');
+  if (subtitleEl) {
+    if (subtitleSrc) {
+      subtitleEl.textContent = subtitleSrc;
+      subtitleEl.style.display = 'block';
+    } else {
+      subtitleEl.style.display = 'none';
+    }
+  }
+
+  // 메타 (FORMAT / AUTHOR / YEAR)
+  const items = [
+    w.format ? w.format.toUpperCase() : null,
+    authorSrc ? String(authorSrc).toUpperCase() : null,
+    w.release_year ? String(w.release_year) : null,
+  ].filter(Boolean);
+  detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
+    + renderCounts(card);
+
+  // 인용구 + 발췌 — 인용구는 detailQuote가 없으니 detail 화면에는 quote가 표시되지 않을 수 있음.
+  // 실제로 detailScript만 있고 quote는 헤더 위에 없는 듯. 발췌만 스왑.
+  {
+    const baseHtml =
+      String(w.format || '').toLowerCase() === 'poem'
+        ? escapeHtml(formatPoemScript(scriptSrc || ''))
+        : isProseFormat(w.format)
+          ? escapeHtml(flowProseScript(scriptSrc || ''))
+          : boldSpeakerLines(cleanForDisplay(scriptSrc || '', w.characters), w.characters);
+    detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
+  }
+}
+
 function paintDetailCollectBtn(isBookmarked) {
   detailCollectBtn.textContent = isBookmarked ? 'Collected' : 'Collect Script Artifact';
 }
@@ -3133,6 +3259,7 @@ function closeDetailInternal() {
     detailScreen.style.display = 'none';
     document.body.style.overflow = '';
     state.detailCardId = null;
+    state.detailCard = null;
     state.detailComments = [];
     state.detailLikes = new Map();
     // 15장 열람 유도 팝업이 예약돼 있으면 카드가 닫힌 뒤 노출

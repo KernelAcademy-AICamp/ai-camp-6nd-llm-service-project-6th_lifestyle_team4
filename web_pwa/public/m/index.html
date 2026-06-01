@@ -1151,9 +1151,12 @@
       <article id="today-card" class="sharp-card" style="padding:20px;cursor:pointer;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div id="today-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
-          <button id="today-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:0;">
-            <span class="material-symbols-outlined c-walnut" style="font-size:24px;">bookmark</span>
-          </button>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button id="today-lang-toggle" aria-label="영문 원본 보기" style="display:none;background:transparent;border:1px solid currentColor;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;letter-spacing:0.05em;cursor:pointer;" class="c-walnut">EN</button>
+            <button id="today-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:0;">
+              <span class="material-symbols-outlined c-walnut" style="font-size:24px;">bookmark</span>
+            </button>
+          </div>
         </div>
 
         <div style="height:20px;"></div>
@@ -1613,6 +1616,10 @@
   <div class="hairline"></div>
 
   <div class="detail-body">
+    <div id="detail-lang-toggle-row" style="display:none;justify-content:flex-end;align-items:center;padding:0 0 8px;">
+      <button id="detail-lang-toggle" type="button" aria-label="영문 원본 보기"
+              style="background:#fff;border:1px solid #2563eb;color:#2563eb;border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;letter-spacing:0.05em;cursor:pointer;">EN 보기</button>
+    </div>
     <div id="detail-meta" style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;"></div>
     <div style="height:28px;"></div>
 

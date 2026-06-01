@@ -154,7 +154,7 @@ async function loadLibrary() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, works(work_id, title, subtitle, format, author, release_year, characters)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
       .order('card_id', { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -1009,29 +1009,66 @@ function buildViewNode(card) {
   const node = libraryCardTemplate.content.firstElementChild.cloneNode(true);
   const work = card.works || {};
 
-  // 셜록홈즈 시리즈처럼 부제가 있으면 제목 바로 뒤에 끼워 — 어느 편 카드인지 한눈에.
-  const workLine = [
-    displayTitle(work.title) || `Work #${card.work_id}`,
-    work.subtitle || null,
-    work.format,
-    work.release_year,
-    work.author,
-  ].filter(Boolean).join(' · ');
-  node.querySelector('.lib-work-title').textContent = workLine;
+  // 토글 가능한 5개 필드 — KO(기본) ↔ EN(*_original)
+  // 영문 원본이 한 곳이라도 있으면 EN 토글 버튼 노출
+  const hasEnOriginal = !!(
+    work.title_original || work.subtitle_original || work.author_original ||
+    card.quote_original || card.script_excerpt_original
+  );
+
+  const renderWorkLine = (lang) => {
+    const title    = lang === 'en' && work.title_original    ? work.title_original    : work.title;
+    const subtitle = lang === 'en' && work.subtitle_original ? work.subtitle_original : work.subtitle;
+    const author   = lang === 'en' && work.author_original   ? work.author_original   : work.author;
+    return [
+      displayTitle(title) || `Work #${card.work_id}`,
+      subtitle || null,
+      work.format,
+      work.release_year,
+      author,
+    ].filter(Boolean).join(' · ');
+  };
+
+  node.querySelector('.lib-work-title').textContent = renderWorkLine('ko');
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
-  // 사용자가 편집에서 ** 로 감싼 부분을 <strong> 으로 렌더 (XSS 안전: 먼저 escape 후 마커만 변환)
-  node.querySelector('.lib-quote').innerHTML = card.quote ? `"${renderMarkdownBold(cleanForDisplay(card.quote))}"` : '';
-  {
+
+  const renderQuote = (lang) => {
+    const text = lang === 'en' && card.quote_original ? card.quote_original : card.quote;
+    return text ? `"${renderMarkdownBold(cleanForDisplay(text))}"` : '';
+  };
+  const renderExcerpt = (lang) => {
+    const text = lang === 'en' && card.script_excerpt_original ? card.script_excerpt_original : (card.script_excerpt || '');
     const fmt = String(work.format || '').toLowerCase();
     const baseHtml = fmt === 'poem'
-      ? escapeHtml(formatPoemScript(card.script_excerpt || ''))
+      ? escapeHtml(formatPoemScript(text))
       : isProseFormat(work.format)
-        ? escapeHtml(flowProseScript(card.script_excerpt || ''))
-        : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', work.characters), work.characters);
-    // baseHtml 은 이미 escape 가 끝난 안전한 문자열 — ** 만 추가 변환
-    node.querySelector('.lib-excerpt').innerHTML = applyMarkdownBoldOnHtml(baseHtml);
-  }
+        ? escapeHtml(flowProseScript(text))
+        : boldSpeakerLines(cleanForDisplay(text, work.characters), work.characters);
+    return applyMarkdownBoldOnHtml(baseHtml);
+  };
+
+  node.querySelector('.lib-quote').innerHTML = renderQuote('ko');
+  node.querySelector('.lib-excerpt').innerHTML = renderExcerpt('ko');
   node.querySelector('.lib-description').innerHTML = renderMarkdownBold(cleanForDisplay(card.excerpt_description || ''));
+
+  // EN 토글 버튼 — 원본이 있을 때만 표시
+  const langToggleBtn = node.querySelector('.lib-lang-toggle');
+  if (langToggleBtn) {
+    if (hasEnOriginal) {
+      langToggleBtn.classList.remove('hidden');
+      let currentLang = 'ko';
+      langToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        currentLang = currentLang === 'ko' ? 'en' : 'ko';
+        node.querySelector('.lib-work-title').textContent = renderWorkLine(currentLang);
+        node.querySelector('.lib-quote').innerHTML = renderQuote(currentLang);
+        node.querySelector('.lib-excerpt').innerHTML = renderExcerpt(currentLang);
+        langToggleBtn.textContent = currentLang === 'ko' ? 'EN' : 'KO';
+        langToggleBtn.title = currentLang === 'ko' ? '영문 원본으로 보기' : '한국어로 돌아가기';
+        langToggleBtn.classList.toggle('bg-primary/10', currentLang === 'en');
+      });
+    }
+  }
 
   const kwEl = node.querySelector('.lib-keywords');
   (card.keywords || []).forEach((k) => {
@@ -1082,26 +1119,53 @@ function buildViewNode(card) {
 
 function buildEditNode(card) {
   const node = libraryEditTemplate.content.firstElementChild.cloneNode(true);
+  const work = card.works || {};
 
-  const quoteEl = node.querySelector('.lib-edit-quote');
-  const excerptEl = node.querySelector('.lib-edit-excerpt');
-  const descEl = node.querySelector('.lib-edit-description');
-  const kwEl = node.querySelector('.lib-edit-keywords');
-  const sigEl = node.querySelector('.lib-edit-significance');
-  const tempEl = node.querySelector('.lib-edit-temperature');
-  const intensityEl = node.querySelector('.lib-edit-intensity');
+  // 작품 메타 (좌/우)
+  const titleEl       = node.querySelector('.lib-edit-title');
+  const titleOrigEl   = node.querySelector('.lib-edit-title-original');
+  const subtitleEl    = node.querySelector('.lib-edit-subtitle');
+  const subtitleOrigEl= node.querySelector('.lib-edit-subtitle-original');
+  const authorEl      = node.querySelector('.lib-edit-author');
+  const authorOrigEl  = node.querySelector('.lib-edit-author-original');
 
-  quoteEl.value = card.quote || '';
-  excerptEl.value = card.script_excerpt || '';
-  descEl.value = card.excerpt_description || '';
-  kwEl.value = (card.keywords || []).join(', ');
+  // 본문 (좌/우)
+  const quoteEl       = node.querySelector('.lib-edit-quote');
+  const quoteOrigEl   = node.querySelector('.lib-edit-quote-original');
+  const excerptEl     = node.querySelector('.lib-edit-excerpt');
+  const excerptOrigEl = node.querySelector('.lib-edit-excerpt-original');
+
+  // 단일 (한국어 해설)
+  const descEl       = node.querySelector('.lib-edit-description');
+  const kwEl         = node.querySelector('.lib-edit-keywords');
+  const sigEl        = node.querySelector('.lib-edit-significance');
+  const tempEl       = node.querySelector('.lib-edit-temperature');
+  const intensityEl  = node.querySelector('.lib-edit-intensity');
+
+  // 초기값 — 작품
+  if (titleEl)        titleEl.value        = work.title || '';
+  if (titleOrigEl)    titleOrigEl.value    = work.title_original || '';
+  if (subtitleEl)     subtitleEl.value     = work.subtitle || '';
+  if (subtitleOrigEl) subtitleOrigEl.value = work.subtitle_original || '';
+  if (authorEl)       authorEl.value       = work.author || '';
+  if (authorOrigEl)   authorOrigEl.value   = work.author_original || '';
+
+  // 초기값 — 카드
+  quoteEl.value       = card.quote || '';
+  quoteOrigEl.value   = card.quote_original || '';
+  excerptEl.value     = card.script_excerpt || '';
+  excerptOrigEl.value = card.script_excerpt_original || '';
+  descEl.value        = card.excerpt_description || '';
+  kwEl.value          = (card.keywords || []).join(', ');
   if (sigEl) sigEl.value = card.significance || '';
-  tempEl.value = card.temperature ?? 3;
-  intensityEl.value = card.intensity ?? 3;
+  tempEl.value        = card.temperature ?? 3;
+  intensityEl.value   = card.intensity ?? 3;
 
   attachKeywordHint(kwEl);
   // B 버튼 + Ctrl/Cmd+B 단축키로 선택 영역에 **굵게** 마커 토글
   wireBoldButtons(node);
+  // ↻ KO — 영문 칸의 텍스트를 한국어로 재번역해서 좌측에 채우기
+  wireTranslateButtons(node, work);
 
   node.querySelector('.lib-save-edit-btn').addEventListener('click', async () => {
     const kwList = parseKeywords(kwEl.value);
@@ -1109,7 +1173,9 @@ function buildEditNode(card) {
     if (!kwCheck.ok) { toast(kwCheck.message, 'error'); return; }
     const over = overLongKeywords(kwList);
     if (over.length) toast(`8자 초과 키워드: ${over.join(', ')} — 더 짧게 권장합니다.`, 'info');
-    const updates = {
+
+    // 카드 단위 업데이트
+    const cardUpdates = {
       quote: quoteEl.value.trim(),
       script_excerpt: excerptEl.value.trim(),
       excerpt_description: descEl.value.trim() || null,
@@ -1117,15 +1183,40 @@ function buildEditNode(card) {
       significance: (sigEl && sigEl.value.trim()) || null,
       temperature: Math.max(1, Math.min(5, Number(tempEl.value) || 3)),
       intensity: Math.max(1, Math.min(5, Number(intensityEl.value) || 3)),
+      // 이중 언어 — 영문 원본 (NULL 허용)
+      quote_original:          (quoteOrigEl.value.trim() || null),
+      script_excerpt_original: (excerptOrigEl.value.trim() || null),
     };
+
+    // 작품 단위 업데이트 — 값이 실제로 바뀌었을 때만
+    const workUpdates = {};
+    if (titleEl && titleEl.value.trim() !== (work.title || ''))                   workUpdates.title             = titleEl.value.trim();
+    if (titleOrigEl && titleOrigEl.value.trim() !== (work.title_original || '')) workUpdates.title_original    = titleOrigEl.value.trim() || null;
+    if (subtitleEl && (subtitleEl.value.trim() || null) !== (work.subtitle || null))
+                                                                                  workUpdates.subtitle          = subtitleEl.value.trim() || null;
+    if (subtitleOrigEl && subtitleOrigEl.value.trim() !== (work.subtitle_original || ''))
+                                                                                  workUpdates.subtitle_original = subtitleOrigEl.value.trim() || null;
+    if (authorEl && authorEl.value.trim() !== (work.author || ''))                workUpdates.author            = authorEl.value.trim() || null;
+    if (authorOrigEl && authorOrigEl.value.trim() !== (work.author_original || ''))
+                                                                                  workUpdates.author_original   = authorOrigEl.value.trim() || null;
+
     try {
       const sb = await getSupabase();
-      const { data, error } = await sb.from('cards').update(updates).eq('card_id', card.card_id).select();
+      const { data, error } = await sb.from('cards').update(cardUpdates).eq('card_id', card.card_id).select();
       if (error) throw error;
       if (!data || data.length === 0) {
         throw new Error('DB에 저장되지 않음 — admin 권한이 없거나 카드가 이미 삭제됐을 수 있습니다.');
       }
-      Object.assign(card, updates);
+      // 작품 변경분이 있으면 works 도 UPDATE — 같은 작품의 다른 카드에도 즉시 반영됨
+      if (Object.keys(workUpdates).length > 0) {
+        const { error: wErr } = await sb.from('works').update(workUpdates).eq('work_id', card.work_id);
+        if (wErr) throw wErr;
+        // 메모리상 동일 work_id 카드들의 works 필드도 동기화
+        state.rows.forEach((r) => {
+          if (r.work_id === card.work_id && r.works) Object.assign(r.works, workUpdates);
+        });
+      }
+      Object.assign(card, cardUpdates);
       state.editing = null;
       renderLibrary();
       refreshPullout();
@@ -1143,6 +1234,55 @@ function buildEditNode(card) {
   });
 
   return node;
+}
+
+// ↻ KO 버튼: 영문 칸의 값을 한국어로 재번역해 좌측 짝꿍 input/textarea 에 채워준다.
+// data-translate-for 속성으로 영문 칸 셀렉터를, data-field 로 백엔드 가이드(필드명)를 받는다.
+function wireTranslateButtons(root, work) {
+  root.querySelectorAll('.lib-translate-btn').forEach((btn) => {
+    const enSelector = btn.dataset.translateFor;
+    const field = btn.dataset.field;
+    if (!enSelector || !field) return;
+    btn.addEventListener('click', async () => {
+      const enEl = root.querySelector(enSelector);
+      if (!enEl) return;
+      const enText = (enEl.value || '').trim();
+      if (!enText) { toast('영문 칸이 비어 있어요.', 'info'); return; }
+
+      // 좌측 짝꿍 — `.lib-edit-foo-original` 의 `-original` 을 떼면 한국어 칸
+      const koSelector = enSelector.replace(/-original$/, '');
+      const koEl = root.querySelector(koSelector);
+      if (!koEl) return;
+
+      const prevText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⋯';
+      try {
+        const token = await getAccessToken();
+        const res = await fetch('/api/translate-field', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ text: enText, field, work }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
+        const translated = String(body?.translated || '').trim();
+        if (!translated) throw new Error('번역 결과 비어 있음');
+        koEl.value = translated;
+        koEl.dispatchEvent(new Event('input', { bubbles: true }));
+        toast('재번역 완료 ✓', 'success');
+      } catch (err) {
+        console.error('[library] translate-field failed:', err);
+        toast(`재번역 실패: ${err.message || err}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prevText;
+      }
+    });
+  });
 }
 
 async function onDelete(card) {

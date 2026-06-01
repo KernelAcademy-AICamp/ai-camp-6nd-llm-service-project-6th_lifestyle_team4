@@ -33,6 +33,10 @@ function normalizeWork(work, fullScriptText) {
     characters: Array.isArray(work.characters)
       ? [...new Set(work.characters.map((c) => String(c).trim()).filter(Boolean))]
       : null,
+    // 이중 언어 — 영문 원본 (있을 때만, 마이그레이션 021)
+    title_original:    work.title_original    ? String(work.title_original).trim().slice(0, 300)    || null : null,
+    subtitle_original: work.subtitle_original ? String(work.subtitle_original).trim().slice(0, 300) || null : null,
+    author_original:   work.author_original   ? String(work.author_original).trim().slice(0, 200)   || null : null,
   };
 }
 
@@ -53,14 +57,27 @@ function normalizeText(s) {
 
 // 카드의 quote / script_excerpt 는 "현재 보고 있는 텍스트"(원문 또는 번역본)로 저장.
 // excerpt_description 은 번역하지 않으므로 항상 원본 저장.
+// 이중 언어 모드: 번역본이 있으면 한국어를 기본, 영문 원본을 *_original 에도 함께 저장.
 function pickDisplayedFields(card) {
   const t = card.translated;
   const useTranslation = card.showingTranslation && t;
-  return {
+  const display = {
     quote: String(useTranslation ? t.quote_translated : card.quote),
     script_excerpt: String(useTranslation ? t.script_excerpt_translated : card.script_excerpt),
     excerpt_description: card.excerpt_description ?? null,
   };
+  // 영문 원본 분리 — 추출본은 영문이고 번역본이 한국어인 경우에만 의미가 있다.
+  // useTranslation=true → card.quote/script_excerpt가 영문 원본, t.*_translated가 한국어.
+  if (useTranslation) {
+    display.quote_original = String(card.quote);
+    display.script_excerpt_original = String(card.script_excerpt);
+  } else {
+    // 클라이언트가 quote_original / script_excerpt_original 을 명시적으로 보낸 경우 보존
+    // (편집 화면에서 좌(KO)/우(EN)을 따로 수정한 후 저장하는 경우).
+    display.quote_original          = card.quote_original ?? null;
+    display.script_excerpt_original = card.script_excerpt_original ?? null;
+  }
+  return display;
 }
 
 function normalizeCard(card, workId) {
@@ -82,6 +99,9 @@ function normalizeCard(card, workId) {
     intensity: clampInt(card.intensity, 1, 5),
     // 의의(significance) — DB의 cards.significance 컬럼에 저장 (텍스트, NULL 허용)
     significance: card.significance ? normalizeText(String(card.significance)).slice(0, 3000) : null,
+    // 이중 언어 — 영문 원본 (있을 때만, 마이그레이션 021)
+    quote_original:          display.quote_original          ? String(display.quote_original).slice(0, 2000) : null,
+    script_excerpt_original: display.script_excerpt_original ? String(display.script_excerpt_original).slice(0, 10000) : null,
   };
 }
 
@@ -131,12 +151,17 @@ export default async function handler(req, res) {
 
     // 저장 직전 가드: LLM이 영문 작가명을 보냈으면 한국어로 변환 후 저장.
     // (프롬프트가 1차로 한국어를 강제하지만 실수로 영문이 들어오는 경우 자동 보정)
+    // 이중 언어: 한국어로 변환하기 전 영문 원본을 author_original 에 보존.
     if (workInput.author && /[A-Za-z]/.test(workInput.author)) {
       try {
-        const ko = await runKoreanizeAuthor(workInput.author);
+        const originalEnglish = workInput.author;
+        const ko = await runKoreanizeAuthor(originalEnglish);
         if (ko && ko.trim()) {
-          console.log(`[save] author koreanized: "${workInput.author}" → "${ko}"`);
+          console.log(`[save] author koreanized: "${originalEnglish}" → "${ko}"`);
           workInput.author = ko.trim();
+          // 클라이언트가 author_original 을 명시적으로 보내지 않은 경우에만 이 영문을 기록.
+          // (편집 단계에서 사용자가 명시 입력했으면 그걸 존중)
+          if (!workInput.author_original) workInput.author_original = originalEnglish;
         }
       } catch (e) {
         console.warn('[save] runKoreanizeAuthor failed, keeping original:', e?.message || e);
