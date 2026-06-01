@@ -1235,13 +1235,17 @@ function renderHome() {
 
 function applyTodayCard(card) {
   if (!card) return;
+  // 같은 카드 재렌더(예: 북마크 카운트 realtime 갱신) 시 todayLang 을 유지해
+  // 사용자가 EN 으로 토글했는데 KO 로 되돌아가는 버그 방지.
+  const prevCardId = state.todayCard?.card_id;
+  const isNewCard = prevCardId !== card.card_id;
   state.todayCard = card;
   state.todayBookmarked = state.bookmarkedIds.has(card.card_id);
   // 최근 표시 큐에 추가 (rememberShown이 dedupe + localStorage 저장 처리)
   rememberShown(card.card_id);
 
-  // EN 토글 — 새 카드로 갱신될 때마다 한국어로 리셋
-  state.todayLang = 'ko';
+  // EN 토글 — 새 카드일 때만 한국어로 리셋. 같은 카드 재렌더는 lang 유지.
+  if (isNewCard) state.todayLang = 'ko';
 
   // Quote with curly quotes (mirror Android: "“$it”").
   // 관리자가 ** 로 굵게 표시한 부분도 함께 렌더.
@@ -1295,15 +1299,22 @@ function applyTodayCard(card) {
 
   paintBookmarkBtn(todayBookmark, state.todayBookmarked);
 
-  // ENG 토글 표시/숨김 — 영문 원본이 있을 때만 노출 + 새 카드 진입 시 KR(off) 로 리셋
+  // ENG 토글 표시/숨김 — 영문 원본이 있을 때만 노출.
+  // 새 카드면 KR(off) 로 리셋. 같은 카드 재렌더는 현재 state.todayLang 따름.
   if (todayLangToggle) {
     const hasEn = !!(card.quote_original || card.works?.title_original ||
                      card.works?.subtitle_original || card.works?.author_original);
     todayLangToggle.style.display = hasEn ? '' : 'none';
-    todayLangToggle.classList.remove('on');
-    todayLangToggle.setAttribute('aria-checked', 'false');
+    const isEn = state.todayLang === 'en';
+    todayLangToggle.classList.toggle('on', isEn);
+    todayLangToggle.setAttribute('aria-checked', isEn ? 'true' : 'false');
     const lbl = document.getElementById('today-lang-label');
     if (lbl) lbl.style.display = hasEn ? '' : 'none';
+  }
+  // 같은 카드 재렌더인데 EN 모드였다면, 본문도 EN 로 다시 적용
+  // (위에서 todayQuote/todayWork 등이 KO 텍스트로 덮어쓰였으므로)
+  if (!isNewCard && state.todayLang === 'en') {
+    applyTodayLang('en');
   }
 }
 
