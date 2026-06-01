@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이중 언어 카드 — UX 미리보기 v3</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: 'Pretendard', -apple-system, system-ui, sans-serif; background: #f7f7f9; }
+  .card-shadow { box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); }
+  .pwa-frame { background: #fff; border-radius: 32px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); border: 8px solid #1a1a1a; max-width: 380px; }
+  .pwa-screen { border-radius: 24px; overflow: hidden; }
+  .lang-pill { transition: all .15s ease; }
+  .lang-pill.en { background: #fff7ed; color: #c2410c; border-color: #fb923c; }
+  .lang-pill.en:hover { background: #fed7aa; }
+  blockquote.quote { font-family: 'Noto Serif KR', 'Times New Roman', serif; }
+  .fade-swap { animation: fadeSwap .25s ease; }
+  @keyframes fadeSwap {
+    from { opacity: .3; transform: translateY(2px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .section-label {
+    background: #1f2937; color: white; padding: .25rem .75rem; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  }
+  .toggle-mini {
+    font-size: 10px; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid #3b82f6; color: #2563eb; background: white;
+    transition: all .15s; line-height: 1;
+  }
+  .toggle-mini.en { background: #fff7ed; color: #c2410c; border-color: #fb923c; }
+</style>
+</head>
+<body class="text-gray-800">
+
+<header class="bg-gradient-to-r from-indigo-900 to-purple-900 text-white">
+  <div class="max-w-6xl mx-auto px-6 py-8">
+    <div class="text-xs uppercase tracking-widest opacity-70 mb-1">Mockup v4 — 저장 안 됨</div>
+    <h1 class="text-3xl font-bold">이중 언어 카드 — 영문 원본 기준</h1>
+    <p class="mt-2 opacity-90 max-w-3xl">
+      명대사가 보이는 <b>모든 화면</b>에 <b>영문 토글 버튼</b>을 둡니다.
+      한 카드를 토글하면 <b>제목·부제·작가</b>(works 메타데이터)와
+      <b>명대사·지문·상황 설명·의의</b>(card 본문)가 <b>한 번에 모두</b> 영문으로 바뀝니다.
+      목록에서 토글 후 상세로 진입해도 <b>상태 유지</b>.
+    </p>
+    <div class="mt-4 flex flex-wrap gap-2">
+      <span class="text-xs px-3 py-1 rounded-full bg-white/15 border border-white/25">홈 (오늘의 한줄)</span>
+      <span class="text-xs px-3 py-1 rounded-full bg-white/15 border border-white/25">목록 / 피드</span>
+      <span class="text-xs px-3 py-1 rounded-full bg-white/15 border border-white/25">상세 (4필드)</span>
+      <span class="text-xs px-3 py-1 rounded-full bg-white/15 border border-white/25">관리자 조회</span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-6 py-10 space-y-14">
+
+<!-- ============== 1. PWA — 홈 / 오늘의 한줄 ============== -->
+<section>
+  <div class="flex items-baseline gap-3 mb-4">
+    <span class="section-label">PWA · 홈</span>
+    <h2 class="text-xl font-bold">오늘의 한줄 — 명대사만 보이는 화면</h2>
+  </div>
+  <p class="text-sm text-gray-600 mb-4">상단 우측에 작은 EN 토글이 붙습니다. 누르면 명대사만 영문으로 즉시 스왑.</p>
+
+  <div class="flex justify-center">
+    <div class="pwa-frame" data-card="pwa-home">
+      <div class="pwa-screen bg-gradient-to-b from-amber-50 via-orange-50 to-white">
+        <!-- top bar -->
+        <div class="flex items-center justify-between px-4 py-3 bg-white/80 backdrop-blur border-b border-gray-100">
+          <div class="text-xs font-semibold text-gray-600">오늘의 한줄</div>
+          <div class="text-xs text-gray-400">2026.06.01</div>
+        </div>
+
+        <!-- big card -->
+        <div class="px-5 py-8">
+          <div class="text-center text-xs text-gray-500 mb-1">
+            <span class="font-semibold text-gray-700 fade-swap" data-field="title">프랑켄슈타인</span>
+            <span class="mx-1">·</span><span>소설</span>
+          </div>
+          <div class="text-center text-[11px] text-gray-400 mb-4 italic fade-swap" data-field="subtitle">현대의 프로메테우스</div>
+          <blockquote class="quote text-xl italic text-center text-gray-800 leading-relaxed fade-swap" data-field="quote">
+            "나는 무서운 비밀의 시작을 막 발견했다 — 그것은 나의 모든 노력을 정당화할 것이었다."
+          </blockquote>
+          <div class="text-xs text-center text-gray-500 mt-6">— <span class="fade-swap" data-field="author">메리 셸리</span></div>
+
+          <!-- 액션 행: 북마크 + EN 토글 (요청: 북마크 옆) -->
+          <div class="mt-8 flex items-center justify-center gap-3">
+            <button class="flex items-center gap-1.5 px-4 py-2 rounded-full border border-gray-300 bg-white hover:border-amber-400 hover:text-amber-700 text-sm font-semibold transition" title="북마크">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z"/></svg>
+              <span>북마크</span>
+            </button>
+            <button type="button" data-toggle-for="pwa-home" class="lang-pill flex items-center gap-1.5 px-4 py-2 rounded-full border border-blue-500 text-blue-600 bg-white text-sm font-semibold" title="원문(영문)으로 보기">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 12h14M5 16h10"/></svg>
+              <span data-toggle-label>EN</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- bottom nav stub -->
+        <div class="border-t border-gray-200 flex justify-around py-3 bg-white">
+          <button class="text-[10px] text-indigo-600 font-bold">홈</button>
+          <button class="text-[10px] text-gray-400">피드</button>
+          <button class="text-[10px] text-gray-400">아카이브</button>
+          <button class="text-[10px] text-gray-400">설정</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== 2. 목록 / 피드 — 카드 그리드 ============== -->
+<section>
+  <div class="flex items-baseline gap-3 mb-4">
+    <span class="section-label">목록 · 피드</span>
+    <h2 class="text-xl font-bold">명대사 카드 그리드 — 카드별 EN 토글</h2>
+  </div>
+  <p class="text-sm text-gray-600 mb-4">관리자 라이브러리(조회) 또는 PWA 아카이브의 카드 목록. 각 카드 우상단에 작은 EN pill.</p>
+
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <!-- card A -->
+    <div class="bg-white rounded-xl card-shadow p-4 flex flex-col" data-card="grid-a">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-[10px] text-gray-500">
+          <b class="fade-swap" data-field="title">프랑켄슈타인</b>
+          <span class="opacity-70"> — </span>
+          <span class="italic fade-swap" data-field="subtitle">현대의 프로메테우스</span>
+          <span class="mx-1">·</span><span>소설</span>
+        </div>
+        <button data-toggle-for="grid-a" class="toggle-mini" type="button"><span data-toggle-label>EN</span></button>
+      </div>
+      <blockquote class="quote text-sm italic text-gray-800 flex-1 fade-swap" data-field="quote">
+        "나는 무서운 비밀의 시작을 막 발견했다 — 그것은 나의 모든 노력을 정당화할 것이었다."
+      </blockquote>
+      <div class="text-[10px] text-gray-400 mt-3 fade-swap" data-field="author">메리 셸리</div>
+    </div>
+
+    <!-- card B -->
+    <div class="bg-white rounded-xl card-shadow p-4 flex flex-col" data-card="grid-b">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-[10px] text-gray-500">
+          <b class="fade-swap" data-field="title">위대한 개츠비</b>
+          <span class="mx-1">·</span><span>소설</span>
+        </div>
+        <button data-toggle-for="grid-b" class="toggle-mini" type="button"><span data-toggle-label>EN</span></button>
+      </div>
+      <blockquote class="quote text-sm italic text-gray-800 flex-1 fade-swap" data-field="quote">
+        "우리는 그렇게 떠밀려간다, 끝없이 과거로 떠밀려가는 작은 배처럼."
+      </blockquote>
+      <div class="text-[10px] text-gray-400 mt-3 fade-swap" data-field="author">F. 스콧 피츠제럴드</div>
+    </div>
+
+    <!-- card C (영문 원본 없는 카드 — 토글 숨김 예시) -->
+    <div class="bg-white rounded-xl card-shadow p-4 flex flex-col opacity-95" data-card="grid-c">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-[10px] text-gray-500"><b>채식주의자</b> · 소설</div>
+        <span class="text-[9px] text-gray-400 italic">한국어 원본</span>
+      </div>
+      <blockquote class="quote text-sm italic text-gray-800 flex-1">
+        "그녀는 더 이상 인간이고 싶지 않았다."
+      </blockquote>
+      <div class="text-[10px] text-gray-400 mt-3">한강</div>
+    </div>
+  </div>
+
+  <p class="text-xs text-gray-500 mt-3">
+    ↑ 세 번째 카드(채식주의자)처럼 <code>*_original = NULL</code>인 카드는 EN 버튼이 자동 숨김 처리됩니다.
+  </p>
+</section>
+
+<!-- ============== 3. 상세 — 4필드 모두 토글 ============== -->
+<section>
+  <div class="flex items-baseline gap-3 mb-4">
+    <span class="section-label">상세</span>
+    <h2 class="text-xl font-bold">카드 클릭 후 — 4개 필드 모두 영문 토글</h2>
+  </div>
+  <p class="text-sm text-gray-600 mb-4">
+    명대사·대본 발췌(지문)·상황 설명·의의 — 4필드 모두 한 번에 영문으로. 목록에서 토글한 상태로 들어오면 그대로 EN.
+  </p>
+
+  <div class="grid lg:grid-cols-2 gap-8">
+
+    <!-- 관리자 상세 -->
+    <div>
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">관리자</span>
+        <span class="text-sm text-gray-600">조회 → 카드 상세</span>
+      </div>
+
+      <div class="bg-white rounded-2xl card-shadow overflow-hidden" data-card="admin">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <div class="text-xs text-gray-500">
+            <span class="font-semibold text-gray-700 fade-swap" data-field="title">프랑켄슈타인</span>
+            <span class="text-gray-400 italic ml-1 fade-swap" data-field="subtitle">— 현대의 프로메테우스</span>
+            <span class="mx-1">·</span><span>소설</span>
+            <span class="mx-1">·</span><span class="fade-swap" data-field="author">메리 셸리</span>
+          </div>
+          <button type="button" data-toggle-for="admin" class="lang-pill text-xs px-3 py-1 rounded-full border border-blue-500 text-blue-600 hover:bg-blue-50 font-semibold">
+            <span data-toggle-label>영문으로 보기</span>
+          </button>
+        </div>
+
+        <div class="p-5">
+          <div class="text-xs font-bold text-gray-500 mb-1">명대사</div>
+          <blockquote class="quote text-lg italic text-gray-800 border-l-4 border-indigo-400 pl-3 mb-4 fade-swap" data-field="quote">
+            "나는 무서운 비밀의 시작을 막 발견했다 — 그것은 나의 모든 노력을 정당화할 것이었다."
+          </blockquote>
+
+          <div class="text-xs font-bold text-gray-500 mb-1">대본 발췌 (지문)</div>
+          <pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-800 bg-gray-50 rounded p-3 mb-4 fade-swap" data-field="excerpt">화자: 빅터 프랑켄슈타인이 자신의 연구 노트를 들여다보며 떨리는 손으로 글을 쓴다.
+등불의 빛이 그의 얼굴을 가른다.
+
+빅터: (낮은 목소리로) 마침내 — 마침내 내가 해냈다.</pre>
+
+          <div class="text-xs font-bold text-gray-500 mb-1">상황 설명</div>
+          <p class="text-sm text-gray-700 mb-4 fade-swap" data-field="desc">
+            프랑켄슈타인이 생명 창조의 비밀에 도달한 순간의 흥분과 두려움을 동시에 보여주는 장면.
+          </p>
+
+          <div class="text-xs font-bold text-gray-500 mb-1">의의</div>
+          <p class="text-sm text-gray-700 fade-swap" data-field="sig">
+            소설의 핵심 전환점 — 인간이 신의 영역에 도전하는 순간이 시작된다.
+          </p>
+        </div>
+
+        <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
+          <button class="text-xs px-3 py-1 rounded border border-gray-300 text-gray-700 hover:bg-white">수정</button>
+          <button class="text-xs px-3 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50">삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PWA 상세 -->
+    <div>
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">사용자 PWA</span>
+        <span class="text-sm text-gray-600">카드 탭 후 상세</span>
+      </div>
+
+      <div class="pwa-frame mx-auto" data-card="pwa">
+        <div class="pwa-screen bg-gradient-to-b from-amber-50 to-white">
+          <div class="flex items-center justify-between px-4 py-3 bg-white/80 backdrop-blur border-b border-gray-100">
+            <button class="text-xl text-gray-700">←</button>
+            <div class="text-xs text-gray-500 fade-swap" data-field="title">프랑켄슈타인</div>
+            <button class="text-lg text-gray-400">⋯</button>
+          </div>
+
+          <div class="px-6 pt-6 pb-2 flex justify-center">
+            <div class="w-32 h-44 rounded-lg shadow-lg bg-gradient-to-br from-stone-700 to-stone-900 text-white p-3 flex flex-col justify-between text-center">
+              <div class="text-[10px] uppercase tracking-widest opacity-70">소설</div>
+              <div>
+                <div class="text-sm font-bold leading-tight fade-swap" data-field="title">프랑켄슈타인</div>
+                <div class="text-[9px] opacity-70 mt-1 italic fade-swap" data-field="subtitle">현대의 프로메테우스</div>
+                <div class="text-[10px] opacity-80 mt-1 fade-swap" data-field="author">메리 셸리</div>
+              </div>
+              <div class="text-[8px] opacity-50">2026</div>
+            </div>
+          </div>
+
+          <div class="px-5 py-4">
+            <blockquote class="quote text-base italic text-center text-gray-800 fade-swap" data-field="quote">
+              "나는 무서운 비밀의 시작을 막 발견했다 — 그것은 나의 모든 노력을 정당화할 것이었다."
+            </blockquote>
+          </div>
+
+          <!-- EN 토글 (요청: 형식·작가·년도·조회·북마크 행 위) -->
+          <div class="px-5 pt-2 pb-1 flex justify-end">
+            <button type="button" data-toggle-for="pwa" class="lang-pill flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-blue-500 text-blue-600 bg-white text-xs font-semibold">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 12h14M5 16h10"/></svg>
+              <span data-toggle-label>EN 보기</span>
+            </button>
+          </div>
+
+          <!-- 메타 정보 행: 형식 · 작가 · 년도 · 조회 · 북마크 -->
+          <div class="px-5 py-2 grid grid-cols-5 gap-1 text-center border-y border-gray-100 bg-white/60">
+            <div>
+              <div class="text-[8px] uppercase tracking-wider text-gray-400 mb-0.5">형식</div>
+              <div class="text-[11px] font-semibold text-gray-700">소설</div>
+            </div>
+            <div>
+              <div class="text-[8px] uppercase tracking-wider text-gray-400 mb-0.5">작가</div>
+              <div class="text-[11px] font-semibold text-gray-700 truncate fade-swap" data-field="author">메리 셸리</div>
+            </div>
+            <div>
+              <div class="text-[8px] uppercase tracking-wider text-gray-400 mb-0.5">년도</div>
+              <div class="text-[11px] font-semibold text-gray-700">1818</div>
+            </div>
+            <div>
+              <div class="text-[8px] uppercase tracking-wider text-gray-400 mb-0.5">조회</div>
+              <div class="text-[11px] font-semibold text-gray-700">1.2K</div>
+            </div>
+            <div>
+              <div class="text-[8px] uppercase tracking-wider text-gray-400 mb-0.5">북마크</div>
+              <div class="text-[11px] font-semibold text-gray-700">328</div>
+            </div>
+          </div>
+
+          <div class="px-5 pb-6 space-y-4">
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">대본 발췌</div>
+              <pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-700 fade-swap" data-field="excerpt">화자: 빅터 프랑켄슈타인이 자신의 연구 노트를 들여다보며 떨리는 손으로 글을 쓴다.
+등불의 빛이 그의 얼굴을 가른다.
+
+빅터: (낮은 목소리로) 마침내 — 마침내 내가 해냈다.</pre>
+            </div>
+
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">상황 설명</div>
+              <p class="text-sm text-gray-700 fade-swap" data-field="desc">
+                프랑켄슈타인이 생명 창조의 비밀에 도달한 순간의 흥분과 두려움을 동시에 보여주는 장면.
+              </p>
+            </div>
+
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">의의</div>
+              <p class="text-sm text-gray-700 fade-swap" data-field="sig">
+                소설의 핵심 전환점 — 인간이 신의 영역에 도전하는 순간이 시작된다.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============== 3.5. 관리자 편집 — 이중 언어 동기화 ============== -->
+<section>
+  <div class="flex items-baseline gap-3 mb-4">
+    <span class="section-label">관리자 · 편집</span>
+    <h2 class="text-xl font-bold">한국어/영문 동시 편집 — 한 쪽 수정 → 반대편 동기화</h2>
+  </div>
+  <p class="text-sm text-gray-600 mb-4">
+    좌(한국어) · 우(영문) 같은 칸에 같은 필드. 본문 길이·줄바꿈 등 <b>구조가 양쪽 모두 똑같이</b> 보이도록 정렬.
+    각 필드 우측 상단 <b>↻ 재번역</b> 버튼: 그 칸 한국어 → 영문(또는 영문 → 한국어) 자동 동기화.
+  </p>
+
+  <div class="bg-white rounded-2xl card-shadow overflow-hidden">
+    <!-- 편집 헤더 -->
+    <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-semibold text-gray-700">카드 #142 편집</span>
+        <span class="text-xs text-gray-400">·</span>
+        <span class="text-xs text-gray-500">프랑켄슈타인 · 메리 셸리</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="text-xs px-3 py-1 rounded border border-blue-500 text-blue-600 hover:bg-blue-50 font-semibold" title="영문 원본을 기준으로 모든 한국어 필드 재번역">↻ 전체 재번역 (EN → KO)</button>
+      </div>
+    </div>
+
+    <!-- 헤더: 메타 (works) -->
+    <div class="grid grid-cols-2 divide-x divide-gray-100 border-b border-gray-100">
+      <div class="p-4 bg-blue-50/30">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-bold text-blue-700">🇰🇷 한국어</span>
+          <span class="text-[10px] text-gray-500 italic">cards.* / works.*</span>
+        </div>
+        <div class="space-y-2 text-sm">
+          <div>
+            <label class="text-[11px] font-semibold text-gray-500">제목</label>
+            <input class="w-full border rounded px-2 py-1 text-sm" value="프랑켄슈타인">
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-gray-500">부제</label>
+            <input class="w-full border rounded px-2 py-1 text-sm" value="현대의 프로메테우스">
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-gray-500">작가</label>
+            <input class="w-full border rounded px-2 py-1 text-sm" value="메리 셸리">
+          </div>
+        </div>
+      </div>
+      <div class="p-4 bg-orange-50/30">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-bold text-orange-700">🇬🇧 ENGLISH (원본)</span>
+          <span class="text-[10px] text-gray-500 italic">*_original</span>
+        </div>
+        <div class="space-y-2 text-sm">
+          <div>
+            <label class="text-[11px] font-semibold text-gray-500">Title</label>
+            <input class="w-full border rounded px-2 py-1 text-sm" value="Frankenstein">
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-gray-500">Subtitle</label>
+            <input class="w-full border rounded px-2 py-1 text-sm" value="The Modern Prometheus">
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-gray-500">Author</label>
+            <input class="w-full border rounded px-2 py-1 text-sm" value="Mary Shelley">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 본문 필드들 -->
+    <div class="divide-y divide-gray-100">
+
+      <!-- 명대사 -->
+      <div class="grid grid-cols-2 divide-x divide-gray-100">
+        <div class="p-4 bg-blue-50/20">
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-bold text-gray-700">명대사 (한국어)</label>
+            <div class="flex items-center gap-1">
+              <button class="text-[11px] font-bold px-2 py-0.5 rounded border border-gray-300 hover:border-blue-500">B</button>
+            </div>
+          </div>
+          <textarea rows="2" class="w-full border rounded p-2 text-sm leading-relaxed">"나는 무서운 비밀의 시작을 막 발견했다 — 그것은 나의 모든 노력을 정당화할 것이었다."</textarea>
+        </div>
+        <div class="p-4 bg-orange-50/20">
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-bold text-gray-700">Quote (English)</label>
+            <div class="flex items-center gap-1">
+              <button class="text-[11px] font-bold px-2 py-0.5 rounded border border-gray-300 hover:border-blue-500">B</button>
+              <button class="text-[11px] px-2 py-0.5 rounded border border-blue-500 text-blue-600 hover:bg-blue-50" title="이 칸을 한국어로 재번역">↻ KO</button>
+            </div>
+          </div>
+          <textarea rows="2" class="w-full border rounded p-2 text-sm leading-relaxed">"I had just begun to discover a tremendous secret — one that would justify all my efforts."</textarea>
+        </div>
+      </div>
+
+      <!-- 대본 발췌 -->
+      <div class="grid grid-cols-2 divide-x divide-gray-100">
+        <div class="p-4 bg-blue-50/20">
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-bold text-gray-700">대본 발췌 (한국어)</label>
+            <div class="flex items-center gap-1">
+              <button class="text-[11px] font-bold px-2 py-0.5 rounded border border-gray-300 hover:border-blue-500">B</button>
+              </div>
+          </div>
+          <textarea rows="5" class="w-full border rounded p-2 text-sm leading-relaxed font-mono">화자: 빅터 프랑켄슈타인이 자신의 연구 노트를 들여다보며 떨리는 손으로 글을 쓴다.
+등불의 빛이 그의 얼굴을 가른다.
+
+빅터: (낮은 목소리로) 마침내 — 마침내 내가 해냈다.</textarea>
+        </div>
+        <div class="p-4 bg-orange-50/20">
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-bold text-gray-700">Script Excerpt (English)</label>
+            <div class="flex items-center gap-1">
+              <button class="text-[11px] font-bold px-2 py-0.5 rounded border border-gray-300 hover:border-blue-500">B</button>
+              <button class="text-[11px] px-2 py-0.5 rounded border border-blue-500 text-blue-600 hover:bg-blue-50">↻ KO</button>
+            </div>
+          </div>
+          <textarea rows="5" class="w-full border rounded p-2 text-sm leading-relaxed font-mono">Narrator: Victor Frankenstein peers into his research notes, writing with a trembling hand.
+The lamplight cuts across his face.
+
+VICTOR: (in a low voice) At last — at last I have done it.</textarea>
+        </div>
+      </div>
+
+      <!-- 상황 설명 (한국어 전용 — LLM 해설) -->
+      <div class="p-4 bg-gray-50/40 border-t-2 border-gray-100">
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="text-xs font-bold text-gray-700">상황 설명 <span class="text-[10px] text-gray-400 font-normal">· 한국어 해설 (토글 대상 아님)</span></label>
+          <button class="text-[11px] font-bold px-2 py-0.5 rounded border border-gray-300 hover:border-blue-500">B</button>
+        </div>
+        <textarea rows="3" class="w-full border rounded p-2 text-sm leading-relaxed">프랑켄슈타인이 생명 창조의 비밀에 도달한 순간의 흥분과 두려움을 동시에 보여주는 장면.</textarea>
+      </div>
+
+      <!-- 의의 (한국어 전용) -->
+      <div class="p-4 bg-gray-50/40">
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="text-xs font-bold text-gray-700">의의 <span class="text-[10px] text-gray-400 font-normal">· 한국어 해설 (토글 대상 아님)</span></label>
+          <button class="text-[11px] font-bold px-2 py-0.5 rounded border border-gray-300 hover:border-blue-500">B</button>
+        </div>
+        <textarea rows="2" class="w-full border rounded p-2 text-sm leading-relaxed">소설의 핵심 전환점 — 인간이 신의 영역에 도전하는 순간이 시작된다.</textarea>
+      </div>
+
+    </div>
+
+    <!-- 저장 버튼 -->
+    <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+      <div class="text-xs text-gray-500">
+        💡 빈 칸으로 저장하면 그 필드는 토글 시 한국어 그대로 표시 (영문 토글 자동 숨김)
+      </div>
+      <div class="flex gap-2">
+        <button class="text-xs px-4 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-white">취소</button>
+        <button class="text-xs px-4 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 font-semibold">저장 (양쪽 모두)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 동기화 로직 설명 -->
+  <div class="mt-5 grid md:grid-cols-3 gap-3 text-sm">
+    <div class="bg-white p-3 rounded-lg border border-blue-200">
+      <div class="font-bold text-blue-700 mb-1">↻ KO (필드별)</div>
+      <p class="text-xs text-gray-700 leading-relaxed">
+        영문 칸 우측 ↻ KO 클릭 → 그 영문을 한국어로 재번역해 좌측 textarea 갱신. 다른 필드 영향 없음.
+        <b class="text-blue-700">영어가 원본이므로 KO→EN 버튼은 없음.</b>
+      </p>
+    </div>
+    <div class="bg-white p-3 rounded-lg border border-blue-200">
+      <div class="font-bold text-blue-700 mb-1">↻ 전체 재번역 (EN → KO)</div>
+      <p class="text-xs text-gray-700 leading-relaxed">
+        헤더 우측 버튼 → 5필드(제목·부제·작가·명대사·발췌) 영문 기준으로 한국어를 한 번에 재번역. 큰 수정 후 편의.
+      </p>
+    </div>
+    <div class="bg-white p-3 rounded-lg border border-blue-200">
+      <div class="font-bold text-blue-700 mb-1">저장 시</div>
+      <p class="text-xs text-gray-700 leading-relaxed">
+        양쪽 textarea 값 모두 UPDATE. 한국어 = 기본 컬럼, 영문 = <code>*_original</code>.
+        해설(설명·의의)은 단일 컬럼 그대로.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============== 4. 데이터 모델 ============== -->
+<section>
+  <h2 class="text-xl font-bold mb-4">데이터 모델 — 컬럼 추가</h2>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div>
+      <div class="text-sm font-semibold mb-2">migrations/021_bilingual.sql</div>
+      <pre class="bg-gray-900 text-green-300 text-xs p-4 rounded-lg overflow-x-auto"><span class="text-gray-500">-- 1) cards 본문 원본 보존</span>
+ALTER TABLE cards
+  ADD COLUMN IF NOT EXISTS quote_original               text,
+  ADD COLUMN IF NOT EXISTS script_excerpt_original      text,
+  ADD COLUMN IF NOT EXISTS excerpt_description_original text,
+  ADD COLUMN IF NOT EXISTS significance_original        text;
+
+<span class="text-gray-500">-- 2) works 메타데이터 원본 보존</span>
+ALTER TABLE works
+  ADD COLUMN IF NOT EXISTS title_original    text,
+  ADD COLUMN IF NOT EXISTS subtitle_original text,
+  ADD COLUMN IF NOT EXISTS author_original   text;
+
+<span class="text-gray-500">-- "원본 있음" 빠른 필터/조회용 표현식 인덱스</span>
+CREATE INDEX IF NOT EXISTS cards_has_original_idx
+  ON cards ((quote_original IS NOT NULL));
+CREATE INDEX IF NOT EXISTS works_has_original_idx
+  ON works ((title_original IS NOT NULL));</pre>
+    </div>
+    <div>
+      <div class="text-sm font-semibold mb-2">저장 규칙 (api/save.js)</div>
+      <table class="w-full text-sm border border-gray-200 rounded overflow-hidden">
+        <thead class="bg-gray-100 text-xs">
+          <tr>
+            <th class="px-3 py-2 text-left">계층</th>
+            <th class="px-3 py-2 text-left">기본 컬럼 (한국어)</th>
+            <th class="px-3 py-2 text-left">_original (영문)</th>
+          </tr>
+        </thead>
+        <tbody class="text-xs">
+          <tr class="border-t bg-amber-50">
+            <td class="px-3 py-2 font-bold text-gray-700">works</td>
+            <td class="px-3 py-2 font-mono text-green-700">title<br>subtitle<br>author</td>
+            <td class="px-3 py-2 font-mono text-orange-700">title_original<br>subtitle_original<br>author_original</td>
+          </tr>
+          <tr class="border-t bg-blue-50">
+            <td class="px-3 py-2 font-bold text-gray-700">cards</td>
+            <td class="px-3 py-2 font-mono text-green-700">quote<br>script_excerpt<br>excerpt_description<br>significance</td>
+            <td class="px-3 py-2 font-mono text-orange-700">quote_original<br>script_excerpt_original<br>excerpt_description_original<br>significance_original</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="text-xs text-gray-600 mt-3 leading-relaxed">
+        • 토글 노출 조건: <code>works.title_original IS NOT NULL</code> (작품 단위)<br>
+        • 기존 저장 카드는 영향 없음 — <code>*_original</code> NULL → 버튼 자동 숨김<br>
+        • 한국어 원본(번역 불필요) 작품은 <code>*_original</code> 비워둠 → 버튼 안 보임
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============== 5. 흐름 ============== -->
+<section>
+  <h2 class="text-xl font-bold mb-4">동작 흐름 (확정)</h2>
+  <div class="bg-white rounded-xl card-shadow p-6">
+    <ol class="space-y-2.5 text-sm">
+      <li class="flex gap-3"><span class="font-bold text-indigo-600 shrink-0 w-6">1.</span><span>관리자가 영문 PDF/TXT 업로드 → 카드 추출 (영문)</span></li>
+      <li class="flex gap-3"><span class="font-bold text-indigo-600 shrink-0 w-6">2.</span><span>"전체 번역" 또는 카드별 번역 → 각 카드에 한국어 번역 부착</span></li>
+      <li class="flex gap-3"><span class="font-bold text-indigo-600 shrink-0 w-6">3.</span><span>저장 시 <b>한국어 = 기본 컬럼</b>, <b>영문 = <code>*_original</code></b> 동시 INSERT</span></li>
+      <li class="flex gap-3"><span class="font-bold text-indigo-600 shrink-0 w-6">4.</span><span><b>PWA 홈</b> 오늘의 한줄 — 명대사가 한국어로 표시 + 우상단 EN 토글</span></li>
+      <li class="flex gap-3"><span class="font-bold text-indigo-600 shrink-0 w-6">5.</span><span><b>PWA 아카이브 / 관리자 목록</b> — 카드마다 우상단에 작은 EN pill (영문 원본 있는 카드만)</span></li>
+      <li class="flex gap-3"><span class="font-bold text-indigo-600 shrink-0 w-6">6.</span><span>카드 클릭 → <b>상세</b>에서 명대사 + 지문 + 설명 + 의의 모두 한국어. 우상단 EN 토글</span></li>
+      <li class="flex gap-3"><span class="font-bold text-indigo-600 shrink-0 w-6">7.</span><span>EN 토글 누르면 그 카드의 <b>모든 보이는 필드</b>가 영문으로 즉시 스왑 (DB 추가 호출 없음)</span></li>
+      <li class="flex gap-3"><span class="font-bold text-indigo-600 shrink-0 w-6">8.</span><span>목록에서 EN으로 토글 후 상세 진입 → 상세도 EN으로 유지 (sessionStorage로 카드 단위 상태 보존)</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============== 6. 변경 파일 ============== -->
+<section>
+  <h2 class="text-xl font-bold mb-4">변경 파일 (구현 시)</h2>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <div class="bg-white p-4 rounded-lg card-shadow">
+      <div class="font-bold mb-2 text-indigo-700">DB · API</div>
+      <ul class="space-y-1 text-xs text-gray-700 list-disc pl-5">
+        <li><code>migrations/021_card_originals.sql</code> (신규)</li>
+        <li><code>api/save.js</code> — KO/원본 동시 저장</li>
+        <li><code>api/cards.js</code> 등 SELECT — <code>*_original</code> 4개 포함</li>
+      </ul>
+    </div>
+    <div class="bg-white p-4 rounded-lg card-shadow">
+      <div class="font-bold mb-2 text-indigo-700">관리자 (upload_web)</div>
+      <ul class="space-y-1 text-xs text-gray-700 list-disc pl-5">
+        <li><code>library.html</code> — 카드 템플릿 + 상세 헤더에 EN 토글, <b>편집 폼: 좌(KO)/우(EN) 2열 textarea</b></li>
+        <li><code>assets/library.js</code> — 토글 핸들러, 4필드 + 메타 스왑, <b>필드별·전체 재번역 호출</b></li>
+        <li><code>api/translate-field.js</code> (신규) — 단일 필드 KO↔EN 재번역</li>
+        <li><code>sw.js</code> — v52-bilingual</li>
+      </ul>
+    </div>
+    <div class="bg-white p-4 rounded-lg card-shadow md:col-span-2">
+      <div class="font-bold mb-2 text-indigo-700">사용자 PWA (web_pwa)</div>
+      <ul class="space-y-1 text-xs text-gray-700 list-disc pl-5">
+        <li><code>m/index.html</code> — 홈 오늘의 한줄, 아카이브 그리드, 상세 헤더에 EN 토글</li>
+        <li><code>m/assets/m-app.js</code> —
+          ① SELECT에 <code>*_original</code> 4개 포함
+          ② renderTodayQuote / renderArchiveCard / renderDetail 에 토글 + 스왑
+          ③ sessionStorage 로 카드별 언어 상태 유지
+        </li>
+        <li><code>sw.js</code> — v52-bilingual</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="border-t bg-white py-6">
+  <div class="max-w-6xl mx-auto px-6 text-xs text-gray-500">
+    이 페이지는 <b>UX 미리보기용 정적 mockup</b>입니다. 실제 데이터는 연결되어 있지 않습니다.
+    승인 후 위 "변경 파일" 목록대로 실제 구현·푸시를 진행합니다.
+  </div>
+</footer>
+
+<!-- ===== Interactive toggle ===== -->
+<script>
+const DATA = {
+  frank: {
+    ko: {
+      title: '프랑켄슈타인',
+      subtitle: '현대의 프로메테우스',
+      author: '메리 셸리',
+      quote: '"나는 무서운 비밀의 시작을 막 발견했다 — 그것은 나의 모든 노력을 정당화할 것이었다."',
+      excerpt: `화자: 빅터 프랑켄슈타인이 자신의 연구 노트를 들여다보며 떨리는 손으로 글을 쓴다.
+등불의 빛이 그의 얼굴을 가른다.
+
+빅터: (낮은 목소리로) 마침내 — 마침내 내가 해냈다.`,
+      desc: '프랑켄슈타인이 생명 창조의 비밀에 도달한 순간의 흥분과 두려움을 동시에 보여주는 장면.',
+      sig: '소설의 핵심 전환점 — 인간이 신의 영역에 도전하는 순간이 시작된다.',
+    },
+    en: {
+      title: 'Frankenstein',
+      subtitle: 'The Modern Prometheus',
+      author: 'Mary Shelley',
+      quote: '"I had just begun to discover a tremendous secret — one that would justify all my efforts."',
+      excerpt: `Narrator: Victor Frankenstein peers into his research notes, writing with a trembling hand.
+The lamplight cuts across his face.
+
+VICTOR: (in a low voice) At last — at last I have done it.`,
+      desc: 'A scene that shows both Frankenstein’s excitement and dread the moment he reaches the secret of creation.',
+      sig: 'The pivotal turning point of the novel — humanity’s challenge to the realm of the divine has begun.',
+    },
+  },
+  gatsby: {
+    ko: {
+      title: '위대한 개츠비',
+      subtitle: '',
+      author: 'F. 스콧 피츠제럴드',
+      quote: '"우리는 그렇게 떠밀려간다, 끝없이 과거로 떠밀려가는 작은 배처럼."',
+    },
+    en: {
+      title: 'The Great Gatsby',
+      subtitle: '',
+      author: 'F. Scott Fitzgerald',
+      quote: '"So we beat on, boats against the current, borne back ceaselessly into the past."',
+    },
+  },
+};
+
+const CARDS = {
+  'pwa-home': { source: 'frank', labels: { ko: 'EN',       en: '한국어' } },
+  'grid-a':   { source: 'frank', labels: { ko: 'EN',       en: 'KO' } },
+  'grid-b':   { source: 'gatsby',labels: { ko: 'EN',       en: 'KO' } },
+  'admin':    { source: 'frank', labels: { ko: '영문으로 보기', en: '한국어로 보기' } },
+  'pwa':      { source: 'frank', labels: { ko: 'EN 보기', en: '한국어 보기' } },
+};
+
+const state = {};
+Object.keys(CARDS).forEach((k) => state[k] = 'ko');
+
+function applyLang(scope) {
+  const lang = state[scope];
+  const meta = CARDS[scope];
+  if (!meta) return;
+  const data = DATA[meta.source][lang];
+  const root = document.querySelector(`[data-card="${scope}"]`);
+  if (!root) return;
+  ['title','subtitle','author','quote','excerpt','desc','sig'].forEach((f) => {
+    if (!(f in data)) return;
+    root.querySelectorAll(`[data-field="${f}"]`).forEach((el) => {
+      // subtitle 빈 문자열일 때 — 영문 카드면 숨김 처리
+      if (f === 'subtitle' && !data[f]) {
+        el.style.display = 'none';
+        return;
+      }
+      el.style.display = '';
+      // 부제 prefix "— " 유지 (관리자 상세에서 사용)
+      const prefix = el.textContent.startsWith('— ') ? '— ' : '';
+      el.textContent = prefix + data[f];
+      el.classList.remove('fade-swap');
+      void el.offsetWidth;
+      el.classList.add('fade-swap');
+    });
+  });
+  const btn = root.querySelector(`[data-toggle-for="${scope}"]`);
+  if (btn) {
+    const lbl = btn.querySelector('[data-toggle-label]');
+    if (lbl) lbl.textContent = meta.labels[lang];
+    btn.classList.toggle('en', lang === 'en');
+  }
+}
+
+document.querySelectorAll('[data-toggle-for]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const scope = btn.dataset.toggleFor;
+    state[scope] = state[scope] === 'ko' ? 'en' : 'ko';
+    applyLang(scope);
+  });
+});
+</script>
+
+</body>
+</html>
