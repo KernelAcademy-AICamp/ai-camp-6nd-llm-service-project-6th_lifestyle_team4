@@ -27,7 +27,7 @@ const STEPS = [
   { sel: '#detail-description-block',         scr: '전문', n: 1, tot: 5, title: '장면 설명(SCENE)', desc: '이 명대사가 언제·어떤 상황에서 나온 말인지 먼저 짚어줘요.' },
   { sel: '#detail-script',                    scr: '전문', n: 2, tot: 5, title: '명대사가 나온 장면', desc: '그 장면의 대본을 그대로 옮겼어요. 명대사를 맥락 속에서 읽어보세요.' },
   { sel: '#detail-significance-block',        scr: '전문', n: 3, tot: 5, title: '작품의 의의',     desc: '이 작품이 왜 오래 사랑받는 고전인지, 그 의미까지 담았어요.' },
-  { sel: '#detail-script',                    scr: '전문', n: 4, tot: 5, title: '구절 하이라이트', desc: '마음에 닿는 문장을 꾹 눌러 드래그하면 그 부분이 선택돼요.' },
+  { sel: '#detail-script',                    scr: '전문', n: 4, tot: 5, title: '구절 하이라이트', desc: '마음에 닿는 문장을 꾹 눌러 드래그해 보세요. 선택하면 바로 다음으로 넘어가요.', advanceOnSelect: true },
   { sel: '#hl-add-btn',                       scr: '전문', n: 5, tot: 5, title: '하이라이트 저장', desc: '선택한 뒤 이 “+ HL” 버튼을 누르면 나만의 하이라이트로 저장돼요.', reveal: true, action: 'onOpenFeed' },
   // ── 피드 화면 ──
   { sel: '#cm-demo-hl',                       scr: '피드', n: 1, tot: 1, title: '피드에 담겼어요', desc: '방금 저장한 하이라이트예요. FEED에서 내 것과 다른 독자들의 명장면을 함께 볼 수 있어요.' },
@@ -41,6 +41,7 @@ let opts = {};
 let captureHandler = null;
 let reposHandler = null;
 let busy = false;            // 화면 전환 중 중복 클릭 방지
+let selCleanup = null;       // 드래그(선택) 자동 진행 리스너 해제용
 
 function buildEls() {
   els = {
@@ -77,8 +78,39 @@ export function startCoachmarkTour(o = {}) {
   return true;
 }
 
+// 드래그(텍스트 선택)만 하면 클릭 없이 다음 단계로 — '구절 하이라이트' 단계용
+function clearSelectAdvance() { if (selCleanup) { selCleanup(); selCleanup = null; } }
+function setupSelectAdvance(step) {
+  clearSelectAdvance();
+  if (!step || !step.advanceOnSelect) return;
+  const myIdx = idx;
+  const sc = document.querySelector(step.sel);
+  const check = () => {
+    if (idx !== myIdx) return;  // 이미 다른 단계로 넘어갔으면 무시
+    let txt = '';
+    try { if (typeof window.__getScriptHlText === 'function') txt = (window.__getScriptHlText() || '').trim(); } catch {}
+    if (!txt) {  // 데스크톱 네이티브 선택
+      const sel = window.getSelection && window.getSelection();
+      if (sel && !sel.isCollapsed && sel.rangeCount) {
+        const t = String(sel.toString() || '').trim();
+        if (t && sc && sc.contains(sel.getRangeAt(0).commonAncestorContainer)) txt = t;
+      }
+    }
+    if (txt) { clearSelectAdvance(); advance(); }
+  };
+  const onUp = () => setTimeout(check, 40);  // 선택 확정 후 검사
+  const onSel = () => check();
+  document.addEventListener('selectionchange', onSel);
+  if (sc) { sc.addEventListener('mouseup', onUp); sc.addEventListener('touchend', onUp); }
+  selCleanup = () => {
+    document.removeEventListener('selectionchange', onSel);
+    if (sc) { sc.removeEventListener('mouseup', onUp); sc.removeEventListener('touchend', onUp); }
+  };
+}
+
 function endTour() {
   if (!els) return;
+  clearSelectAdvance();
   document.documentElement.classList.remove('cm-show-hl');
   els.root.classList.remove('open', 'final');
   if (captureHandler) document.removeEventListener('click', captureHandler, true);
@@ -140,6 +172,7 @@ function renderStep() {
   els.root.setAttribute('data-sel', isFinal ? 'final' : s.sel);
 
   applyReveal(isFinal ? null : s);  // 숨겨진 버튼(+ HL)은 해당 단계에서만 보이게
+  setupSelectAdvance(isFinal ? null : s);  // '구절 하이라이트' 단계는 드래그(선택)만으로 진행
 
   if (!isFinal) {
     const target = document.querySelector(s.sel);

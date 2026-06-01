@@ -2890,9 +2890,16 @@ function injectDemoHighlight() {
   list.prepend(item);
 }
 
+// 온보딩 고정 카드 — 비교적 짧은 햄릿(141번)으로 진행해 Read Full Script 화면이 길어지지 않게.
+const ONBOARDING_CARD_ID = 141;
+
 // 홈 → 전문 → 피드를 넘나드는 투어. 각 전환은 실제 화면을 열고 레이아웃이 준비되면 resolve.
 function launchTour() {
   const savedFeedCat = state.feedCategory;
+  // 온보딩 동안 홈·전문·피드 데모를 모두 141번 카드로 고정 (없으면 현재 카드 유지)
+  const tourCard = (state.allCards || []).find((c) => Number(c.card_id) === ONBOARDING_CARD_ID);
+  const prevCard = state.todayCard;
+  if (tourCard && tourCard !== state.todayCard) { state.todayCard = tourCard; applyTodayCard(tourCard); }
   return startCoachmarkTour({
     // 홈 5단계: 전문 화면 열기 (슬라이드인 0.25s 뒤 측정)
     onOpenDetail: () => new Promise((resolve) => {
@@ -2917,11 +2924,12 @@ function launchTour() {
       injectDemoHighlight();
       setTimeout(resolve, 360);  // 전문 슬라이드아웃(0.25s) 뒤 피드/데모 측정
     }),
-    // 마침/건너뛰기: 데모 정리 후 홈으로
+    // 마침/건너뛰기: 데모 정리 + 홈 카드 원복 후 홈으로
     onEnd: () => {
       document.getElementById('cm-demo-hl')?.remove();
       if (detailScreen.classList.contains('open')) closeDetailInternal();
       state.feedCategory = savedFeedCat;
+      if (tourCard && prevCard && prevCard !== tourCard) { state.todayCard = prevCard; applyTodayCard(prevCard); }
       setView('home');
     },
   });
