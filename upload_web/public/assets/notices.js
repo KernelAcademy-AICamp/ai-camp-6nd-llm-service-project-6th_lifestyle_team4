@@ -11,6 +11,8 @@ const TAG_BADGE = {
   event:  'bg-primary/15 text-primary',
 };
 
+const NOTICE_IMAGES_BUCKET = 'notice-images';
+
 let editingId = null;
 let isAdmin = false;
 
@@ -18,6 +20,38 @@ function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 공지 본문 마크다운 소부분집합 → 안전 HTML (web_pwa renderNoticeBodyHtml 과 동일 규칙).
+//   **굵게** · ## 소제목 · - 항목/• 항목 · ![설명](https://…) · 빈 줄=문단 간격
+function renderNoticeBodyHtml(raw) {
+  const inline = (s) => escapeHtml(s).replace(/\*\*([^*\n][^*]*?)\*\*/g, '<strong>$1</strong>');
+  const lines = String(raw ?? '').split('\n');
+  const out = [];
+  let inList = false;
+  const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+  for (const line of lines) {
+    const t = line.trim();
+    let m;
+    if ((m = t.match(/^!\[([^\]]*)\]\((https:\/\/[^\s)]+)\)$/))) {
+      closeList();
+      out.push(`<img class="nb-img" src="${escapeHtml(m[2])}" alt="${escapeHtml(m[1])}" loading="lazy">`);
+    } else if ((m = t.match(/^#{1,3}\s+(.+)$/))) {
+      closeList();
+      out.push(`<p class="nb-h">${inline(m[1])}</p>`);
+    } else if ((m = t.match(/^[-•]\s+(.+)$/))) {
+      if (!inList) { out.push('<ul class="nb-ul">'); inList = true; }
+      out.push(`<li>${inline(m[1])}</li>`);
+    } else if (t === '') {
+      closeList();
+      out.push('<div class="nb-gap"></div>');
+    } else {
+      closeList();
+      out.push(`<p class="nb-p">${inline(line)}</p>`);
+    }
+  }
+  closeList();
+  return out.join('');
 }
 
 let toastTimer = null;
@@ -53,7 +87,8 @@ function fmtDate(iso) {
 
   if (!isAdmin) {
     $('#not-admin-banner')?.classList.remove('hidden');
-    ['f-tag', 'f-title', 'f-body', 'f-pinned', 'f-published', 'save-btn'].forEach((id) => {
+    ['f-tag', 'f-title', 'f-body', 'f-pinned', 'f-published', 'save-btn',
+     'md-bold', 'md-head', 'md-list', 'md-image'].forEach((id) => {
       const e = document.getElementById(id);
       if (e) e.disabled = true;
     });
@@ -66,8 +101,103 @@ function fmtDate(iso) {
   $('#save-btn')?.addEventListener('click', onSave);
   $('#cancel-edit')?.addEventListener('click', resetForm);
 
+  // ---- 본문 서식 툴바 / 미리보기 / 이미지 업로드 ----
+  $('#f-body')?.addEventListener('input', updatePreview);
+  $('#md-bold')?.addEventListener('click', () => wrapSelection('**', '**', '굵게'));
+  $('#md-head')?.addEventListener('click', () => prefixLine('## '));
+  $('#md-list')?.addEventListener('click', () => prefixLine('- '));
+  $('#md-image')?.addEventListener('click', () => $('#md-file')?.click());
+  $('#md-file')?.addEventListener('change', onPickImage);
+  updatePreview();
+
   await loadAndRender();
 })();
+
+// ---------- 본문 편집 도우미 ----------
+function updatePreview() {
+  const el = $('#body-preview');
+  if (!el) return;
+  const html = renderNoticeBodyHtml($('#f-body')?.value || '');
+  el.innerHTML = html || '<span class="text-on-surface-variant/50">미리보기가 여기에 표시됩니다.</span>';
+}
+
+function wrapSelection(before, after, placeholder) {
+  const ta = $('#f-body');
+  if (!ta || ta.disabled) return;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const val = ta.value;
+  const sel = val.slice(s, e) || placeholder || '텍스트';
+  ta.value = val.slice(0, s) + before + sel + after + val.slice(e);
+  ta.focus();
+  ta.selectionStart = s + before.length;
+  ta.selectionEnd = s + before.length + sel.length;
+  updatePreview();
+}
+
+function prefixLine(prefix) {
+  const ta = $('#f-body');
+  if (!ta || ta.disabled) return;
+  const s = ta.selectionStart;
+  const val = ta.value;
+  const lineStart = val.lastIndexOf('\n', s - 1) + 1;
+  ta.value = val.slice(0, lineStart) + prefix + val.slice(lineStart);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = s + prefix.length;
+  updatePreview();
+}
+
+function insertAtCursor(text) {
+  const ta = $('#f-body');
+  if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const val = ta.value;
+  ta.value = val.slice(0, s) + text + val.slice(e);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = s + text.length;
+  updatePreview();
+}
+
+async function onPickImage(ev) {
+  const input = ev.target;
+  const file = input.files && input.files[0];
+  input.value = '';            // 같은 파일 다시 선택 가능하게 초기화
+  if (!file) return;
+  if (!isAdmin) return;
+  if (!/^image\//.test(file.type)) { toast('이미지 파일만 올릴 수 있어요'); return; }
+  if (file.size > 5 * 1024 * 1024) { toast('이미지는 5MB 이하만 가능해요'); return; }
+
+  const statusEl = $('#md-status');
+  const btn = $('#md-image');
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.textContent = '이미지 업로드 중…';
+  try {
+    const url = await uploadNoticeImage(file);
+    insertAtCursor(`\n![](${url})\n`);
+    if (statusEl) statusEl.textContent = '이미지가 본문에 추가됐어요';
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
+  } catch (err) {
+    console.warn('[notices] image upload failed', err);
+    const m = String(err?.message || err);
+    if (statusEl) statusEl.textContent = '';
+    toast(/bucket|not found|404/i.test(m)
+      ? '업로드 실패 — Storage 버킷(notice-images)이 아직 없을 수 있어요'
+      : ('이미지 업로드 실패: ' + m));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function uploadNoticeImage(file) {
+  const sb = await getSupabase();
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await sb.storage.from(NOTICE_IMAGES_BUCKET).upload(path, file, {
+    cacheControl: '3600', upsert: false, contentType: file.type || undefined,
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from(NOTICE_IMAGES_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
 
 async function loadAndRender() {
   const loading = $('#list-loading');
@@ -108,7 +238,7 @@ function renderList(rows) {
         <span class="ml-auto text-xs text-on-surface-variant">${escapeHtml(fmtDate(n.created_at))}</span>
       </div>
       <h4 class="font-bold text-on-background">${escapeHtml(n.title || '')}</h4>
-      <p class="text-sm text-on-surface-variant whitespace-pre-line leading-relaxed">${escapeHtml(n.body || '')}</p>
+      <div class="nb-body text-sm text-on-surface-variant leading-relaxed">${renderNoticeBodyHtml(n.body || '')}</div>
       ${isAdmin ? `<div class="flex gap-2 justify-end pt-1">
         <button class="edit-btn px-3 py-1.5 rounded-lg text-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container-low" data-id="${n.notice_id}">수정</button>
         <button class="del-btn px-3 py-1.5 rounded-lg text-sm border border-error/40 text-error hover:bg-error-container" data-id="${n.notice_id}">삭제</button>
@@ -183,6 +313,7 @@ function startEdit(n) {
   $('#save-btn').textContent = '수정 저장';
   $('#cancel-edit').classList.remove('hidden');
   $('#form-msg')?.classList.add('hidden');
+  updatePreview();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -197,6 +328,7 @@ function resetForm() {
   $('#save-btn').textContent = '공지 등록';
   $('#cancel-edit').classList.add('hidden');
   $('#form-msg')?.classList.add('hidden');
+  updatePreview();
 }
 
 async function onDelete(id) {
