@@ -170,6 +170,46 @@
         <span id="model-hint" class="text-xs text-on-surface-variant"></span>
       </div>
 
+      <!-- Wikisource KR 본문 가져오기 (PD 한국 문학) -->
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p class="text-sm font-semibold flex items-center gap-1">
+              <span class="material-symbols-outlined text-primary" style="font-size:18px;">menu_book</span>
+              Wikisource KR 에서 본문 불러오기
+            </p>
+            <p class="text-xs text-on-surface-variant mt-0.5">위 작품명으로 ko.wikisource.org 를 검색합니다 (PD 한국 문학). 파일 업로드 대신 사용 가능.</p>
+          </div>
+          <button id="ws-search-btn" type="button"
+                  class="px-4 py-2 rounded-lg border-2 border-primary text-primary text-sm font-semibold hover:bg-primary hover:text-white transition-colors flex items-center gap-1">
+            <span class="material-symbols-outlined" style="font-size:18px;">search</span>
+            <span>위키문헌 검색</span>
+          </button>
+        </div>
+        <div id="ws-status" class="hidden text-xs"></div>
+        <div id="ws-results" class="hidden flex flex-col gap-1"></div>
+      </div>
+
+      <!-- Project Gutenberg 본문 가져오기 (PD 영문/다국어 문학) -->
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p class="text-sm font-semibold flex items-center gap-1">
+              <span class="material-symbols-outlined text-primary" style="font-size:18px;">auto_stories</span>
+              Project Gutenberg 에서 본문 불러오기
+            </p>
+            <p class="text-xs text-on-surface-variant mt-0.5">위 작품명으로 gutendex.com 카탈로그 검색 (PD 영문/다국어). 숫자만 입력하면 Gutenberg 책 ID 로 바로 가져옴.</p>
+          </div>
+          <button id="gb-search-btn" type="button"
+                  class="px-4 py-2 rounded-lg border-2 border-primary text-primary text-sm font-semibold hover:bg-primary hover:text-white transition-colors flex items-center gap-1">
+            <span class="material-symbols-outlined" style="font-size:18px;">search</span>
+            <span>Gutenberg 검색</span>
+          </button>
+        </div>
+        <div id="gb-status" class="hidden text-xs"></div>
+        <div id="gb-results" class="hidden flex flex-col gap-1"></div>
+      </div>
+
       <label id="dropzone" for="pdf-input"
              class="bg-surface-container-lowest border-2 border-dashed border-primary/30 rounded-xl p-10 flex flex-col items-center justify-center text-center hover:border-primary hover:bg-primary/5 transition-all duration-300 cursor-pointer shadow-sm block">
         <div class="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mb-4">
