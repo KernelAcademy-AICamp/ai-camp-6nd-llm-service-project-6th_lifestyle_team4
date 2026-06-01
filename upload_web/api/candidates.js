@@ -10,7 +10,12 @@
 
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase-admin.js';
+import { runTranslateField } from '../lib/anthropic.js';
 import { HttpError, readJsonBody, sendError } from '../lib/http.js';
+
+// 승인(approve) 시 promote_candidate + KO→EN 자동 채우기까지 한 번에 처리.
+// 카드당 LLM 호출 최대 ~6회 (각 ~2~5s). Vercel 기본 60s 한도를 넘을 여지가 있어 120s 로 확장.
+export const config = { maxDuration: 120 };
 
 const CLAIM_TTL_MIN = 10;
 const VALID_STATUSES = new Set(['pending', 'approved', 'rejected', 'needs_edit']);
@@ -203,6 +208,7 @@ async function decideCandidate(req, res, body, adminUser) {
   if (updErr) throw updErr;
 
   let promotedCardId = null;
+  let autoFillSummary = null;
   if (decision === 'approved') {
     const { data: rpcData, error: rpcErr } = await supabaseAdmin
       .rpc('promote_candidate', { p_candidate_id: id });
@@ -216,6 +222,16 @@ async function decideCandidate(req, res, body, adminUser) {
       throw new HttpError(`promote failed: ${rpcErr.message || rpcErr}`, 500);
     }
     promotedCardId = rpcData;
+
+    // 자동 영문 채우기 — 새로 promote 된 카드의 빈 *_original 만 KO→EN 번역해서 채움.
+    // 실패해도 승인 자체는 성공이므로 throw 하지 않고 로그만 남김.
+    if (promotedCardId) {
+      try {
+        autoFillSummary = await autoFillEnglishForCard(promotedCardId);
+      } catch (e) {
+        console.warn(`[candidates] auto-fill EN failed card_id=${promotedCardId}:`, e?.message || e);
+      }
+    }
   }
 
   return res.status(200).json({
@@ -223,7 +239,78 @@ async function decideCandidate(req, res, body, adminUser) {
     candidate_id: id,
     decision,
     promoted_card_id: promotedCardId,
+    auto_fill: autoFillSummary,
   });
+}
+
+// 카드 한 장의 빈 *_original 만 골라 KO→EN 번역해 채운다.
+// promote_candidate 직후 호출 — admin 이 별도로 백필 버튼 안 눌러도 됨.
+// 이미 채워진 필드는 건너뜀 (영문 PDF 추출본의 quote_original / script_excerpt_original
+// 은 save 시 이미 들어가 있고, 작가는 runKoreanizeAuthor 가드로 author_original 채워짐).
+async function autoFillEnglishForCard(cardId) {
+  const { data: card, error } = await supabaseAdmin
+    .from('cards')
+    .select([
+      'card_id', 'work_id',
+      'quote', 'script_excerpt', 'excerpt_description', 'keywords', 'significance',
+      'quote_original', 'script_excerpt_original',
+      'excerpt_description_original', 'significance_original', 'keywords_original',
+      'works(work_id, title, subtitle, author, format, title_original, subtitle_original, author_original)',
+    ].join(', '))
+    .eq('card_id', cardId)
+    .single();
+  if (error || !card) return { ok: false, reason: error?.message || 'card not found' };
+
+  const w = card.works || {};
+  const workCtx = {
+    title: w.title || '', subtitle: w.subtitle || '',
+    author: w.author || '', format: w.format || '',
+  };
+
+  // 한 필드 안전 번역 — 실패해도 다음 필드는 그대로 진행.
+  async function safeTranslate(text, field) {
+    try {
+      if (!text || !String(text).trim()) return null;
+      return await runTranslateField({ text, field, work: workCtx, direction: 'ko2en' });
+    } catch (e) {
+      console.warn(`[candidates] auto-fill ${field} failed:`, e?.message || e);
+      return null;
+    }
+  }
+
+  // 1) 작품 메타 — 비어 있는 칸만
+  const workUpdate = {};
+  if (!w.title_original    && w.title)    { const v = await safeTranslate(w.title,    'title');    if (v) workUpdate.title_original    = v; }
+  if (!w.subtitle_original && w.subtitle) { const v = await safeTranslate(w.subtitle, 'subtitle'); if (v) workUpdate.subtitle_original = v; }
+  if (!w.author_original   && w.author)   { const v = await safeTranslate(w.author,   'author');   if (v) workUpdate.author_original   = v; }
+  if (Object.keys(workUpdate).length > 0) {
+    const { error: werr } = await supabaseAdmin.from('works').update(workUpdate).eq('work_id', w.work_id);
+    if (werr) console.warn('[candidates] works update failed:', werr.message);
+  }
+
+  // 2) 카드 본문 — 비어 있는 칸만 (quote/script_excerpt 는 보통 save 가 이미 채움)
+  const cardUpdate = {};
+  if (!card.quote_original          && card.quote)          { const v = await safeTranslate(card.quote,          'quote');          if (v) cardUpdate.quote_original          = v; }
+  if (!card.script_excerpt_original && card.script_excerpt) { const v = await safeTranslate(card.script_excerpt, 'script_excerpt'); if (v) cardUpdate.script_excerpt_original = v; }
+  if (!card.excerpt_description_original && card.excerpt_description) { const v = await safeTranslate(card.excerpt_description, 'excerpt_description'); if (v) cardUpdate.excerpt_description_original = v; }
+  if (!card.significance_original   && card.significance)   { const v = await safeTranslate(card.significance,   'significance');   if (v) cardUpdate.significance_original   = v; }
+  if ((!Array.isArray(card.keywords_original) || !card.keywords_original.length) && Array.isArray(card.keywords) && card.keywords.length) {
+    const v = await safeTranslate(card.keywords.join(', '), 'keywords');
+    if (v) {
+      const arr = v.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
+      if (arr.length) cardUpdate.keywords_original = arr;
+    }
+  }
+  if (Object.keys(cardUpdate).length > 0) {
+    const { error: cerr } = await supabaseAdmin.from('cards').update(cardUpdate).eq('card_id', cardId);
+    if (cerr) console.warn('[candidates] cards update failed:', cerr.message);
+  }
+
+  return {
+    ok: true,
+    work_filled: Object.keys(workUpdate),
+    card_filled: Object.keys(cardUpdate),
+  };
 }
 
 export default async function handler(req, res) {
