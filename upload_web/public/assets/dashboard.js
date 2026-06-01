@@ -543,7 +543,31 @@ function escapeHtmlBasic(s) {
 }
 function escapeAttr(s) { return escapeHtmlBasic(s); }
 
+// 검색 중에는 같은 버튼이 "검색 중지" 로 변신. 다시 클릭하면 abort.
+let currentWsSearchAbort = null;
+function setWsSearchBtnBusy(busy) {
+  if (!wsSearchBtn) return;
+  if (busy) {
+    wsSearchBtn.innerHTML =
+      '<span class="material-symbols-outlined" style="font-size:18px;">stop</span>' +
+      '<span>검색 중지</span>';
+    wsSearchBtn.classList.remove('border-primary', 'text-primary');
+    wsSearchBtn.classList.add('border-error', 'text-error');
+  } else {
+    wsSearchBtn.innerHTML =
+      '<span class="material-symbols-outlined" style="font-size:18px;">search</span>' +
+      '<span>위키문헌 검색</span>';
+    wsSearchBtn.classList.remove('border-error', 'text-error');
+    wsSearchBtn.classList.add('border-primary', 'text-primary');
+  }
+}
+
 async function onWsSearch() {
+  // 검색 진행 중이면 이 클릭은 "중지" — 진행 중인 fetch abort
+  if (currentWsSearchAbort) {
+    currentWsSearchAbort.abort();
+    return;
+  }
   const titleInput = document.querySelector('#title-input');
   const query = (titleInput?.value || '').trim();
   if (!query) {
@@ -553,6 +577,8 @@ async function onWsSearch() {
   }
   setWsStatus(`검색 중: "${query}"`, 'info');
   renderWsResults([]);
+  currentWsSearchAbort = new AbortController();
+  setWsSearchBtnBusy(true);
   try {
     const token = await getAccessToken();
     const j = await apiFetch('/api/fetch-source', {
@@ -562,6 +588,7 @@ async function onWsSearch() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ kind: 'wikisource_kr', op: 'search', query }),
+      signal: currentWsSearchAbort.signal,
     });
     const results = Array.isArray(j.results) ? j.results : [];
     if (results.length === 0) {
@@ -571,8 +598,17 @@ async function onWsSearch() {
     setWsStatus(`${results.length}개 결과 — 가져올 항목을 클릭하세요.`, 'ok');
     renderWsResults(results);
   } catch (err) {
+    if (isAbortError(err)) {
+      // 사용자가 명시적으로 중지 — 깨끗하게 idle 로 복귀, 에러 토스트 없음
+      setWsStatus('', 'info');
+      renderWsResults([]);
+      return;
+    }
     console.error('[ws] search failed', err);
     setWsStatus(`검색 실패: ${err.message || err}`, 'err');
+  } finally {
+    currentWsSearchAbort = null;
+    setWsSearchBtnBusy(false);
   }
 }
 
@@ -713,7 +749,32 @@ function renderGbResults(results) {
   }
 }
 
+// 검색 중에는 같은 버튼이 "검색 중지" 로 변신. 다시 클릭하면 abort.
+// Gutendex /books?search 가 30~60초 걸릴 수 있어 특히 유용.
+let currentGbSearchAbort = null;
+function setGbSearchBtnBusy(busy) {
+  if (!gbSearchBtn) return;
+  if (busy) {
+    gbSearchBtn.innerHTML =
+      '<span class="material-symbols-outlined" style="font-size:18px;">stop</span>' +
+      '<span>검색 중지</span>';
+    gbSearchBtn.classList.remove('border-primary', 'text-primary');
+    gbSearchBtn.classList.add('border-error', 'text-error');
+  } else {
+    gbSearchBtn.innerHTML =
+      '<span class="material-symbols-outlined" style="font-size:18px;">search</span>' +
+      '<span>Gutenberg 검색</span>';
+    gbSearchBtn.classList.remove('border-error', 'text-error');
+    gbSearchBtn.classList.add('border-primary', 'text-primary');
+  }
+}
+
 async function onGbSearch() {
+  // 검색 진행 중이면 이 클릭은 "중지" — 진행 중인 fetch abort
+  if (currentGbSearchAbort) {
+    currentGbSearchAbort.abort();
+    return;
+  }
   const titleInput = document.querySelector('#title-input');
   const query = (titleInput?.value || '').trim();
   if (!query) {
@@ -721,7 +782,8 @@ async function onGbSearch() {
     titleInput?.focus();
     return;
   }
-  // 숫자만 입력했으면 책 ID 로 바로 fetch (검색 endpoint 가 느릴 때 유용)
+  // 숫자만 입력했으면 책 ID 로 바로 fetch (검색 endpoint 가 느릴 때 유용).
+  // 직접 fetch 경로는 자체적인 progress 패널 [중단] 버튼으로 abort 가능 — 별도 처리 X.
   if (/^#?\d+$/.test(query)) {
     const bookId = Number.parseInt(query.replace(/^#/, ''), 10);
     setGbStatus(`Gutenberg #${bookId} 로 바로 가져옵니다…`, 'info');
@@ -731,6 +793,8 @@ async function onGbSearch() {
   }
   setGbStatus(`Gutendex 카탈로그 검색 중: "${query}" (느릴 수 있음, 최대 60초)`, 'info');
   renderGbResults([]);
+  currentGbSearchAbort = new AbortController();
+  setGbSearchBtnBusy(true);
   try {
     const token = await getAccessToken();
     const j = await apiFetch('/api/fetch-source', {
@@ -740,6 +804,7 @@ async function onGbSearch() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ kind: 'gutenberg', op: 'search', query }),
+      signal: currentGbSearchAbort.signal,
     });
     const results = Array.isArray(j.results) ? j.results : [];
     const transBadge = (j.translatedFrom && j.effectiveQuery && j.effectiveQuery !== j.translatedFrom)
@@ -752,8 +817,17 @@ async function onGbSearch() {
     setGbStatus(`${results.length}개 결과${transBadge} — 가져올 항목 클릭.`, 'ok');
     renderGbResults(results);
   } catch (err) {
+    if (isAbortError(err)) {
+      // 사용자가 명시적으로 중지 — 깨끗하게 idle 로 복귀, 에러 토스트 없음
+      setGbStatus('', 'info');
+      renderGbResults([]);
+      return;
+    }
     console.error('[gb] search failed', err);
     setGbStatus(`검색 실패: ${err.message || err}. 책 ID 를 직접 입력해 보세요.`, 'err');
+  } finally {
+    currentGbSearchAbort = null;
+    setGbSearchBtnBusy(false);
   }
 }
 
