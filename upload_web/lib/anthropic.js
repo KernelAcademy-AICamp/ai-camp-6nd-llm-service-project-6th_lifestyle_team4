@@ -688,3 +688,85 @@ ${src}
   if (!out) throw new Error('Translation response missing text');
   return out;
 }
+
+// 카드 N장의 description / significance / keywords 를 한 번의 LLM 호출로 KO→EN 일괄 번역.
+// 입력 cards = [{ id, description?, significance?, keywords?: string[] }, ...]
+// 응답: [{ id, description_en?, significance_en?, keywords_en?: string[] }, ...]
+// 비용 절감 — 카드당 3회 호출(60회) → 1회로 축소. 입력은 짧으니 한 prompt 에 안전하게 들어감.
+export async function runTranslateCommentaryBatch({ cards, work }) {
+  const items = Array.isArray(cards) ? cards : [];
+  if (!items.length) return [];
+
+  // LLM 입력으로 보낼 슬림한 페이로드 — 빈 필드는 빼서 토큰 절약.
+  const payload = items.map((c, i) => {
+    const o = { id: c.id ?? i };
+    if (c.description && String(c.description).trim()) o.description = String(c.description).trim();
+    if (c.significance && String(c.significance).trim()) o.significance = String(c.significance).trim();
+    if (Array.isArray(c.keywords) && c.keywords.length) o.keywords = c.keywords.map((k) => String(k).trim()).filter(Boolean);
+    return o;
+  }).filter((o) => o.description || o.significance || (o.keywords && o.keywords.length));
+
+  if (!payload.length) return [];
+
+  const w = work && typeof work === 'object' ? work : {};
+  const ctx = [
+    w.title    ? `Title: ${w.title}`        : null,
+    w.subtitle ? `Subtitle: ${w.subtitle}`  : null,
+    w.author   ? `Author: ${w.author}`      : null,
+    w.format   ? `Format: ${w.format}`      : null,
+  ].filter(Boolean).join('\n');
+
+  const system =
+    'You are a precise Korean→English literary translator. Translate each item faithfully and literally — match source length closely (do not exceed 1.8x), preserve sentence count, every detail. Output JSON only — no prose, no markdown.';
+
+  const prompt = `Translate Korean commentary fields into English for ${payload.length} card(s). One LLM call for all cards.
+
+[Translation rules — hard requirements]
+1. Translate Korean directly — no paraphrase, no reinterpretation, no added context.
+2. Each output sentence count = each input sentence count.
+3. Length per field ≤ ~1.8x of the Korean source.
+4. Preserve every detail, name, claim. Match tone (narrative commentary).
+5. keywords: same count and order as input. Each tag = single English word or short phrase. No quotes, no Oxford commas.
+6. If an input field is absent, omit it from the output (do NOT invent content).
+7. Match the id of each input item exactly.
+
+[Work context — for terminology consistency]
+${ctx || '(none)'}
+
+[Input — array of cards]
+${JSON.stringify(payload, null, 2)}
+
+Output: a single JSON object with key "results" whose value is an array. Same length and order as input.
+Each result object has: id (same as input), and optionally description_en, significance_en, keywords_en (array of strings).
+Example:
+{"results":[{"id":1,"description_en":"...","significance_en":"...","keywords_en":["love","betrayal"]}]}`;
+
+  // 출력 토큰: 카드 N장 × 평균 ~300자 영문 = ~150 tokens × 3필드 × N = N × 450 tokens.
+  // 안전 마진으로 cards 수 × 1500 토큰 또는 최소 6000 토큰 보장.
+  const maxTokens = Math.max(6000, Math.min(16000, payload.length * 1500));
+
+  const result = await callClaude(prompt, {
+    maxTokens,
+    system,
+    temperature: 0.3,
+    prefill: '{"results":[',
+  });
+
+  const arr = Array.isArray(result?.results) ? result.results : [];
+  // id 매칭이 어긋날 가능성 — 안전 가드.
+  const byId = new Map();
+  arr.forEach((r) => {
+    if (r && r.id != null) byId.set(String(r.id), r);
+  });
+
+  // 입력 순서대로 정렬해서 반환. 누락된 카드는 빈 객체.
+  return payload.map((p) => {
+    const r = byId.get(String(p.id)) || {};
+    return {
+      id: p.id,
+      description_en: r.description_en ? String(r.description_en).trim() : null,
+      significance_en: r.significance_en ? String(r.significance_en).trim() : null,
+      keywords_en: Array.isArray(r.keywords_en) ? r.keywords_en.map((s) => String(s).trim()).filter(Boolean) : null,
+    };
+  });
+}

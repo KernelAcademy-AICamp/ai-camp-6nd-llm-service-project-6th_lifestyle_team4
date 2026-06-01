@@ -690,7 +690,7 @@ function applyExtraction(payload) {
   state.work = payload?.work || null;
   state.fullScriptText = payload?.full_script_text || '';
   state.cards = Array.isArray(payload?.cards)
-    ? payload.cards.map((c) => ({ ...c, selected: false, translated: null, showingTranslation: false, editing: false }))
+    ? payload.cards.map((c) => ({ ...c, selected: false, translated: null, translated_commentary: null, showingTranslation: false, editing: false }))
     : [];
   render();
 }
@@ -1145,6 +1145,19 @@ async function onTranslateAll() {
     } else {
       toast(`전체 번역 종료 · 성공 ${done} / 실패 ${failed}`, done ? 'info' : 'error');
     }
+
+    // ★ 추가 — quote/script 번역 끝나면 description/significance/keywords KO→EN 도 한 번에 채움.
+    // 카드별 LLM 호출이 아니라 1회 배치 호출. 비용 최소화 + 저장 단계에서 *_original 모두 준비 완료.
+    try {
+      translateAllBtn.innerHTML =
+        `<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>` +
+        `<span>해설 영문화 중⋯</span>`;
+      await fillCommentaryEn(token);
+      toast('해설(의의·설명) 영문도 채웠어요', 'success');
+    } catch (e) {
+      console.warn('[translate-all] commentary batch failed (non-fatal):', e);
+      toast(`해설 영문화 실패 — 저장 후 라이브러리에서 보충 가능 (${e.message || e})`, 'info');
+    }
   } catch (err) {
     console.error(err);
     toast(err.message || '전체 번역 실패', 'error');
@@ -1153,6 +1166,40 @@ async function onTranslateAll() {
     translateAllBtn.innerHTML = orig;
     render();
   }
+}
+
+// 모든 카드의 description / significance / keywords 를 한 번의 API 호출로 KO→EN 일괄 번역.
+// 결과를 각 카드의 translated_commentary 에 부착해 저장 단계에서 함께 보낸다.
+async function fillCommentaryEn(token) {
+  const payload = state.cards.map((c, i) => ({
+    id: i,
+    description: c.excerpt_description || '',
+    significance: c.significance || '',
+    keywords: Array.isArray(c.keywords) ? c.keywords : [],
+  })).filter((p) => p.description || p.significance || (p.keywords && p.keywords.length));
+  if (!payload.length) return;
+
+  const res = await fetch('/api/translate-commentary-batch', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ cards: payload, work: state.work || null }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
+
+  const results = Array.isArray(body?.results) ? body.results : [];
+  results.forEach((r) => {
+    const i = Number(r?.id);
+    if (Number.isNaN(i) || !state.cards[i]) return;
+    state.cards[i].translated_commentary = {
+      excerpt_description_original: r.description_en || null,
+      significance_original: r.significance_en || null,
+      keywords_original: Array.isArray(r.keywords_en) ? r.keywords_en : null,
+    };
+  });
 }
 
 translateAllBtn?.addEventListener('click', onTranslateAll);
@@ -1181,6 +1228,8 @@ saveBtn.addEventListener('click', async () => {
       significance: c.significance || null,
       translated: c.translated || null,
       showingTranslation: !!c.showingTranslation,
+      // ★ 번역 단계에서 KO→EN 배치로 채운 해설 영문 — save.js 가 *_original 컬럼에 INSERT
+      translated_commentary: c.translated_commentary || null,
     }));
 
     const json = await apiFetch('/api/save', {
