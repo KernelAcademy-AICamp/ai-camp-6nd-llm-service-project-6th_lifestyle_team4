@@ -111,7 +111,7 @@ function makeStreamWriter(res) {
   res.setHeader('X-Accel-Buffering', 'no'); // nginx/proxy 가 버퍼링하지 않도록
   res.flushHeaders?.();
 
-  return function write(event) {
+  const write = (event) => {
     try {
       res.write(JSON.stringify(event) + '\n');
       // node res 는 stream.Writable — push 후 즉시 flush 되도록
@@ -120,6 +120,14 @@ function makeStreamWriter(res) {
       console.warn('[extract] stream write failed:', e?.message || e);
     }
   };
+
+  // Vercel 엣지 프록시 / HTTPS 미들박스가 작은 chunk 를 버퍼링하는 문제 회피 —
+  // 초기에 ~4KB padding 을 한 번 흘려보내 client 가 응답 처리를 즉시 시작하게 한다.
+  // padding 은 ping 이벤트의 __pad 필드에 실어 한 줄 유효 JSON 으로 유지.
+  // 클라이언트는 t:'ping' 을 silently 무시.
+  write({ t: 'ping', __pad: 'x'.repeat(4000) });
+
+  return write;
 }
 
 export default async function handler(req, res) {

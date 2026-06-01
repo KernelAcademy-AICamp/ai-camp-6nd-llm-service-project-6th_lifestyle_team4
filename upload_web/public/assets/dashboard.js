@@ -475,6 +475,9 @@ async function callExtractStreaming(url, fetchOptions, signal) {
         case 'result':
           resultPayload = event.d;
           break;
+        case 'ping':
+          // 서버가 프록시 버퍼링 회피용으로 보낸 padding 이벤트 — 조용히 무시
+          break;
         default:
           // 미지의 이벤트 — 디버깅용 raw 로그
           logProgress(`(unknown event: ${event.t})`);
