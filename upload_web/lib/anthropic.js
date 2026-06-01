@@ -501,9 +501,36 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
       onProgress?.({ t: 'chunk_done', index: chunk.index, total: chunk.total, completed });
     }
   }
-  await Promise.all(
-    Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, worker)
-  );
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, worker)
+    );
+  } catch (err) {
+    // Abort 시 지금까지 완료된 청크의 부분 결과를 client 에 보낸다 — 사용자가 8개 청크 중
+    // 5개 끝나고 중단했으면 그 5개 카드는 살려서 돌려준다.
+    if (err?.name === 'AbortError' || /aborted/i.test(String(err?.message || ''))) {
+      const completedResults = results.filter(Boolean);
+      if (completedResults.length > 0 && onProgress) {
+        try {
+          const partial = mergeExtractResults(completedResults);
+          onProgress({
+            t: 'partial_result',
+            d: {
+              ...partial,
+              __chunked: {
+                chunks: chunks.length,
+                completed: completedResults.length,
+                aborted: true,
+              },
+            },
+          });
+        } catch (mergeErr) {
+          console.warn('[anthropic] partial merge failed on abort:', mergeErr?.message || mergeErr);
+        }
+      }
+    }
+    throw err;
+  }
 
   const merged = mergeExtractResults(results);
   let finalResult = merged;

@@ -201,9 +201,21 @@ export default async function handler(req, res) {
     }
 
     emit({ t: 'stage', m: `LLM 으로 카드 추출 시작 (모델: ${modelKey || 'haiku'})` });
+    // partial_result 이벤트에는 full_script_text + seed debug 도 같이 실어 보낸다 — save.js
+    // 가 full_script_text 필요 + 디버깅 정보 보존.
+    const onProgressForRun = (event) => {
+      if (event?.t === 'partial_result' && event.d && typeof event.d === 'object') {
+        emit({
+          ...event,
+          d: { ...event.d, full_script_text: scriptText, _seed_debug: seedDebug },
+        });
+        return;
+      }
+      emit(event);
+    };
     const result = await runExtract(scriptText, category, seedBlock, modelKey, {
       signal,
-      onProgress: emit,
+      onProgress: onProgressForRun,
     });
     const { __chunked, ...extractPayload } = result || {};
     const cardCount = Array.isArray(extractPayload.cards) ? extractPayload.cards.length : 0;
