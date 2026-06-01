@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html class="light" lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+<title>Script &amp; Quote Intelligence — 검토 큐</title>
+<link rel="manifest" href="/manifest-admin.webmanifest" />
+<meta name="theme-color" content="#3525cd" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="S&amp;Q Admin" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+KR:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<style>
+  body { font-family: 'Inter', 'Noto Sans KR', sans-serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
+
+  .queue-row { transition: background 0.12s ease, transform 0.12s ease; }
+  .queue-row:hover { background: #f0f3ff; }
+  .queue-row.locked { opacity: 0.55; }
+  .queue-row.locked:hover { background: inherit; cursor: not-allowed; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .badge-pending  { background: #fff7ed; color: #9a3412; }
+  .badge-approved { background: #ecfdf5; color: #166534; }
+  .badge-rejected { background: #fef2f2; color: #991b1b; }
+  .badge-needs    { background: #eff6ff; color: #1e40af; }
+  .badge-verified { background: #f0fdf4; color: #15803d; }
+  .badge-unverified { background: #fff7ed; color: #9a3412; }
+  .badge-claim    { background: #ede9fe; color: #5b21b6; }
+
+  .editable-field { width: 100%; padding: 10px 12px; border: 1px solid #c7c4d8; border-radius: 8px; background: white; font-size: 14px; line-height: 1.55; }
+  .editable-field:focus { outline: none; border-color: #3525cd; box-shadow: 0 0 0 3px rgba(53,37,205,0.1); }
+  .editable-textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+  .field-label { display: block; font-size: 12px; font-weight: 600; color: #464555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .readonly-pill { display: inline-block; padding: 6px 12px; background: #f0f3ff; border: 1px solid #c7c4d8; border-radius: 999px; font-size: 13px; color: #464555; }
+
+  .decide-btn { padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; }
+  .decide-btn:active { transform: translateY(1px); }
+  .btn-approve { background: #16a34a; color: white; border: 1px solid #15803d; }
+  .btn-approve:hover { background: #15803d; }
+  .btn-reject { background: #dc2626; color: white; border: 1px solid #b91c1c; }
+  .btn-reject:hover { background: #b91c1c; }
+  .btn-needs { background: #2563eb; color: white; border: 1px solid #1d4ed8; }
+  .btn-needs:hover { background: #1d4ed8; }
+  .btn-save { background: white; color: #3525cd; border: 1px solid #3525cd; }
+  .btn-save:hover { background: #f0f3ff; }
+  .btn-back { background: white; color: #464555; border: 1px solid #c7c4d8; }
+  .btn-back:hover { background: #f0f3ff; }
+
+  .toast { position: fixed; top: 16px; right: 16px; padding: 12px 16px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); font-size: 14px; z-index: 100; }
+  .toast-ok   { background: #ecfdf5; color: #166534; border: 1px solid #86efac; }
+  .toast-err  { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+
+  .keyword-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: #ede9fe; color: #5b21b6; font-size: 12px; font-weight: 600; margin-right: 6px; margin-bottom: 6px; }
+  .keyword-tag button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0; font-size: 14px; line-height: 1; }
+</style>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          'surface-variant': '#d8e3fb', 'inverse-surface': '#263143', 'outline': '#777587',
+          'surface': '#f9f9ff', 'primary-fixed-dim': '#c3c0ff', 'error': '#ba1a1a',
+          'background': '#f9f9ff', 'surface-container-high': '#dee8ff', 'inverse-primary': '#c3c0ff',
+          'on-surface-variant': '#464555', 'surface-container-low': '#f0f3ff',
+          'outline-variant': '#c7c4d8', 'on-primary': '#ffffff', 'surface-container-lowest': '#ffffff',
+          'surface-container': '#e7eeff', 'on-error-container': '#93000a',
+          'on-primary-container': '#dad7ff', 'surface-bright': '#f9f9ff',
+          'secondary': '#006591', 'primary-container': '#4f46e5', 'tertiary': '#684000',
+          'primary': '#3525cd', 'primary-fixed': '#e2dfff',
+          'on-background': '#111c2d', 'on-surface': '#111c2d',
+          'error-container': '#ffdad6', 'secondary-container': '#39b8fd',
+          'inverse-on-surface': '#ecf1ff',
+        },
+        borderRadius: { DEFAULT: '0.25rem', lg: '0.5rem', xl: '0.75rem', full: '9999px' },
+      },
+    },
+  };
+</script>
+</head>
+<body class="bg-surface text-on-background min-h-screen">
+
+<aside class="fixed left-0 top-0 h-full w-[280px] bg-surface border-r border-outline-variant flex flex-col p-4 gap-2 z-50">
+  <div class="mb-8 px-2">
+    <h1 class="text-xl font-bold text-primary tracking-tight">Script &amp; Quote Intelligence</h1>
+    <p class="text-sm text-on-surface-variant mt-1">스크립트 및 견적 관리</p>
+  </div>
+  <nav class="flex flex-col gap-1 flex-1">
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors" href="/dashboard.html">
+      <span class="material-symbols-outlined">dashboard</span>
+      <span class="text-sm">대시보드</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors" href="/library.html">
+      <span class="material-symbols-outlined">inventory_2</span>
+      <span class="text-sm">조회</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 bg-secondary-container/20 text-primary rounded-lg font-bold" href="/review.html">
+      <span class="material-symbols-outlined">rule</span>
+      <span class="text-sm">검토 큐</span>
+      <span id="nav-pending-count" class="ml-auto text-xs bg-primary text-white px-2 py-0.5 rounded-full hidden"></span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors" href="/quiz.html">
+      <span class="material-symbols-outlined">quiz</span>
+      <span class="text-sm">명대사 맞추기</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors" href="/notices.html">
+      <span class="material-symbols-outlined">campaign</span>
+      <span class="text-sm">공지사항</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors opacity-50 cursor-not-allowed" href="#" aria-disabled="true">
+      <span class="material-symbols-outlined">history</span>
+      <span class="text-sm">히스토리 (Coming soon)</span>
+    </a>
+  </nav>
+  <div class="border-t border-outline-variant pt-4 flex flex-col gap-1">
+    <button data-install-app data-install-always class="flex items-center gap-3 px-4 py-2 text-primary hover:bg-surface-container-low rounded-lg transition-colors text-left border border-primary/30">
+      <span class="material-symbols-outlined">install_mobile</span>
+      <span class="text-sm font-medium">관리자 앱 설치</span>
+    </button>
+    <button id="logout-btn" class="flex items-center gap-3 px-4 py-2 text-error hover:bg-surface-container-low rounded-lg transition-colors text-left">
+      <span class="material-symbols-outlined">logout</span>
+      <span class="text-sm font-medium">로그아웃</span>
+    </button>
+  </div>
+</aside>
+
+<header class="fixed top-0 left-[280px] w-[calc(100%-280px)] h-16 bg-surface-container-lowest border-b border-outline-variant flex justify-between items-center px-8 z-40">
+  <h2 class="text-xl font-extrabold text-primary">검토 큐</h2>
+  <div class="flex items-center gap-3">
+    <span id="user-email" class="text-sm text-on-surface-variant"></span>
+  </div>
+</header>
+
+<main class="ml-[280px] pt-16 min-h-screen pb-16">
+  <div class="p-8 max-w-5xl mx-auto">
+
+    <!-- ===== Queue list view ===== -->
+    <section id="view-queue">
+      <div class="flex justify-between items-end mb-6">
+        <div>
+          <h1 class="text-2xl font-bold mb-1">검토 대기 카드</h1>
+          <p class="text-sm text-on-surface-variant">승인하면 PWA / iOS 앱에 노출됩니다. 거절 / 수정 필요로 표시하면 노출되지 않습니다.</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <select id="status-filter" class="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-white">
+            <option value="pending" selected>검토 대기 (pending)</option>
+            <option value="approved">승인됨 (approved)</option>
+            <option value="rejected">거절됨 (rejected)</option>
+            <option value="needs_edit">수정 필요 (needs_edit)</option>
+          </select>
+          <button id="refresh-btn" class="px-3 py-2 border border-outline-variant rounded-lg text-sm hover:bg-surface-container-low flex items-center gap-1">
+            <span class="material-symbols-outlined" style="font-size:18px;">refresh</span>
+            새로고침
+          </button>
+        </div>
+      </div>
+
+      <div id="queue-loading" class="text-center py-12 text-on-surface-variant">로드 중…</div>
+      <div id="queue-empty" class="hidden text-center py-12 text-on-surface-variant">표시할 카드가 없습니다.</div>
+      <div id="queue-list" class="flex flex-col gap-2"></div>
+    </section>
+
+    <!-- ===== Detail / edit view ===== -->
+    <section id="view-detail" class="hidden">
+      <button id="back-to-queue" class="decide-btn btn-back mb-4 flex items-center gap-1">
+        <span class="material-symbols-outlined" style="font-size:18px;">arrow_back</span>
+        목록으로
+      </button>
+
+      <div id="detail-claim-banner" class="hidden mb-4 p-3 rounded-lg border border-violet-300 bg-violet-50 text-sm text-violet-900"></div>
+
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+        <div class="flex justify-between items-start mb-4">
+          <div>
+            <p id="detail-work" class="text-sm text-on-surface-variant mb-1"></p>
+            <h1 id="detail-title" class="text-xl font-bold"></h1>
+          </div>
+          <div class="flex flex-col items-end gap-1">
+            <span id="detail-status" class="badge badge-pending">PENDING</span>
+            <span id="detail-verified" class="badge badge-unverified">UNVERIFIED</span>
+            <span id="detail-source" class="text-xs text-on-surface-variant"></span>
+          </div>
+        </div>
+
+        <div class="grid gap-5 mt-4">
+          <div>
+            <label class="field-label">명대사 (quote)</label>
+            <textarea id="edit-quote" class="editable-field editable-textarea" rows="3"></textarea>
+          </div>
+          <div>
+            <label class="field-label">대본 발췌 (script_excerpt)</label>
+            <textarea id="edit-script-excerpt" class="editable-field editable-textarea" rows="6"></textarea>
+          </div>
+          <div>
+            <label class="field-label">발췌 설명 (excerpt_description)</label>
+            <textarea id="edit-excerpt-description" class="editable-field editable-textarea" rows="3"></textarea>
+          </div>
+          <div>
+            <label class="field-label">의의 (significance)</label>
+            <textarea id="edit-significance" class="editable-field editable-textarea" rows="3"></textarea>
+          </div>
+          <div>
+            <label class="field-label">키워드 (keywords) — 최대 10개</label>
+            <div id="keywords-container"></div>
+            <div class="flex gap-2 mt-2">
+              <input id="keyword-input" type="text" class="editable-field flex-1" placeholder="새 키워드 입력 후 Enter" maxlength="40" />
+              <button id="keyword-add-btn" type="button" class="decide-btn btn-save">추가</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="field-label">온도 (temperature) <span class="text-on-surface-variant font-normal normal-case text-[10px]">— LLM 결정값, 변경 불가</span></label>
+              <span id="display-temperature" class="readonly-pill">—</span>
+            </div>
+            <div>
+              <label class="field-label">강도 (intensity) <span class="text-on-surface-variant font-normal normal-case text-[10px]">— LLM 결정값, 변경 불가</span></label>
+              <span id="display-intensity" class="readonly-pill">—</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="field-label">검토 메모 (notes — 선택)</label>
+            <textarea id="edit-notes" class="editable-field editable-textarea" rows="2" placeholder="결정 사유나 후속 작업 메모"></textarea>
+          </div>
+        </div>
+
+        <div class="mt-6 pt-5 border-t border-outline-variant flex flex-wrap gap-2 justify-end">
+          <button id="decide-needs-edit" class="decide-btn btn-needs">수정 필요</button>
+          <button id="decide-reject" class="decide-btn btn-reject">거절</button>
+          <button id="decide-approve" class="decide-btn btn-approve">승인 → cards 로</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<div id="toast-container"></div>
+
+<script type="module" src="/assets/review.js"></script>
+</body>
+</html>

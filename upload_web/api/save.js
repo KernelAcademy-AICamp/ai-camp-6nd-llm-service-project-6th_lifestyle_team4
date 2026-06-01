@@ -85,6 +85,43 @@ function normalizeCard(card, workId) {
   };
 }
 
+// 후보를 만들 때 추가로 들어가는 검토용 메타.
+// quote_verbatim_verified: 업로드된 원문에서 추출된 카드는 quote 가 원문에 substring 으로
+// 존재하는지 확인. 번역본을 저장하는 경우 (showingTranslation && translated) 는 원문
+// 비교가 의미 없으므로 false 로 둔다.
+function buildCandidateMeta(card, normalizedCard, fullScriptText, extractedBy) {
+  const usingTranslation = !!(card.showingTranslation && card.translated);
+  const verbatim = !usingTranslation
+    && typeof fullScriptText === 'string'
+    && fullScriptText.length > 0
+    && typeof normalizedCard.quote === 'string'
+    && fullScriptText.includes(normalizedCard.quote);
+
+  // 원본 LLM 출력을 그대로 보관 — 인라인 편집 후 비교/감사용
+  const originalPayload = {
+    quote: card.quote ?? null,
+    script_excerpt: card.script_excerpt ?? null,
+    excerpt_description: card.excerpt_description ?? null,
+    keywords: Array.isArray(card.keywords) ? card.keywords : [],
+    temperature: card.temperature ?? null,
+    intensity: card.intensity ?? null,
+    significance: card.significance ?? null,
+    translated: card.translated ?? null,
+    showingTranslation: !!card.showingTranslation,
+  };
+
+  return {
+    ...normalizedCard,
+    status: 'pending',
+    source_kind: 'uploaded_doc',
+    source_url: null,
+    source_text: null, // uploaded_doc 은 works.full_script_text 가 원본 — 중복 저장 안 함
+    quote_verbatim_verified: verbatim,
+    extracted_by: extractedBy || null,
+    original_payload: originalPayload,
+  };
+}
+
 // 장르 이름 배열을 받아 genres 테이블에 upsert(없으면 insert)하고 genre_id 목록 반환.
 async function resolveGenreIds(genreNames) {
   if (!genreNames || genreNames.length === 0) return [];
@@ -124,7 +161,7 @@ export default async function handler(req, res) {
   let createdGenreLinks = false;
 
   try {
-    await requireAdmin(req);
+    const adminUser = await requireAdmin(req);
 
     const body = await readJsonBody(req, { maxBytes: SAVE_BODY_MAX_BYTES });
     const workInput = normalizeWork(body.work, body.full_script_text);
@@ -168,17 +205,25 @@ export default async function handler(req, res) {
       createdGenreLinks = true;
     }
 
-    // 3) cards bulk insert
-    const cardRows = body.cards.map((c) => normalizeCard(c, createdWorkId));
+    // 3) card_candidates bulk insert — 검토 게이트.
+    //    cards 로 직접 들어가지 않는다. 어드민이 review 페이지에서 승인해야
+    //    promote_candidate RPC 가 해당 행을 cards 로 복사한다.
+    const cardRows = body.cards.map((c) => {
+      const normalized = normalizeCard(c, createdWorkId);
+      return buildCandidateMeta(c, normalized, workInput.full_script_text, adminUser?.id);
+    });
     const { data: inserted, error: cardErr } = await supabaseAdmin
-      .from('cards')
+      .from('card_candidates')
       .insert(cardRows)
-      .select('card_id');
+      .select('candidate_id, quote_verbatim_verified');
     if (cardErr) throw cardErr;
 
+    const verifiedCount = inserted.filter((r) => r.quote_verbatim_verified).length;
     return res.status(200).json({
       work_id: createdWorkId,
-      inserted_count: inserted.length,
+      candidate_count: inserted.length,
+      verbatim_verified_count: verifiedCount,
+      pending_review: true,
     });
   } catch (err) {
     if (err instanceof AuthError) {

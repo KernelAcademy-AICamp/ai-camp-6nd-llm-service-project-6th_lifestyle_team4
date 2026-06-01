@@ -762,7 +762,15 @@ saveBtn.addEventListener('click', async () => {
         cards: cardsPayload,
       }),
     });
-    toast(`저장 완료 (work_id=${json.work_id}, ${json.inserted_count}장)`, 'success');
+    // 검토 게이트 도입: 카드는 cards 에 바로 들어가지 않고 card_candidates 에 쌓인다.
+    // 어드민이 review.html 에서 승인해야 cards 로 promote 된다.
+    const n = json.candidate_count ?? json.inserted_count ?? 0;
+    const verified = json.verbatim_verified_count;
+    const verifiedMsg = verified != null ? ` · 원문 검증 ${verified}/${n}` : '';
+    toast(`후보 ${n}건 저장됨 — 검토 큐로 이동${verifiedMsg}`, 'success');
+
+    // 검토 페이지로 자동 이동 (잠깐 토스트 보여주고).
+    setTimeout(() => { location.href = '/review.html'; }, 1500);
 
     // Reset selection so user can re-curate or upload a new file
     state.cards.forEach((c) => (c.selected = false));
