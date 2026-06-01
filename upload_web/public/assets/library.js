@@ -1019,14 +1019,19 @@ function buildViewNode(card) {
   ].filter(Boolean).join(' · ');
   node.querySelector('.lib-work-title').textContent = workLine;
   node.querySelector('.lib-tag').textContent = (card.keywords && card.keywords[0]) || `Card #${card.card_id}`;
-  node.querySelector('.lib-quote').textContent = card.quote ? `"${cleanForDisplay(card.quote)}"` : '';
-  node.querySelector('.lib-excerpt').innerHTML =
-    String(work.format || '').toLowerCase() === 'poem'
+  // 사용자가 편집에서 ** 로 감싼 부분을 <strong> 으로 렌더 (XSS 안전: 먼저 escape 후 마커만 변환)
+  node.querySelector('.lib-quote').innerHTML = card.quote ? `"${renderMarkdownBold(cleanForDisplay(card.quote))}"` : '';
+  {
+    const fmt = String(work.format || '').toLowerCase();
+    const baseHtml = fmt === 'poem'
       ? escapeHtml(formatPoemScript(card.script_excerpt || ''))
       : isProseFormat(work.format)
         ? escapeHtml(flowProseScript(card.script_excerpt || ''))
         : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', work.characters), work.characters);
-  node.querySelector('.lib-description').textContent = cleanForDisplay(card.excerpt_description || '');
+    // baseHtml 은 이미 escape 가 끝난 안전한 문자열 — ** 만 추가 변환
+    node.querySelector('.lib-excerpt').innerHTML = applyMarkdownBoldOnHtml(baseHtml);
+  }
+  node.querySelector('.lib-description').innerHTML = renderMarkdownBold(cleanForDisplay(card.excerpt_description || ''));
 
   const kwEl = node.querySelector('.lib-keywords');
   (card.keywords || []).forEach((k) => {
@@ -1043,7 +1048,7 @@ function buildViewNode(card) {
   const sigWrap = node.querySelector('.lib-significance-wrap');
   const sigEl = node.querySelector('.lib-significance');
   if (sigWrap && sigEl && card.significance && String(card.significance).trim()) {
-    sigEl.textContent = cleanForDisplay(card.significance);
+    sigEl.innerHTML = renderMarkdownBold(cleanForDisplay(card.significance));
     sigWrap.classList.remove('hidden');
     sigWrap.classList.add('flex');
   }
@@ -1095,6 +1100,8 @@ function buildEditNode(card) {
   intensityEl.value = card.intensity ?? 3;
 
   attachKeywordHint(kwEl);
+  // B 버튼 + Ctrl/Cmd+B 단축키로 선택 영역에 **굵게** 마커 토글
+  wireBoldButtons(node);
 
   node.querySelector('.lib-save-edit-btn').addEventListener('click', async () => {
     const kwList = parseKeywords(kwEl.value);
@@ -1248,6 +1255,68 @@ const previewAndroidScreen = $('#preview-android-screen');
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// 카드 텍스트에 사용자 입력 굵게 마커(**...**) 를 <strong>...</strong> 로 렌더.
+// HTML escape 후 처리하므로 임의 HTML 주입 안전.
+function renderMarkdownBold(text) {
+  return escapeHtml(text).replace(/\*\*([^*\n][^*]*?)\*\*/g, '<strong>$1</strong>');
+}
+// 이미 escape + 다른 변환(<strong>)이 끝난 HTML 문자열 위에 **...** 만 추가 변환.
+// boldSpeakerLines / formatPoemScript 결과 위에 사용.
+function applyMarkdownBoldOnHtml(html) {
+  return String(html).replace(/\*\*([^*\n][^*]*?)\*\*/g, '<strong>$1</strong>');
+}
+
+// 편집 textarea 의 현재 선택 영역을 ** 로 토글 감싸기.
+// - 선택 없으면 커서 위치에 **굵게** 삽입 후 안쪽 글자 선택.
+// - 이미 양 끝이 ** 로 감싸졌으면 풀어줌(토글).
+function toggleBoldOnTextarea(ta) {
+  if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const value = ta.value;
+  if (s === e) {
+    const placeholder = '굵게';
+    const next = value.slice(0, s) + '**' + placeholder + '**' + value.slice(e);
+    ta.value = next;
+    ta.focus();
+    ta.setSelectionRange(s + 2, s + 2 + placeholder.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  const selected = value.slice(s, e);
+  // 토글: 이미 **...** 로 감싸졌으면 벗기기
+  if (/^\*\*[\s\S]+\*\*$/.test(selected)) {
+    const unwrapped = selected.slice(2, -2);
+    ta.value = value.slice(0, s) + unwrapped + value.slice(e);
+    ta.focus();
+    ta.setSelectionRange(s, s + unwrapped.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  const wrapped = '**' + selected + '**';
+  ta.value = value.slice(0, s) + wrapped + value.slice(e);
+  ta.focus();
+  ta.setSelectionRange(s, s + wrapped.length);
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// 편집 노드의 모든 .lib-bold-btn 과 대응 textarea 에 핸들러 + Ctrl/Cmd+B 단축키 부착.
+function wireBoldButtons(root) {
+  root.querySelectorAll('.lib-bold-btn').forEach((btn) => {
+    const sel = btn.dataset.boldFor;
+    const ta = sel ? root.querySelector(sel) : null;
+    if (!ta) return;
+    btn.addEventListener('click', (ev) => { ev.preventDefault(); toggleBoldOnTextarea(ta); });
+  });
+  root.querySelectorAll('textarea').forEach((ta) => {
+    ta.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        toggleBoldOnTextarea(ta);
+      }
+    });
+  });
 }
 
 // DB에 콜론·em-dash·libretto 스타일 카드도 화면에선 정리해 보여줌

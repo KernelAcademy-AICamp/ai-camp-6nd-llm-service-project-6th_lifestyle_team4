@@ -1172,8 +1172,9 @@ function applyTodayCard(card) {
   // 최근 표시 큐에 추가 (rememberShown이 dedupe + localStorage 저장 처리)
   rememberShown(card.card_id);
 
-  // Quote with curly quotes (mirror Android: "“$it”")
-  todayQuote.textContent = `“${cleanQuote(card.quote)}”`;
+  // Quote with curly quotes (mirror Android: "“$it”").
+  // 관리자가 ** 로 굵게 표시한 부분도 함께 렌더.
+  todayQuote.innerHTML = `“${renderMarkdownBold(cleanQuote(card.quote))}”`;
 
   // Chips: filled format only
   todayChips.innerHTML = '';
@@ -3058,9 +3059,9 @@ function openDetail(card) {
   // 산문 필드(설명·의의)는 줄바꿈을 공백으로 펴서 한 단락처럼 흐르게 한다.
   const flowProse = (s) => String(s ?? '').replace(/\s*\n+\s*/g, ' ').trim();
 
-  // excerpt description (centered)
+  // excerpt description (centered) — 관리자 ** 굵게 마커도 렌더.
   if (card.excerpt_description) {
-    detailDescription.textContent = flowProse(card.excerpt_description);
+    detailDescription.innerHTML = renderMarkdownBold(flowProse(card.excerpt_description));
     detailDescriptionBlock.style.display = 'block';
     detailDescSpacer.style.height = '24px';
   } else {
@@ -3071,17 +3072,21 @@ function openDetail(card) {
   // script_excerpt — 시(poem)는 행·연 구조를 그대로 보존하고,
   // 산문(novel/essay)은 단락으로 흘려보내고(화자 볼드 없음),
   // 그 외(대본 등)는 기존 화자 라인 볼드 처리 (admin library.js와 동일).
-  detailScript.innerHTML =
-    String(w.format || '').toLowerCase() === 'poem'
-      ? escapeHtml(formatPoemScript(card.script_excerpt || ''))
-      : isProseFormat(w.format)
-        ? escapeHtml(flowProseScript(card.script_excerpt || ''))
-        : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', w.characters), w.characters);
+  // 모든 경로 결과는 escape 가 끝난 안전한 HTML — 그 위에 ** 만 추가 변환.
+  {
+    const baseHtml =
+      String(w.format || '').toLowerCase() === 'poem'
+        ? escapeHtml(formatPoemScript(card.script_excerpt || ''))
+        : isProseFormat(w.format)
+          ? escapeHtml(flowProseScript(card.script_excerpt || ''))
+          : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', w.characters), w.characters);
+    detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
+  }
 
   // significance — 네 프롬프트(screen/opera/play/literature) 모두 생성하므로
-  // format 게이팅 없이 값이 있으면 표시.
+  // format 게이팅 없이 값이 있으면 표시. ** 굵게 마커도 렌더.
   if (card.significance && String(card.significance).trim()) {
-    detailSignificance.textContent = flowProse(card.significance);
+    detailSignificance.innerHTML = renderMarkdownBold(flowProse(card.significance));
     detailSignificanceBlock.style.display = 'block';
   } else {
     detailSignificanceBlock.style.display = 'none';
@@ -4533,6 +4538,15 @@ function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 관리자가 편집에서 ** 로 감싼 부분을 <strong> 으로 렌더 (먼저 escape 후 마커만 변환 — XSS 안전)
+function renderMarkdownBold(text) {
+  return escapeHtml(text).replace(/\*\*([^*\n][^*]*?)\*\*/g, '<strong>$1</strong>');
+}
+// 이미 escape 가 끝난 HTML 위에 ** 만 추가로 변환 (boldSpeakerLines 결과 등에 사용)
+function applyMarkdownBoldOnHtml(html) {
+  return String(html).replace(/\*\*([^*\n][^*]*?)\*\*/g, '<strong>$1</strong>');
 }
 
 // 발췌문 표시용 정리. admin library.js와 동일 로직 — 화자/대사 라인 재조립.
