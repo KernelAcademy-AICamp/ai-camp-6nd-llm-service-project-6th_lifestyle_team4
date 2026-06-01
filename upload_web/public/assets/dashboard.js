@@ -65,6 +65,8 @@ const translateAllBtn = $('#translate-all-btn');
   const sb = await getSupabase();
   const { data } = await sb.auth.getUser();
   userEmailEl.textContent = emailToDisplayId(data?.user?.email);
+  // 어드민 인증 후 이전 작업 복원 안내
+  maybeOfferRestore();
 })();
 
 logoutBtn.addEventListener('click', async () => {
@@ -250,7 +252,12 @@ async function handleFile(file) {
   } catch (err) {
     if (isAbortError(err)) {
       logProgress('중단됨');
-      toast('중단됨', 'info');
+      if (err.partial && Array.isArray(err.partial.cards) && err.partial.cards.length > 0) {
+        applyExtraction(err.partial);
+        toast(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'info');
+      } else {
+        toast('중단됨', 'info');
+      }
     } else {
       console.error(err);
       toast(err.message || '추출 실패', 'error');
@@ -344,6 +351,56 @@ progressStopBtn?.addEventListener('click', () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Leave-page guard
+//   추출 진행 중이거나 저장하지 않은 카드가 있을 때 사이드바 클릭 / 새로고침 /
+//   탭 닫기 → 확인 후 진행. 잃어버릴 게 없으면 (state.cards 비어있고 추출 중 아님)
+//   확인 안내 안 함.
+//   /api/save 가 의도적으로 location.href 를 바꿀 때는 intentionallyNavigating
+//   플래그로 차단 해제.
+// ---------------------------------------------------------------------------
+let intentionallyNavigating = false;
+
+function isExtracting() { return currentExtractAbort != null; }
+function hasUnsavedCards() { return Array.isArray(state.cards) && state.cards.length > 0; }
+function guardActive() { return isExtracting() || hasUnsavedCards(); }
+
+function guardMessage() {
+  if (isExtracting()) {
+    return '추출이 진행 중입니다. 이동하면 작업이 취소됩니다. 계속하시겠어요?';
+  }
+  return '저장하지 않은 카드가 있습니다. 이동하면 잃어버립니다. 계속하시겠어요?';
+}
+
+// 1) Reload / 탭 닫기 / 주소창 직접 입력 — 브라우저 기본 confirm 다이얼로그
+window.addEventListener('beforeunload', (e) => {
+  if (intentionallyNavigating) return;
+  if (!guardActive()) return;
+  e.preventDefault();
+  // 일부 브라우저는 returnValue 가 truthy 인지만 본다 (메시지 자체는 무시되고 기본 문구 표시)
+  e.returnValue = '';
+});
+
+// 2) 사이드바 nav 링크 클릭 — 우리 confirm 다이얼로그
+function wireNavGuard() {
+  document.querySelectorAll('aside a[href]').forEach((a) => {
+    const href = a.getAttribute('href') || '';
+    // # 으로 시작하는 disabled 링크는 스킵 (히스토리 Coming soon 등)
+    if (!href || href === '#') return;
+    a.addEventListener('click', (e) => {
+      if (!guardActive()) return; // 잃을 게 없으면 통과
+      e.preventDefault();
+      if (confirm(guardMessage())) {
+        // 사용자가 확인 — 추출 중이면 abort 도 같이 해서 서버 부담 줄임
+        if (currentExtractAbort) currentExtractAbort.abort();
+        intentionallyNavigating = true;
+        window.location.href = href;
+      }
+    });
+  });
+}
+wireNavGuard();
+
 // V2 NDJSON 스트리밍 호출 — /api/extract 가 진행 이벤트를 1줄 JSON 으로 흘려준다.
 // 각 이벤트는 progress 패널의 stage/log 로 그대로 반영. 'result' 이벤트가 최종 응답.
 // 사용자가 [중단] 누르면 fetch 가 abort → 서버 IncomingMessage 'close' 가 발화 →
@@ -369,6 +426,7 @@ async function callExtractStreaming(url, fetchOptions, signal) {
   const decoder = new TextDecoder();
   let buffer = '';
   let resultPayload = null;
+  let partialPayload = null;  // chunked 추출 중단 시 서버가 보내는 부분 결과
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -402,8 +460,15 @@ async function callExtractStreaming(url, fetchOptions, signal) {
         case 'chunk_done':
           logProgress(`청크 ${event.index}/${event.total} 완료 — 누적 ${event.completed}/${event.total}`);
           break;
+        case 'partial_result':
+          partialPayload = event.d;
+          logProgress(`부분 결과 보존됨 — 카드 ${Array.isArray(event.d?.cards) ? event.d.cards.length : 0}장 (청크 ${event.d?.__chunked?.completed}/${event.d?.__chunked?.chunks} 완료)`);
+          break;
         case 'aborted': {
-          const a = new Error('aborted'); a.name = 'AbortError'; throw a;
+          const a = new Error('aborted');
+          a.name = 'AbortError';
+          if (partialPayload) a.partial = partialPayload;
+          throw a;
         }
         case 'error':
           throw new Error(event.m || 'extract error');
@@ -566,8 +631,14 @@ async function onWsPickResult(item) {
   } catch (err) {
     if (isAbortError(err)) {
       logProgress('중단됨');
-      setWsStatus('중단됨', 'err');
-      toast('중단됨', 'info');
+      if (err.partial && Array.isArray(err.partial.cards) && err.partial.cards.length > 0) {
+        applyExtraction(err.partial);
+        setWsStatus(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'ok');
+        toast(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'info');
+      } else {
+        setWsStatus('중단됨', 'err');
+        toast('중단됨', 'info');
+      }
       return;
     }
     console.error('[ws] fetch failed', err);
@@ -741,8 +812,14 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
   } catch (err) {
     if (isAbortError(err)) {
       logProgress('중단됨');
-      setGbStatus('중단됨', 'err');
-      toast('중단됨', 'info');
+      if (err.partial && Array.isArray(err.partial.cards) && err.partial.cards.length > 0) {
+        applyExtraction(err.partial);
+        setGbStatus(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'ok');
+        toast(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'info');
+      } else {
+        setGbStatus('중단됨', 'err');
+        toast('중단됨', 'info');
+      }
       return;
     }
     console.error('[gb] fetch/extract failed', err);
@@ -766,6 +843,91 @@ function applyExtraction(payload) {
     ? payload.cards.map((c) => ({ ...c, selected: false, translated: null, translated_commentary: null, showingTranslation: false, editing: false }))
     : [];
   render();
+  // 추출 결과를 localStorage 에 백업 — 새로고침/탭 닫힘 사고 보호. /api/save 성공시 정리.
+  saveDraft();
+}
+
+// ---------------------------------------------------------------------------
+// Autosave — 추출 결과(work + full_script_text + cards)를 localStorage 에 보관해서
+// 사용자가 새로고침/탭 닫음/실수 시 잃지 않도록. 5MB 한도가 있어 큰 본문은 실패할 수
+// 있고, 실패 시 조용히 넘긴다 (사용자 흐름을 막지 않음).
+// ---------------------------------------------------------------------------
+const AUTOSAVE_KEY = 'ds.admin.extract.draft';
+const AUTOSAVE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24시간 — 오래된 초안은 자동 폐기
+
+function saveDraft() {
+  if (!state.work && (!state.cards || state.cards.length === 0)) return; // 의미 있는 내용 없음
+  const draft = {
+    v: 1,
+    savedAt: new Date().toISOString(),
+    category: state.category,
+    model: state.model,
+    work: state.work,
+    fullScriptText: state.fullScriptText,
+    cards: state.cards,
+  };
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(draft));
+  } catch (e) {
+    // QuotaExceededError 등 — 본문이 너무 크면 cards 만 저장 시도
+    try {
+      const lighter = { ...draft, fullScriptText: '' };
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(lighter));
+      console.warn('[autosave] fullScriptText 가 너무 커서 비우고 저장 — 복원시 본문 재추출 필요');
+    } catch (e2) {
+      console.warn('[autosave] localStorage 저장 실패:', e2?.message || e2);
+    }
+  }
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    if (!draft || draft.v !== 1) return null;
+    const age = Date.now() - Date.parse(draft.savedAt || 0);
+    if (!Number.isFinite(age) || age > AUTOSAVE_MAX_AGE_MS) {
+      localStorage.removeItem(AUTOSAVE_KEY);
+      return null;
+    }
+    return draft;
+  } catch (e) {
+    console.warn('[autosave] localStorage 읽기 실패:', e?.message || e);
+    return null;
+  }
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(AUTOSAVE_KEY); } catch { /* noop */ }
+}
+
+function maybeOfferRestore() {
+  const draft = loadDraft();
+  if (!draft) return;
+  const cardCount = Array.isArray(draft.cards) ? draft.cards.length : 0;
+  const title = draft.work?.title || '(제목 없음)';
+  const ageMin = Math.floor((Date.now() - Date.parse(draft.savedAt)) / 60000);
+  const ageLabel = ageMin < 60 ? `${ageMin}분 전` : `${Math.floor(ageMin / 60)}시간 전`;
+  const ok = confirm(
+    `이전 추출 작업이 남아 있어요 (${ageLabel}, "${title}", 카드 ${cardCount}장).\n` +
+    '복원할까요?\n\n' +
+    '(취소하면 폐기합니다.)'
+  );
+  if (ok) {
+    state.category = draft.category || state.category;
+    state.model = draft.model || state.model;
+    paintCategory();
+    paintModel();
+    applyExtraction({
+      work: draft.work,
+      full_script_text: draft.fullScriptText,
+      cards: draft.cards,
+    });
+    toast(`복원됨 — 카드 ${cardCount}장`, 'success');
+  } else {
+    clearDraft();
+  }
 }
 
 function render() {
@@ -1324,12 +1486,14 @@ saveBtn.addEventListener('click', async () => {
     const verifiedMsg = verified != null ? ` · 원문 검증 ${verified}/${n}` : '';
     toast(`후보 ${n}건 저장됨 — 검토 큐로 이동${verifiedMsg}`, 'success');
 
-    // 검토 페이지로 자동 이동 (잠깐 토스트 보여주고).
-    setTimeout(() => { location.href = '/review.html'; }, 1500);
+    // 저장 성공 — 더 이상 복원할 필요 없음, autosave 초안 정리.
+    clearDraft();
 
-    // Reset selection so user can re-curate or upload a new file
-    state.cards.forEach((c) => (c.selected = false));
+    // 검토 페이지로 자동 이동 — guard 가 막지 않도록 의도적 이동 플래그 + cards 비움.
+    intentionallyNavigating = true;
+    state.cards = [];
     render();
+    setTimeout(() => { location.href = '/review.html'; }, 1500);
   } catch (err) {
     console.error(err);
     toast(err.message || '저장 실패', 'error');
