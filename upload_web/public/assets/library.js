@@ -1222,6 +1222,39 @@ function buildEditNode(card) {
   // ↻ KO — 영문 칸의 텍스트를 한국어로 재번역해서 좌측에 채우기
   wireTranslateButtons(node, work);
 
+  // ↻ 영문 일괄 채우기 — 이 카드의 빠진 *_original 필드만 KO→EN 번역해서 채움.
+  // 전체 백필이 일부 실패한 카드를 admin 이 편집 화면에서 바로 보충하는 용도.
+  const fillEnBtn = node.querySelector('.lib-fill-en-btn');
+  if (fillEnBtn) {
+    fillEnBtn.addEventListener('click', async () => {
+      fillEnBtn.disabled = true;
+      const origHtml = fillEnBtn.innerHTML;
+      fillEnBtn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> 채우는 중⋯';
+      try {
+        await ensureEnglishOriginals(card, card.works || work || {});
+        // 메모리에 채워진 *_original 을 빈 폼 칸에 다시 반영 (admin 이 이미 입력한 값은 보존)
+        const w2 = card.works || work || {};
+        if (titleOrigEl    && !titleOrigEl.value.trim()    && w2.title_original)    titleOrigEl.value    = w2.title_original;
+        if (subtitleOrigEl && !subtitleOrigEl.value.trim() && w2.subtitle_original) subtitleOrigEl.value = w2.subtitle_original;
+        if (authorOrigEl   && !authorOrigEl.value.trim()   && w2.author_original)   authorOrigEl.value   = w2.author_original;
+        if (quoteOrigEl    && !quoteOrigEl.value.trim()    && card.quote_original)    quoteOrigEl.value    = card.quote_original;
+        if (excerptOrigEl  && !excerptOrigEl.value.trim()  && card.script_excerpt_original) excerptOrigEl.value = card.script_excerpt_original;
+        if (descOrigEl     && !descOrigEl.value.trim()     && card.excerpt_description_original) descOrigEl.value = card.excerpt_description_original;
+        if (sigOrigEl      && !sigOrigEl.value.trim()      && card.significance_original)       sigOrigEl.value  = card.significance_original;
+        if (kwOrigEl       && !kwOrigEl.value.trim()       && Array.isArray(card.keywords_original) && card.keywords_original.length) {
+          kwOrigEl.value = card.keywords_original.join(', ');
+        }
+        toast('영문 일괄 채우기 완료 — 저장(✓) 누르면 DB 반영', 'success');
+      } catch (e) {
+        console.error('[library] fill EN failed:', e);
+        toast(`영문 채우기 실패: ${e.message || e}`, 'error');
+      } finally {
+        fillEnBtn.disabled = false;
+        fillEnBtn.innerHTML = origHtml;
+      }
+    });
+  }
+
   node.querySelector('.lib-save-edit-btn').addEventListener('click', async () => {
     const kwList = parseKeywords(kwEl.value);
     const kwCheck = validateKeywords(kwList);

@@ -684,7 +684,11 @@
   <div class="card bg-surface-container-lowest border-2 border-primary rounded-xl p-6 flex flex-col gap-4 shadow-md">
     <div class="flex justify-between items-center">
       <span class="text-xs font-bold text-primary uppercase tracking-wider">DB 카드 편집 중 · 좌(한국어) / 우(영문 원본)</span>
-      <div class="flex gap-1">
+      <div class="flex gap-1 items-center">
+        <button type="button" class="lib-fill-en-btn px-2 py-1 text-[11px] rounded border border-blue-500 text-blue-600 hover:bg-blue-50 transition-colors font-semibold flex items-center gap-1" title="이 카드의 빠진 영문 필드만 모아서 KO→EN 자동 채우기">
+          <span class="material-symbols-outlined text-sm">language</span>
+          영문 일괄 채우기
+        </button>
         <button type="button" class="lib-cancel-edit-btn p-1.5 rounded hover:bg-surface-container-low text-on-surface-variant transition-colors" title="취소">
           <span class="material-symbols-outlined text-base">close</span>
         </button>
