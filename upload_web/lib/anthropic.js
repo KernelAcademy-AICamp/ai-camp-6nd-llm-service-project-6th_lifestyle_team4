@@ -592,21 +592,29 @@ export async function runTranslateField({ text, field, work, direction = 'en2ko'
     author: 'Author name. Use the standard English spelling if known (e.g., 셰익스피어 → "William Shakespeare"); otherwise transliterate.',
     quote: 'A single character line of dialogue. Keep it speakable in one breath. Match the original register and tone.',
     script_excerpt: 'A scene excerpt. Preserve speaker labels (e.g., "VICTOR:") and stage direction linebreaks. Keep tone and register.',
-    excerpt_description: 'A short prose description of the scene situation. Natural English, single paragraph.',
-    significance: 'A commentary on the work\'s significance. Natural English prose, 1-3 sentences.',
+    excerpt_description: 'A literal translation of the Korean scene description. Preserve the original sentence count, structure, and every detail. Do NOT paraphrase, summarize, or add new information.',
+    significance: 'A literal translation of the Korean commentary. Preserve the original sentence count, structure, and every claim. Do NOT paraphrase, summarize, or reinterpret.',
     keywords: 'A comma-separated list of short tags. Keep EXACTLY the same number and order as input. Translate each tag as a single English word or short phrase. No quotes, no Oxford commas. Example: "사랑, 배신, 신앙" → "love, betrayal, faith".',
   };
 
   let prompt, system;
   if (direction === 'ko2en') {
-    system = 'You are a precise Korean→English literary translator. Output a single JSON object only. No prose, no markdown.';
-    prompt = `Translate the following Korean text into natural English.
+    system = 'You are a precise Korean→English literary translator. Translate faithfully and literally. Preserve the original meaning, sentence structure, and all details. Do NOT paraphrase, summarize, or add new information. Output a single JSON object only. No prose, no markdown.';
+    prompt = `Translate the following Korean text into English. Be faithful and literal.
 
-[Work context]
+[Translation rules]
+1. Translate the Korean directly. Do NOT paraphrase or reinterpret.
+2. Keep the SAME number of sentences and paragraphs as the original.
+3. Preserve every detail, name, and claim in the Korean source.
+4. Match the original tone (narrative, commentary, etc.).
+5. Use natural English wording, but stay close to the Korean structure.
+6. Do NOT add new information or context that isn't in the source.
+
+[Work context — for terminology consistency only]
 ${ctx || '(none)'}
 
 [Field: ${field}]
-${FIELD_GUIDE_EN[field] || 'Natural English.'}
+${FIELD_GUIDE_EN[field] || 'Natural English, faithful to the source.'}
 
 [Korean source]
 ${src}

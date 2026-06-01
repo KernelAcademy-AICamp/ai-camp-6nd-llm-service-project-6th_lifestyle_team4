@@ -492,6 +492,44 @@
   .editorial-toggle.on { background: var(--espresso); }
   .editorial-toggle.on .knob { left: 22px; border-color: var(--espresso); }
 
+  /* 언어 세그먼트 토글 — [KR | ENG] 양쪽 라벨이 토글 안에 들어가고 활성쪽이 강조 */
+  .lang-segmented {
+    display: inline-flex;
+    align-items: stretch;
+    background: var(--latte);
+    border-radius: 999px;
+    padding: 2px;
+    height: 26px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: background 0.2s;
+  }
+  .lang-segmented .seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--walnut);
+    transition: background 0.2s, color 0.2s;
+    line-height: 1;
+  }
+  /* KR 활성 (기본 = 한국어) */
+  .lang-segmented:not(.on) .seg-ko {
+    background: var(--espresso);
+    color: var(--paper);
+  }
+  /* ENG 활성 */
+  .lang-segmented.on .seg-en {
+    background: var(--espresso);
+    color: var(--paper);
+  }
+
   /* Star rating (의견 남기기 만족도) */
   .star-rating { display: flex; gap: 6px; }
   .star-rating .star {
@@ -1279,9 +1317,9 @@
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div id="today-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <span id="today-lang-label" class="c-walnut" style="display:none;font-size:10px;font-weight:700;letter-spacing:0.1em;line-height:1;">ENG</span>
-            <div id="today-lang-toggle" class="editorial-toggle" role="switch" aria-checked="false" tabindex="0" aria-label="영문 보기 전환" style="display:none;">
-              <div class="knob"></div>
+            <div id="today-lang-toggle" class="lang-segmented" role="switch" aria-checked="false" tabindex="0" aria-label="영문 보기 전환" style="display:none;">
+              <div class="seg seg-ko">KR</div>
+              <div class="seg seg-en">ENG</div>
             </div>
             <button id="today-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:0;">
               <span class="material-symbols-outlined c-walnut" style="font-size:24px;">bookmark</span>
@@ -1749,11 +1787,12 @@
     <div id="detail-meta" style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;"></div>
     <div style="height:24px;"></div>
 
-    <!-- 영문 보기 전환 — 푸시알림 토글과 동일한 editorial-toggle 스타일, 장면 설명 위에 가로 행으로 배치 -->
+    <!-- 언어 전환 — 장면 설명 위 가로 긴 행, 토글 안에 KR/ENG 라벨. 좌측 라벨은 토글 상태에 따라 바뀜 -->
     <div id="detail-lang-toggle-row" style="display:none;align-items:center;justify-content:space-between;padding:14px 0;border-top:1px solid var(--latte);border-bottom:1px solid var(--latte);">
-      <span class="t-body-md c-espresso" style="font-weight:500;">원문(영문)으로 보기</span>
-      <div id="detail-lang-toggle" class="editorial-toggle" role="switch" aria-checked="false" tabindex="0" aria-label="영문 보기 전환">
-        <div class="knob"></div>
+      <span id="detail-lang-row-label" class="t-body-md c-espresso" style="font-weight:500;">원문(영문)으로 보기</span>
+      <div id="detail-lang-toggle" class="lang-segmented" role="switch" aria-checked="false" tabindex="0" aria-label="영문 보기 전환">
+        <div class="seg seg-ko">KR</div>
+        <div class="seg seg-en">ENG</div>
       </div>
     </div>
     <div id="detail-lang-spacer" style="display:none;height:20px;"></div>

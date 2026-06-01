@@ -3277,10 +3277,14 @@ function openDetail(card) {
   detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
     + renderCounts(card);
 
-  // 상세 ENG 토글 — 장면 설명 위 가로 행 (editorial-toggle 스타일, push 알림과 동일 느낌)
+  // 상세 ENG 토글 — 장면 설명 위 가로 행 (lang-segmented, 토글 안에 KR/ENG 라벨)
   const detailLangRow = document.getElementById('detail-lang-toggle-row');
   const detailLangSpacer = document.getElementById('detail-lang-spacer');
   const detailLangBtn = document.getElementById('detail-lang-toggle');
+  const detailLangRowLabel = document.getElementById('detail-lang-row-label');
+  // 좌측 라벨 — 토글 상태에 따라 바뀜 (KR 모드: 한국어로 안내, EN 모드: 영어로 안내)
+  const LANG_LABEL_KO = '원문(영문)으로 보기';
+  const LANG_LABEL_EN = 'View in Korean';
   if (detailLangRow && detailLangBtn) {
     const hasEn = !!(card.quote_original || card.script_excerpt_original ||
                      card.excerpt_description_original || card.significance_original ||
@@ -3291,6 +3295,7 @@ function openDetail(card) {
     // 매번 OFF(KR) 상태로 리셋 — 새 카드 진입 시 한국어부터
     detailLangBtn.classList.remove('on');
     detailLangBtn.setAttribute('aria-checked', 'false');
+    if (detailLangRowLabel) detailLangRowLabel.textContent = LANG_LABEL_KO;
     // 핸들러는 매번 새로 바인딩 — 노드 교체로 이전 카드 핸들러 제거
     const fresh = detailLangBtn.cloneNode(true);
     detailLangBtn.parentNode.replaceChild(fresh, detailLangBtn);
@@ -3301,6 +3306,9 @@ function openDetail(card) {
       const isEn = state.detailLang === 'en';
       fresh.classList.toggle('on', isEn);
       fresh.setAttribute('aria-checked', isEn ? 'true' : 'false');
+      if (detailLangRowLabel) {
+        detailLangRowLabel.textContent = isEn ? LANG_LABEL_EN : LANG_LABEL_KO;
+      }
     });
   }
 
