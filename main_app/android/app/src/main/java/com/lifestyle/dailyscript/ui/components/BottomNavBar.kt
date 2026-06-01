@@ -12,11 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Campaign
-import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.LocalLibrary
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -68,7 +68,7 @@ fun BottomNavBar(
             NavItem(
                 route = Routes.ARCHIVE,
                 label = stringResource(R.string.nav_archive),
-                icon = Icons.Outlined.History,
+                icon = Icons.Outlined.LocalLibrary,
                 active = currentRoute == Routes.ARCHIVE,
                 onClick = onSelect,
                 modifier = Modifier.weight(1f),
@@ -76,7 +76,7 @@ fun BottomNavBar(
             NavItem(
                 route = Routes.FEED,
                 label = stringResource(R.string.nav_feed),
-                icon = Icons.AutoMirrored.Outlined.MenuBook,
+                icon = Icons.Outlined.DynamicFeed,
                 active = currentRoute == Routes.FEED,
                 onClick = onSelect,
                 modifier = Modifier.weight(1f),
@@ -93,7 +93,7 @@ fun BottomNavBar(
             NavItem(
                 route = Routes.SETTINGS,
                 label = stringResource(R.string.nav_settings),
-                icon = Icons.Outlined.Settings,
+                icon = Icons.Outlined.Person,
                 active = currentRoute == Routes.SETTINGS,
                 onClick = onSelect,
                 modifier = Modifier.weight(1f),

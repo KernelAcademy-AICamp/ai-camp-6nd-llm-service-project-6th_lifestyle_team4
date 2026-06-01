@@ -49,6 +49,7 @@ import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.DetailTopBar
 import com.lifestyle.dailyscript.ui.components.EditorialField
+import com.lifestyle.dailyscript.ui.components.LangSegmented
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -100,9 +101,6 @@ fun DetailScreen(
             title = topTitle,
             bookmarked = state.bookmarked,
             bookmarkEnabled = state.card != null && !state.bookmarkActionInFlight,
-            hasEnglish = hasEn,
-            english = english,
-            onToggleLang = { english = !english },
             onBack = onBack,
             onToggleBookmark = { vm.toggleBookmark(userId) },
         )
@@ -134,7 +132,12 @@ fun DetailScreen(
                         textAlign = TextAlign.Center,
                     )
                 }
-                Box(modifier = Modifier.height(28.dp))
+                Box(modifier = Modifier.height(24.dp))
+
+                if (hasEn) {
+                    LangRow(english = english, onToggle = { english = !english })
+                    Box(modifier = Modifier.height(24.dp))
+                }
 
                 val description = card.descriptionFor(english)
                 if (!description.isNullOrBlank()) {
@@ -240,6 +243,27 @@ fun DetailScreen(
             }
         }
     }
+}
+
+/** Full-width "원문(영문)으로 보기" row with the KR︱ENG segmented control (above the SCENE block). */
+@Composable
+private fun LangRow(english: Boolean, onToggle: () -> Unit) {
+    Hairline()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = if (english) "한국어로 보기" else "원문(영문)으로 보기",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Walnut,
+        )
+        LangSegmented(english = english, onToggle = onToggle)
+    }
+    Hairline()
 }
 
 @Composable

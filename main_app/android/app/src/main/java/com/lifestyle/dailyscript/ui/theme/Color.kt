@@ -33,3 +33,9 @@ val Roast: Color
 
 val Highlight: Color
     @Composable @ReadOnlyComposable get() = LocalAppColors.current.highlight
+
+val CardWarm: Color
+    @Composable @ReadOnlyComposable get() = LocalAppColors.current.cardWarm
+
+val FeedCard: Color
+    @Composable @ReadOnlyComposable get() = LocalAppColors.current.feedCard

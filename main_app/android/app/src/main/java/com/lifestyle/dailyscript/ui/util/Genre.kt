@@ -15,5 +15,24 @@ private val GENRE_LABEL = mapOf(
     "prose" to "산문",
 )
 
+private val GENRE_LABEL_EN = mapOf(
+    "movie" to "Movie",
+    "drama" to "Drama",
+    "musical" to "Musical",
+    "opera" to "Opera",
+    "play" to "Play",
+    "novel" to "Novel",
+    "poem" to "Poem",
+    "essay" to "Essay",
+    "prose" to "Prose",
+)
+
 fun genreLabel(format: String?): String =
     GENRE_LABEL[format?.lowercase()] ?: "기타"
+
+/** Genre label honoring the KO/EN toggle (mirrors GENRE_LABEL / GENRE_LABEL_EN). */
+fun genreLabel(format: String?, english: Boolean): String {
+    val key = format?.lowercase()
+    return if (english) GENRE_LABEL_EN[key] ?: (format ?: "Etc.")
+    else GENRE_LABEL[key] ?: "기타"
+}

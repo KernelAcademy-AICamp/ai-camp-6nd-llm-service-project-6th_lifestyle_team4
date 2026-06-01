@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lifestyle.dailyscript.data.model.Notice
 import com.lifestyle.dailyscript.ui.detail.relativeTime
+import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Highlight
@@ -79,14 +80,14 @@ fun NoticeScreen(vm: NoticeViewModel) {
 @Composable
 private fun NoticeCard(notice: Notice) {
     var expanded by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Paper, shape)
+            .background(CardWarm, shape)
             .border(0.5.dp, Latte, shape)
             .clickable { expanded = !expanded }
-            .padding(16.dp),
+            .padding(horizontal = 18.dp, vertical = 20.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -124,22 +125,21 @@ private fun NoticeCard(notice: Notice) {
 
 @Composable
 private fun TagChip(tag: String) {
-    val (label, color) = when (tag) {
-        "update" -> "업데이트" to Cta
-        "event" -> "이벤트" to Highlight
-        else -> "공지" to Walnut
-    }
     val shape = RoundedCornerShape(4.dp)
+    val label: String
+    val bg: Color
+    val fg: Color
+    when (tag) {
+        "update" -> { label = "업데이트"; bg = Cta; fg = Color.White }
+        "event" -> { label = "이벤트"; bg = Highlight; fg = Color(0xFF2C2620) }
+        else -> { label = "공지"; bg = Espresso; fg = Paper }
+    }
     Box(
         modifier = Modifier
-            .background(color, shape)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .background(bg, shape)
+            .padding(horizontal = 9.dp, vertical = 3.dp),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (tag == "event") Espresso else Color.White,
-        )
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = fg)
     }
 }
 

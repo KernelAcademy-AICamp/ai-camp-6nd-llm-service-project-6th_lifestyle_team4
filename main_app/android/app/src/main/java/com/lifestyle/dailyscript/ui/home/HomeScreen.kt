@@ -45,7 +45,7 @@ import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.ChipTag
-import com.lifestyle.dailyscript.ui.components.LangPill
+import com.lifestyle.dailyscript.ui.components.LangSegmented
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.onboarding.CoachmarkOverlay
 import kotlinx.coroutines.launch
@@ -56,6 +56,7 @@ import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.displayTitle
+import com.lifestyle.dailyscript.ui.util.genreLabel
 import com.lifestyle.dailyscript.ui.util.keywordsFor
 import com.lifestyle.dailyscript.ui.util.quoteFor
 import java.time.LocalDate
@@ -218,7 +219,7 @@ private fun TodayCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val format = card?.works?.format
-                if (!format.isNullOrBlank()) ChipTag(text = format, filled = true)
+                if (!format.isNullOrBlank()) ChipTag(text = genreLabel(format, english), filled = true)
                 if (card != null) {
                     CardCounts(viewCount = card.viewCount, bookmarkCount = bookmarkCount)
                 }
@@ -228,7 +229,7 @@ private fun TodayCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (card?.hasEnglish() == true) {
-                    LangPill(english = english, onToggle = { english = !english })
+                    LangSegmented(english = english, onToggle = { english = !english })
                 }
                 Icon(
                     imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
@@ -250,6 +251,15 @@ private fun TodayCard(
             style = MaterialTheme.typography.headlineMedium,
             color = Espresso,
         )
+        val workMeta = card?.let { workMetaLine(it, english) }
+        if (!workMeta.isNullOrBlank()) {
+            Box(modifier = Modifier.height(18.dp))
+            Text(
+                text = workMeta,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Walnut,
+            )
+        }
         Box(modifier = Modifier.height(24.dp))
         SectionDivider()
         Box(modifier = Modifier.height(12.dp))
@@ -324,6 +334,17 @@ private fun SectionDivider() {
             .height(0.5.dp)
             .background(Latte),
     )
+}
+
+/** "— 장르 <제목> 부제" line under the quote (mirrors the PWA's todayWork, applyTodayLang). */
+private fun workMetaLine(card: CardDto, english: Boolean): String? {
+    val w = card.works ?: return null
+    val title = (if (english) w.titleOriginal?.ifBlank { null } else null) ?: w.title
+    if (title.isBlank()) return null
+    val subtitle = (if (english) w.subtitleOriginal?.ifBlank { null } else null) ?: w.subtitle
+    val titleBlock = if (!subtitle.isNullOrBlank()) "<$title> ${subtitle.trim()}" else "<$title>"
+    val genre = genreLabel(w.format, english)
+    return if (genre.isNotBlank()) "— $genre $titleBlock" else "— $titleBlock"
 }
 
 private fun todayString(): String {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -41,15 +43,18 @@ import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.data.model.Highlight
 import com.lifestyle.dailyscript.ui.components.EditorialField
-import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.detail.relativeTime
+import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
+import com.lifestyle.dailyscript.ui.theme.FeedCard
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.displayTitle
+import com.lifestyle.dailyscript.ui.util.genreLabel
+import kotlin.math.absoluteValue
 
 @Composable
 fun FeedScreen(
@@ -80,10 +85,10 @@ fun FeedScreen(
             // Category tabs
             Row(
                 modifier = Modifier.padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                CategoryTab("오늘의 한줄", state.category == FEED_TODAY) { vm.setCategory(FEED_TODAY) }
-                CategoryTab("하이라이트", state.category == FEED_HIGHLIGHT) { vm.setCategory(FEED_HIGHLIGHT) }
+                FeedChip("오늘의 한줄", state.category == FEED_TODAY) { vm.setCategory(FEED_TODAY) }
+                FeedChip("하이라이트", state.category == FEED_HIGHLIGHT) { vm.setCategory(FEED_HIGHLIGHT) }
             }
             Box(modifier = Modifier.height(8.dp))
 
@@ -140,91 +145,167 @@ fun FeedScreen(
     }
 }
 
+// --- Leather palette for feed book mockups (fixed, theme-independent — like the archive spines). ---
+private val FeedGold = Color(0xFFC9A24B)
+private val FeedGoldBright = Color(0xFFE6CC82)
+private val BookCream = Color(0xFFFAF8F2)
+private val FeedLeathers = listOf(
+    Color(0xFF0E0C0A), Color(0xFF5A2A24), Color(0xFF2F3A30), Color(0xFF293541),
+    Color(0xFF6A4A30), Color(0xFF40303B), Color(0xFF3A463F), Color(0xFF1F2A3A),
+    Color(0xFF4A2B1A), Color(0xFF3D2E22), Color(0xFF26393B), Color(0xFF2E2538),
+)
+
+private fun leatherColorFor(title: String?): Color {
+    val key = (title ?: "").ifBlank { "?" }
+    return FeedLeathers[key.hashCode().absoluteValue % FeedLeathers.size]
+}
+
 @Composable
-private fun CategoryTab(label: String, active: Boolean, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick),
+private fun FeedChip(text: String, active: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(4.dp)
+    Box(
+        modifier = Modifier
+            .background(if (active) Espresso else Paper, shape)
+            .border(1.dp, if (active) Espresso else Latte, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleLarge,
-            color = if (active) Espresso else Walnut,
-        )
-        Box(modifier = Modifier.height(4.dp))
-        Box(
-            modifier = Modifier
-                .height(2.dp)
-                .size(width = 28.dp, height = 2.dp)
-                .background(if (active) Cta else Color.Transparent),
-        )
+        Text(text, style = MaterialTheme.typography.labelSmall, color = if (active) Paper else Walnut, maxLines = 1)
     }
 }
 
+/** "오늘의 한줄" — a paper note resting on a leather book strip. */
 @Composable
 private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
-    FeedCardFrame(
-        nickname = post.authorNickname ?: "익명",
-        time = relativeTime(post.createdAt),
-        card = post.cards,
-        onClick = onClick,
-    ) {
-        Text(text = post.body, style = MaterialTheme.typography.bodyLarge, color = Espresso)
-    }
-}
-
-@Composable
-private fun HighlightCard(hl: Highlight, onClick: () -> Unit) {
-    FeedCardFrame(
-        nickname = hl.authorNickname ?: "익명",
-        time = relativeTime(hl.createdAt),
-        card = hl.cards,
-        onClick = onClick,
-    ) {
-        Text(
-            text = "“${hl.selectedText}”",
-            style = MaterialTheme.typography.titleLarge.copy(fontFamily = EditorialSerif),
-            color = Espresso,
-        )
-        if (!hl.userNote.isNullOrBlank()) {
-            Box(modifier = Modifier.height(8.dp))
-            Text(text = hl.userNote, style = MaterialTheme.typography.bodyMedium, color = Walnut)
-        }
-    }
-}
-
-@Composable
-private fun FeedCardFrame(
-    nickname: String,
-    time: String,
-    card: CardDto?,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val shape = RoundedCornerShape(8.dp)
+    val w = post.cards?.works
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Paper, shape)
-            .border(0.5.dp, Latte, shape)
+            .background(FeedCard)
             .clickable(onClick = onClick)
-            .padding(16.dp),
+            .padding(start = 24.dp, top = 16.dp, end = 24.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text = nickname, style = MaterialTheme.typography.titleMedium, color = Espresso)
-            Text(text = time, style = MaterialTheme.typography.labelSmall, color = Walnut)
+            Text(post.authorNickname ?: "익명", style = MaterialTheme.typography.bodySmall, color = Espresso)
+            Text(relativeTime(post.createdAt), style = MaterialTheme.typography.labelSmall, color = Walnut)
         }
-        Box(modifier = Modifier.height(10.dp))
-        content()
-        val meta = listOfNotNull(card?.works?.format?.uppercase(), card?.works.displayTitle().ifBlank { null })
-            .joinToString("  ·  ")
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+                .height(0.5.dp)
+                .background(Latte),
+        )
+        Box(modifier = Modifier.height(14.dp))
+        // paper note
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.80f)
+                .align(Alignment.CenterHorizontally)
+                .background(BookCream)
+                .padding(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 30.dp),
+        ) {
+            Text(
+                text = post.body,
+                style = MaterialTheme.typography.bodyLarge.copy(fontFamily = EditorialSerif),
+                color = Color(0xFF2C2620),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        // leather book strip, pulled up to overlap the paper bottom
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(y = (-20).dp)
+                .background(leatherColorFor(w?.title))
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(FeedGold),
+            )
+            Box(modifier = Modifier.height(8.dp))
+            Text(
+                text = w.displayTitle().ifBlank { "—" },
+                style = MaterialTheme.typography.titleMedium.copy(fontFamily = EditorialSerif),
+                color = FeedGoldBright,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** "하이라이트" — a leather book cover + the saved excerpt below. */
+@Composable
+private fun HighlightCard(hl: Highlight, onClick: () -> Unit) {
+    val w = hl.cards?.works
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(0.5.dp, Latte)
+            .background(CardWarm)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(hl.authorNickname ?: "익명", style = MaterialTheme.typography.titleMedium, color = Espresso)
+        val meta = listOfNotNull(
+            w?.format?.let { genreLabel(it).uppercase() },
+            w.displayTitle().ifBlank { null },
+        ).joinToString("  ·  ")
         if (meta.isNotBlank()) {
-            Box(modifier = Modifier.height(10.dp))
-            Text(text = meta, style = MaterialTheme.typography.labelSmall, color = Walnut, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box(modifier = Modifier.height(6.dp))
+            Text(meta, style = MaterialTheme.typography.labelSmall, color = Walnut, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+
+        Box(modifier = Modifier.height(20.dp))
+        // book cover
+        Column(
+            modifier = Modifier
+                .size(width = 132.dp, height = 188.dp)
+                .background(leatherColorFor(w?.title), RoundedCornerShape(4.dp))
+                .padding(horizontal = 14.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = (w?.title ?: hl.selectedText.take(20)),
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = EditorialSerif),
+                color = BookCream,
+                textAlign = TextAlign.Center,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val author = w?.author
+            if (!author.isNullOrBlank()) {
+                Box(modifier = Modifier.height(14.dp))
+                Text(
+                    text = author.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BookCream.copy(alpha = 0.78f),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+
+        Box(modifier = Modifier.height(20.dp))
+        Text(
+            text = "“${hl.selectedText}”",
+            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = EditorialSerif),
+            color = Espresso,
+            textAlign = TextAlign.Center,
+        )
+        if (!hl.userNote.isNullOrBlank()) {
+            Box(modifier = Modifier.height(8.dp))
+            Text(hl.userNote, style = MaterialTheme.typography.bodyMedium, color = Walnut, textAlign = TextAlign.Center)
         }
     }
 }

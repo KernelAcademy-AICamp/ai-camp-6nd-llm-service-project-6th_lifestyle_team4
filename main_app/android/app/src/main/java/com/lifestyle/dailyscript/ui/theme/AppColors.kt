@@ -21,6 +21,8 @@ data class AppColors(
     val cta: Color,
     val roast: Color,
     val highlight: Color,
+    val cardWarm: Color,
+    val feedCard: Color,
 )
 
 val LightAppColors = AppColors(
@@ -32,6 +34,8 @@ val LightAppColors = AppColors(
     cta = Color(0xFFD85A30),       // coral CTA
     roast = Color(0xFF2C2620),     // pressed state of filled button
     highlight = Color(0xFFF4C20D), // signal (LIVE, star)
+    cardWarm = Color(0xFFFFFDF7),  // card bg inside modals / notice cards
+    feedCard = Color(0xFFE6E1D7),  // feed item container
 )
 
 val DarkAppColors = AppColors(
@@ -43,6 +47,8 @@ val DarkAppColors = AppColors(
     cta = Color(0xFFE0683E),       // coral CTA (slightly brighter on dark)
     roast = Color(0xFFE6DFD1),     // pressed state of (now light) filled button
     highlight = Color(0xFFF4C20D),
+    cardWarm = Color(0xFF15120E),  // card bg inside modals / notice cards (dark)
+    feedCard = Color(0xFF1C1813),  // feed item container (dark)
 )
 
 val LocalAppColors = staticCompositionLocalOf { LightAppColors }
