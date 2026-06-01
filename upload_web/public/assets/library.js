@@ -165,6 +165,9 @@ async function loadLibrary() {
     renderLibrary();
     if (libraryKeywordFreq && !libraryKeywordFreq.classList.contains('hidden')) renderKeywordFreq();
     libraryStatus.textContent = `총 ${state.rows.length}장 로드됨.`;
+    // 자동 영문 백필 — admin 이 EN 토글을 누르지 않아도 모든 카드의 *_original 가
+    // 미리 채워지도록 백그라운드에서 순차 ensureEnglishOriginals 호출. fire-and-forget.
+    autoBackfillBilingual().catch((e) => console.warn('[library] backfill error:', e));
   } catch (err) {
     console.error('[library] load error:', err);
     libraryStatus.textContent = `불러오기 실패: ${err.message || err}`;
@@ -1294,6 +1297,44 @@ function buildEditNode(card) {
   });
 
   return node;
+}
+
+// 라이브러리 진입 시 누락된 *_original 을 자동으로 채워 admin 이 EN 클릭하지 않아도
+// 토글이 즉시 동작하도록 한다. 순차 처리(동시 호출 1) — 같은 work 의 카드들이 work 메타를
+// 중복 번역하는 걸 피하고, Anthropic API 레이트도 보호.
+async function autoBackfillBilingual() {
+  const candidates = state.rows.filter((card) => {
+    const w = card.works || {};
+    return (
+      (!w.title_original    && w.title) ||
+      (!w.subtitle_original && w.subtitle) ||
+      (!w.author_original   && w.author) ||
+      (!card.quote_original          && card.quote) ||
+      (!card.script_excerpt_original && card.script_excerpt) ||
+      (!card.excerpt_description_original && card.excerpt_description) ||
+      (!card.significance_original   && card.significance) ||
+      ((!Array.isArray(card.keywords_original) || !card.keywords_original.length) &&
+       Array.isArray(card.keywords) && card.keywords.length)
+    );
+  });
+  if (!candidates.length) return;
+
+  const origStatus = libraryStatus?.textContent || '';
+  console.log(`[library] auto-backfill: ${candidates.length} cards`);
+
+  for (let i = 0; i < candidates.length; i++) {
+    const card = candidates[i];
+    if (libraryStatus) {
+      libraryStatus.textContent = `이중 언어 자동 백필 중⋯ (${i + 1}/${candidates.length}) · 백그라운드`;
+    }
+    try {
+      await ensureEnglishOriginals(card, card.works || {});
+    } catch (e) {
+      console.warn('[library] backfill failed card', card.card_id, e?.message || e);
+    }
+  }
+  if (libraryStatus) libraryStatus.textContent = origStatus;
+  console.log('[library] auto-backfill complete');
 }
 
 // 보기 토글에서 영문 칸이 비어 있는 필드를 즉시 KO→EN 번역해서 채운다 (lazy).

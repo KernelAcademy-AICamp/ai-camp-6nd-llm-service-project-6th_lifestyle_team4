@@ -1320,7 +1320,8 @@ function applyTodayLang(lang) {
   const workTitle = displayTitle(titleSrc || '');
   if (workTitle) {
     const fmt = w.format || '';
-    const genreLabel = GENRE_LABEL[fmt] || '';
+    // EN 모드면 영문 라벨(Novel, Movie...) — 한국어 모드면 기존 라벨(소설, 영화...)
+    const genreLabel = useEn ? (GENRE_LABEL_EN[fmt] || fmt) : (GENRE_LABEL[fmt] || '');
     const sub = subtitleSrc ? String(subtitleSrc).trim() : '';
     const titleBlock = sub ? `<${workTitle}> ${sub}` : `<${workTitle}>`;
     todayWork.textContent = genreLabel ? `— ${genreLabel} ${titleBlock}` : `— ${titleBlock}`;
@@ -1508,6 +1509,18 @@ const GENRE_LABEL = {
   poem: '시',
   essay: '에세이',
   prose: '산문',
+};
+// 영문 보기 시 형식 라벨 — 한국어 GENRE_LABEL 과 1:1 대응.
+const GENRE_LABEL_EN = {
+  movie: 'Movie',
+  drama: 'Drama',
+  musical: 'Musical',
+  opera: 'Opera',
+  play: 'Play',
+  novel: 'Novel',
+  poem: 'Poem',
+  essay: 'Essay',
+  prose: 'Prose',
 };
 // 작품 제목 해시 → 고정 가죽 색상 (같은 작품엔 항상 같은 책등 색)
 const LEATHER_PALETTE = [
