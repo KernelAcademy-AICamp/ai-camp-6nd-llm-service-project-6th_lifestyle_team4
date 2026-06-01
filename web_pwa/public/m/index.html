@@ -519,14 +519,14 @@
     transition: background 0.2s, color 0.2s;
     line-height: 1;
   }
-  /* KR 활성 (기본 = 한국어) */
+  /* KR 활성 (기본) — 진한 espresso 대신 중간 톤 walnut 으로 통일감 */
   .lang-segmented:not(.on) .seg-ko {
-    background: var(--espresso);
+    background: var(--walnut);
     color: var(--paper);
   }
   /* ENG 활성 */
   .lang-segmented.on .seg-en {
-    background: var(--espresso);
+    background: var(--walnut);
     color: var(--paper);
   }
 
@@ -1789,7 +1789,7 @@
 
     <!-- 언어 전환 — 장면 설명 위 가로 긴 행, 토글 안에 KR/ENG 라벨. 좌측 라벨은 토글 상태에 따라 바뀜 -->
     <div id="detail-lang-toggle-row" style="display:none;align-items:center;justify-content:space-between;padding:14px 0;border-top:1px solid var(--latte);border-bottom:1px solid var(--latte);">
-      <span id="detail-lang-row-label" class="t-body-md c-espresso" style="font-weight:500;">원문(영문)으로 보기</span>
+      <span id="detail-lang-row-label" class="t-body-md c-walnut" style="font-weight:500;">원문(영문)으로 보기</span>
       <div id="detail-lang-toggle" class="lang-segmented" role="switch" aria-checked="false" tabindex="0" aria-label="영문 보기 전환">
         <div class="seg seg-ko">KR</div>
         <div class="seg seg-en">ENG</div>

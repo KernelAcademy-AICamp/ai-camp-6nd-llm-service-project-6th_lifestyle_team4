@@ -599,18 +599,22 @@ export async function runTranslateField({ text, field, work, direction = 'en2ko'
 
   let prompt, system;
   if (direction === 'ko2en') {
-    system = 'You are a precise Korean→English literary translator. Translate faithfully and literally. Preserve the original meaning, sentence structure, and all details. Do NOT paraphrase, summarize, or add new information. Output a single JSON object only. No prose, no markdown.';
-    prompt = `Translate the following Korean text into English. Be faithful and literal.
+    system = 'You are a precise Korean→English literary translator. Translate faithfully and literally. Match the source length closely — never expand. Preserve the original meaning, sentence structure, and all details. Do NOT paraphrase, summarize, or add new information. Output a single JSON object only. No prose, no markdown.';
+    // 원본 문장 수를 셈 — LLM 에게 "정확히 이만큼" 으로 명시.
+    const srcSentenceCount = (src.match(/[.!?。！？\n]+/g) || []).length || 1;
+    const srcCharCount = src.length;
+    prompt = `Translate the following Korean text into English. Be faithful, literal, and CONCISE.
 
-[Translation rules]
+[Translation rules — hard requirements]
 1. Translate the Korean directly. Do NOT paraphrase or reinterpret.
-2. Keep the SAME number of sentences and paragraphs as the original.
-3. Preserve every detail, name, and claim in the Korean source.
-4. Match the original tone (narrative, commentary, etc.).
-5. Use natural English wording, but stay close to the Korean structure.
-6. Do NOT add new information or context that isn't in the source.
+2. Output must have the SAME number of sentences as the original (≈ ${srcSentenceCount} sentence(s)).
+3. Output length should be similar to the source (the Korean source is ${srcCharCount} chars). English is usually slightly longer per word — but do not exceed ~1.8x.
+4. Preserve every detail, name, and claim in the Korean — no omissions.
+5. Do NOT add new information, context, examples, or explanations not in the source.
+6. Match the original tone (narrative, commentary, etc.).
+7. Use natural English wording, but stay close to the Korean structure.
 
-[Work context — for terminology consistency only]
+[Work context — for terminology consistency only, do NOT translate from it]
 ${ctx || '(none)'}
 
 [Field: ${field}]
@@ -620,7 +624,7 @@ ${FIELD_GUIDE_EN[field] || 'Natural English, faithful to the source.'}
 ${src}
 
 Output: a single JSON line, no other keys or explanation.
-{"text":"English translation"}`;
+{"text":"English translation matching the source length and detail"}`;
   } else {
     system = TRANSLATE_SYSTEM;
     prompt = `너는 한국어 정전 감각을 가진 번역가다. 다음 영문을 한국어로 옮긴다.

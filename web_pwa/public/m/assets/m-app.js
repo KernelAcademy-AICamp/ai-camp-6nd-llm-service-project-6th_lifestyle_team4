@@ -1314,11 +1314,26 @@ function applyTodayLang(lang) {
   const w = card.works || {};
   const useEn = lang === 'en';
 
-  const quoteSrc    = useEn && card.quote_original    ? card.quote_original    : card.quote;
-  const titleSrc    = useEn && w.title_original       ? w.title_original       : w.title;
-  const subtitleSrc = useEn && w.subtitle_original    ? w.subtitle_original    : w.subtitle;
+  const quoteSrc    = useEn && card.quote_original          ? card.quote_original          : card.quote;
+  const scriptSrc   = useEn && card.script_excerpt_original ? card.script_excerpt_original : card.script_excerpt;
+  const titleSrc    = useEn && w.title_original             ? w.title_original             : w.title;
+  const subtitleSrc = useEn && w.subtitle_original          ? w.subtitle_original          : w.subtitle;
 
   todayQuote.innerHTML = `“${renderMarkdownBold(cleanQuote(quoteSrc))}”`;
+
+  // 화자(speaker) — EN 모드면 영문 script/quote 에서 다시 추출. 영문 대본의 'VICTOR:' 같은
+  // 라벨이 화자로 잡혀 한국어 화자(예: '빅터') 대신 표시된다.
+  if (todaySpeaker) {
+    const speaker = extractSpeaker(scriptSrc, w.characters, quoteSrc);
+    if (speaker) {
+      todaySpeaker.textContent = speaker;
+      todaySpeaker.style.display = 'block';
+      if (todaySpeakerSpacer) todaySpeakerSpacer.style.height = '12px';
+    } else {
+      todaySpeaker.style.display = 'none';
+      if (todaySpeakerSpacer) todaySpeakerSpacer.style.height = '0';
+    }
+  }
 
   const workTitle = displayTitle(titleSrc || '');
   if (workTitle) {
@@ -3268,14 +3283,25 @@ function openDetail(card) {
     }
   }
 
-  // metadata chips row (FORMAT / AUTHOR / YEAR — uppercase labels)
-  const items = [
+  // metadata 두 행 분리:
+  //   1행: 형식 / 작가 (FORMAT / AUTHOR)
+  //   2행: 연도 · 조회수 · 북마크
+  const headItems = [
     w.format ? w.format.toUpperCase() : null,
     w.author ? w.author.toUpperCase() : null,
-    w.release_year ? String(w.release_year) : null,
   ].filter(Boolean);
-  detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
-    + renderCounts(card);
+  const yearHtml = w.release_year
+    ? `<span class="t-label-sm c-walnut">${escapeHtml(String(w.release_year))}</span><span class="t-label-sm c-walnut">·</span>`
+    : '';
+  detailMeta.style.flexDirection = 'column';
+  detailMeta.innerHTML =
+      `<div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;">`
+    + headItems.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
+    + `</div>`
+    + `<div style="margin-top:6px;display:flex;gap:6px;justify-content:center;align-items:center;">`
+    + yearHtml
+    + renderCounts(card)
+    + `</div>`;
 
   // 상세 ENG 토글 — 장면 설명 위 가로 행 (lang-segmented, 토글 안에 KR/ENG 라벨)
   const detailLangRow = document.getElementById('detail-lang-toggle-row');
@@ -3404,14 +3430,22 @@ function applyDetailLang(lang) {
     }
   }
 
-  // 메타 (FORMAT / AUTHOR / YEAR)
-  const items = [
+  // 메타 두 행 — 1행: 형식·작가  /  2행: 연도·조회·북마크
+  const headItems = [
     w.format ? w.format.toUpperCase() : null,
     authorSrc ? String(authorSrc).toUpperCase() : null,
-    w.release_year ? String(w.release_year) : null,
   ].filter(Boolean);
-  detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
-    + renderCounts(card);
+  const yearHtml = w.release_year
+    ? `<span class="t-label-sm c-walnut">${escapeHtml(String(w.release_year))}</span><span class="t-label-sm c-walnut">·</span>`
+    : '';
+  detailMeta.innerHTML =
+      `<div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;">`
+    + headItems.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
+    + `</div>`
+    + `<div style="margin-top:6px;display:flex;gap:6px;justify-content:center;align-items:center;">`
+    + yearHtml
+    + renderCounts(card)
+    + `</div>`;
 
   // 발췌 (script_excerpt) 스왑
   {
