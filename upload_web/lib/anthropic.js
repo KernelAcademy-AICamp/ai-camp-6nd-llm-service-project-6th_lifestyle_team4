@@ -75,7 +75,9 @@ async function callClaude(
         messages,
       };
       if (temperature !== null) payload.temperature = temperature;
-      if (topP !== null) payload.top_p = topP;
+      // 신형 Claude 모델은 temperature 와 top_p 를 동시에 보내면 400 거부.
+      // temperature 가 우선이고, top_p 는 temperature 가 없을 때만 보낸다.
+      if (topP !== null && temperature === null) payload.top_p = topP;
       const res = await getClient().messages.create(payload);
       const text = res.content
         .filter((b) => b.type === 'text')
@@ -529,11 +531,11 @@ export async function runTranslate(work, card) {
   // script_excerpt가 2000자 이상으로 길어, 영문→한국어 번역 출력이 4096 토큰을 넘어
   // JSON이 중간에 잘리는 문제(=valid JSON 실패)를 막기 위해 넉넉히 16000으로.
   // prefill로 응답 JSON 헤더를 미리 박아 모델이 형식 토큰에 자원을 덜 쓰게 한다.
+  // 신형 모델은 temperature 와 top_p 동시 지정 시 400 에러. temperature 만 사용.
   const result = await callClaude(prompt, {
     maxTokens: 16000,
     system: TRANSLATE_SYSTEM,
     temperature: 0.3,
-    topP: 0.9,
     prefill: '{"quote":"',
   });
 
@@ -591,7 +593,6 @@ ${src}
     maxTokens: field === 'script_excerpt' ? 8000 : 1024,
     system: TRANSLATE_SYSTEM,
     temperature: 0.3,
-    topP: 0.9,
     prefill: '{"text":"',
   });
   const out = String(result?.text ?? '').trim();
