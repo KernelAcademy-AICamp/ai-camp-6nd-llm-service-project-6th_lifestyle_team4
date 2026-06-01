@@ -7,6 +7,7 @@ import com.lifestyle.dailyscript.data.model.Comment
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
 import com.lifestyle.dailyscript.data.repo.CommentRepository
+import com.lifestyle.dailyscript.data.repo.FeedRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,7 @@ class DetailViewModel : ViewModel() {
     private val cardRepo = CardRepository()
     private val bookmarkRepo = BookmarkRepository()
     private val commentRepo = CommentRepository()
+    private val feedRepo = FeedRepository()
 
     private var currentCardId = -1L
 
@@ -33,16 +35,20 @@ class DetailViewModel : ViewModel() {
         viewModelScope.launch {
             val cardResult = runCatching { cardRepo.fetchCardById(cardId) }
             val bookmarkResult = runCatching { bookmarkRepo.isBookmarked(userId, cardId) }
+            val count = runCatching { bookmarkRepo.counts(listOf(cardId))[cardId] }.getOrNull() ?: 0
             _state.value = _state.value.copy(
                 loading = false,
                 card = cardResult.getOrNull(),
                 bookmarked = bookmarkResult.getOrDefault(false),
+                bookmarkCount = count,
                 error = listOfNotNull(
                     cardResult.exceptionOrNull()?.message,
                     bookmarkResult.exceptionOrNull()?.message,
                 ).joinToString(" / ").ifBlank { null },
             )
         }
+        // Fire-and-forget view increment (mirrors PWA m-app.js:3235). Failure is non-fatal.
+        viewModelScope.launch { runCatching { cardRepo.incrementView(cardId) } }
         loadComments()
     }
 
@@ -53,7 +59,12 @@ class DetailViewModel : ViewModel() {
         viewModelScope.launch {
             runCatching { bookmarkRepo.toggle(userId, card.cardId) }
                 .onSuccess { now ->
-                    _state.value = _state.value.copy(bookmarked = now, bookmarkActionInFlight = false)
+                    val delta = if (now) 1 else -1
+                    _state.value = _state.value.copy(
+                        bookmarked = now,
+                        bookmarkCount = (_state.value.bookmarkCount + delta).coerceAtLeast(0),
+                        bookmarkActionInFlight = false,
+                    )
                 }
                 .onFailure { error ->
                     _state.value = _state.value.copy(
@@ -126,6 +137,25 @@ class DetailViewModel : ViewModel() {
         }
     }
 
+    // ---------- Highlights ----------
+    fun saveHighlight(userId: Long, nickname: String, selectedText: String, note: String) {
+        val cardId = currentCardId
+        val text = selectedText.trim()
+        if (text.isEmpty() || cardId <= 0L || _state.value.highlightSaving) return
+        _state.value = _state.value.copy(highlightSaving = true, highlightMessage = null)
+        viewModelScope.launch {
+            runCatching { feedRepo.addHighlight(cardId, userId, text, note, nickname.ifBlank { null }) }
+                .onSuccess {
+                    _state.value = _state.value.copy(highlightSaving = false, highlightMessage = "하이라이트를 피드에 저장했어요.")
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(highlightSaving = false, highlightMessage = "저장 실패: ${it.message ?: ""}")
+                }
+        }
+    }
+
+    fun consumeHighlightMessage() { _state.value = _state.value.copy(highlightMessage = null) }
+
     fun deleteComment(userId: Long, commentId: Long) {
         viewModelScope.launch {
             runCatching { commentRepo.deleteComment(commentId, userId) }
@@ -150,6 +180,7 @@ data class DetailState(
     val loading: Boolean = true,
     val card: CardDto? = null,
     val bookmarked: Boolean = false,
+    val bookmarkCount: Int = 0,
     val error: String? = null,
     val bookmarkActionInFlight: Boolean = false,
     val comments: List<Comment> = emptyList(),
@@ -157,4 +188,6 @@ data class DetailState(
     val commentSubmitting: Boolean = false,
     val commentsError: String? = null,
     val replyingTo: Comment? = null,
+    val highlightSaving: Boolean = false,
+    val highlightMessage: String? = null,
 )

@@ -7,6 +7,7 @@ import com.lifestyle.dailyscript.data.Recommend
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
+import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,12 +38,14 @@ class HomeViewModel : ViewModel() {
             val today = Recommend.pickToday(allCards, tasteEnabled, bookmarkCards)
             if (today != null) AppPreferences.rememberShown(today.cardId)
             val recentIds = AppPreferences.recentlyShown.first()
+            val recent = buildRecent(recentIds)
 
             _state.value = HomeState(
                 loading = false,
                 todayCard = today,
                 todayBookmarked = today != null && bookmarkCards.any { it.cardId == today.cardId },
-                recent = buildRecent(recentIds),
+                recent = recent,
+                bookmarkCounts = loadCounts(listOfNotNull(today) + recent),
                 error = listOfNotNull(
                     cardsResult.exceptionOrNull()?.message,
                     bookmarksResult.exceptionOrNull()?.message,
@@ -51,21 +54,39 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    /** Refresh — non-deterministic pick excluding recently shown. */
-    fun refresh(userId: Long) {
+    /** Bookmark counts (card_id → count) for the given cards; empty on failure. */
+    private suspend fun loadCounts(cards: List<CardDto>): Map<Long, Int> {
+        val ids = cards.map { it.cardId }.distinct()
+        return runCatching { bookmarkRepo.counts(ids) }.getOrDefault(emptyMap())
+    }
+
+    /** Refresh — non-deterministic pick excluding recently shown. Non-members are capped at 3/day. */
+    fun refresh(userId: Long, isAnonymous: Boolean) {
         if (allCards.isEmpty()) { load(userId); return }
-        _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
+            if (isAnonymous) {
+                val today = LocalDate.now().toString()
+                if (AppPreferences.refreshCountToday(today) >= FREE_REFRESH_LIMIT) {
+                    _state.value = _state.value.copy(
+                        error = "오늘 새로고침 ${FREE_REFRESH_LIMIT}회를 모두 썼어요. 로그인하면 무제한이에요.",
+                    )
+                    return@launch
+                }
+                AppPreferences.bumpRefreshCount(today)
+            }
+            _state.value = _state.value.copy(loading = true, error = null)
             val tasteEnabled = AppPreferences.tasteEnabled.first()
             val recentIds = AppPreferences.recentlyShown.first()
             val pick = Recommend.pickRandom(allCards, tasteEnabled, bookmarkCards, recentIds)
             if (pick != null) AppPreferences.rememberShown(pick.cardId)
             val newRecentIds = AppPreferences.recentlyShown.first()
+            val recent = buildRecent(newRecentIds)
             _state.value = _state.value.copy(
                 loading = false,
                 todayCard = pick,
                 todayBookmarked = pick != null && bookmarkCards.any { it.cardId == pick.cardId },
-                recent = buildRecent(newRecentIds),
+                recent = recent,
+                bookmarkCounts = _state.value.bookmarkCounts + loadCounts(listOfNotNull(pick) + recent),
             )
         }
     }
@@ -100,6 +121,10 @@ class HomeViewModel : ViewModel() {
             .distinct()
             .take(3)
             .mapNotNull { id -> allCards.firstOrNull { it.cardId == id } }
+
+    private companion object {
+        const val FREE_REFRESH_LIMIT = 3
+    }
 }
 
 data class HomeState(
@@ -107,6 +132,7 @@ data class HomeState(
     val todayCard: CardDto? = null,
     val todayBookmarked: Boolean = false,
     val recent: List<CardDto> = emptyList(),
+    val bookmarkCounts: Map<Long, Int> = emptyMap(),
     val error: String? = null,
     val bookmarkActionInFlight: Boolean = false,
 )

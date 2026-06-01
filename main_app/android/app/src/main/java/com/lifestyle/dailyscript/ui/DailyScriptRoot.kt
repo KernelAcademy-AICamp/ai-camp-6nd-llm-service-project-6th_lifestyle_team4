@@ -32,8 +32,12 @@ import com.lifestyle.dailyscript.ui.components.HomeTopBar
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SettingsTopBar
 import com.lifestyle.dailyscript.ui.detail.DetailScreen
+import com.lifestyle.dailyscript.ui.feed.FeedScreen
+import com.lifestyle.dailyscript.ui.feedback.FeedbackScreen
 import com.lifestyle.dailyscript.ui.home.HomeScreen
 import com.lifestyle.dailyscript.ui.nav.Routes
+import com.lifestyle.dailyscript.ui.notice.NoticeScreen
+import com.lifestyle.dailyscript.ui.notice.NoticeViewModel
 import com.lifestyle.dailyscript.ui.settings.SettingsScreen
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Walnut
@@ -75,9 +79,14 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val authMessage by sessionVm.authMessage.collectAsState()
     val authInProgress by sessionVm.authInProgress.collectAsState()
 
+    val noticeVm: NoticeViewModel = viewModel()
+    val noticeBadge by noticeVm.unread.collectAsState()
+
+    val mainTabs = setOf(Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE, Routes.SETTINGS)
     val isDetail = currentRoute?.startsWith("detail/") == true || currentRoute == Routes.DETAIL
-    val showTopBar = !isDetail
-    val showBottomBar = !isDetail && currentRoute in setOf(Routes.HOME, Routes.ARCHIVE, Routes.SETTINGS)
+    val isFullScreen = isDetail || currentRoute == Routes.FEEDBACK
+    val showTopBar = !isFullScreen
+    val showBottomBar = !isFullScreen && currentRoute in mainTabs
     val initials = session.nickname.trim().take(2).ifBlank { "DS" }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -86,8 +95,8 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 Routes.HOME -> HomeTopBar(onMyPageClick = {
                     navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
                 })
-                Routes.SETTINGS -> SettingsTopBar(initials = initials)
-                Routes.ARCHIVE -> SettingsTopBar(initials = initials)
+                Routes.SETTINGS, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE ->
+                    SettingsTopBar(initials = initials)
                 else -> Unit
             }
         }
@@ -96,6 +105,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.HOME) {
                     HomeScreen(
                         userId = session.userId,
+                        isAnonymous = session.isAnonymous,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
@@ -105,6 +115,17 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
+                composable(Routes.FEED) {
+                    FeedScreen(
+                        userId = session.userId,
+                        isAnonymous = session.isAnonymous,
+                        myNickname = session.nickname,
+                        onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                    )
+                }
+                composable(Routes.NOTICE) {
+                    NoticeScreen(vm = noticeVm)
+                }
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
                         session = session,
@@ -112,8 +133,16 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         authInProgress = authInProgress,
                         onSignIn = { id, pw, signUp -> sessionVm.signIn(id, pw, signUp) },
                         onSignOut = sessionVm::signOutAndReauth,
-                        onUpdateNickname = sessionVm::updateNickname,
+                        onUpdateProfile = sessionVm::updateProfile,
+                        onOpenFeedback = { navController.navigate(Routes.FEEDBACK) },
                         onConsumeMessage = sessionVm::consumeAuthMessage,
+                    )
+                }
+                composable(Routes.FEEDBACK) {
+                    FeedbackScreen(
+                        initialGender = session.gender,
+                        initialAge = session.ageGroup,
+                        onBack = { navController.popBackStack() },
                     )
                 }
                 composable(
@@ -134,6 +163,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         if (showBottomBar) {
             BottomNavBar(
                 currentRoute = currentRoute,
+                noticeBadge = noticeBadge,
                 onSelect = { route ->
                     if (currentRoute != route) {
                         navController.navigate(route) {

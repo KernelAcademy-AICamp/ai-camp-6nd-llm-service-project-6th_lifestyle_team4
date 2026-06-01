@@ -75,6 +75,27 @@ class AppSessionViewModel : ViewModel() {
         }
     }
 
+    fun updateProfile(newName: String, gender: String?, ageGroup: String?) {
+        val session = (_state.value as? SessionState.Ready)?.session ?: return
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) { _authMessage.value = "이름을 입력해주세요"; return }
+        if (trimmed.length > 24) { _authMessage.value = "24자 이하로 입력해주세요"; return }
+        viewModelScope.launch {
+            runCatching { authRepo.updateProfile(session.userId, trimmed, gender, ageGroup) }
+                .onSuccess {
+                    _state.value = SessionState.Ready(
+                        session.copy(
+                            nickname = trimmed,
+                            gender = gender ?: session.gender,
+                            ageGroup = ageGroup ?: session.ageGroup,
+                        )
+                    )
+                    _authMessage.value = "프로필이 저장됐어요"
+                }
+                .onFailure { _authMessage.value = "저장 실패: ${it.message ?: ""}" }
+        }
+    }
+
     fun consumeAuthMessage() { _authMessage.value = null }
 
     private suspend fun bootstrapIntoState() {

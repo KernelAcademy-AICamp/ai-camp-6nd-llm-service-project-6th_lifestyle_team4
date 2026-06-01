@@ -11,11 +11,16 @@ import kotlinx.serialization.json.contentOrNull
 data class WorkDto(
     @SerialName("work_id") val workId: Long = 0,
     val title: String,
+    val subtitle: String? = null,
     val format: String,
     val author: String? = null,
     @SerialName("release_year") val releaseYear: Int? = null,
     // jsonb array of character names — used for speaker bolding in the detail view.
     val characters: JsonElement? = null,
+    // --- Bilingual originals (English). ---
+    @SerialName("title_original") val titleOriginal: String? = null,
+    @SerialName("subtitle_original") val subtitleOriginal: String? = null,
+    @SerialName("author_original") val authorOriginal: String? = null,
 ) {
     fun characterList(): List<String> = when (val c = characters) {
         is JsonArray -> c.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) }

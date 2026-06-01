@@ -21,35 +21,52 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
+import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.model.CardDto
+import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.ChipTag
+import com.lifestyle.dailyscript.ui.components.LangPill
 import com.lifestyle.dailyscript.ui.components.SharpButton
+import com.lifestyle.dailyscript.ui.onboarding.CoachmarkOverlay
+import kotlinx.coroutines.launch
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.util.displayTitle
+import com.lifestyle.dailyscript.ui.util.keywordsFor
+import com.lifestyle.dailyscript.ui.util.quoteFor
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     userId: Long,
+    isAnonymous: Boolean,
     onOpenCard: (Long) -> Unit,
 ) {
     val vm: HomeViewModel = viewModel()
@@ -57,13 +74,27 @@ fun HomeScreen(
 
     LaunchedEffect(userId) { vm.load(userId) }
 
-    Column(
+    // First-run onboarding (default true → never flashes before the real value loads).
+    val guideSeen by AppPreferences.guideSeen.collectAsState(initial = true)
+    val scope = rememberCoroutineScope()
+    var showGuide by remember { mutableStateOf(false) }
+    LaunchedEffect(guideSeen, state.loading, state.todayCard) {
+        if (!guideSeen && !state.loading && state.todayCard != null) showGuide = true
+    }
+
+    PullToRefreshBox(
+        isRefreshing = state.loading,
+        onRefresh = { vm.load(userId) },
         modifier = Modifier
             .fillMaxSize()
-            .background(Paper)
+            .background(Paper),
+    ) {
+      Column(
+        modifier = Modifier
+            .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
-    ) {
+      ) {
         Box(modifier = Modifier.height(32.dp))
         Text(
             text = todayString().uppercase(),
@@ -87,7 +118,7 @@ fun HomeScreen(
                 tint = Walnut,
                 modifier = Modifier
                     .size(40.dp)
-                    .clickable(enabled = !state.loading) { vm.refresh(userId) }
+                    .clickable(enabled = !state.loading) { vm.refresh(userId, isAnonymous) }
                     .padding(8.dp),
             )
         }
@@ -98,6 +129,7 @@ fun HomeScreen(
             bookmarked = state.todayBookmarked,
             bookmarkActionInFlight = state.bookmarkActionInFlight,
             loading = state.loading,
+            bookmarkCount = state.todayCard?.let { state.bookmarkCounts[it.cardId] } ?: 0,
             onBookmarkToggle = { vm.toggleTodayBookmark(userId) },
             onOpen = { state.todayCard?.let { onOpenCard(it.cardId) } },
         )
@@ -143,6 +175,14 @@ fun HomeScreen(
             }
         }
         Box(modifier = Modifier.height(40.dp))
+      }
+
+      if (showGuide) {
+          CoachmarkOverlay(onFinish = {
+              showGuide = false
+              scope.launch { AppPreferences.setGuideSeen() }
+          })
+      }
     }
 }
 
@@ -152,10 +192,14 @@ private fun TodayCard(
     bookmarked: Boolean,
     bookmarkActionInFlight: Boolean,
     loading: Boolean,
+    bookmarkCount: Int,
     onBookmarkToggle: () -> Unit,
     onOpen: () -> Unit,
 ) {
     val shape = RoundedCornerShape(8.dp)
+    // EN/KO toggle is ephemeral per-card UI state — resets when the card changes.
+    var english by remember(card?.cardId) { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -169,28 +213,40 @@ private fun TodayCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 val format = card?.works?.format
                 if (!format.isNullOrBlank()) ChipTag(text = format, filled = true)
-                card?.keywordList()?.firstOrNull()?.let { kw ->
-                    ChipTag(text = kw, filled = false)
+                if (card != null) {
+                    CardCounts(viewCount = card.viewCount, bookmarkCount = bookmarkCount)
                 }
             }
-            Icon(
-                imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                contentDescription = stringResource(R.string.bookmark),
-                tint = if (bookmarked) Cta else Walnut,
-                modifier = Modifier
-                    .size(24.dp)
-                    .clickable(
-                        enabled = card != null && !bookmarkActionInFlight,
-                        onClick = onBookmarkToggle,
-                    ),
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (card?.hasEnglish() == true) {
+                    LangPill(english = english, onToggle = { english = !english })
+                }
+                Icon(
+                    imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                    contentDescription = stringResource(R.string.bookmark),
+                    tint = if (bookmarked) Cta else Walnut,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clickable(
+                            enabled = card != null && !bookmarkActionInFlight,
+                            onClick = onBookmarkToggle,
+                        ),
+                )
+            }
         }
         Box(modifier = Modifier.height(28.dp))
         Text(
-            text = card?.quote?.let { "“$it”" } ?: if (loading) stringResource(R.string.loading) else "—",
+            text = card?.quoteFor(english)?.let { "“$it”" }
+                ?: if (loading) stringResource(R.string.loading) else "—",
             style = MaterialTheme.typography.headlineMedium,
             color = Espresso,
         )
@@ -198,7 +254,7 @@ private fun TodayCard(
         SectionDivider()
         Box(modifier = Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            card?.keywordList()?.forEach { kw ->
+            card?.keywordsFor(english)?.forEach { kw ->
                 Text(
                     text = "#$kw",
                     style = MaterialTheme.typography.bodyMedium,
@@ -236,7 +292,7 @@ private fun RecentRowItem(card: CardDto, onClick: () -> Unit) {
                 Box(modifier = Modifier.height(6.dp))
             }
             Text(
-                text = card.works?.title ?: "—",
+                text = card.works.displayTitle().ifBlank { "—" },
                 style = MaterialTheme.typography.titleLarge,
                 color = Espresso,
                 maxLines = 1,

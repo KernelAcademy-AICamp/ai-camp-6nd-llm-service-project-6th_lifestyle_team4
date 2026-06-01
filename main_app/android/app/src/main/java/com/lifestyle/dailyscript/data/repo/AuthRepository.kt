@@ -18,6 +18,8 @@ data class UserSession(
     val userId: Long,
     val isAnonymous: Boolean,
     val nickname: String,
+    val gender: String? = null,
+    val ageGroup: String? = null,
 )
 
 class AuthRepository {
@@ -61,7 +63,7 @@ class AuthRepository {
                 runCatching { updateNickname(existing.userId, nickname) }
             }
             clearPending()
-            return UserSession(existing.userId, isAnonymous, nickname)
+            return UserSession(existing.userId, isAnonymous, nickname, existing.gender, existing.ageGroup)
         }
 
         // Brand-new users row.
@@ -137,6 +139,21 @@ class AuthRepository {
 
     suspend fun updateNickname(userId: Long, nickname: String) {
         client.postgrest["users"].update({ set("nickname", nickname) }) {
+            filter { eq("user_id", userId) }
+        }
+    }
+
+    /**
+     * Update nickname + optional demographic fields. gender/age_group are only
+     * written when non-null (the DB CHECK rejects empty strings). Mirrors the
+     * PWA's profile save (m-app.js:2619).
+     */
+    suspend fun updateProfile(userId: Long, nickname: String, gender: String?, ageGroup: String?) {
+        client.postgrest["users"].update({
+            set("nickname", nickname)
+            if (gender != null) set("gender", gender)
+            if (ageGroup != null) set("age_group", ageGroup)
+        }) {
             filter { eq("user_id", userId) }
         }
     }

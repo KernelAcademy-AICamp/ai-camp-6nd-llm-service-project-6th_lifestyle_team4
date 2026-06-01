@@ -10,9 +10,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
@@ -37,6 +38,7 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 @Composable
 fun BottomNavBar(
     currentRoute: String?,
+    noticeBadge: Int = 0,
     onSelect: (String) -> Unit,
 ) {
     Column {
@@ -61,6 +63,7 @@ fun BottomNavBar(
                 icon = Icons.Outlined.Home,
                 active = currentRoute == Routes.HOME,
                 onClick = onSelect,
+                modifier = Modifier.weight(1f),
             )
             NavItem(
                 route = Routes.ARCHIVE,
@@ -68,6 +71,24 @@ fun BottomNavBar(
                 icon = Icons.Outlined.History,
                 active = currentRoute == Routes.ARCHIVE,
                 onClick = onSelect,
+                modifier = Modifier.weight(1f),
+            )
+            NavItem(
+                route = Routes.FEED,
+                label = stringResource(R.string.nav_feed),
+                icon = Icons.AutoMirrored.Outlined.MenuBook,
+                active = currentRoute == Routes.FEED,
+                onClick = onSelect,
+                modifier = Modifier.weight(1f),
+            )
+            NavItem(
+                route = Routes.NOTICE,
+                label = stringResource(R.string.nav_notice),
+                icon = Icons.Outlined.Campaign,
+                active = currentRoute == Routes.NOTICE,
+                onClick = onSelect,
+                badge = noticeBadge,
+                modifier = Modifier.weight(1f),
             )
             NavItem(
                 route = Routes.SETTINGS,
@@ -75,6 +96,7 @@ fun BottomNavBar(
                 icon = Icons.Outlined.Settings,
                 active = currentRoute == Routes.SETTINGS,
                 onClick = onSelect,
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -87,22 +109,34 @@ private fun NavItem(
     icon: ImageVector,
     active: Boolean,
     onClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    badge: Int = 0,
 ) {
     val tint = if (active) Espresso else Walnut
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .width(96.dp)
+        modifier = modifier
             .clickable { onClick(route) }
             .padding(vertical = 6.dp),
     ) {
-        Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
+        Box {
+            Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
+            if (badge > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(7.dp)
+                        .background(Cta, CircleShape),
+                )
+            }
+        }
         Box(modifier = Modifier.height(4.dp))
         Text(
             text = label.uppercase(),
             color = tint,
             style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
         )
         // active indicator: small coral dot
         Box(modifier = Modifier.height(4.dp))

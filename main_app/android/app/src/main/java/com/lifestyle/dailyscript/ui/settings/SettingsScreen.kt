@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,7 +56,8 @@ fun SettingsScreen(
     authInProgress: Boolean,
     onSignIn: (id: String, password: String, signUp: Boolean) -> Unit,
     onSignOut: () -> Unit,
-    onUpdateNickname: (String) -> Unit,
+    onUpdateProfile: (nickname: String, gender: String?, ageGroup: String?) -> Unit,
+    onOpenFeedback: () -> Unit,
     onConsumeMessage: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel()
@@ -65,7 +68,7 @@ fun SettingsScreen(
 
     LaunchedEffect(session.userId) { vm.loadTasteProfile(session.userId) }
 
-    var showNicknameDialog by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -94,7 +97,7 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = Walnut,
                     modifier = Modifier
-                        .clickable { showNicknameDialog = true }
+                        .clickable { showProfileDialog = true }
                         .padding(horizontal = 6.dp, vertical = 4.dp),
                 )
             }
@@ -156,6 +159,11 @@ fun SettingsScreen(
         // --- Legal & About ---
         Box(modifier = Modifier.height(40.dp))
         SectionLabel(text = stringResource(R.string.legal_about))
+        SettingRow(
+            title = stringResource(R.string.send_feedback),
+            subtitle = stringResource(R.string.send_feedback_desc),
+            onClick = onOpenFeedback,
+        )
         SettingRow(title = stringResource(R.string.terms_of_service))
         SettingRow(
             title = stringResource(R.string.version_info),
@@ -173,13 +181,15 @@ fun SettingsScreen(
         Box(modifier = Modifier.height(40.dp))
     }
 
-    if (showNicknameDialog) {
-        NicknameDialog(
-            initial = session.nickname,
-            onDismiss = { showNicknameDialog = false },
-            onSave = { newName ->
-                onUpdateNickname(newName)
-                showNicknameDialog = false
+    if (showProfileDialog) {
+        ProfileDialog(
+            initialNickname = session.nickname,
+            initialGender = session.gender,
+            initialAge = session.ageGroup,
+            onDismiss = { showProfileDialog = false },
+            onSave = { newName, gender, age ->
+                onUpdateProfile(newName, gender, age)
+                showProfileDialog = false
             },
         )
     }
@@ -232,38 +242,89 @@ private fun SignInBlock(
     }
 }
 
+// (value, display) — null value means "선택 안 함" (clears nothing; just leaves unset).
+private val GENDER_OPTIONS: List<Pair<String?, String>> = listOf(
+    null to "선택 안 함", "male" to "남성", "female" to "여성", "other" to "기타",
+)
+private val AGE_OPTIONS: List<Pair<String?, String>> = listOf(null to "선택 안 함") +
+    (1..9).map { "${it}0s" to "${it}0대" }
+
 @Composable
-private fun NicknameDialog(
-    initial: String,
+private fun ProfileDialog(
+    initialNickname: String,
+    initialGender: String?,
+    initialAge: String?,
     onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
+    onSave: (String, String?, String?) -> Unit,
 ) {
-    var text by remember { mutableStateOf(initial) }
+    var name by remember { mutableStateOf(initialNickname) }
+    var gender by remember { mutableStateOf(initialGender) }
+    var age by remember { mutableStateOf(initialAge) }
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onSave(text) }) { Text("저장", color = Cta) }
+            TextButton(onClick = { onSave(name, gender, age) }) { Text("저장", color = Cta) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("취소", color = Walnut) }
         },
-        title = { Text(stringResource(R.string.edit_nickname), color = Espresso) },
+        title = { Text(stringResource(R.string.edit_profile), color = Espresso) },
         text = {
             Column {
-                FieldBox(value = text, placeholder = stringResource(R.string.nickname_placeholder), onChange = { if (it.length <= 24) text = it })
+                FieldBox(value = name, placeholder = stringResource(R.string.nickname_placeholder), onChange = { if (it.length <= 24) name = it })
                 Box(modifier = Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.randomize),
                     style = MaterialTheme.typography.labelSmall,
                     color = Walnut,
                     modifier = Modifier
-                        .clickable { text = AuthRepository.randomCuteNickname() }
+                        .clickable { name = AuthRepository.randomCuteNickname() }
                         .padding(vertical = 4.dp),
                 )
+                Box(modifier = Modifier.height(16.dp))
+                DropdownField(label = "성별", options = GENDER_OPTIONS, selected = gender, onSelect = { gender = it })
+                Box(modifier = Modifier.height(8.dp))
+                DropdownField(label = "나이대", options = AGE_OPTIONS, selected = age, onSelect = { age = it })
             }
         },
         containerColor = Paper,
     )
+}
+
+/** Editorial-styled dropdown row (label left, value right) backed by a DropdownMenu. */
+@Composable
+private fun DropdownField(
+    label: String,
+    options: List<Pair<String?, String>>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(8.dp)
+    val selectedLabel = options.firstOrNull { it.first == selected }?.second ?: options.first().second
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Paper, shape)
+                .border(0.5.dp, Latte, shape)
+                .clickable { expanded = true }
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(text = label, style = MaterialTheme.typography.bodyMedium, color = Walnut)
+            Text(text = selectedLabel, style = MaterialTheme.typography.bodyMedium, color = Espresso)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { (value, disp) ->
+                DropdownMenuItem(
+                    text = { Text(disp, color = Espresso) },
+                    onClick = { onSelect(value); expanded = false },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -314,11 +375,13 @@ private fun SettingRow(
     title: String,
     subtitle: String? = null,
     trailingText: String? = null,
+    onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,

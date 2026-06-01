@@ -5,6 +5,8 @@ import com.lifestyle.dailyscript.data.model.CardDto
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class CardRepository {
 
@@ -21,7 +23,13 @@ class CardRepository {
         keywords,
         temperature,
         intensity,
-        works ( work_id, title, format, author, release_year, characters )
+        view_count,
+        quote_original,
+        script_excerpt_original,
+        excerpt_description_original,
+        significance_original,
+        keywords_original,
+        works ( work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original )
         """.trimIndent()
     )
 
@@ -51,5 +59,16 @@ class CardRepository {
                 limit(1)
             }
             .decodeSingleOrNull<CardDto>()
+    }
+
+    /**
+     * Fire-and-forget view increment (mirrors the PWA's increment_card_view RPC,
+     * m-app.js:3235). Backend function is shared across web/native.
+     */
+    suspend fun incrementView(cardId: Long) {
+        client.postgrest.rpc(
+            function = "increment_card_view",
+            parameters = buildJsonObject { put("p_card_id", cardId) },
+        )
     }
 }

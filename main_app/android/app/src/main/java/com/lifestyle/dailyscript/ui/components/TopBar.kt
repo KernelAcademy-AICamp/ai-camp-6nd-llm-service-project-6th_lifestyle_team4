@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Bookmark
@@ -37,7 +39,7 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 private val TopBarHeight = 64.dp
 
 @Composable
-private fun TopBarContainer(content: @Composable () -> Unit) {
+private fun TopBarContainer(content: @Composable RowScope.() -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -91,6 +93,9 @@ fun DetailTopBar(
     title: String,
     bookmarked: Boolean,
     bookmarkEnabled: Boolean = true,
+    hasEnglish: Boolean = false,
+    english: Boolean = false,
+    onToggleLang: () -> Unit = {},
     onBack: () -> Unit,
     onToggleBookmark: () -> Unit,
 ) {
@@ -104,7 +109,10 @@ fun DetailTopBar(
                 .clickable(onClick = onBack)
                 .padding(8.dp),
         )
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+        ) {
             Text(
                 text = stringResource(R.string.app_brand).uppercase(),
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
@@ -116,17 +124,25 @@ fun DetailTopBar(
                     fontFamily = EditorialSerif,
                 ),
                 color = Espresso,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
         }
-        Icon(
-            imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-            contentDescription = stringResource(R.string.bookmark),
-            tint = if (bookmarked) Cta else Walnut,
-            modifier = Modifier
-                .size(40.dp)
-                .clickable(enabled = bookmarkEnabled, onClick = onToggleBookmark)
-                .padding(8.dp),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (hasEnglish) {
+                LangPill(english = english, onToggle = onToggleLang, koLabel = "ENG")
+                Box(modifier = Modifier.width(8.dp))
+            }
+            Icon(
+                imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                contentDescription = stringResource(R.string.bookmark),
+                tint = if (bookmarked) Cta else Walnut,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable(enabled = bookmarkEnabled, onClick = onToggleBookmark)
+                    .padding(8.dp),
+            )
+        }
     }
 }
 

@@ -4,6 +4,7 @@ import com.lifestyle.dailyscript.data.SupabaseProvider
 import com.lifestyle.dailyscript.data.model.BookmarkIdRow
 import com.lifestyle.dailyscript.data.model.BookmarkInsert
 import com.lifestyle.dailyscript.data.model.BookmarkRow
+import com.lifestyle.dailyscript.data.model.CardBookmarkCount
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
@@ -30,7 +31,13 @@ class BookmarkRepository {
             keywords,
             temperature,
             intensity,
-            works ( work_id, title, format, author, release_year, characters )
+            view_count,
+            quote_original,
+            script_excerpt_original,
+            excerpt_description_original,
+            significance_original,
+            keywords_original,
+            works ( work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original )
         )
         """.trimIndent()
     )
@@ -46,6 +53,20 @@ class BookmarkRepository {
 
     suspend fun isBookmarked(userId: Long, cardId: Long): Boolean {
         return findBookmark(userId, cardId) != null
+    }
+
+    /**
+     * card_id → how many users bookmarked it (from the card_bookmark_counts view).
+     * Mirrors the PWA's loadBookmarkCounts (m-app.js:917). Returns an empty map on failure.
+     */
+    suspend fun counts(cardIds: List<Long>): Map<Long, Int> {
+        if (cardIds.isEmpty()) return emptyMap()
+        val rows = client.postgrest["card_bookmark_counts"]
+            .select(Columns.raw("card_id, bookmark_count")) {
+                filter { isIn("card_id", cardIds) }
+            }
+            .decodeList<CardBookmarkCount>()
+        return rows.associate { it.cardId to it.bookmarkCount }
     }
 
     private suspend fun findBookmark(userId: Long, cardId: Long): BookmarkIdRow? {

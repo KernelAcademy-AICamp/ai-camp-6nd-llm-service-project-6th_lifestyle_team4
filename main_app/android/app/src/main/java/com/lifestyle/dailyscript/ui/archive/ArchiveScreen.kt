@@ -1,7 +1,9 @@
 package com.lifestyle.dailyscript.ui.archive
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -47,6 +50,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
+import com.lifestyle.dailyscript.ui.components.EditorialField
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -54,6 +58,8 @@ import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.MetaCaps
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.util.GENRE_ORDER
+import com.lifestyle.dailyscript.ui.util.genreLabel
 
 // --- British-bookstore bookshelf palette (local, decorative) ---
 private val Gilt = Color(0xFFC9A24B)        // antique gold — rules, marker
@@ -79,12 +85,20 @@ private val BookGap = 6.dp
 private data class ShelfBook(
     val workId: Long,
     val title: String,
+    val subtitle: String?,
     val author: String?,
     val format: String?,
     val cards: List<CardDto>,
     val width: Dp,
     val height: Dp,
     val leather: Color,
+)
+
+private data class GenreSection(
+    val genre: String,
+    val label: String,
+    val count: Int,
+    val shelves: List<List<ShelfBook>>,
 )
 
 @Composable
@@ -96,6 +110,24 @@ fun ArchiveScreen(
     val state by vm.state.collectAsState()
 
     LaunchedEffect(userId) { vm.load(userId) }
+
+    var search by remember { mutableStateOf("") }
+    var genre by remember { mutableStateOf<String?>(null) } // null = 전체
+
+    val allBooks = remember(state.bookmarks) { buildBooks(state.bookmarks) }
+    val filtered = allBooks.filter { b ->
+        val fmt = b.format?.lowercase() ?: ""
+        val genreOk = when (genre) {
+            null -> true
+            "other" -> fmt !in GENRE_ORDER
+            else -> fmt == genre
+        }
+        val q = search.trim()
+        val searchOk = q.isBlank() ||
+            b.title.contains(q, ignoreCase = true) ||
+            (b.subtitle?.contains(q, ignoreCase = true) == true)
+        genreOk && searchOk
+    }
 
     Column(
         modifier = Modifier
@@ -130,7 +162,20 @@ fun ArchiveScreen(
             )
         }
 
-        Box(modifier = Modifier.height(8.dp))
+        Box(modifier = Modifier.height(12.dp))
+
+        if (allBooks.isNotEmpty()) {
+            EditorialField(
+                value = search,
+                onValueChange = { search = it },
+                placeholder = "작품·부제 검색",
+                singleLine = true,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Box(modifier = Modifier.height(12.dp))
+            GenreChips(allBooks = allBooks, selected = genre, onSelect = { genre = it })
+            Box(modifier = Modifier.height(4.dp))
+        }
 
         when {
             state.loading && state.bookmarks.isEmpty() -> {
@@ -143,7 +188,7 @@ fun ArchiveScreen(
             }
             state.bookmarks.isEmpty() -> EmptyShelf()
             else -> Bookcase(
-                bookmarks = state.bookmarks,
+                books = filtered,
                 removingCardId = state.removingCardId,
                 onOpenCard = onOpenCard,
                 onRemove = { cardId -> vm.removeBookmark(userId, cardId) },
@@ -153,38 +198,96 @@ fun ArchiveScreen(
 }
 
 @Composable
+private fun GenreChips(
+    allBooks: List<ShelfBook>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    val counts = allBooks.groupingBy { it.format?.lowercase() ?: "other" }.eachCount()
+    val present = GENRE_ORDER.filter { counts.containsKey(it) }
+    val otherCount = counts.filterKeys { it !in GENRE_ORDER }.values.sum()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Chip(text = "전체 ${allBooks.size}", active = selected == null) { onSelect(null) }
+        present.forEach { g ->
+            Chip(text = "${genreLabel(g)} ${counts[g]}", active = selected == g) { onSelect(g) }
+        }
+        if (otherCount > 0) {
+            Chip(text = "기타 $otherCount", active = selected == "other") { onSelect("other") }
+        }
+    }
+}
+
+@Composable
+private fun Chip(text: String, active: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(4.dp)
+    Box(
+        modifier = Modifier
+            .background(if (active) Espresso else Paper, shape)
+            .border(1.dp, if (active) Espresso else Latte, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (active) Paper else Walnut,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
 private fun Bookcase(
-    bookmarks: List<BookmarkRow>,
+    books: List<ShelfBook>,
     removingCardId: Long?,
     onOpenCard: (Long) -> Unit,
     onRemove: (Long) -> Unit,
 ) {
     var openWorkId by remember { mutableStateOf<Long?>(null) }
-    val books = remember(bookmarks) { buildBooks(bookmarks) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // --- The shelves of books ---
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val available = maxWidth - ShelfSidePadding - ShelfSidePadding
-            val shelves = remember(books, available) { packShelves(books, available) }
+        if (books.isEmpty()) {
+            Text(
+                text = "검색 결과가 없습니다.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Walnut,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+            )
+        } else {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val available = maxWidth - ShelfSidePadding - ShelfSidePadding
+                val sections = remember(books, available) { groupByGenre(books, available) }
 
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(shelves) { _, shelf ->
-                    Box(modifier = Modifier.height(30.dp)) // open air of the shelf compartment
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = ShelfSidePadding),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(BookGap),
-                    ) {
-                        shelf.forEach { book ->
-                            BookSpine(book = book, onOpen = { openWorkId = book.workId })
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    sections.forEach { section ->
+                        item(key = "hdr-${section.genre}") {
+                            GenreHeader(label = section.label, count = section.count)
+                        }
+                        itemsIndexed(section.shelves, key = { i, _ -> "${section.genre}-$i" }) { _, shelf ->
+                            Box(modifier = Modifier.height(24.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = ShelfSidePadding),
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(BookGap),
+                            ) {
+                                shelf.forEach { book ->
+                                    BookSpine(book = book, onOpen = { openWorkId = book.workId })
+                                }
+                            }
+                            ShelfBoard()
                         }
                     }
-                    ShelfBoard()
+                    item { Box(modifier = Modifier.height(56.dp)) }
                 }
-                item { Box(modifier = Modifier.height(56.dp)) }
             }
         }
 
@@ -202,6 +305,26 @@ private fun Bookcase(
     }
 }
 
+@Composable
+private fun GenreHeader(label: String, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ShelfSidePadding, vertical = 0.dp)
+            .padding(top = 20.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(text = label, style = MaterialTheme.typography.headlineSmall, color = Espresso)
+        Text(
+            text = "$count ${if (count == 1) "BOOK" else "BOOKS"}",
+            style = MetaCaps,
+            color = Walnut,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+    }
+}
+
 /** Group bookmarked cards by work, newest work first, into shelf-ready books. */
 private fun buildBooks(bookmarks: List<BookmarkRow>): List<ShelfBook> {
     val cards = bookmarks.mapNotNull { it.cards }
@@ -215,6 +338,7 @@ private fun buildBooks(bookmarks: List<BookmarkRow>): List<ShelfBook> {
         ShelfBook(
             workId = workId,
             title = title,
+            subtitle = work?.subtitle,
             author = work?.author,
             format = work?.format,
             cards = cardList,
@@ -223,6 +347,22 @@ private fun buildBooks(bookmarks: List<BookmarkRow>): List<ShelfBook> {
             leather = Leathers[index % Leathers.size],
         )
     }
+}
+
+/** Order books into GENRE_ORDER sections (then 기타), each packed into shelves. */
+private fun groupByGenre(books: List<ShelfBook>, available: Dp): List<GenreSection> {
+    val sections = mutableListOf<GenreSection>()
+    for (g in GENRE_ORDER) {
+        val items = books.filter { (it.format?.lowercase() ?: "") == g }
+        if (items.isNotEmpty()) {
+            sections.add(GenreSection(g, genreLabel(g), items.size, packShelves(items, available)))
+        }
+    }
+    val others = books.filter { (it.format?.lowercase() ?: "") !in GENRE_ORDER }
+    if (others.isNotEmpty()) {
+        sections.add(GenreSection("other", "기타", others.size, packShelves(others, available)))
+    }
+    return sections
 }
 
 /** Greedily pack books left-to-right onto shelves that fit the available width. */
@@ -345,6 +485,15 @@ private fun OpenedBook(
             color = Espresso,
             modifier = Modifier.padding(horizontal = 20.dp),
         )
+        if (!book.subtitle.isNullOrBlank()) {
+            Box(modifier = Modifier.height(2.dp))
+            Text(
+                text = book.subtitle,
+                style = MaterialTheme.typography.titleMedium,
+                color = Walnut,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+        }
         val meta = listOfNotNull(
             book.author,
             book.format,
