@@ -52,7 +52,16 @@ function getClient() {
 
 async function callClaude(
   prompt,
-  { maxTokens = 8192, model = null, system = null, temperature = null, topP = null, prefill = null } = {}
+  {
+    maxTokens = 8192,
+    model = null,
+    system = null,
+    temperature = null,
+    topP = null,
+    prefill = null,
+    signal = null,        // V2 streaming: 클라이언트 연결이 끊기면 abort
+    onProgress = null,    // V2 streaming: 진행 이벤트 emit (서버 → 클라이언트)
+  } = {}
 ) {
   // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper는 1회 추가 시도까지만 (총 ≤2회).
   // 외부 재시도 횟수가 많으면 Vercel 함수 timeout(300s)을 잡아먹어 전체 실패.
@@ -67,6 +76,11 @@ async function callClaude(
     messages.push({ role: 'assistant', content: prefill });
   }
   for (let attempt = 0; attempt < MAX_OUTER_ATTEMPTS; attempt++) {
+    if (signal?.aborted) {
+      const abortErr = new Error('aborted');
+      abortErr.name = 'AbortError';
+      throw abortErr;
+    }
     try {
       const payload = {
         model: useModel,
@@ -78,7 +92,9 @@ async function callClaude(
       // 신형 Claude 모델은 temperature 와 top_p 를 동시에 보내면 400 거부.
       // temperature 가 우선이고, top_p 는 temperature 가 없을 때만 보낸다.
       if (topP !== null && temperature === null) payload.top_p = topP;
-      const res = await getClient().messages.create(payload);
+      onProgress?.({ t: 'llm_call', model: useModel, max_tokens: maxTokens, attempt: attempt + 1 });
+      // Anthropic SDK 의 두 번째 인자(RequestOptions)에 signal 전달 → 진짜 LLM 호출 중단.
+      const res = await getClient().messages.create(payload, signal ? { signal } : undefined);
       const text = res.content
         .filter((b) => b.type === 'text')
         .map((b) => b.text)
@@ -87,8 +103,14 @@ async function callClaude(
       // 단, 모델이 prefill을 무시하고 '{'부터 새로 출력한 경우엔 그대로 둠 (이중 헤더 방지).
       const combined =
         prefill && !text.trimStart().startsWith('{') ? prefill + text : text;
+      onProgress?.({ t: 'llm_done', model: useModel, attempt: attempt + 1 });
       return parseJson(combined);
     } catch (err) {
+      // AbortError 는 재시도하지 않고 그대로 throw
+      if (err?.name === 'AbortError' || /aborted/i.test(String(err?.message || ''))) {
+        onProgress?.({ t: 'aborted', model: useModel });
+        throw err;
+      }
       lastErr = err;
       // 디버그 로그 — Vercel 함수 로그에 정확한 원인이 남도록
       console.error(
@@ -99,6 +121,7 @@ async function callClaude(
       if (!isRetryable(err) || attempt === MAX_OUTER_ATTEMPTS - 1) break;
       const delayMs = 3000 + Math.floor(Math.random() * 500);
       console.warn(`[anthropic] retrying after ${delayMs}ms (status=${err?.status})`);
+      onProgress?.({ t: 'llm_retry', model: useModel, attempt: attempt + 1, delayMs, status: err?.status ?? null });
       await new Promise((r) => setTimeout(r, delayMs));
     }
   }
@@ -339,9 +362,9 @@ export function splitScriptIntoChunks(
   }));
 }
 
-async function runExtractSingle(scriptText, category, seedBlock, model, chunkInfo = null) {
+async function runExtractSingle(scriptText, category, seedBlock, model, chunkInfo = null, { signal = null, onProgress = null } = {}) {
   const prompt = buildExtractPrompt(scriptText, category, seedBlock, chunkInfo);
-  return callClaude(prompt, { maxTokens: 16000, model });
+  return callClaude(prompt, { maxTokens: 16000, model, signal, onProgress });
 }
 
 function arrayOfStrings(value) {
@@ -411,7 +434,7 @@ function pickEvenly(items, limit) {
   return picked;
 }
 
-async function finalizeChunkedExtract(merged, model) {
+async function finalizeChunkedExtract(merged, model, { signal = null, onProgress = null } = {}) {
   const input = {
     work: merged.work,
     cards: pickEvenly(merged.cards, EXTRACT_FINAL_INPUT_CARDS),
@@ -434,17 +457,18 @@ Rules:
 INPUT_JSON:
 ${JSON.stringify(input, null, 2)}`;
 
-  const finalResult = await callClaude(prompt, { maxTokens: 16000, model });
+  const finalResult = await callClaude(prompt, { maxTokens: 16000, model, signal, onProgress });
   return {
     work: mergeWork(merged.work, finalResult?.work),
     cards: Array.isArray(finalResult?.cards) && finalResult.cards.length ? finalResult.cards : merged.cards,
   };
 }
 
-export async function runExtract(scriptText, category = 'screen', seedBlock = '', model = null) {
+export async function runExtract(scriptText, category = 'screen', seedBlock = '', model = null, { signal = null, onProgress = null } = {}) {
   const chunks = splitScriptIntoChunks(scriptText);
   if (chunks.length === 1) {
-    return runExtractSingle(scriptText, category, seedBlock, model);
+    onProgress?.({ t: 'stage', m: '본문 분석 중 (단일 청크)' });
+    return runExtractSingle(scriptText, category, seedBlock, model, null, { signal, onProgress });
   }
 
   // 자동 결정된 실제 청크 사이즈 — 영문 PDF 는 더 큼.
@@ -453,22 +477,28 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
     `[anthropic] chunked extract chars=${String(scriptText || '').length} ` +
     `chunks=${chunks.length} firstChunkChars=${sampleSize} overlap=${EXTRACT_CHUNK_OVERLAP_CHARS}`
   );
+  onProgress?.({ t: 'stage', m: `본문이 길어 ${chunks.length}개 청크로 분할 — 동시 3개씩 분석` });
 
   // 청크 병렬 처리 — 순차로 돌면 6~7개 청크 × 30~60초 = Vercel 300s 한도 초과.
   // 동시 3개씩 처리해 wall-clock 을 1/3 로 단축. Anthropic 레이트는 SDK 가 자동 관리.
   const CHUNK_CONCURRENCY = 3;
   const results = new Array(chunks.length);
   let cursor = 0;
+  let completed = 0;
   async function worker() {
     while (cursor < chunks.length) {
+      if (signal?.aborted) { const a = new Error('aborted'); a.name = 'AbortError'; throw a; }
       const i = cursor++;
       const chunk = chunks[i];
       console.log(`[anthropic] extracting chunk ${chunk.index}/${chunk.total} chars=${chunk.text.length}`);
+      onProgress?.({ t: 'chunk_start', index: chunk.index, total: chunk.total, chars: chunk.text.length });
       results[i] = await runExtractSingle(chunk.text, category, seedBlock, model, {
         index: chunk.index,
         total: chunk.total,
         overlapChars: EXTRACT_CHUNK_OVERLAP_CHARS,
-      });
+      }, { signal, onProgress });
+      completed += 1;
+      onProgress?.({ t: 'chunk_done', index: chunk.index, total: chunk.total, completed });
     }
   }
   await Promise.all(
@@ -479,8 +509,10 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
   let finalResult = merged;
   let finalizeFailed = false;
   try {
-    finalResult = await finalizeChunkedExtract(merged, model);
+    onProgress?.({ t: 'stage', m: '청크 결과 병합 중' });
+    finalResult = await finalizeChunkedExtract(merged, model, { signal, onProgress });
   } catch (err) {
+    if (err?.name === 'AbortError') throw err;
     finalizeFailed = true;
     console.warn('[anthropic] chunk finalization failed, returning deterministic merge:', err?.message || err);
   }
