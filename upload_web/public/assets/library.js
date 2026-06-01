@@ -27,6 +27,7 @@ const libraryFormatFilter = $('#library-format-filter');
 const librarySearchInput = $('#library-search');
 const libraryRefreshBtn = $('#library-refresh');
 const libraryBackfillEnBtn = $('#library-backfill-en-btn');
+const libraryBackfillCommentaryBtn = $('#library-backfill-commentary-btn');
 const libraryKeywordFreqBtn = $('#library-keyword-freq-btn');
 const libraryKeywordFreq = $('#library-keyword-freq');
 const libraryKeywordFreqClose = $('#library-keyword-freq-close');
@@ -1361,6 +1362,129 @@ async function clearStaleLongEnTranslations() {
   if (cleared) console.log(`[library] cleared ${cleared} over-long EN translations for re-translation`);
 }
 
+// 의의(significance) · 상황 설명(excerpt_description) 영문 누락 카드만 집중 백필.
+// 일반 backfillAllCards 에서 자주 누락되는 두 필드를 더 공격적으로 처리:
+//  · 재시도 5회 (기본 3회 대비 강화)
+//  · 두 필드만 처리하므로 동시성 늘려도 안전 (작품 메타·다른 필드 안 건드림)
+//  · 카드별 성공/실패를 상세 콘솔 로그 + 실패한 card_id 목록을 최종 토스트
+async function backfillCommentary() {
+  const sb = await getSupabase();
+  const token = await getAccessToken();
+
+  if (libraryStatus) libraryStatus.textContent = 'DB 카드 목록 조회 중⋯';
+
+  // 1) 의의 또는 설명 영문이 비어 있는 카드만 직접 조회 — *_original 이 null 이면서 KO 가 있는 경우.
+  const COLS = 'card_id, work_id, excerpt_description, significance, excerpt_description_original, significance_original, works(title, subtitle, author, format)';
+  const PAGE = 1000;
+  let all = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await sb
+      .from('cards')
+      .select(COLS)
+      .order('card_id', { ascending: false })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break;
+  }
+
+  const candidates = all.filter((c) =>
+    (!c.excerpt_description_original && c.excerpt_description) ||
+    (!c.significance_original && c.significance)
+  );
+
+  if (!candidates.length) {
+    if (libraryStatus) libraryStatus.textContent = `의의·설명 영문 모두 채워져 있음 (총 ${all.length}장 검사).`;
+    toast('의의·설명 영문 누락 카드 없음', 'info');
+    return { total: all.length, processed: 0 };
+  }
+
+  toast(`의의·설명 영문 누락 ${candidates.length}장 발견 — 채우기 시작`, 'info');
+  console.log(`[library] backfill commentary candidates:`, candidates.map((c) => c.card_id));
+
+  // 강화된 재시도 (5회 + 더 긴 백오프) — Anthropic 일시 과부하 더 끈질기게 통과
+  async function callTranslate(text, field, workCtx) {
+    if (!text || !String(text).trim()) return null;
+    let lastErr;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        const res = await fetch('/api/translate-field', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ text, field, work: workCtx, direction: 'ko2en' }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) return String(body?.translated || '').trim() || null;
+        const retryable = [408, 429, 500, 502, 503, 504].includes(res.status);
+        if (!retryable || attempt === 5) throw new Error(body?.error || `HTTP ${res.status}`);
+        await new Promise((r) => setTimeout(r, 1000 * attempt + Math.random() * 500));
+      } catch (e) {
+        lastErr = e;
+        if (attempt === 5) throw e;
+        await new Promise((r) => setTimeout(r, 1000 * attempt + Math.random() * 500));
+      }
+    }
+    throw lastErr;
+  }
+
+  let done = 0, failedCards = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const card = candidates[i];
+    const w = card.works || {};
+    const workCtx = { title: w.title || '', subtitle: w.subtitle || '', author: w.author || '', format: w.format || '' };
+    if (libraryStatus) {
+      libraryStatus.textContent =
+        `의의·설명 채우는 중⋯ (${i + 1}/${candidates.length}) — 실패 ${failedCards.length}장`;
+    }
+    const update = {};
+    const failures = [];
+    if (!card.excerpt_description_original && card.excerpt_description) {
+      try {
+        const v = await callTranslate(card.excerpt_description, 'excerpt_description', workCtx);
+        if (v) update.excerpt_description_original = v;
+        else failures.push('desc:빈응답');
+      } catch (e) { failures.push(`desc:${e.message || e}`); }
+    }
+    if (!card.significance_original && card.significance) {
+      try {
+        const v = await callTranslate(card.significance, 'significance', workCtx);
+        if (v) update.significance_original = v;
+        else failures.push('sig:빈응답');
+      } catch (e) { failures.push(`sig:${e.message || e}`); }
+    }
+    if (Object.keys(update).length > 0) {
+      try {
+        await sb.from('cards').update(update).eq('card_id', card.card_id);
+        done++;
+      } catch (e) {
+        failures.push(`db:${e.message || e}`);
+      }
+    }
+    if (failures.length) {
+      failedCards.push({ id: card.card_id, reasons: failures });
+      console.warn(`[library] commentary backfill failed card_id=${card.card_id}:`, failures.join(' | '));
+    }
+  }
+
+  if (libraryStatus) {
+    libraryStatus.textContent =
+      `의의·설명 백필 완료 — 성공 ${done} / 실패 ${failedCards.length} / 전체 ${candidates.length}장` +
+      (failedCards.length ? ` (콘솔에 실패 ID 출력)` : '');
+  }
+  if (failedCards.length) {
+    console.warn('[library] failed cards:', failedCards);
+    toast(`백필 완료: 성공 ${done} · 실패 ${failedCards.length} (콘솔 확인)`, 'info');
+  } else {
+    toast(`의의·설명 영문 백필 완료: ${done}장`, 'success');
+  }
+  loadLibrary().catch((e) => console.warn('[library] reload failed:', e));
+  return { total: all.length, candidates: candidates.length, done, failed: failedCards };
+}
+
 // 수동 트리거 — DB 의 모든 카드(500 한도 무시) 를 페이지네이션으로 가져와 영문 누락분 백필.
 // admin 이 '전체 영문 백필' 버튼 클릭 시 호출. 진행률을 status 영역에 실시간 표시.
 async function backfillAllCards() {
@@ -1718,6 +1842,23 @@ librarySearchInput.addEventListener('input', () => {
 });
 
 libraryRefreshBtn.addEventListener('click', () => loadLibrary());
+
+// 의의·설명 영문만 집중 백필 — 강화된 재시도 + 상세 실패 로그
+libraryBackfillCommentaryBtn?.addEventListener('click', async () => {
+  if (!confirm('의의·설명 영문이 비어있는 카드를 모두 찾아 채웁니다.\n재시도 5회로 끈질기게 처리합니다. 진행하시겠어요?')) return;
+  libraryBackfillCommentaryBtn.disabled = true;
+  const prev = libraryBackfillCommentaryBtn.innerHTML;
+  libraryBackfillCommentaryBtn.innerHTML = '<span class="material-symbols-outlined text-base animate-spin">progress_activity</span> 채우는 중⋯';
+  try {
+    await backfillCommentary();
+  } catch (err) {
+    console.error('[library] backfill commentary error:', err);
+    toast(`의의·설명 백필 실패: ${err.message || err}`, 'error');
+  } finally {
+    libraryBackfillCommentaryBtn.disabled = false;
+    libraryBackfillCommentaryBtn.innerHTML = prev;
+  }
+});
 
 // 전체 영문 백필 — DB 의 모든 카드에서 *_original 빠진 곳 자동 번역.
 libraryBackfillEnBtn?.addEventListener('click', async () => {
