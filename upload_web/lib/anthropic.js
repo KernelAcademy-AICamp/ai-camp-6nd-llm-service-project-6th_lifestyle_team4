@@ -430,15 +430,26 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
     `chunks=${chunks.length} target=${EXTRACT_CHUNK_TARGET_CHARS} overlap=${EXTRACT_CHUNK_OVERLAP_CHARS}`
   );
 
-  const results = [];
-  for (const chunk of chunks) {
-    console.log(`[anthropic] extracting chunk ${chunk.index}/${chunk.total} chars=${chunk.text.length}`);
-    results.push(await runExtractSingle(chunk.text, category, seedBlock, model, {
-      index: chunk.index,
-      total: chunk.total,
-      overlapChars: EXTRACT_CHUNK_OVERLAP_CHARS,
-    }));
+  // 청크 병렬 처리 — 순차로 돌면 6~7개 청크 × 30~60초 = Vercel 300s 한도 초과.
+  // 동시 3개씩 처리해 wall-clock 을 1/3 로 단축. Anthropic 레이트는 SDK 가 자동 관리.
+  const CHUNK_CONCURRENCY = 3;
+  const results = new Array(chunks.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < chunks.length) {
+      const i = cursor++;
+      const chunk = chunks[i];
+      console.log(`[anthropic] extracting chunk ${chunk.index}/${chunk.total} chars=${chunk.text.length}`);
+      results[i] = await runExtractSingle(chunk.text, category, seedBlock, model, {
+        index: chunk.index,
+        total: chunk.total,
+        overlapChars: EXTRACT_CHUNK_OVERLAP_CHARS,
+      });
+    }
   }
+  await Promise.all(
+    Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, worker)
+  );
 
   const merged = mergeExtractResults(results);
   let finalResult = merged;
