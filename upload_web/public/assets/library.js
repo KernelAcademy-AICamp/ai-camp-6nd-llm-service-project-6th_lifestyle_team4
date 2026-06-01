@@ -1299,10 +1299,43 @@ function buildEditNode(card) {
   return node;
 }
 
+// 의의/설명 영문이 한국어 원본 글자수의 2.0배를 초과하면 paraphrase·확장된 것으로 판단.
+// 새 프롬프트(길이 제약)로 재번역하기 위해 NULL 처리 → autoBackfillBilingual 누락 필터가 잡음.
+const STALE_EN_RATIO = 2.0;
+async function clearStaleLongEnTranslations() {
+  const sb = await getSupabase();
+  let cleared = 0;
+  for (const card of state.rows) {
+    const updates = {};
+    if (card.excerpt_description && card.excerpt_description_original
+        && card.excerpt_description_original.length > card.excerpt_description.length * STALE_EN_RATIO) {
+      card.excerpt_description_original = null;
+      updates.excerpt_description_original = null;
+    }
+    if (card.significance && card.significance_original
+        && card.significance_original.length > card.significance.length * STALE_EN_RATIO) {
+      card.significance_original = null;
+      updates.significance_original = null;
+    }
+    if (Object.keys(updates).length === 0) continue;
+    try {
+      await sb.from('cards').update(updates).eq('card_id', card.card_id);
+      cleared++;
+    } catch (e) {
+      console.warn('[library] stale clear failed', card.card_id, e?.message);
+    }
+  }
+  if (cleared) console.log(`[library] cleared ${cleared} over-long EN translations for re-translation`);
+}
+
 // 라이브러리 진입 시 누락된 *_original 을 자동으로 채워 admin 이 EN 클릭하지 않아도
 // 토글이 즉시 동작하도록 한다. 순차 처리(동시 호출 1) — 같은 work 의 카드들이 work 메타를
 // 중복 번역하는 걸 피하고, Anthropic API 레이트도 보호.
 async function autoBackfillBilingual() {
+  // ① paraphrase 된 과거 영문 번역(원본 대비 2배 초과)을 NULL 처리 →
+  //    아래 누락 필터가 잡아 새 프롬프트(길이 제약)로 재번역.
+  try { await clearStaleLongEnTranslations(); } catch (e) { console.warn('[library] stale clear error:', e); }
+
   const candidates = state.rows.filter((card) => {
     const w = card.works || {};
     return (

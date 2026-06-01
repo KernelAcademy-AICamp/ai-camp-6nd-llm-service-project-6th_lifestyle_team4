@@ -592,27 +592,39 @@ export async function runTranslateField({ text, field, work, direction = 'en2ko'
     author: 'Author name. Use the standard English spelling if known (e.g., 셰익스피어 → "William Shakespeare"); otherwise transliterate.',
     quote: 'A single character line of dialogue. Keep it speakable in one breath. Match the original register and tone.',
     script_excerpt: 'A scene excerpt. Preserve speaker labels (e.g., "VICTOR:") and stage direction linebreaks. Keep tone and register.',
-    excerpt_description: 'A short prose description of the scene situation. Natural English, single paragraph.',
-    significance: 'A commentary on the work\'s significance. Natural English prose, 1-3 sentences.',
+    excerpt_description: 'A literal translation of the Korean scene description. Preserve the original sentence count, structure, and every detail. Do NOT paraphrase, summarize, or add new information.',
+    significance: 'A literal translation of the Korean commentary. Preserve the original sentence count, structure, and every claim. Do NOT paraphrase, summarize, or reinterpret.',
     keywords: 'A comma-separated list of short tags. Keep EXACTLY the same number and order as input. Translate each tag as a single English word or short phrase. No quotes, no Oxford commas. Example: "사랑, 배신, 신앙" → "love, betrayal, faith".',
   };
 
   let prompt, system;
   if (direction === 'ko2en') {
-    system = 'You are a precise Korean→English literary translator. Output a single JSON object only. No prose, no markdown.';
-    prompt = `Translate the following Korean text into natural English.
+    system = 'You are a precise Korean→English literary translator. Translate faithfully and literally. Match the source length closely — never expand. Preserve the original meaning, sentence structure, and all details. Do NOT paraphrase, summarize, or add new information. Output a single JSON object only. No prose, no markdown.';
+    // 원본 문장 수를 셈 — LLM 에게 "정확히 이만큼" 으로 명시.
+    const srcSentenceCount = (src.match(/[.!?。！？\n]+/g) || []).length || 1;
+    const srcCharCount = src.length;
+    prompt = `Translate the following Korean text into English. Be faithful, literal, and CONCISE.
 
-[Work context]
+[Translation rules — hard requirements]
+1. Translate the Korean directly. Do NOT paraphrase or reinterpret.
+2. Output must have the SAME number of sentences as the original (≈ ${srcSentenceCount} sentence(s)).
+3. Output length should be similar to the source (the Korean source is ${srcCharCount} chars). English is usually slightly longer per word — but do not exceed ~1.8x.
+4. Preserve every detail, name, and claim in the Korean — no omissions.
+5. Do NOT add new information, context, examples, or explanations not in the source.
+6. Match the original tone (narrative, commentary, etc.).
+7. Use natural English wording, but stay close to the Korean structure.
+
+[Work context — for terminology consistency only, do NOT translate from it]
 ${ctx || '(none)'}
 
 [Field: ${field}]
-${FIELD_GUIDE_EN[field] || 'Natural English.'}
+${FIELD_GUIDE_EN[field] || 'Natural English, faithful to the source.'}
 
 [Korean source]
 ${src}
 
 Output: a single JSON line, no other keys or explanation.
-{"text":"English translation"}`;
+{"text":"English translation matching the source length and detail"}`;
   } else {
     system = TRANSLATE_SYSTEM;
     prompt = `너는 한국어 정전 감각을 가진 번역가다. 다음 영문을 한국어로 옮긴다.

@@ -1235,13 +1235,17 @@ function renderHome() {
 
 function applyTodayCard(card) {
   if (!card) return;
+  // 같은 카드 재렌더(예: 북마크 카운트 realtime 갱신) 시 todayLang 을 유지해
+  // 사용자가 EN 으로 토글했는데 KO 로 되돌아가는 버그 방지.
+  const prevCardId = state.todayCard?.card_id;
+  const isNewCard = prevCardId !== card.card_id;
   state.todayCard = card;
   state.todayBookmarked = state.bookmarkedIds.has(card.card_id);
   // 최근 표시 큐에 추가 (rememberShown이 dedupe + localStorage 저장 처리)
   rememberShown(card.card_id);
 
-  // EN 토글 — 새 카드로 갱신될 때마다 한국어로 리셋
-  state.todayLang = 'ko';
+  // EN 토글 — 새 카드일 때만 한국어로 리셋. 같은 카드 재렌더는 lang 유지.
+  if (isNewCard) state.todayLang = 'ko';
 
   // Quote with curly quotes (mirror Android: "“$it”").
   // 관리자가 ** 로 굵게 표시한 부분도 함께 렌더.
@@ -1295,12 +1299,22 @@ function applyTodayCard(card) {
 
   paintBookmarkBtn(todayBookmark, state.todayBookmarked);
 
-  // EN 토글 표시/숨김 — 영문 원본이 있을 때만 노출
+  // ENG 토글 표시/숨김 — 영문 원본이 있을 때만 노출.
+  // 새 카드면 KR(off) 로 리셋. 같은 카드 재렌더는 현재 state.todayLang 따름.
   if (todayLangToggle) {
     const hasEn = !!(card.quote_original || card.works?.title_original ||
                      card.works?.subtitle_original || card.works?.author_original);
     todayLangToggle.style.display = hasEn ? '' : 'none';
-    todayLangToggle.textContent = 'EN';
+    const isEn = state.todayLang === 'en';
+    todayLangToggle.classList.toggle('on', isEn);
+    todayLangToggle.setAttribute('aria-checked', isEn ? 'true' : 'false');
+    const lbl = document.getElementById('today-lang-label');
+    if (lbl) lbl.style.display = hasEn ? '' : 'none';
+  }
+  // 같은 카드 재렌더인데 EN 모드였다면, 본문도 EN 로 다시 적용
+  // (위에서 todayQuote/todayWork 등이 KO 텍스트로 덮어쓰였으므로)
+  if (!isNewCard && state.todayLang === 'en') {
+    applyTodayLang('en');
   }
 }
 
@@ -1311,11 +1325,26 @@ function applyTodayLang(lang) {
   const w = card.works || {};
   const useEn = lang === 'en';
 
-  const quoteSrc    = useEn && card.quote_original    ? card.quote_original    : card.quote;
-  const titleSrc    = useEn && w.title_original       ? w.title_original       : w.title;
-  const subtitleSrc = useEn && w.subtitle_original    ? w.subtitle_original    : w.subtitle;
+  const quoteSrc    = useEn && card.quote_original          ? card.quote_original          : card.quote;
+  const scriptSrc   = useEn && card.script_excerpt_original ? card.script_excerpt_original : card.script_excerpt;
+  const titleSrc    = useEn && w.title_original             ? w.title_original             : w.title;
+  const subtitleSrc = useEn && w.subtitle_original          ? w.subtitle_original          : w.subtitle;
 
   todayQuote.innerHTML = `“${renderMarkdownBold(cleanQuote(quoteSrc))}”`;
+
+  // 화자(speaker) — EN 모드면 영문 script/quote 에서 다시 추출. 영문 대본의 'VICTOR:' 같은
+  // 라벨이 화자로 잡혀 한국어 화자(예: '빅터') 대신 표시된다.
+  if (todaySpeaker) {
+    const speaker = extractSpeaker(scriptSrc, w.characters, quoteSrc);
+    if (speaker) {
+      todaySpeaker.textContent = speaker;
+      todaySpeaker.style.display = 'block';
+      if (todaySpeakerSpacer) todaySpeakerSpacer.style.height = '12px';
+    } else {
+      todaySpeaker.style.display = 'none';
+      if (todaySpeakerSpacer) todaySpeakerSpacer.style.height = '0';
+    }
+  }
 
   const workTitle = displayTitle(titleSrc || '');
   if (workTitle) {
@@ -1455,23 +1484,14 @@ todayBookmark.addEventListener('click', (e) => {
   if (!state.todayCard) return;
   toggleBookmark(state.todayCard.card_id);
 });
-// ENG 토글 — 오늘의 한줄
+// ENG 토글 — 오늘의 한줄 (editorial-toggle 스타일: 활성/비활성)
 todayLangToggle?.addEventListener('click', (e) => {
   e.stopPropagation();
   state.todayLang = state.todayLang === 'ko' ? 'en' : 'ko';
   applyTodayLang(state.todayLang);
-  todayLangToggle.textContent = state.todayLang === 'ko' ? 'ENG' : 'KR';
-  todayLangToggle.setAttribute('aria-label', state.todayLang === 'ko' ? '영문 원본 보기' : '한국어로 돌아가기');
-  // 활성 상태 — espresso(짙은 톤)로 채움, 비활성은 outline
-  if (state.todayLang === 'en') {
-    todayLangToggle.style.background = 'var(--espresso)';
-    todayLangToggle.style.color = 'var(--paper)';
-    todayLangToggle.style.borderColor = 'var(--espresso)';
-  } else {
-    todayLangToggle.style.background = 'transparent';
-    todayLangToggle.style.color = 'var(--walnut)';
-    todayLangToggle.style.borderColor = 'var(--walnut)';
-  }
+  const isEn = state.todayLang === 'en';
+  todayLangToggle.classList.toggle('on', isEn);
+  todayLangToggle.setAttribute('aria-checked', isEn ? 'true' : 'false');
 });
 todayCard.addEventListener('click', () => {
   if (state.todayCard) openDetail(state.todayCard);
@@ -3274,47 +3294,57 @@ function openDetail(card) {
     }
   }
 
-  // metadata chips row (FORMAT / AUTHOR / YEAR — uppercase labels)
-  const items = [
+  // metadata 두 행 분리:
+  //   1행: 형식 / 작가 (FORMAT / AUTHOR)
+  //   2행: 연도 · 조회수 · 북마크
+  const headItems = [
     w.format ? w.format.toUpperCase() : null,
     w.author ? w.author.toUpperCase() : null,
-    w.release_year ? String(w.release_year) : null,
   ].filter(Boolean);
-  detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
-    + renderCounts(card);
+  const yearHtml = w.release_year
+    ? `<span class="t-label-sm c-walnut">${escapeHtml(String(w.release_year))}</span><span class="t-label-sm c-walnut">·</span>`
+    : '';
+  detailMeta.style.flexDirection = 'column';
+  detailMeta.innerHTML =
+      `<div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;">`
+    + headItems.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
+    + `</div>`
+    + `<div style="margin-top:6px;display:flex;gap:6px;justify-content:center;align-items:center;">`
+    + yearHtml
+    + renderCounts(card)
+    + `</div>`;
 
-  // 상세 ENG 토글 — top-bar 안 북마크 옆 (요청: 자연스러운 위치 + 앱 톤 색상 + ENG 라벨)
+  // 상세 ENG 토글 — 장면 설명 위 가로 행 (lang-segmented, 토글 안에 KR/ENG 라벨)
+  const detailLangRow = document.getElementById('detail-lang-toggle-row');
+  const detailLangSpacer = document.getElementById('detail-lang-spacer');
   const detailLangBtn = document.getElementById('detail-lang-toggle');
-  if (detailLangBtn) {
-    // 항상 노출 — 영문 원본이 없으면 lazy 번역 호출이 admin 권한이라 PWA 에선 불가.
-    // 그래서 *_original 이 한 곳이라도 있을 때만 토글 노출.
+  const detailLangRowLabel = document.getElementById('detail-lang-row-label');
+  // 좌측 라벨 — 토글 상태에 따라 바뀜 (KR 모드: 한국어로 안내, EN 모드: 영어로 안내)
+  const LANG_LABEL_KO = '원문(영문)으로 보기';
+  const LANG_LABEL_EN = 'View in Korean';
+  if (detailLangRow && detailLangBtn) {
     const hasEn = !!(card.quote_original || card.script_excerpt_original ||
                      card.excerpt_description_original || card.significance_original ||
                      (Array.isArray(card.keywords_original) && card.keywords_original.length) ||
                      w.title_original || w.subtitle_original || w.author_original);
-    detailLangBtn.style.display = hasEn ? '' : 'none';
-    // 초기 상태(KO) — outline walnut
-    detailLangBtn.textContent = 'ENG';
-    detailLangBtn.style.background = 'transparent';
-    detailLangBtn.style.color = 'var(--walnut)';
-    detailLangBtn.style.borderColor = 'var(--walnut)';
-    // 핸들러는 매번 새로 바인딩 — 노드 교체로 이전 핸들러 제거
+    detailLangRow.style.display = hasEn ? 'flex' : 'none';
+    if (detailLangSpacer) detailLangSpacer.style.display = hasEn ? '' : 'none';
+    // 매번 OFF(KR) 상태로 리셋 — 새 카드 진입 시 한국어부터
+    detailLangBtn.classList.remove('on');
+    detailLangBtn.setAttribute('aria-checked', 'false');
+    if (detailLangRowLabel) detailLangRowLabel.textContent = LANG_LABEL_KO;
+    // 핸들러는 매번 새로 바인딩 — 노드 교체로 이전 카드 핸들러 제거
     const fresh = detailLangBtn.cloneNode(true);
     detailLangBtn.parentNode.replaceChild(fresh, detailLangBtn);
     fresh.addEventListener('click', (e) => {
       e.stopPropagation();
       state.detailLang = state.detailLang === 'ko' ? 'en' : 'ko';
       applyDetailLang(state.detailLang);
-      fresh.textContent = state.detailLang === 'ko' ? 'ENG' : 'KR';
-      // 활성(EN) — espresso 채움 / 비활성(KO) — walnut outline
-      if (state.detailLang === 'en') {
-        fresh.style.background = 'var(--espresso)';
-        fresh.style.color = 'var(--paper)';
-        fresh.style.borderColor = 'var(--espresso)';
-      } else {
-        fresh.style.background = 'transparent';
-        fresh.style.color = 'var(--walnut)';
-        fresh.style.borderColor = 'var(--walnut)';
+      const isEn = state.detailLang === 'en';
+      fresh.classList.toggle('on', isEn);
+      fresh.setAttribute('aria-checked', isEn ? 'true' : 'false');
+      if (detailLangRowLabel) {
+        detailLangRowLabel.textContent = isEn ? LANG_LABEL_EN : LANG_LABEL_KO;
       }
     });
   }
@@ -3411,14 +3441,22 @@ function applyDetailLang(lang) {
     }
   }
 
-  // 메타 (FORMAT / AUTHOR / YEAR)
-  const items = [
+  // 메타 두 행 — 1행: 형식·작가  /  2행: 연도·조회·북마크
+  const headItems = [
     w.format ? w.format.toUpperCase() : null,
     authorSrc ? String(authorSrc).toUpperCase() : null,
-    w.release_year ? String(w.release_year) : null,
   ].filter(Boolean);
-  detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
-    + renderCounts(card);
+  const yearHtml = w.release_year
+    ? `<span class="t-label-sm c-walnut">${escapeHtml(String(w.release_year))}</span><span class="t-label-sm c-walnut">·</span>`
+    : '';
+  detailMeta.innerHTML =
+      `<div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;">`
+    + headItems.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
+    + `</div>`
+    + `<div style="margin-top:6px;display:flex;gap:6px;justify-content:center;align-items:center;">`
+    + yearHtml
+    + renderCounts(card)
+    + `</div>`;
 
   // 발췌 (script_excerpt) 스왑
   {
