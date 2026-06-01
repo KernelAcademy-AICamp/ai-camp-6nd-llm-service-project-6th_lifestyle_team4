@@ -2791,9 +2791,9 @@ function maybeShowGuide() {
   if (safeStorageGet(GUIDE_SEEN_KEY) === '1') return false;
   if (!document.querySelector('#coachmark')) return false;
   if (state.currentView !== 'home' || !state.todayCard) return false;  // 홈·오늘 카드 준비됐을 때만
-  safeStorageSet(GUIDE_SEEN_KEY, '1');  // 표시 즉시 영구 1회 보장
   const started = launchTour();
-  if (started) track('onboarding_start');
+  // onboarding.js가 동적 import라 아직 로드 전이면 started=false → '본 것'으로 기록하지 않고 다음 기회에 재시도
+  if (started) { safeStorageSet(GUIDE_SEEN_KEY, '1'); track('onboarding_start'); }
   return started;
 }
 
