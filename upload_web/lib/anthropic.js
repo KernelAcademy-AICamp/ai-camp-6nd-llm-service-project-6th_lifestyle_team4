@@ -215,8 +215,12 @@ function parseJson(text) {
   throw new Error('LLM did not return valid JSON (all repair attempts failed)');
 }
 
-const EXTRACT_CHUNK_TARGET_CHARS = 300000;
-const EXTRACT_CHUNK_WINDOW_CHARS = 50000;
+// 청크 크기 — Claude 4 계열의 200K 토큰 한도에 맞춰 보수적으로.
+// 한국어 1글자 ≈ 1.5~2 토큰. 80K 글자 ≈ 최대 160K 토큰 (input 측). 시스템 프롬프트
+// + 추출 프롬프트 + 시드 블록 + 출력 예약(~16K) 합쳐도 200K 안에 안전하게 들어간다.
+// 이전 값(300K)은 영문 위주(1글자≈0.25토큰)였을 때 동작했으나 한국어 PDF에서 413 빈발.
+const EXTRACT_CHUNK_TARGET_CHARS = 80000;
+const EXTRACT_CHUNK_WINDOW_CHARS = 15000;
 const EXTRACT_CHUNK_OVERLAP_CHARS = 3000;
 const EXTRACT_FINAL_INPUT_CARDS = 80;
 const EXTRACT_FINAL_OUTPUT_CARDS = 40;
