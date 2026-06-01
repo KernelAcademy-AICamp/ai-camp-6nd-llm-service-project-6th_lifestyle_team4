@@ -458,6 +458,9 @@ let pollingTimer = null;
 let lastCardCount = 0;
 let lastBookmarkCount = 0;
 let realtimeIsHealthy = false;
+// 재구독 폭주 방지: 세대 토큰으로 '최신 구독'만 유효하게 두고, 재구독 타이머는 1개만.
+let subscribeGeneration = 0;
+let resubscribeTimer = null;
 
 function startPollingFallback() {
   if (pollingTimer) return;
@@ -486,48 +489,51 @@ function startPollingFallback() {
   }, 30000);
 }
 async function subscribeToChanges() {
+  const myGen = ++subscribeGeneration;  // 이 호출이 최신임을 표시 (이전 채널 콜백은 모두 무효화)
+  if (resubscribeTimer) { clearTimeout(resubscribeTimer); resubscribeTimer = null; }
   try {
     const sb = await getSupabase();
     if (realtimeChannel) {
       try { await sb.removeChannel(realtimeChannel); } catch {}
       realtimeChannel = null;
     }
+    // removeChannel 대기 중 더 최신 구독이 시작됐으면 이 호출은 포기 (중복 채널 방지)
+    if (myGen !== subscribeGeneration) return;
     console.log('[m] realtime: subscribing… userId=', state.userId);
     let ch = sb
       .channel('ds-public-changes-' + Date.now())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, async (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, (payload) => {
         console.log('[m] realtime cards event:', payload.eventType);
-        await loadAllCards();
-        rerenderActiveView();
+        scheduleRealtimeRefresh('cards');
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'works' }, async (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'works' }, (payload) => {
         console.log('[m] realtime works event:', payload.eventType);
-        await loadAllCards();
-        rerenderActiveView();
+        scheduleRealtimeRefresh('cards');
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notices' }, async (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notices' }, (payload) => {
         console.log('[m] realtime notices event:', payload.eventType);
-        await loadNotices();
-        if (state.currentView === 'notice') renderNotice();
-        paintNoticeBadge();
+        scheduleRealtimeRefresh('notices');
       });
     if (state.userId != null) {
       ch = ch.on('postgres_changes',
         { event: '*', schema: 'public', table: 'user_bookmarks', filter: `user_id=eq.${state.userId}` },
-        async (payload) => {
+        (payload) => {
           console.log('[m] realtime user_bookmarks event:', payload.eventType);
-          await loadBookmarks();
-          rerenderActiveView();
+          scheduleRealtimeRefresh('bookmarks');
         }
       );
     }
     realtimeChannel = ch;
     ch.subscribe((status, err) => {
+      // 오래된 채널의 콜백이면 무시 (재구독 폭주·중복 폴링 방지)
+      if (myGen !== subscribeGeneration) return;
       console.log('[m] realtime subscription status:', status, err || '');
       setRealtimeStatus(status);
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        // 5초 후 재구독 시도
-        setTimeout(() => {
+        // 5초 후 재구독 — 동시에 1개만 예약
+        if (resubscribeTimer) return;
+        resubscribeTimer = setTimeout(() => {
+          resubscribeTimer = null;
           if (state.currentView) subscribeToChanges();
         }, 5000);
       }
@@ -569,13 +575,51 @@ function rerenderActiveView() {
   }
 }
 
-async function refreshAll() {
+// refreshAll 스로틀: 포그라운드 복귀 등으로 너무 자주 전체 재조회되는 것을 막는다.
+// force=true(당겨서 새로고침 등 명시적 요청)면 무시하고 즉시 실행.
+let lastRefreshAt = 0;
+const REFRESH_MIN_INTERVAL_MS = 10000;
+async function refreshAll({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && now - lastRefreshAt < REFRESH_MIN_INTERVAL_MS) {
+    console.log('[m] refreshAll skipped (throttled, ' + Math.round((now - lastRefreshAt) / 1000) + 's ago)');
+    return;
+  }
+  lastRefreshAt = now;
   try {
     await Promise.all([loadAllCards(), loadBookmarks()]);
     rerenderActiveView();
   } catch (err) {
     console.warn('[m] refreshAll failed:', err);
   }
+}
+
+// realtime 이벤트 디바운스: 짧은 시간에 여러 변경이 와도 한 번만 재조회·재렌더.
+// (대량 insert 같은 burst 가 N번의 풀로드로 번지는 것을 방지)
+let realtimeDebounceTimer = null;
+const realtimePending = { cards: false, bookmarks: false, notices: false };
+function scheduleRealtimeRefresh(kind) {
+  realtimePending[kind] = true;
+  if (realtimeDebounceTimer) return;
+  realtimeDebounceTimer = setTimeout(async () => {
+    realtimeDebounceTimer = null;
+    const pending = { ...realtimePending };
+    realtimePending.cards = realtimePending.bookmarks = realtimePending.notices = false;
+    try {
+      const tasks = [];
+      if (pending.cards) tasks.push(loadAllCards());
+      if (pending.bookmarks) tasks.push(loadBookmarks());
+      if (pending.notices) tasks.push(loadNotices());
+      await Promise.all(tasks);
+      if (pending.notices) {
+        if (state.currentView === 'notice') renderNotice();
+        paintNoticeBadge();
+      }
+      if (pending.cards || pending.bookmarks) rerenderActiveView();
+    } catch (err) {
+      console.warn('[m] realtime refresh failed:', err);
+    }
+  }, 350);
 }
 
 // ---------- Pull-to-refresh ----------
@@ -648,7 +692,7 @@ async function refreshAll() {
     ptrLabel.textContent = 'Refreshing⋯';
     ptr.style.transform = `translateY(${THRESHOLD - 12}px)`;
     try {
-      await refreshAll();
+      await refreshAll({ force: true });
       toast('갱신됨');
     } catch (err) {
       console.warn('[m] PTR refresh failed:', err);
@@ -835,27 +879,39 @@ async function applySignupProfile(sb, userId) {
 }
 
 // ---------- Data ----------
-async function loadAllCards() {
-  const sb = await getSupabase();
-  const { data, error } = await sb
-    .from('cards')
-    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
-    .order('card_id', { ascending: false }).limit(500);
-  if (error) throw error;
-  state.allCards = Array.isArray(data) ? data : [];
+// 동시 호출 코얼레싱: 같은 쿼리가 여러 트리거(포그라운드·realtime·폴링)에서 겹쳐도
+// 진행 중인 1개를 공유한다. (중복 500행 조회·재렌더 stacking 방지)
+let loadAllCardsInFlight = null;
+function loadAllCards() {
+  if (loadAllCardsInFlight) return loadAllCardsInFlight;
+  loadAllCardsInFlight = (async () => {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('cards')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
+      .order('card_id', { ascending: false }).limit(500);
+    if (error) throw error;
+    state.allCards = Array.isArray(data) ? data : [];
+  })().finally(() => { loadAllCardsInFlight = null; });
+  return loadAllCardsInFlight;
 }
 
-async function loadBookmarks() {
-  if (!state.userId) return;
-  const sb = await getSupabase();
-  const { data, error } = await sb
-    .from('user_bookmarks')
-    .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters))')
-    .eq('user_id', state.userId)
-    .order('created_at', { ascending: false });
-  if (error) { console.warn('[m] bookmarks load failed:', error); return; }
-  state.bookmarks = Array.isArray(data) ? data : [];
-  state.bookmarkedIds = new Set(state.bookmarks.map((b) => b.card_id));
+let loadBookmarksInFlight = null;
+function loadBookmarks() {
+  if (loadBookmarksInFlight) return loadBookmarksInFlight;
+  loadBookmarksInFlight = (async () => {
+    if (!state.userId) return;
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('user_bookmarks')
+      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters))')
+      .eq('user_id', state.userId)
+      .order('created_at', { ascending: false });
+    if (error) { console.warn('[m] bookmarks load failed:', error); return; }
+    state.bookmarks = Array.isArray(data) ? data : [];
+    state.bookmarkedIds = new Set(state.bookmarks.map((b) => b.card_id));
+  })().finally(() => { loadBookmarksInFlight = null; });
+  return loadBookmarksInFlight;
 }
 
 async function loadBookmarkCounts() {
