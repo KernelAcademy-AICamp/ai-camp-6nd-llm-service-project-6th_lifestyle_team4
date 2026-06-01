@@ -234,13 +234,12 @@ async function handleFile(file) {
     fd.append('model', state.model);
     const titleHint = document.querySelector('#title-input')?.value?.trim();
     if (titleHint) fd.append('title', titleHint);
-    setProgressStage('LLM 으로 카드 추출 중 ⋯ (Haiku 과부하 시 자동 재시도)');
-    const json = await apiFetch('/api/extract', {
+    setProgressStage('LLM 으로 카드 추출 중 ⋯ (서버 진행 이벤트 스트리밍)');
+    const json = await callExtractStreaming('/api/extract', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
-      signal,
-    });
+    }, signal);
     applyExtraction(json);
     setProgressStage(`완료 — 카드 ${Array.isArray(json?.cards) ? json.cards.length : 0}장`);
     if (json?._truncated) {
@@ -344,6 +343,82 @@ progressStopBtn?.addEventListener('click', () => {
     currentExtractAbort.abort();
   }
 });
+
+// V2 NDJSON 스트리밍 호출 — /api/extract 가 진행 이벤트를 1줄 JSON 으로 흘려준다.
+// 각 이벤트는 progress 패널의 stage/log 로 그대로 반영. 'result' 이벤트가 최종 응답.
+// 사용자가 [중단] 누르면 fetch 가 abort → 서버 IncomingMessage 'close' 가 발화 →
+// callClaude 에 전달된 signal 이 Anthropic SDK 호출까지 끊는다 (V1 의 한계 해결).
+async function callExtractStreaming(url, fetchOptions, signal) {
+  const headers = { ...(fetchOptions.headers || {}), Accept: 'application/x-ndjson' };
+  const res = await fetch(url, { ...fetchOptions, headers, signal });
+  // 서버가 스트리밍 헤더를 못 보냈으면(예: 401 / 404) 일반 JSON 경로로 처리
+  const ct = String(res.headers.get('content-type') || '');
+  if (!ct.includes('application/x-ndjson')) {
+    const raw = await res.text();
+    let json = null; try { json = JSON.parse(raw); } catch { /* not json */ }
+    if (!res.ok) {
+      const detail = json?.error || raw.slice(0, 300) || res.statusText;
+      throw new Error(`HTTP ${res.status} · ${detail}`);
+    }
+    // (이론상 발생 안 함 — 스트리밍 요청에 일반 JSON 200 응답)
+    return json;
+  }
+  if (!res.body) throw new Error('스트리밍 응답에 body 없음');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let resultPayload = null;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line) continue;
+      let event;
+      try { event = JSON.parse(line); } catch { continue; }
+      switch (event.t) {
+        case 'stage':
+          setProgressStage(event.m);
+          break;
+        case 'log':
+          logProgress(event.m);
+          break;
+        case 'llm_call':
+          logProgress(`LLM 호출 (${event.model}, 시도 ${event.attempt}, max=${event.max_tokens})`);
+          break;
+        case 'llm_done':
+          logProgress(`LLM 응답 수신 (시도 ${event.attempt})`);
+          break;
+        case 'llm_retry':
+          logProgress(`LLM 재시도 — ${event.delayMs}ms 후 (${event.model}, status=${event.status ?? '?'})`);
+          break;
+        case 'chunk_start':
+          logProgress(`청크 ${event.index}/${event.total} 시작 (${event.chars.toLocaleString()}자)`);
+          break;
+        case 'chunk_done':
+          logProgress(`청크 ${event.index}/${event.total} 완료 — 누적 ${event.completed}/${event.total}`);
+          break;
+        case 'aborted': {
+          const a = new Error('aborted'); a.name = 'AbortError'; throw a;
+        }
+        case 'error':
+          throw new Error(event.m || 'extract error');
+        case 'result':
+          resultPayload = event.d;
+          break;
+        default:
+          // 미지의 이벤트 — 디버깅용 raw 로그
+          logProgress(`(unknown event: ${event.t})`);
+      }
+    }
+  }
+  if (!resultPayload) throw new Error('스트림이 result 없이 종료됨');
+  return resultPayload;
+}
 
 // ---------------------------------------------------------------------------
 // Wikisource KR — 위 #title-input 의 값으로 ko.wikisource.org 검색 → 본문 가져오기.
@@ -463,11 +538,11 @@ async function onWsPickResult(item) {
     const finalTitle = (titleInput?.value.trim()) || fetchJson.title || item.title;
     if (titleInput && !titleInput.value.trim()) titleInput.value = finalTitle;
 
-    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, Haiku 과부하 시 자동 재시도)`);
+    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, 서버 스트리밍)`);
     // 파일 업로드 경로 (multipart) 가 아닌 JSON 경로로 /api/extract 호출.
     // 외부 PD 소스에서 가져온 본문은 이미 텍스트라 multipart 래핑이 불필요 + Busboy
     // 가 합성 File 의 Korean 파일명에서 "Unexpected end of form" 으로 떨어지는 문제 회피.
-    const extractJson = await apiFetch('/api/extract', {
+    const extractJson = await callExtractStreaming('/api/extract', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -479,8 +554,7 @@ async function onWsPickResult(item) {
         model: state.model,
         title: finalTitle,
       }),
-      signal,
-    });
+    }, signal);
     applyExtraction(extractJson);
     setProgressStage(`완료 — 카드 ${Array.isArray(extractJson?.cards) ? extractJson.cards.length : 0}장`);
     if (extractJson?._truncated) {
@@ -646,8 +720,8 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
       : (fetchJson.title || title || `Gutenberg #${bookId}`);
     if (titleInput) titleInput.value = finalTitle;
 
-    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, Haiku 과부하 시 자동 재시도)`);
-    const extractJson = await apiFetch('/api/extract', {
+    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, 서버 스트리밍)`);
+    const extractJson = await callExtractStreaming('/api/extract', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -659,8 +733,7 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
         model: state.model,
         title: finalTitle,
       }),
-      signal,
-    });
+    }, signal);
     applyExtraction(extractJson);
     setProgressStage(`완료 — 카드 ${Array.isArray(extractJson?.cards) ? extractJson.cards.length : 0}장`);
     toast('추출 완료 — 영문 카드. 카드별 번역 버튼으로 한국어 변환 가능.', 'success');
