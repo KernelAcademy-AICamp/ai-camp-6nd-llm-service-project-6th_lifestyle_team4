@@ -154,7 +154,7 @@ async function loadLibrary() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
       .order('card_id', { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -1009,12 +1009,9 @@ function buildViewNode(card) {
   const node = libraryCardTemplate.content.firstElementChild.cloneNode(true);
   const work = card.works || {};
 
-  // 토글 가능한 5개 필드 — KO(기본) ↔ EN(*_original)
-  // 영문 원본이 한 곳이라도 있으면 EN 토글 버튼 노출
-  const hasEnOriginal = !!(
-    work.title_original || work.subtitle_original || work.author_original ||
-    card.quote_original || card.script_excerpt_original
-  );
+  // 토글 대상 7필드 — KO(기본) ↔ EN(*_original).
+  // *_original 이 비어 있으면 첫 EN 클릭 때 KO→EN 번역해서 채워넣는 lazy 방식.
+  // → 항상 EN 버튼을 노출하고, 빈 칸은 클릭 시 채운다.
 
   const renderWorkLine = (lang) => {
     const title    = lang === 'en' && work.title_original    ? work.title_original    : work.title;
@@ -1046,28 +1043,55 @@ function buildViewNode(card) {
         : boldSpeakerLines(cleanForDisplay(text, work.characters), work.characters);
     return applyMarkdownBoldOnHtml(baseHtml);
   };
+  const renderDescription = (lang) => {
+    const text = lang === 'en' && card.excerpt_description_original ? card.excerpt_description_original : (card.excerpt_description || '');
+    return renderMarkdownBold(cleanForDisplay(text));
+  };
+  const renderSignificance = (lang) => {
+    const text = lang === 'en' && card.significance_original ? card.significance_original : (card.significance || '');
+    return renderMarkdownBold(cleanForDisplay(text));
+  };
 
   node.querySelector('.lib-quote').innerHTML = renderQuote('ko');
   node.querySelector('.lib-excerpt').innerHTML = renderExcerpt('ko');
-  node.querySelector('.lib-description').innerHTML = renderMarkdownBold(cleanForDisplay(card.excerpt_description || ''));
+  node.querySelector('.lib-description').innerHTML = renderDescription('ko');
 
-  // EN 토글 버튼 — 원본이 있을 때만 표시
+  // EN 토글 버튼 — 항상 노출 (빈 *_original 은 첫 클릭 때 KO→EN 번역으로 채움)
   const langToggleBtn = node.querySelector('.lib-lang-toggle');
   if (langToggleBtn) {
-    if (hasEnOriginal) {
-      langToggleBtn.classList.remove('hidden');
-      let currentLang = 'ko';
-      langToggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        currentLang = currentLang === 'ko' ? 'en' : 'ko';
-        node.querySelector('.lib-work-title').textContent = renderWorkLine(currentLang);
-        node.querySelector('.lib-quote').innerHTML = renderQuote(currentLang);
-        node.querySelector('.lib-excerpt').innerHTML = renderExcerpt(currentLang);
-        langToggleBtn.textContent = currentLang === 'ko' ? 'EN' : 'KO';
-        langToggleBtn.title = currentLang === 'ko' ? '영문 원본으로 보기' : '한국어로 돌아가기';
-        langToggleBtn.classList.toggle('bg-primary/10', currentLang === 'en');
-      });
-    }
+    langToggleBtn.classList.remove('hidden');
+    let currentLang = 'ko';
+    langToggleBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      currentLang = currentLang === 'ko' ? 'en' : 'ko';
+
+      // EN 으로 갈 때 누락된 *_original 을 lazy 번역
+      if (currentLang === 'en') {
+        const prevTxt = langToggleBtn.textContent;
+        langToggleBtn.disabled = true;
+        langToggleBtn.textContent = '⋯';
+        try {
+          await ensureEnglishOriginals(card, work);
+        } catch (err) {
+          console.error('[library] lazy translate failed:', err);
+          toast(`영문 번역 실패: ${err.message || err}`, 'error');
+        } finally {
+          langToggleBtn.disabled = false;
+          langToggleBtn.textContent = prevTxt;
+        }
+      }
+
+      node.querySelector('.lib-work-title').textContent = renderWorkLine(currentLang);
+      node.querySelector('.lib-quote').innerHTML = renderQuote(currentLang);
+      node.querySelector('.lib-excerpt').innerHTML = renderExcerpt(currentLang);
+      node.querySelector('.lib-description').innerHTML = renderDescription(currentLang);
+      const sigEl = node.querySelector('.lib-significance');
+      if (sigEl) sigEl.innerHTML = renderSignificance(currentLang);
+
+      langToggleBtn.textContent = currentLang === 'ko' ? 'EN' : 'KO';
+      langToggleBtn.title = currentLang === 'ko' ? '영문 원본으로 보기' : '한국어로 돌아가기';
+      langToggleBtn.classList.toggle('bg-primary/10', currentLang === 'en');
+    });
   }
 
   const kwEl = node.querySelector('.lib-keywords');
@@ -1234,6 +1258,73 @@ function buildEditNode(card) {
   });
 
   return node;
+}
+
+// 보기 토글에서 영문 칸이 비어 있는 필드를 즉시 KO→EN 번역해서 채운다 (lazy).
+// 카드(card) 와 작품(work) 메모리 객체에 결과를 즉시 반영하고, DB에도 백필 저장해 다음 진입부터는 캐시 히트.
+// 누락된 필드만 호출하므로 비용 최소화. 병렬 처리로 빠르게.
+const _inFlightOriginals = new Map(); // card_id → Promise (중복 호출 방지)
+async function ensureEnglishOriginals(card, work) {
+  if (_inFlightOriginals.has(card.card_id)) return _inFlightOriginals.get(card.card_id);
+
+  const promise = (async () => {
+    const token = await getAccessToken();
+    const sb = await getSupabase();
+
+    // 작품 메타 — 한 작품에 카드가 여러 개면 한 번만 채우면 됨
+    const workCtx = {
+      title: work.title || '', subtitle: work.subtitle || '',
+      author: work.author || '', format: work.format || '',
+    };
+
+    const callTranslate = async (text, field) => {
+      if (!text || !String(text).trim()) return null;
+      const res = await fetch('/api/translate-field', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ text, field, work: workCtx, direction: 'ko2en' }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || `HTTP ${res.status} (${field})`);
+      return String(body?.translated || '').trim() || null;
+    };
+
+    // 작품 메타 — 비어 있는 *_original 만 병렬 채움
+    const workJobs = [];
+    if (!work.title_original    && work.title)    workJobs.push(callTranslate(work.title,    'title')   .then((v) => { if (v) work.title_original    = v; return ['title_original', v]; }));
+    if (!work.subtitle_original && work.subtitle) workJobs.push(callTranslate(work.subtitle, 'subtitle').then((v) => { if (v) work.subtitle_original = v; return ['subtitle_original', v]; }));
+    if (!work.author_original   && work.author)   workJobs.push(callTranslate(work.author,   'author')  .then((v) => { if (v) work.author_original   = v; return ['author_original', v]; }));
+
+    // 카드 본문 — 비어 있는 *_original 만 병렬 채움
+    const cardJobs = [];
+    if (!card.quote_original          && card.quote)          cardJobs.push(callTranslate(card.quote,          'quote')         .then((v) => { if (v) card.quote_original          = v; return ['quote_original', v]; }));
+    if (!card.script_excerpt_original && card.script_excerpt) cardJobs.push(callTranslate(card.script_excerpt, 'script_excerpt').then((v) => { if (v) card.script_excerpt_original = v; return ['script_excerpt_original', v]; }));
+    if (!card.excerpt_description_original && card.excerpt_description)
+      cardJobs.push(callTranslate(card.excerpt_description, 'excerpt_description').then((v) => { if (v) card.excerpt_description_original = v; return ['excerpt_description_original', v]; }));
+    if (!card.significance_original && card.significance)
+      cardJobs.push(callTranslate(card.significance, 'significance').then((v) => { if (v) card.significance_original = v; return ['significance_original', v]; }));
+
+    const [workResults, cardResults] = await Promise.all([Promise.all(workJobs), Promise.all(cardJobs)]);
+
+    // DB 백필 — 같은 work_id 다른 카드들도 즉시 영문 메타 공유하도록 메모리 동기화
+    const workUpdate = Object.fromEntries(workResults.filter(([_, v]) => v));
+    if (Object.keys(workUpdate).length > 0) {
+      await sb.from('works').update(workUpdate).eq('work_id', card.work_id);
+      state.rows.forEach((r) => {
+        if (r.work_id === card.work_id && r.works) Object.assign(r.works, workUpdate);
+      });
+    }
+    const cardUpdate = Object.fromEntries(cardResults.filter(([_, v]) => v));
+    if (Object.keys(cardUpdate).length > 0) {
+      await sb.from('cards').update(cardUpdate).eq('card_id', card.card_id);
+    }
+  })();
+
+  _inFlightOriginals.set(card.card_id, promise);
+  try { await promise; } finally { _inFlightOriginals.delete(card.card_id); }
 }
 
 // ↻ KO 버튼: 영문 칸의 값을 한국어로 재번역해 좌측 짝꿍 input/textarea 에 채워준다.

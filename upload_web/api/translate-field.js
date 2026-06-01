@@ -6,7 +6,11 @@ import { requireAdmin, AuthError } from '../lib/auth.js';
 import { runTranslateField } from '../lib/anthropic.js';
 import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
-const ALLOWED_FIELDS = new Set(['quote', 'script_excerpt', 'title', 'subtitle', 'author']);
+const ALLOWED_FIELDS = new Set([
+  'quote', 'script_excerpt', 'title', 'subtitle', 'author',
+  'excerpt_description', 'significance',
+]);
+const ALLOWED_DIRECTIONS = new Set(['en2ko', 'ko2en']);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -18,16 +22,20 @@ export default async function handler(req, res) {
     const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
     const text = String(body?.text ?? '').trim();
     const field = String(body?.field ?? '').trim();
+    const direction = String(body?.direction ?? 'en2ko');
     if (!text) throw new HttpError('text is required', 400);
     if (!ALLOWED_FIELDS.has(field)) {
-      throw new HttpError('field must be one of quote | script_excerpt | title | subtitle | author', 400);
+      throw new HttpError(`field must be one of ${[...ALLOWED_FIELDS].join(' | ')}`, 400);
+    }
+    if (!ALLOWED_DIRECTIONS.has(direction)) {
+      throw new HttpError('direction must be en2ko or ko2en', 400);
     }
     if (text.length > 12000) throw new HttpError('text is too large', 413);
 
     // 작품 메타는 톤 추론 컨텍스트로만 사용 (선택)
     const work = body?.work && typeof body.work === 'object' ? body.work : null;
 
-    const translated = await runTranslateField({ text, field, work });
+    const translated = await runTranslateField({ text, field, work, direction });
     return res.status(200).json({ translated });
   } catch (err) {
     if (err instanceof AuthError) {

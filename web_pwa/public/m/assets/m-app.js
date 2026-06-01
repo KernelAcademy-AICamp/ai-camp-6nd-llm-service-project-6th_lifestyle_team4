@@ -839,7 +839,7 @@ async function loadAllCards() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('cards')
-    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
+    .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
     .order('card_id', { ascending: false }).limit(500);
   if (error) throw error;
   state.allCards = Array.isArray(data) ? data : [];
@@ -3322,8 +3322,7 @@ function applyDetailLang(lang) {
   detailMeta.innerHTML = items.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
     + renderCounts(card);
 
-  // 인용구 + 발췌 — 인용구는 detailQuote가 없으니 detail 화면에는 quote가 표시되지 않을 수 있음.
-  // 실제로 detailScript만 있고 quote는 헤더 위에 없는 듯. 발췌만 스왑.
+  // 발췌 (script_excerpt) 스왑
   {
     const baseHtml =
       String(w.format || '').toLowerCase() === 'poem'
@@ -3332,6 +3331,17 @@ function applyDetailLang(lang) {
           ? escapeHtml(flowProseScript(scriptSrc || ''))
           : boldSpeakerLines(cleanForDisplay(scriptSrc || '', w.characters), w.characters);
     detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
+  }
+
+  // 상황 설명 (excerpt_description) + 의의 (significance) 스왑
+  const flowProse = (s) => String(s ?? '').replace(/\s*\n+\s*/g, ' ').trim();
+  const descSrc = useEn && card.excerpt_description_original ? card.excerpt_description_original : card.excerpt_description;
+  if (descSrc && detailDescription) {
+    detailDescription.innerHTML = renderMarkdownBold(flowProse(descSrc));
+  }
+  const sigSrc = useEn && card.significance_original ? card.significance_original : card.significance;
+  if (sigSrc && detailSignificance) {
+    detailSignificance.innerHTML = renderMarkdownBold(flowProse(sigSrc));
   }
 }
 

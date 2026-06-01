@@ -555,7 +555,11 @@ export async function runTranslate(work, card) {
 // 단일 필드 EN→KO 재번역. 편집 화면에서 영문 원본 한 칸을 수정한 뒤
 // "↻ KO" 버튼으로 한국어 번역만 다시 받기 위한 가벼운 호출.
 // field 별로 톤·길이를 약간 다르게 안내한다.
-export async function runTranslateField({ text, field, work }) {
+// 단일 필드 재번역.
+//  direction='en2ko' (기본): 편집 화면의 영문 원본 칸 "↻ KO" 버튼
+//  direction='ko2en'        : 보기 토글에서 영문 원본이 비어 있는 필드를 즉시 영문 변환
+// 지원 필드: title / subtitle / author / quote / script_excerpt / excerpt_description / significance
+export async function runTranslateField({ text, field, work, direction = 'en2ko' }) {
   const src = String(text ?? '').trim();
   if (!src) throw new Error('text is required');
 
@@ -567,31 +571,63 @@ export async function runTranslateField({ text, field, work }) {
     w.format   ? `형식: ${w.format}`            : null,
   ].filter(Boolean).join('\n');
 
-  const FIELD_GUIDE = {
+  const FIELD_GUIDE_KO = {
     title: '작품 제목. 한국 통용 표기가 있으면 그것을 사용. 부제는 빼고 본 제목만.',
     subtitle: '작품 부제(시리즈 편명 등). 자연스러운 한국어로.',
     author: '작가 인명. 한국 통용 표기 우선. 음역 시 한국 표준 표기. 한자/영문 그대로 두지 말 것.',
     quote: '인물의 명대사 한 줄. 무대 위 배우가 한 호흡에 말할 수 있게. 번역체("~인 것이다", "당신", "그/그녀" 남용) 금지.',
     script_excerpt: '대본 발췌. 화자: 형식과 지문 줄바꿈을 유지. 인물 관계에 맞는 위계 어투(반말/존댓말/하오체)로. 옛 철자 금지.',
+    excerpt_description: '짧은 산문 해설(상황 설명). 자연스러운 한국어로 한 단락.',
+    significance: '작품 의의 해설. 자연스러운 한국어 산문.',
   };
 
-  const prompt = `너는 한국어 정전 감각을 가진 번역가다. 다음 영문을 한국어로 옮긴다.
+  const FIELD_GUIDE_EN = {
+    title: 'The work title. Prefer the canonical English title if known (e.g., 드라큘라 → "Dracula", 햄릿 → "Hamlet"); otherwise translate naturally. Title only, no subtitle.',
+    subtitle: 'The work subtitle (series episode name, etc). Natural English.',
+    author: 'Author name. Use the standard English spelling if known (e.g., 셰익스피어 → "William Shakespeare"); otherwise transliterate.',
+    quote: 'A single character line of dialogue. Keep it speakable in one breath. Match the original register and tone.',
+    script_excerpt: 'A scene excerpt. Preserve speaker labels (e.g., "VICTOR:") and stage direction linebreaks. Keep tone and register.',
+    excerpt_description: 'A short prose description of the scene situation. Natural English, single paragraph.',
+    significance: 'A commentary on the work\'s significance. Natural English prose, 1-3 sentences.',
+  };
+
+  let prompt, system;
+  if (direction === 'ko2en') {
+    system = 'You are a precise Korean→English literary translator. Output a single JSON object only. No prose, no markdown.';
+    prompt = `Translate the following Korean text into natural English.
+
+[Work context]
+${ctx || '(none)'}
+
+[Field: ${field}]
+${FIELD_GUIDE_EN[field] || 'Natural English.'}
+
+[Korean source]
+${src}
+
+Output: a single JSON line, no other keys or explanation.
+{"text":"English translation"}`;
+  } else {
+    system = TRANSLATE_SYSTEM;
+    prompt = `너는 한국어 정전 감각을 가진 번역가다. 다음 영문을 한국어로 옮긴다.
 
 [작품 컨텍스트]
 ${ctx || '(없음)'}
 
 [필드: ${field}]
-${FIELD_GUIDE[field] || '자연스러운 한국어로.'}
+${FIELD_GUIDE_KO[field] || '자연스러운 한국어로.'}
 
 [영문 원본]
 ${src}
 
 응답: JSON 한 줄, 다른 키·설명 금지.
 {"text":"한국어 번역"}`;
+  }
 
+  // 신형 모델은 temperature 와 top_p 동시 지정 시 400 에러. temperature 만 사용.
   const result = await callClaude(prompt, {
     maxTokens: field === 'script_excerpt' ? 8000 : 1024,
-    system: TRANSLATE_SYSTEM,
+    system,
     temperature: 0.3,
     prefill: '{"text":"',
   });
