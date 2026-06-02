@@ -1478,17 +1478,19 @@ async function onTranslateAll() {
       toast(`전체 번역 종료 · 성공 ${done} / 실패 ${failed}`, done ? 'info' : 'error');
     }
 
-    // ★ 추가 — quote/script 번역 끝나면 description/significance/keywords KO→EN 도 한 번에 채움.
-    // 카드별 LLM 호출이 아니라 1회 배치 호출. 비용 최소화 + 저장 단계에서 *_original 모두 준비 완료.
+    // ★ 추가 — quote/script 번역 끝나면 description/significance/keywords KO→EN 도 채움.
+    // 카드 N장이 많을 때 한 번의 LLM 호출은 응답 잘림 위험 → 10장씩 청크로 동시 3개 호출.
+    // 일부 청크가 실패해도 나머지는 저장되어 검토 단계에서 ↻KO 또는 영문 일괄 채우기로 보충 가능.
     try {
-      translateAllBtn.innerHTML =
-        `<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>` +
-        `<span>해설 영문화 중⋯</span>`;
       await fillCommentaryEn(token);
       toast('해설(의의·설명) 영문도 채웠어요', 'success');
     } catch (e) {
-      console.warn('[translate-all] commentary batch failed (non-fatal):', e);
-      toast(`해설 영문화 실패 — 저장 후 라이브러리에서 보충 가능 (${e.message || e})`, 'info');
+      console.warn('[translate-all] commentary fill failed:', e);
+      if (e.partial) {
+        toast(`해설 일부 청크 실패 — 성공한 카드는 저장됩니다. 검토에서 ↻KO 또는 영문 일괄 채우기로 보충`, 'info');
+      } else {
+        toast(`해설 영문화 실패 — 저장 후 검토 페이지에서 영문 일괄 채우기로 보충 가능`, 'info');
+      }
     }
   } catch (err) {
     console.error(err);
@@ -1500,38 +1502,70 @@ async function onTranslateAll() {
   }
 }
 
-// 모든 카드의 description / significance / keywords 를 한 번의 API 호출로 KO→EN 일괄 번역.
-// 결과를 각 카드의 translated_commentary 에 부착해 저장 단계에서 함께 보낸다.
+// 모든 카드의 description / significance / keywords 를 KO→EN 일괄 번역.
+// 카드 N장이 많을 때 한 번의 LLM 호출은 응답 토큰이 넘쳐 잘리거나 timeout 위험 →
+// 10장씩 청크로 나눠 동시 3개씩 호출. 청크별 실패는 격리(다른 청크엔 영향 X).
 async function fillCommentaryEn(token) {
-  const payload = state.cards.map((c, i) => ({
+  const all = state.cards.map((c, i) => ({
     id: i,
     description: c.excerpt_description || '',
     significance: c.significance || '',
     keywords: Array.isArray(c.keywords) ? c.keywords : [],
   })).filter((p) => p.description || p.significance || (p.keywords && p.keywords.length));
-  if (!payload.length) return;
+  if (!all.length) return;
 
-  const res = await fetch('/api/translate-commentary-batch', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ cards: payload, work: state.work || null }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
+  const CHUNK = 10;
+  const chunks = [];
+  for (let i = 0; i < all.length; i += CHUNK) chunks.push(all.slice(i, i + CHUNK));
 
-  const results = Array.isArray(body?.results) ? body.results : [];
-  results.forEach((r) => {
-    const i = Number(r?.id);
-    if (Number.isNaN(i) || !state.cards[i]) return;
-    state.cards[i].translated_commentary = {
-      excerpt_description_original: r.description_en || null,
-      significance_original: r.significance_en || null,
-      keywords_original: Array.isArray(r.keywords_en) ? r.keywords_en : null,
-    };
-  });
+  // 청크별 호출. 동시성 3 — Anthropic 레이트 보호.
+  const CONCURRENCY = 3;
+  let cursor = 0;
+  const errors = [];
+
+  async function worker() {
+    while (cursor < chunks.length) {
+      const idx = cursor++;
+      const chunk = chunks[idx];
+      // 진행률 표시
+      translateAllBtn.innerHTML =
+        `<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>` +
+        `<span>해설 영문화 중⋯ (청크 ${idx + 1}/${chunks.length})</span>`;
+      try {
+        const res = await fetch('/api/translate-commentary-batch', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ cards: chunk, work: state.work || null }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
+        const results = Array.isArray(body?.results) ? body.results : [];
+        results.forEach((r) => {
+          const i = Number(r?.id);
+          if (Number.isNaN(i) || !state.cards[i]) return;
+          state.cards[i].translated_commentary = {
+            excerpt_description_original: r.description_en || null,
+            significance_original:        r.significance_en || null,
+            keywords_original: Array.isArray(r.keywords_en) ? r.keywords_en : null,
+          };
+        });
+      } catch (e) {
+        console.warn(`[translate-all] commentary chunk ${idx + 1}/${chunks.length} failed:`, e?.message || e);
+        errors.push({ chunk: idx + 1, error: e?.message || String(e) });
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker));
+
+  if (errors.length) {
+    const detail = errors.map((e) => `#${e.chunk}: ${e.error}`).join(' | ');
+    const err = new Error(`${errors.length}/${chunks.length} 청크 실패 — ${detail}`);
+    err.partial = errors.length < chunks.length;
+    throw err;
+  }
 }
 
 translateAllBtn?.addEventListener('click', onTranslateAll);

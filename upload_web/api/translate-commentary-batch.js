@@ -39,7 +39,11 @@ export default async function handler(req, res) {
     if (err instanceof HttpError) {
       return sendError(res, err);
     }
-    console.error('[translate-commentary-batch] error:', err);
+    // 자세한 로그 — Vercel 함수 로그에서 실패 원인 파악 가능 (status·type·message)
+    console.error(
+      `[translate-commentary-batch] error status=${err?.status} ` +
+      `type=${err?.error?.type || err?.type} message=${(err?.message || '').slice(0, 300)}`
+    );
     if (err?.status === 529 || err?.status === 429) {
       return res.status(503).json({
         error: 'Anthropic API가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.',
@@ -47,7 +51,17 @@ export default async function handler(req, res) {
     }
     if (/prompt is too long|tokens.*maximum/i.test(err?.message || '')) {
       return res.status(413).json({
-        error: '카드 수가 많아 한 번에 처리 불가. 적은 수로 나눠 다시 시도해주세요.',
+        error: '카드 수가 많아 한 번에 처리 불가. 청크 크기를 줄여주세요.',
+      });
+    }
+    if (/usage limits|reached your specified/i.test(err?.message || '')) {
+      return res.status(402).json({
+        error: 'Anthropic API 사용량 한도에 도달했습니다.',
+      });
+    }
+    if (/did not return valid JSON|parseJson/i.test(err?.message || '')) {
+      return res.status(502).json({
+        error: 'LLM 응답이 잘렸거나 형식이 잘못됨. 카드 수가 너무 많을 수 있어요.',
       });
     }
     return res.status(500).json({ error: err.message || 'Internal error' });
