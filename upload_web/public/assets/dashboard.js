@@ -1511,6 +1511,28 @@ async function onTranslateAll() {
         throw e;
       }
       const results = Array.isArray(body?.results) ? body.results : [];
+      // 작품 메타 번역 결과 (있을 때만) — state.work 의 한·영 양쪽 채움.
+      const workMeta = body?.work;
+      if (workMeta && state.work) {
+        const wko = workMeta.ko || {};
+        const wen = workMeta.en || {};
+        const workSourceIsEN = workMeta.source_lang === 'en';
+        if (workSourceIsEN) {
+          // EN 원문 — primary KO 가 새 정보, _original EN 은 source echo
+          if (wko.title    && !state.work.title)              state.work.title             = wko.title;
+          if (wko.subtitle && !state.work.subtitle)           state.work.subtitle          = wko.subtitle;
+          // author 은 추출 시 한국어 표기로 변환되었을 수 있으므로 KO 가 비어있을 때만 채움
+          if (wko.author   && !state.work.author)             state.work.author            = wko.author;
+          if (wen.title    && !state.work.title_original)     state.work.title_original    = wen.title;
+          if (wen.subtitle && !state.work.subtitle_original)  state.work.subtitle_original = wen.subtitle;
+          if (wen.author   && !state.work.author_original)    state.work.author_original   = wen.author;
+        } else {
+          // KO 원문 — primary 이미 KO, _original EN 만 채움
+          if (wen.title    && !state.work.title_original)     state.work.title_original    = wen.title;
+          if (wen.subtitle && !state.work.subtitle_original)  state.work.subtitle_original = wen.subtitle;
+          if (wen.author   && !state.work.author_original)    state.work.author_original   = wen.author;
+        }
+      }
       results.forEach((r) => {
         const idx = Number(r?.id);
         if (Number.isNaN(idx) || !state.cards[idx]) return;

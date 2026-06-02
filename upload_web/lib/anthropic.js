@@ -267,7 +267,16 @@ const EXTRACT_FINAL_OUTPUT_CARDS = 40;
 // 카테고리별 절대 어겨선 안 되는 규칙 — 프롬프트 본문 앞에 prepend.
 // LLM 이 본문 규칙을 가끔 무시하는 케이스 대비, 최상단에 다시 한 번 강조.
 // 서버 후처리 검증(validateAndFilterCards)이 같은 규칙으로 위반 카드를 drop.
-function buildCriticalRulesPreamble(category) {
+// 입력 스크립트의 주요 언어 판정 — 한·영 글자 비율 기준.
+// 추출 시 source 언어 결정 → preamble 에 강한 LANGUAGE OVERRIDE 주입.
+function detectScriptLanguage(scriptText) {
+  const sample = String(scriptText || '').slice(0, 5000);
+  const koreanChars = (sample.match(/[가-힯]/g) || []).length;
+  const latinChars  = (sample.match(/[a-zA-Z]/g) || []).length;
+  return koreanChars > latinChars * 0.3 ? 'ko' : 'en';
+}
+
+function buildCriticalRulesPreamble(category, sourceLang = 'ko') {
   const lengthRule = ({
     screen: '· script_excerpt 는 **무조건 2000자 이상**. 미달이면 앞뒤 turn을 더 가져와 반드시 채울 것. 미달 카드는 서버에서 삭제됨.',
     opera:  '· script_excerpt 는 **무조건 2000자 이상**. 미달이면 앞뒤 노래 단락을 더 포함할 것. 미달 카드는 서버에서 삭제됨.',
@@ -278,6 +287,67 @@ function buildCriticalRulesPreamble(category) {
     poem:   '· script_excerpt 는 행·연 구조 그대로 (짧을수록 좋음. 다른 시·단락을 끌어와 채우지 말 것).',
     prose:  '· script_excerpt 는 가능한 2000자 이상이지만, 글 한 편이 짧으면 전체 그대로 (짧은 산문 예외).',
   })[category] || '· script_excerpt 는 **무조건 2000자 이상** (poem/prose 제외).';
+
+  // === LANGUAGE OVERRIDE — EN source 케이스에 압도적으로 강한 영문 출력 강제 ===
+  // 본문 EXTRACT_PROMPTS 에는 "한국어로" 가 수십 번 반복되어 짧은 안내로는 묻힘.
+  // 따라서 EN source 일 때만 ABSOLUTE PRIORITY 헤더 + 구체 ❌/✅ 예시 + 반복 강조로
+  // 본문의 한국어 지시를 무력화한다.
+  const languageOverride = sourceLang === 'en' ? `
+
+[★★★★★ ABSOLUTE PRIORITY: ENGLISH OUTPUT REQUIRED ★★★★★]
+
+THIS IS AN ENGLISH SOURCE TEXT. EVERY OUTPUT FIELD MUST BE IN ENGLISH.
+
+The Korean template instructions below ("한국어로 작성", "자연스러운 한국어",
+"한국어 명사", "한국어 산문" 등) are TEMPLATE DEFAULTS for Korean sources.
+For this English source, **THOSE INSTRUCTIONS ARE OVERRIDDEN.** OUTPUT EVERY
+FIELD IN ENGLISH.
+
+[Required language per field — STRICT]
+- work.title          → English (verbatim from source, e.g., "Adventures of Huckleberry Finn")
+- work.subtitle       → English (from source) or null
+- work.author         → English (verbatim from source, e.g., "Mark Twain")
+- work.release_year   → integer (language-neutral)
+- work.genres         → ENGLISH genre names (e.g., ["Drama", "Adventure"])  ← ★ ENGLISH, not Korean
+- work.characters     → English names (e.g., ["Huck Finn", "Tom Sawyer"])
+- card.quote          → English (verbatim from source)
+- card.script_excerpt → English (verbatim from source, preserve line breaks)
+- card.excerpt_description  → English narrative paragraph (~100-300 chars)
+- card.significance         → English commentary (~80-200 chars, single distilled claim)
+- card.keywords             → 3 English noun/noun-phrase tags
+
+[❌ FORBIDDEN vs ✅ REQUIRED — concrete examples]
+
+excerpt_description:
+  ❌ "허크가 학교에 다니며 문명에 적응하는 장면이다."   ← Korean (FORBIDDEN)
+  ✅ "Huck shows his discomfort with arithmetic, revealing his uneasy
+     relationship with the civilizing world of formal education."
+
+significance:
+  ❌ "허크가 문명에 저항하는 개성을 드러낸다."         ← Korean (FORBIDDEN)
+  ✅ "Huck selectively absorbs civilization's demands while resisting
+     what conflicts with his own nature."
+
+keywords:
+  ❌ ["교육과 저항", "개인의 한계", "순응과 반발"]      ← Korean (FORBIDDEN)
+  ✅ ["education", "resistance", "individuality"]
+
+genres:
+  ❌ ["드라마", "모험"]                                ← Korean (FORBIDDEN)
+  ✅ ["Drama", "Adventure", "Coming-of-Age"]
+
+title / author:
+  ❌ "허클베리 핀의 모험" / "마크 트웨인"              ← Korean (FORBIDDEN)
+  ✅ "Adventures of Huckleberry Finn" / "Mark Twain"
+
+[Self-check before output]
+For every text field, ask: "Is this in English?" If a field contains any
+Korean characters (가-힯), REWRITE IT IN ENGLISH before outputting.
+
+REPEAT: English source → English output for ALL fields. No Korean.
+
+[★★★★★ END LANGUAGE OVERRIDE ★★★★★]
+` : '';
 
   return `[★★★ CRITICAL — 아래 규칙은 절대 위반 금지. 위반 카드는 서버에서 즉시 삭제됨 ★★★]
 1. quote ≠ script_excerpt — 같거나 95% 이상 겹치면 카드 자체가 무효.
@@ -292,20 +362,7 @@ function buildCriticalRulesPreamble(category) {
    (b) script_excerpt 의 길이가 quote 의 길이보다 최소 5배 이상인가?
    (c) script_excerpt 가 카테고리별 최소 길이를 충족하는가?
    (d) quote 의 모든 문자가 script_excerpt 안에 그대로 포함되는가?
-
-★ COMMENTARY LANGUAGE (해설 필드 작성 언어) ★
-다음 필드는 quote/script_excerpt 와 **동일한 언어**로 작성한다:
-  · excerpt_description
-  · significance
-  · keywords (각 키워드 단어를 source 언어로)
-  · title, subtitle, author 도 가능한 source 언어 그대로 (작가명만 한국어 통용 표기 변환 허용)
-
-언어 판정 기준 — quote/script_excerpt 의 주요 언어:
-  · 한국어 원문 → 위 필드 모두 **한국어**로 (하단 본문의 한국어 스타일 가이드 따름)
-  · 영어 원문 → 위 필드 모두 **영어**로 (간결하고 문학적인 영어, 하단의 "한국어로" 지시 무시)
-  · 그 외 언어(불어/독어/일본어 등) → source 언어로 그대로
-
-이유: 사용자가 양 언어 모두를 보려 한다. 추출 시 source 언어로 작성하면 추후 단방향 번역 한 번으로 양 언어 확보 가능.
+${languageOverride}
 [★★★ CRITICAL 끝 ★★★]
 
 `;
@@ -322,7 +379,9 @@ function buildExtractPrompt(scriptText, category, seedBlock = '', chunkInfo = nu
         'Extract strong candidates from this visible section. A later merge pass will deduplicate and select across the whole work.',
       ].join('\n')
     : '';
-  const critical = buildCriticalRulesPreamble(category);
+  // ★ source 언어 자동 감지 → preamble 에 EN OVERRIDE 주입 결정.
+  const sourceLang = detectScriptLanguage(scriptText);
+  const critical = buildCriticalRulesPreamble(category, sourceLang);
   const body = tpl
     .replace('{{QUOTE_SEED_BLOCK}}', `${seedBlock || ''}${chunkNote}`)
     .replace('{{SCRIPT_TEXT}}', scriptText);
@@ -1454,6 +1513,28 @@ export async function runTranslateCardBatch({ cards, work }) {
     w.format   ? `Format: ${w.format}`      : null,
   ].filter(Boolean).join('\n');
 
+  // 작품 메타 (title/subtitle/author) 도 batch 에 포함 — 추출 직후 양 언어 모두 즉시 채워짐.
+  // 비어 있거나 source 언어가 아니면 (이미 target 언어) 빼서 토큰 절약.
+  function isSourceLang(text) {
+    if (!text) return false;
+    const s = String(text);
+    const ko = (s.match(/[가-힯]/g) || []).length;
+    const en = (s.match(/[a-zA-Z]/g) || []).length;
+    const detected = ko > en ? 'ko' : 'en';
+    return detected === sourceLang;
+  }
+  const workNeedsTranslate = [];
+  if (w.title    && isSourceLang(w.title))    workNeedsTranslate.push('TITLE');
+  if (w.subtitle && isSourceLang(w.subtitle)) workNeedsTranslate.push('SUBTITLE');
+  if (w.author   && isSourceLang(w.author))   workNeedsTranslate.push('AUTHOR');
+  const workBlock = workNeedsTranslate.length === 0 ? '' : `
+
+<<<WORK>>>
+${w.title    && workNeedsTranslate.includes('TITLE')    ? `<<<SRC_TITLE>>>\n${String(w.title).trim()}\n<<<END_SRC_TITLE>>>`    : ''}
+${w.subtitle && workNeedsTranslate.includes('SUBTITLE') ? `<<<SRC_SUBTITLE>>>\n${String(w.subtitle).trim()}\n<<<END_SRC_SUBTITLE>>>` : ''}
+${w.author   && workNeedsTranslate.includes('AUTHOR')   ? `<<<SRC_AUTHOR>>>\n${String(w.author).trim()}\n<<<END_SRC_AUTHOR>>>`   : ''}
+<<<END_WORK>>>`;
+
   // 입력 카드 블록 — source 언어 그대로 SRC_ 접두 5필드. 빈 필드는 빼서 토큰 절약.
   const cardBlocks = items.map((c, i) => {
     const id = c.id ?? i;
@@ -1504,12 +1585,23 @@ ${translationGuide}
 
 [Input cards — markers delimit cards and fields; content is plain text, no escaping]
 ${cardBlocks}
-
+${workBlock}
+${workNeedsTranslate.length > 0 ? `
+[Required work-meta output — emit ALL of these in <<<WORK_RESULT>>> block]
+${workNeedsTranslate.map((k) => `· TGT_${k}`).join('\n')}
+` : ''}
 [Required output blocks per card — emit ALL of these, no exceptions]
 ${cardRequirements}
 
 [Output format — STRICT]
-For each input card, emit ONE <<<RESULT id=N>>> ... <<<END_RESULT>>> block. Inside, emit EACH required TGT_ section listed above:
+${workNeedsTranslate.length > 0 ? `First emit work meta translation (if any):
+<<<WORK_RESULT>>>
+${workNeedsTranslate.includes('TITLE')    ? '<<<TGT_TITLE>>>\n{${targetLang.toUpperCase()} translation of SRC_TITLE}\n<<<END_TGT_TITLE>>>' : ''}
+${workNeedsTranslate.includes('SUBTITLE') ? '<<<TGT_SUBTITLE>>>\n{...}\n<<<END_TGT_SUBTITLE>>>' : ''}
+${workNeedsTranslate.includes('AUTHOR')   ? '<<<TGT_AUTHOR>>>\n{...}\n<<<END_TGT_AUTHOR>>>' : ''}
+<<<END_WORK_RESULT>>>
+
+Then for each input card,` : 'For each input card,'} emit ONE <<<RESULT id=N>>> ... <<<END_RESULT>>> block. Inside, emit EACH required TGT_ section:
 
 <<<RESULT id=1>>>
 <<<TGT_QUOTE>>>
@@ -1533,9 +1625,10 @@ For each input card, emit ONE <<<RESULT id=N>>> ... <<<END_RESULT>>> block. Insi
 1. Emit EXACTLY ${items.length} <<<RESULT>>> block(s), one per input card, in the SAME ORDER as input.
 2. Use the EXACT input id from the corresponding <<<CARD id=N>>>.
 3. Within each RESULT, emit EVERY required TGT_ section listed above for that card.
-4. Marker content is plain text — do NOT escape quotes, newlines, brackets, or any character.
-5. No text outside RESULT blocks. No greetings, no JSON, no markdown.
-6. Translate every field FULLY — do not abbreviate or summarize.`;
+${workNeedsTranslate.length > 0 ? '4. Emit <<<WORK_RESULT>>> block first if work meta is provided.' : ''}
+5. Marker content is plain text — do NOT escape quotes, newlines, brackets, or any character.
+6. No text outside RESULT/WORK_RESULT blocks. No greetings, no JSON, no markdown.
+7. Translate every field FULLY — do not abbreviate or summarize.`;
 
   // 토큰 예산 — 단방향이라 양방향 대비 절감. 카드당 평균 4000 토큰. 최대 16000.
   const maxTokens = Math.min(16000, Math.max(2500, items.length * 4000));
@@ -1595,6 +1688,44 @@ For each input card, emit ONE <<<RESULT id=N>>> ... <<<END_RESULT>>> block. Insi
     });
   }
 
+  // WORK_RESULT 블록 파싱 (있을 때만)
+  let workResult = null;
+  if (workNeedsTranslate.length > 0) {
+    const wm = raw.match(/<<<WORK_RESULT>>>([\s\S]*?)<<<END_WORK_RESULT>>>/);
+    if (wm) {
+      const wInside = wm[1];
+      function wSection(open, close) {
+        const s = wInside.indexOf(open);
+        if (s === -1) return null;
+        const valueStart = s + open.length;
+        const e = wInside.indexOf(close, valueStart);
+        if (e === -1) return null;
+        return wInside.slice(valueStart, e).trim() || null;
+      }
+      workResult = {
+        title:    wSection('<<<TGT_TITLE>>>',    '<<<END_TGT_TITLE>>>'),
+        subtitle: wSection('<<<TGT_SUBTITLE>>>', '<<<END_TGT_SUBTITLE>>>'),
+        author:   wSection('<<<TGT_AUTHOR>>>',   '<<<END_TGT_AUTHOR>>>'),
+      };
+    }
+  }
+  // work 응답 구조 — source 는 echo, target 은 LLM 번역
+  const sourceWork = {
+    title:    w.title    || null,
+    subtitle: w.subtitle || null,
+    author:   w.author   || null,
+  };
+  const targetWork = {
+    title:    workResult?.title    || null,
+    subtitle: workResult?.subtitle || null,
+    author:   workResult?.author   || null,
+  };
+  const workOut = {
+    source_lang: sourceLang,
+    ko: sourceLang === 'ko' ? sourceWork : targetWork,
+    en: sourceLang === 'en' ? sourceWork : targetWork,
+  };
+
   // 입력 순서대로 정렬해서 반환. { id, source_lang, ko: {...}, en: {...} } 형태.
   // 입력(source) 은 echo, 출력(target) 은 LLM 번역 결과.
   const out = items.map((c, i) => {
@@ -1624,9 +1755,10 @@ For each input card, emit ONE <<<RESULT id=N>>> ... <<<END_RESULT>>> block. Insi
   // 진단 로그 — Vercel 함수 로그에서 batch 품질 모니터링용.
   console.log(
     `[translate-card-batch] input=${items.length} blocks=${blocksFound} ` +
-    `${sourceLang}→${targetLang} maxTokens=${maxTokens} llmMs=${llmMs}`
+    `${sourceLang}→${targetLang} workMeta=${workNeedsTranslate.join(',') || 'none'} ` +
+    `maxTokens=${maxTokens} llmMs=${llmMs}`
   );
-  return out;
+  return { results: out, work: workOut };
 }
 
 // 카드 N장의 description / significance / keywords 를 한 번의 LLM 호출로 KO→EN 일괄 번역.
