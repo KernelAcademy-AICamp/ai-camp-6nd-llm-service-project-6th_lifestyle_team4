@@ -1006,87 +1006,58 @@
     text-transform: uppercase; color: var(--sand);
   }
 
-  /* ===== Feed (오늘의 한줄) ===== */
-  /* 회색 컨테이너 안에: [닉네임·시간] + 흰 종이가 책 금박 단면에 꽂혀 얹힌 모양.
-     책은 컨테이너에 꽉 차지 않고 사방 여백을 두고 인셋(목업 기준). */
+  /* ===== Feed (오늘의 한줄) — 소셜 리뷰 카드 (Android FeedPostCard 미러) ===== */
+  /* 카드: 헤더(원형 아바타 + 닉네임 + "한 줄 리뷰·시간") → 명조 인용 패널 → 책 제목·저자 */
   .feed-item {
-    background: var(--feed-card);
-    padding: 16px 28px 0;       /* 좌우 여백 늘려 책 폭 줄임 — 하단은 붙음 */
-    margin-bottom: 24px;
-    overflow: hidden;
-  }
-  .feed-item-head {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(0,0,0,0.13);   /* 섹션 구분선 */
+    background: var(--paper);
+    border: 0.5px solid var(--latte);   /* 다크 모드에서 카드 경계 (그림자는 어두운 배경에서 안 보임) */
+    border-radius: 16px;
     margin-bottom: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(14,12,10,0.16);
+    cursor: pointer;
   }
+  /* 헤더 — 원형 아바타 + 닉네임 + "한 줄 리뷰 · 시간" */
+  .feed-item-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px;
+  }
+  .feed-avatar {
+    flex: 0 0 auto;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--latte);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .feed-avatar .material-symbols-outlined { font-size: 22px; color: var(--walnut); }
+  .feed-head-text { flex: 1; min-width: 0; }
   .feed-item-head .feed-nick {
-    /* 시간과 완전히 동일한 텍스트 스타일 (sans-serif · 12px · roast · 0.04em) */
-    font-size: 12px; font-weight: 400; color: var(--roast);
-    letter-spacing: 0.04em;
-    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .feed-item-head .feed-time {
-    flex: 0 0 auto; font-size: 12px; letter-spacing: 0.04em; color: var(--roast);
-  }
-  /* 책 + 종이 겹침 컨텍스트 */
-  .feed-book-wrap { position: relative; }
-  /* 흰 종이 — 책보다 좁고 가운데, 아래쪽이 책 금박 단면에 꽂힌 듯 */
-  .feed-paper {
-    position: relative; z-index: 1;
-    width: 74%; margin: 0 auto;
-    background: #FFFDF7;
-    padding: 20px 16px 32px;   /* 하단 여백: 책이 겹쳐도 글 안 가려지게 */
-    font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 15px; line-height: 27px; color: #2C2620;
-    white-space: pre-wrap; word-break: keep-all; text-align: center;
-    box-shadow: 0 8px 16px rgba(14,12,10,0.16);
-  }
-  /* 책 — 가죽색(인라인). 사방 인셋 + 높이 낮게.
-     왼쪽 책등·오른쪽 페이지 단면·아래 음영을 inset 그림자로 → '책'처럼 입체감 */
-  .feed-book {
-    position: relative; z-index: 2;
-    margin-top: -22px;          /* 종이 하단을 덮어 '꽂힌' 느낌 */
-    padding: 0 16px 14px;       /* 컨테이너 하단에 붙음 */
-    box-shadow:
-      inset 7px 0 9px -6px rgba(0,0,0,0.42),     /* 왼쪽 책등 그림자 */
-      inset -5px 0 8px -6px rgba(0,0,0,0.28),    /* 오른쪽 단면 */
-      inset 0 -10px 14px -10px rgba(0,0,0,0.32); /* 아래쪽 입체 음영 */
-    /* background: leatherColorFor(title) — 인라인 */
-  }
-  /* 금색 가죽 밴드 — 아카이브 책등(.spine)의 띠와 동일 스타일(가운데 금색, 위아래 음영 양각) */
-  .feed-book-band {
-    height: 14px; margin: 7px -16px 11px;   /* 위 가죽 lip + 띠 */
-    background: linear-gradient(180deg,
-      transparent 0%, rgba(0,0,0,0.5) 26%, #C9A24B 50%, rgba(0,0,0,0.5) 74%, transparent 100%);
-    border-top: 0.5px solid rgba(255,230,180,0.4);
-    border-bottom: 0.5px solid rgba(0,0,0,0.7);
-  }
-  .feed-book .fb-title {
-    font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 14px; font-weight: 700; color: #E6CC82;
-    display: flex; align-items: baseline; gap: 8px;
-  }
-  .feed-book .fb-name {
-    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .feed-book .fb-year { flex: 0 0 auto; font-size: 12px; color: #C9A24B; font-weight: 400; }
-  .feed-book .fb-mid {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    margin-top: 5px;
-  }
-  .feed-book .fb-sub {
-    font-family: 'Nanum Myeongjo', Georgia, serif;
-    font-size: 12px; color: #E6CC82; min-width: 0;
+    font-size: 15px; font-weight: 400; color: var(--espresso);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .feed-book .fb-num {
-    flex: 0 0 auto; font-size: 12px; letter-spacing: 0.06em; color: #C9A24B;
+  .feed-item-head .feed-time {
+    font-size: 11px; letter-spacing: 0.02em; color: var(--roast);
+    margin-top: 2px;
   }
-  .feed-book .fb-bottom {
-    margin-top: 5px; font-size: 10px; letter-spacing: 0.1em;
-    color: #C9A24B;
+  /* 인용 패널 — CardWarm 배경, 가운데 명조 볼드 (post.body) */
+  .feed-quote-panel {
+    background: var(--card-warm);
+    padding: 40px 28px;
+    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
+    font-weight: 700;
+    font-size: 18px; line-height: 30px; color: var(--espresso);
+    text-align: center; white-space: pre-wrap; word-break: keep-all;
+  }
+  /* 책 줄 — 제목 + 저자 */
+  .feed-book-line {
+    background: var(--paper);
+    padding: 16px 20px;
+  }
+  .feed-book-line .fb-title {
+    font-size: 15px; color: var(--espresso);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .feed-book-line .fb-author {
+    font-size: 14px; color: var(--walnut); margin-top: 4px;
   }
   #feed-fab {
     position: fixed; right: 20px; bottom: 80px; z-index: 29;

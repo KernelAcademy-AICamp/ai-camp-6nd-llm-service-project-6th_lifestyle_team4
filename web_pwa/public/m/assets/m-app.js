@@ -4088,32 +4088,23 @@ function buildFeedItem(post) {
   const w = card.works || {};
   const wrap = document.createElement('div');
   wrap.className = 'feed-item';
-  const color = leatherColorFor(w.title);
-  const genreLabel = GENRE_LABEL[w.format] || w.format || '';
-  const bottomParts = [genreLabel, w.author].filter(Boolean);
+  const title = displayTitle(w.title) || '—';
+  const author = w.author || '';
   wrap.innerHTML = `
     <div class="feed-item-head">
-      <span class="feed-nick">${escapeHtml(post.author_nickname || '익명')}</span>
-      <span class="feed-time">${escapeHtml(formatRelativeTime(post.created_at))}</span>
-    </div>
-    <div class="feed-book-wrap">
-      <div class="feed-paper">${escapeHtml(post.body || '')}</div>
-      <div class="feed-book" style="background:${color};">
-        <div class="feed-book-band"></div>
-        <div class="fb-title">
-          <span class="fb-name">${escapeHtml(displayTitle(w.title) || '—')}</span>
-          ${w.release_year ? `<span class="fb-year">${escapeHtml(String(w.release_year))}</span>` : ''}
-        </div>
-        <div class="fb-mid">
-          <span class="fb-sub">${escapeHtml(w.subtitle || '')}</span>
-          ${card.card_id != null ? `<span class="fb-num">#${escapeHtml(String(card.card_id))}</span>` : ''}
-        </div>
-        ${bottomParts.length ? `<div class="fb-bottom">${escapeHtml(bottomParts.join(' · '))}</div>` : ''}
+      <div class="feed-avatar"><span class="material-symbols-outlined">edit</span></div>
+      <div class="feed-head-text">
+        <p class="feed-nick">${escapeHtml(post.author_nickname || '익명')}</p>
+        <p class="feed-time">한 줄 리뷰 · ${escapeHtml(formatRelativeTime(post.created_at))}</p>
       </div>
+    </div>
+    <div class="feed-quote-panel">${escapeHtml(post.body || '')}</div>
+    <div class="feed-book-line">
+      <p class="fb-title">${escapeHtml(title)}</p>
+      ${author ? `<p class="fb-author">${escapeHtml(author)}</p>` : ''}
     </div>
   `;
   // 카드 탭 → 해당 명대사 한 줄 팝업 (홈 한 줄과 동일, 전문 아님)
-  wrap.style.cursor = 'pointer';
   wrap.addEventListener('click', () => openFeedQuote(card));
   return wrap;
 }
