@@ -308,7 +308,11 @@ FIELD IN ENGLISH.
 - work.subtitle       → English (from source) or null
 - work.author         → English (verbatim from source, e.g., "Mark Twain")
 - work.release_year   → integer (language-neutral)
-- work.genres         → ENGLISH genre names (e.g., ["Drama", "Adventure"])  ← ★ ENGLISH, not Korean
+- work.genres         → ★ EXCEPTION: 한국어 유지. 본문에 명시된 고정 13개 한국어 값
+                        (로맨스, 코미디, 스릴러/서스펜스, 드라마, 비극, 미스터리,
+                         판타지, 역사극/시대극, 가족극, 액션, 호러, 느와르, SF) 중
+                        1~3개 그대로 선택. 영문 번역 금지.
+- work.format         → ★ EXCEPTION: 카테고리 고정값 유지 (예: "novel"). 변경 금지.
 - work.characters     → English names (e.g., ["Huck Finn", "Tom Sawyer"])
 - card.quote          → English (verbatim from source)
 - card.script_excerpt → English (verbatim from source, preserve line breaks)
@@ -332,9 +336,9 @@ keywords:
   ❌ ["교육과 저항", "개인의 한계", "순응과 반발"]      ← Korean (FORBIDDEN)
   ✅ ["education", "resistance", "individuality"]
 
-genres:
-  ❌ ["드라마", "모험"]                                ← Korean (FORBIDDEN)
-  ✅ ["Drama", "Adventure", "Coming-of-Age"]
+genres (★ 예외 — 한국어 유지):
+  ❌ ["Drama", "Adventure"]                            ← English (FORBIDDEN, 고정 13개 값 아님)
+  ✅ ["드라마", "비극", "가족극"]                       ← 본문 13개 중 1~3개 선택
 
 title / author:
   ❌ "허클베리 핀의 모험" / "마크 트웨인"              ← Korean (FORBIDDEN)
