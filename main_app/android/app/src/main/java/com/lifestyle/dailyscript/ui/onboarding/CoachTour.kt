@@ -83,6 +83,9 @@ data class CoachStep(
     val final: Boolean = false,
     val cta: String? = null,
     val action: String? = null, // "openDetail" → run controller.onAction before advancing
+    val advanceAfterAction: Boolean = true,
+    val advanceOnSelect: Boolean = false, // pass touches through; advance when the script gets selected
+    val requiresMember: Boolean = false,
 )
 
 val TOUR_STEPS: List<CoachStep> = listOf(
@@ -96,10 +99,12 @@ val TOUR_STEPS: List<CoachStep> = listOf(
     CoachStep("detail_scene", "전문", 1, 5, "장면 설명(SCENE)", "이 명대사가 언제·어떤 상황에서 나온 말인지 먼저 짚어줘요."),
     CoachStep("detail_script", "전문", 2, 5, "명대사가 나온 장면", "그 장면의 대본을 그대로 옮겼어요. 명대사를 맥락 속에서 읽어보세요."),
     CoachStep("detail_significance", "전문", 3, 5, "작품의 의의", "이 작품이 왜 오래 사랑받는 고전인지, 그 의미까지 담았어요."),
-    CoachStep("detail_script", "전문", 4, 5, "구절 하이라이트", "대본에서 마음에 닿는 문장을 길게 눌러 선택해 보세요. 그 구절만 따로 간직할 수 있어요."),
-    CoachStep("detail_script", "전문", 5, 5, "하이라이트 저장", "선택하면 나타나는 [하이라이트 저장] 버튼으로 나만의 하이라이트가 저장돼요.", action = "openFeed"),
+    CoachStep("detail_script", "전문", 4, 5, "구절 하이라이트", "대본에서 마음에 닿는 문장을 길게 눌러 보세요. 노란 형광펜으로 표시되며 그 구절을 하이라이트할 수 있어요.", advanceOnSelect = true),
+    CoachStep("detail_hl_button", "전문", 5, 5, "하이라이트 추가", "선택하면 오른쪽 아래에 뜨는 이 [하이라이트 추가] 버튼을 누르면 나만의 하이라이트로 저장돼요.", action = "saveHighlight", advanceAfterAction = false),
     // ── 피드 ──
-    CoachStep("nav_feed", "피드", 1, 1, "피드에 담겼어요", "저장한 하이라이트는 여기 FEED에 모여요. 다른 독자들의 명장면도 함께 볼 수 있어요."),
+    CoachStep("nav_feed", "피드", 1, 3, "피드에 담겼어요", "저장한 하이라이트는 여기 FEED에 모여요. 다른 독자들의 명장면도 함께 볼 수 있어요."),
+    CoachStep("feed_today_chip", "피드", 2, 3, "오늘의 한줄", "이 ‘오늘의 한줄’ 탭을 눌러보세요. 북마크한 명대사에 짧은 한 줄 감상을 남기는 곳이에요.", action = "setFeedToday"),
+    CoachStep("feed_fab", "피드", 3, 3, "한 줄 남기기", "이제 오른쪽 아래 + 버튼을 눌러보세요. 북마크한 명대사를 골라 오늘의 한줄을 남길 수 있어요.", action = "openFeedComposer", requiresMember = true),
     // ── 마침 ──
     CoachStep(null, "", 0, 0, "오늘의 명대사", "준비 끝!\n이제 오늘의 고전 명작을 만나러 가볼까요?", final = true, cta = "읽으러 가기"),
 )
@@ -108,8 +113,11 @@ class CoachController {
     var active by mutableStateOf(false)
     var index by mutableStateOf(0)
     var pending by mutableStateOf(false)
+    var memberActionsEnabled by mutableStateOf(true)
     val anchors = mutableStateMapOf<String, Rect>()
-    val steps: List<CoachStep> = TOUR_STEPS
+    private val actionHandlers = mutableMapOf<String, () -> Unit>()
+    val steps: List<CoachStep>
+        get() = numberedSteps(TOUR_STEPS.filter { memberActionsEnabled || !it.requiresMember })
     val current: CoachStep? get() = steps.getOrNull(index)
 
     /** The today card id, so the tour can open its detail (set from HomeScreen). */
@@ -120,10 +128,37 @@ class CoachController {
     var onEnd: (() -> Unit)? = null
 
     /** Defer the tour until HOME is the current route (used from the MY tab). */
+    fun configure(memberActionsEnabled: Boolean) {
+        this.memberActionsEnabled = memberActionsEnabled
+        if (index > steps.lastIndex) index = steps.lastIndex.coerceAtLeast(0)
+    }
     fun requestStart() { pending = true }
     fun start() { pending = false; index = 0; active = true }
     fun next() { if (index < steps.lastIndex) index++ else end() }
     fun end() { active = false; index = 0; pending = false; onEnd?.invoke() }
+    fun setActionHandler(action: String, handler: (() -> Unit)?) {
+        if (handler == null) actionHandlers.remove(action) else actionHandlers[action] = handler
+    }
+    fun performAction(action: String) {
+        actionHandlers[action]?.invoke() ?: onAction?.invoke(action)
+    }
+}
+
+private fun numberedSteps(steps: List<CoachStep>): List<CoachStep> {
+    val totals = steps
+        .filter { !it.final && it.scr.isNotBlank() }
+        .groupingBy { it.scr }
+        .eachCount()
+    val seen = mutableMapOf<String, Int>()
+    return steps.map { step ->
+        if (step.final || step.scr.isBlank()) {
+            step
+        } else {
+            val n = (seen[step.scr] ?: 0) + 1
+            seen[step.scr] = n
+            step.copy(n = n, tot = totals[step.scr] ?: step.tot)
+        }
+    }
 }
 
 val LocalCoachController = staticCompositionLocalOf<CoachController?> { null }
@@ -182,18 +217,25 @@ fun CoachTourOverlay(controller: CoachController) {
         modifier = Modifier
             .fillMaxSize()
             .onGloballyPositioned { overlayOrigin = it.boundsInWindow().topLeft }
-            .pointerInput(Unit) {
-                detectTapGestures { pos ->
-                    val s = currentStep
-                    if (s.final) return@detectTapGestures // final: only CTA/skip act
-                    val h = currentHole
-                    if (h != null && h.contains(pos)) {
-                        s.action?.let { controller.onAction?.invoke(it) } // e.g. open the detail screen
-                        controller.next()
+            // advanceOnSelect steps (구절 하이라이트) let touches reach the real script so the user
+            // can long-press to highlight; the step advances when a selection is made. Other steps
+            // swallow touches and advance on a tap/long-press of the spotlight.
+            .then(
+                if (step.advanceOnSelect) Modifier
+                else Modifier.pointerInput(Unit) {
+                    val advance: (Offset) -> Unit = { pos ->
+                        val s = currentStep
+                        if (!s.final) {
+                            val h = currentHole
+                            if (h != null && h.contains(pos)) {
+                                s.action?.let { controller.performAction(it) }
+                                if (s.advanceAfterAction) controller.next()
+                            }
+                        }
                     }
-                    // taps outside the spotlight are swallowed (tour stays put), matching the PWA
-                }
-            },
+                    detectTapGestures(onTap = advance, onLongPress = advance)
+                },
+            ),
     ) {
         val wPx = constraints.maxWidth.toFloat()
         val hPx = constraints.maxHeight.toFloat()
@@ -223,6 +265,10 @@ fun CoachTourOverlay(controller: CoachController) {
                     style = Stroke(width = ringStrokePx),
                 )
             }
+        }
+
+        if (step.advanceOnSelect) {
+            TouchBlockersAround(hole = hole, widthPx = wPx, heightPx = hPx)
         }
 
         // 2) Step-number badge at the hole's top-left.
@@ -264,6 +310,46 @@ fun CoachTourOverlay(controller: CoachController) {
             CoachTooltip(step = step, onSkip = { controller.end() }, onCta = { controller.end() })
         }
     }
+}
+
+@Composable
+private fun TouchBlockersAround(hole: Rect?, widthPx: Float, heightPx: Float) {
+    if (hole == null) {
+        TouchBlocker(0f, 0f, widthPx, heightPx)
+        return
+    }
+
+    val left = hole.left.coerceIn(0f, widthPx)
+    val top = hole.top.coerceIn(0f, heightPx)
+    val right = hole.right.coerceIn(0f, widthPx)
+    val bottom = hole.bottom.coerceIn(0f, heightPx)
+
+    TouchBlocker(0f, 0f, widthPx, top)
+    TouchBlocker(0f, bottom, widthPx, heightPx - bottom)
+    TouchBlocker(0f, top, left, bottom - top)
+    TouchBlocker(right, top, widthPx - right, bottom - top)
+}
+
+@Composable
+private fun TouchBlocker(xPx: Float, yPx: Float, widthPx: Float, heightPx: Float) {
+    if (widthPx <= 0f || heightPx <= 0f) return
+    val density = LocalDensity.current
+    Box(
+        modifier = Modifier
+            .offset { IntOffset(xPx.roundToInt(), yPx.roundToInt()) }
+            .size(
+                width = with(density) { widthPx.toDp() },
+                height = with(density) { heightPx.toDp() },
+            )
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+            },
+    )
 }
 
 @Composable

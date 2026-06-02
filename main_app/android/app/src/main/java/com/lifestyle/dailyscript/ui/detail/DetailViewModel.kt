@@ -138,7 +138,13 @@ class DetailViewModel : ViewModel() {
     }
 
     // ---------- Highlights ----------
-    fun saveHighlight(userId: Long, nickname: String, selectedText: String, note: String) {
+    fun saveHighlight(
+        userId: Long,
+        nickname: String,
+        selectedText: String,
+        note: String,
+        onSaved: (() -> Unit)? = null,
+    ) {
         val cardId = currentCardId
         val text = selectedText.trim()
         if (text.isEmpty() || cardId <= 0L || _state.value.highlightSaving) return
@@ -147,6 +153,7 @@ class DetailViewModel : ViewModel() {
             runCatching { feedRepo.addHighlight(cardId, userId, text, note, nickname.ifBlank { null }) }
                 .onSuccess {
                     _state.value = _state.value.copy(highlightSaving = false, highlightMessage = "하이라이트를 피드에 저장했어요.")
+                    onSaved?.invoke()
                 }
                 .onFailure {
                     _state.value = _state.value.copy(highlightSaving = false, highlightMessage = "저장 실패: ${it.message ?: ""}")

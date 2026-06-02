@@ -28,12 +28,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -82,6 +85,8 @@ import com.lifestyle.dailyscript.ui.util.ScriptFormat
 import com.lifestyle.dailyscript.ui.util.descriptionFor
 import com.lifestyle.dailyscript.ui.util.displayAuthor
 import com.lifestyle.dailyscript.ui.util.significanceFor
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -135,6 +140,62 @@ fun DetailScreen(
     val scriptSel = scriptTfv.selection
     val scriptSelected = if (!scriptSel.collapsed) scriptTfv.text.substring(scriptSel.min, scriptSel.max).trim() else ""
     var hlComposeText by remember(cardId) { mutableStateOf<String?>(null) }
+    val selectedForTour by rememberUpdatedState(scriptSelected)
+    val userIdForTour by rememberUpdatedState(userId)
+    val nicknameForTour by rememberUpdatedState(myNickname)
+    val isAnonymousForTour by rememberUpdatedState(isAnonymous)
+
+    // Tour: wait for a new text-selection event after this step starts, so an old selection
+    // cannot auto-skip the "select a phrase" instruction.
+    LaunchedEffect(coach?.index, coach?.current?.advanceOnSelect) {
+        if (coach?.active == true && coach.current?.advanceOnSelect == true) {
+            snapshotFlow { scriptTfv }
+                .drop(1)
+                .first { value ->
+                    val sel = value.selection
+                    if (sel.collapsed) {
+                        false
+                    } else {
+                        val start = sel.min.coerceIn(0, value.text.length)
+                        val end = sel.max.coerceIn(0, value.text.length)
+                        value.text.substring(start, end).trim().isNotEmpty()
+                    }
+                }
+            if (coach.active && coach.current?.advanceOnSelect == true) {
+                coach.next()
+            }
+        }
+    }
+
+    DisposableEffect(coach) {
+        if (coach == null) {
+            onDispose { }
+        } else {
+            coach.setActionHandler("saveHighlight") {
+                val selected = selectedForTour.trim()
+                when {
+                    selected.isEmpty() -> Unit
+                    isAnonymousForTour -> {
+                        android.widget.Toast.makeText(
+                            context,
+                            "로그인해야 하이라이트를 저장할 수 있어요.",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                        coach.next()
+                        coach.onAction?.invoke("openFeed")
+                    }
+                    else -> {
+                        vm.saveHighlight(userIdForTour, nicknameForTour, selected, "") {
+                            scriptTfv = scriptTfv.copy(selection = TextRange(scriptTfv.selection.end))
+                            coach.next()
+                            coach.onAction?.invoke("openFeed")
+                        }
+                    }
+                }
+            }
+            onDispose { coach.setActionHandler("saveHighlight", null) }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
       Column(
@@ -308,7 +369,8 @@ fun DetailScreen(
           HlFloatingButton(
               modifier = Modifier
                   .align(Alignment.BottomEnd)
-                  .padding(end = 18.dp, bottom = 24.dp),
+                  .padding(end = 18.dp, bottom = 24.dp)
+                  .coachAnchor(coach, "detail_hl_button"),
               onClick = {
                   if (isAnonymous) {
                       android.widget.Toast.makeText(

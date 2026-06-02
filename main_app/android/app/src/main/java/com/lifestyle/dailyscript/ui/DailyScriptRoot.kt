@@ -95,6 +95,9 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
 
     // Interactive spotlight onboarding tour (앱 사용법 / 첫 실행). Starts only once HOME is shown.
     val coach = remember { CoachController() }
+    LaunchedEffect(session.isAnonymous) {
+        coach.configure(memberActionsEnabled = !session.isAnonymous)
+    }
     LaunchedEffect(currentRoute, coach.pending) {
         if (coach.pending && currentRoute == Routes.HOME) coach.start()
     }

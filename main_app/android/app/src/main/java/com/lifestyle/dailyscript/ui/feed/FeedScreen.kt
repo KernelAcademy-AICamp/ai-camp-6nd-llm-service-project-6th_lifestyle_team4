@@ -34,11 +34,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +64,8 @@ import com.lifestyle.dailyscript.data.model.Highlight
 import com.lifestyle.dailyscript.ui.components.EditorialField
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.detail.relativeTime
+import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
+import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSans
@@ -87,6 +91,7 @@ fun FeedScreen(
 ) {
     val vm: FeedViewModel = viewModel()
     val state by vm.state.collectAsState()
+    val coach = LocalCoachController.current
     LaunchedEffect(userId) { vm.load(userId) }
 
     // Tapping a "오늘의 한줄" card pops up just the card's quote (not the full detail).
@@ -94,6 +99,31 @@ fun FeedScreen(
     // Bookmark pickers: today → compose a one-liner; highlight → open that card's detail.
     var todayPickerOpen by remember { mutableStateOf(false) }
     var hlPickerOpen by remember { mutableStateOf(false) }
+    val categoryForTour by rememberUpdatedState(state.category)
+    val isAnonymousForTour by rememberUpdatedState(isAnonymous)
+
+    DisposableEffect(coach) {
+        if (coach == null) {
+            onDispose { }
+        } else {
+            coach.setActionHandler("setFeedToday") {
+                vm.setCategory(FEED_TODAY)
+            }
+            coach.setActionHandler("openFeedComposer") {
+                if (!isAnonymousForTour) {
+                    if (categoryForTour == FEED_HIGHLIGHT) {
+                        hlPickerOpen = true
+                    } else {
+                        todayPickerOpen = true
+                    }
+                }
+            }
+            onDispose {
+                coach.setActionHandler("setFeedToday", null)
+                coach.setActionHandler("openFeedComposer", null)
+            }
+        }
+    }
 
     // One list reused for both categories — reset to the top whenever the category flips.
     val listState = rememberLazyListState()
@@ -119,7 +149,11 @@ fun FeedScreen(
                 modifier = Modifier.padding(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FeedChip("오늘의 한줄", state.category == FEED_TODAY) { vm.setCategory(FEED_TODAY) }
+                FeedChip(
+                    "오늘의 한줄",
+                    state.category == FEED_TODAY,
+                    modifier = Modifier.coachAnchor(coach, "feed_today_chip"),
+                ) { vm.setCategory(FEED_TODAY) }
                 FeedChip("하이라이트", state.category == FEED_HIGHLIGHT) { vm.setCategory(FEED_HIGHLIGHT) }
             }
             Box(modifier = Modifier.height(8.dp))
@@ -160,6 +194,7 @@ fun FeedScreen(
                     .align(Alignment.BottomEnd)
                     .padding(20.dp)
                     .size(56.dp)
+                    .coachAnchor(coach, "feed_fab")
                     .background(Espresso, RoundedCornerShape(28.dp))
                     .clickable {
                         if (state.category == FEED_HIGHLIGHT) hlPickerOpen = true else todayPickerOpen = true
@@ -421,10 +456,10 @@ private fun leatherColorFor(title: String?): Color {
 }
 
 @Composable
-private fun FeedChip(text: String, active: Boolean, onClick: () -> Unit) {
+private fun FeedChip(text: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(4.dp)
     Box(
-        modifier = Modifier
+        modifier = modifier
             .background(if (active) Espresso else Paper, shape)
             .border(1.dp, if (active) Espresso else Latte, shape)
             .clickable(onClick = onClick)
