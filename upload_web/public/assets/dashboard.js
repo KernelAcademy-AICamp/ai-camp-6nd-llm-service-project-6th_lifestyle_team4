@@ -1279,13 +1279,24 @@ function buildCardEditNode(card, idx) {
   const quoteEl = node.querySelector('.edit-quote');
   const excerptEl = node.querySelector('.edit-excerpt');
   const descEl = node.querySelector('.edit-description');
+  const sigEl = node.querySelector('.edit-significance');
   const kwEl = node.querySelector('.edit-keywords');
   const tempEl = node.querySelector('.edit-temperature');
   const intensityEl = node.querySelector('.edit-intensity');
 
-  quoteEl.value = card.quote || '';
-  excerptEl.value = card.script_excerpt || '';
+  // 표시할 텍스트 선택 — 사용자가 KO 토글 상태면 번역본 우선, 아니면 source.
+  // 또한 한쪽이 비었으면 다른 쪽으로 fallback (편집기에서 빈 칸 방지).
+  const useKo = !!(card.showingTranslation && card.translated);
+  quoteEl.value = (useKo ? card.translated?.quote_translated : card.quote)
+                  || card.quote
+                  || card.translated?.quote_translated
+                  || '';
+  excerptEl.value = (useKo ? card.translated?.script_excerpt_translated : card.script_excerpt)
+                    || card.script_excerpt
+                    || card.translated?.script_excerpt_translated
+                    || '';
   descEl.value = card.excerpt_description || '';
+  if (sigEl) sigEl.value = card.significance || '';
   kwEl.value = (card.keywords || []).join(', ');
   tempEl.value = card.temperature ?? 3;
   intensityEl.value = card.intensity ?? 3;
@@ -1302,6 +1313,7 @@ function buildCardEditNode(card, idx) {
       quote: quoteEl.value.trim(),
       script_excerpt: excerptEl.value.trim(),
       excerpt_description: descEl.value.trim(),
+      significance: sigEl ? (sigEl.value.trim() || null) : (card.significance ?? null),
       keywords: kwList,
       temperature: Math.max(1, Math.min(5, Number(tempEl.value) || 3)),
       intensity: Math.max(1, Math.min(5, Number(intensityEl.value) || 3)),
