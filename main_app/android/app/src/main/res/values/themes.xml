@@ -7,4 +7,12 @@
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>
+
+    <!-- Launch splash: espresso background + centered Daily Script wordmark.
+         Shown until the first app frame is drawn, then swaps to Theme.DailyScript. -->
+    <style name="Theme.DailyScript.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.DailyScript</item>
+    </style>
 </resources>

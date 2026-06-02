@@ -23,11 +23,9 @@ import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -79,7 +77,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     userId: Long,
@@ -99,9 +96,7 @@ fun HomeScreen(
         if (!guideSeen && !state.loading && state.todayCard != null) showGuide = true
     }
 
-    PullToRefreshBox(
-        isRefreshing = state.loading,
-        onRefresh = { vm.refresh(userId, isAnonymous) },
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Paper),
