@@ -74,6 +74,7 @@ import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.displayTitle
+import com.lifestyle.dailyscript.ui.util.formatBookmarkDate
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import kotlin.math.absoluteValue
 
@@ -691,20 +692,6 @@ private fun HlQuote(text: String) {
             modifier = Modifier.align(Alignment.BottomEnd).offset(y = 12.dp),
         )
     }
-}
-
-private fun formatBookmarkDate(iso: String): String {
-    val instant = runCatching { java.time.OffsetDateTime.parse(iso).toInstant() }.getOrNull()
-        ?: runCatching { java.time.Instant.parse(iso) }.getOrNull()
-        ?: runCatching { java.time.LocalDateTime.parse(iso).toInstant(java.time.ZoneOffset.UTC) }.getOrNull()
-        ?: return ""
-    val dt = java.time.OffsetDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
-    var h = dt.hour
-    val min = "%02d".format(dt.minute)
-    val ampm = if (h < 12) "오전" else "오후"
-    h %= 12
-    if (h == 0) h = 12
-    return "${dt.monthValue}. ${dt.dayOfMonth}  $ampm $h:$min"
 }
 
 @Composable

@@ -28,6 +28,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.ui.nav.Routes
+import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
+import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
@@ -40,6 +42,7 @@ fun BottomNavBar(
     noticeBadge: Int = 0,
     onSelect: (String) -> Unit,
 ) {
+    val coach = LocalCoachController.current
     Column {
         // hairline top divider
         Box(
@@ -62,7 +65,7 @@ fun BottomNavBar(
                 icon = Icons.Outlined.Home,
                 active = currentRoute == Routes.HOME,
                 onClick = onSelect,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).coachAnchor(coach, "nav_home"),
             )
             NavItem(
                 route = Routes.ARCHIVE,
@@ -70,7 +73,7 @@ fun BottomNavBar(
                 icon = LibraryShelfIcon,
                 active = currentRoute == Routes.ARCHIVE,
                 onClick = onSelect,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).coachAnchor(coach, "nav_archive"),
             )
             NavItem(
                 route = Routes.FEED,
@@ -78,7 +81,7 @@ fun BottomNavBar(
                 icon = Icons.Outlined.DynamicFeed,
                 active = currentRoute == Routes.FEED,
                 onClick = onSelect,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).coachAnchor(coach, "nav_feed"),
             )
             NavItem(
                 route = Routes.NOTICE,

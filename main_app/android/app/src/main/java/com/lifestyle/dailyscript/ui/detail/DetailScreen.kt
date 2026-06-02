@@ -1,7 +1,11 @@
 package com.lifestyle.dailyscript.ui.detail
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,12 +19,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,11 +37,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalTextToolbar
+import androidx.compose.ui.platform.TextToolbar
+import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
@@ -54,6 +68,8 @@ import com.lifestyle.dailyscript.ui.components.EditorialField
 import com.lifestyle.dailyscript.ui.components.LangSegmented
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
+import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
+import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -67,6 +83,7 @@ import com.lifestyle.dailyscript.ui.util.descriptionFor
 import com.lifestyle.dailyscript.ui.util.displayAuthor
 import com.lifestyle.dailyscript.ui.util.significanceFor
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DetailScreen(
     cardId: Long,
@@ -79,6 +96,20 @@ fun DetailScreen(
     val state by vm.state.collectAsState()
 
     LaunchedEffect(cardId, userId) { vm.load(cardId, userId) }
+
+    // Coachmark tour anchors — scroll the targeted info block into view during the 전문 steps.
+    val coach = LocalCoachController.current
+    val sceneReq = remember { BringIntoViewRequester() }
+    val scriptReq = remember { BringIntoViewRequester() }
+    val sigReq = remember { BringIntoViewRequester() }
+    val tourAnchor = if (coach?.active == true && coach.current?.scr == "전문") coach.current?.anchorId else null
+    LaunchedEffect(tourAnchor) {
+        when (tourAnchor) {
+            "detail_scene" -> runCatching { sceneReq.bringIntoView() }
+            "detail_script" -> runCatching { scriptReq.bringIntoView() }
+            "detail_significance" -> runCatching { sigReq.bringIntoView() }
+        }
+    }
 
     val context = LocalContext.current
     LaunchedEffect(state.highlightMessage) {
@@ -95,11 +126,22 @@ fun DetailScreen(
     val topTitle = (if (english) work?.titleOriginal?.ifBlank { null } else null) ?: work?.title.orEmpty()
     val subtitle = (if (english) work?.subtitleOriginal?.ifBlank { null } else null) ?: work?.subtitle
 
-    Column(
+    // Script selection hoisted to screen level so the highlight action can float at the
+    // bottom-right of the screen (mirrors the PWA #hl-add-btn) instead of being buried
+    // under a long script.
+    var scriptTfv by remember(state.card?.cardId, english) {
+        mutableStateOf(TextFieldValue(state.card?.let { ScriptFormat.displayScript(it, english) } ?: ""))
+    }
+    val scriptSel = scriptTfv.selection
+    val scriptSelected = if (!scriptSel.collapsed) scriptTfv.text.substring(scriptSel.min, scriptSel.max).trim() else ""
+    var hlComposeText by remember(cardId) { mutableStateOf<String?>(null) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+      Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Paper),
-    ) {
+      ) {
         DetailTopBar(
             title = topTitle,
             subtitle = subtitle,
@@ -139,6 +181,8 @@ fun DetailScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .bringIntoViewRequester(sceneReq)
+                            .coachAnchor(coach, "detail_scene")
                             .border(0.5.dp, Latte, RoundedCornerShape(4.dp))
                             .padding(horizontal = 18.dp, vertical = 16.dp),
                     ) {
@@ -159,33 +203,47 @@ fun DetailScreen(
                     Box(modifier = Modifier.height(24.dp))
                 }
 
-                ScriptBody(
-                    card = card,
-                    english = english,
-                    isAnonymous = isAnonymous,
-                    onSaveHighlight = { text, note -> vm.saveHighlight(userId, myNickname, text, note) },
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .bringIntoViewRequester(scriptReq)
+                        .coachAnchor(coach, "detail_script"),
+                ) {
+                    ScriptBody(
+                        card = card,
+                        value = scriptTfv,
+                        onValueChange = { scriptTfv = it },
+                    )
+                }
 
                 val significance = card.significanceFor(english)
                 if (shouldShowSignificance(card) && !significance.isNullOrBlank()) {
                     Box(modifier = Modifier.height(32.dp))
                     Hairline()
                     Box(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = stringResource(R.string.significance_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Walnut,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Box(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = Markdown.prose(significance),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Espresso,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .bringIntoViewRequester(sigReq)
+                            .coachAnchor(coach, "detail_significance"),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.significance_label),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Walnut,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Box(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = Markdown.prose(significance),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Espresso,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
 
                 Box(modifier = Modifier.height(48.dp))
@@ -243,6 +301,38 @@ fun DetailScreen(
                 Box(modifier = Modifier.height(24.dp))
             }
         }
+      }
+
+      // Floating highlight action — appears when script text is selected (PWA #hl-add-btn).
+      if (scriptSelected.isNotEmpty()) {
+          HlFloatingButton(
+              modifier = Modifier
+                  .align(Alignment.BottomEnd)
+                  .padding(end = 18.dp, bottom = 24.dp),
+              onClick = {
+                  if (isAnonymous) {
+                      android.widget.Toast.makeText(
+                          context,
+                          "로그인 후 하이라이트를 저장할 수 있어요.",
+                          android.widget.Toast.LENGTH_SHORT,
+                      ).show()
+                  } else {
+                      hlComposeText = scriptSelected
+                  }
+              },
+          )
+      }
+      hlComposeText?.let { text ->
+          HighlightComposeDialog(
+              selectedText = text,
+              onDismiss = { hlComposeText = null },
+              onSave = { note ->
+                  vm.saveHighlight(userId, myNickname, text, note)
+                  hlComposeText = null
+                  scriptTfv = scriptTfv.copy(selection = TextRange(scriptTfv.selection.end))
+              },
+          )
+      }
     }
 }
 
@@ -308,33 +398,29 @@ private fun boldSpeakerLines(text: String, characterNames: List<String>): Annota
 }
 
 /**
- * Script excerpt rendered in a read-only text field so the user can long-press to
- * select text natively. When a non-empty selection exists, a "하이라이트 저장" action
- * appears (members only). Speaker lines stay bold via a VisualTransformation.
+ * Script excerpt in a read-only text field — long-press selects text natively, styled like
+ * the PWA's yellow 형광펜 with the native Copy/Select-all toolbar suppressed. The selection
+ * is hoisted to [DetailScreen], which floats the "하이라이트 추가" action over the screen.
+ * Speaker lines stay bold via a VisualTransformation.
  */
 @Composable
 private fun ScriptBody(
     card: CardDto,
-    english: Boolean,
-    isAnonymous: Boolean,
-    onSaveHighlight: (String, String) -> Unit,
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
 ) {
     val format = card.works?.format
     val names = card.works?.characterList().orEmpty()
-    var tfv by remember(card.cardId, english) {
-        mutableStateOf(TextFieldValue(ScriptFormat.displayScript(card, english)))
-    }
-    var composeText by remember { mutableStateOf<String?>(null) }
     val transformation = remember(names, format) {
         if (ScriptFormat.usesSpeakerBold(format)) SpeakerBoldTransformation(names) else VisualTransformation.None
     }
-    val sel = tfv.selection
-    val selected = if (!sel.collapsed) tfv.text.substring(sel.min, sel.max).trim() else ""
-
-    Column(modifier = Modifier.fillMaxWidth()) {
+    CompositionLocalProvider(
+        LocalTextSelectionColors provides HighlightSelectionColors,
+        LocalTextToolbar provides NoTextToolbar,
+    ) {
         BasicTextField(
-            value = tfv,
-            onValueChange = { tfv = it },
+            value = value,
+            onValueChange = onValueChange,
             readOnly = true,
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 fontFamily = ScreenplayMono,
@@ -345,32 +431,28 @@ private fun ScriptBody(
             cursorBrush = SolidColor(Cta),
             modifier = Modifier.fillMaxWidth(),
         )
-        if (selected.isNotEmpty()) {
-            Box(modifier = Modifier.height(12.dp))
-            if (isAnonymous) {
-                Text(
-                    text = "로그인 후 하이라이트를 저장할 수 있어요.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Walnut,
-                )
-            } else {
-                SharpButton(
-                    label = "하이라이트 저장",
-                    onClick = { composeText = selected },
-                    variant = SharpButtonVariant.Outline,
-                )
-            }
-        }
     }
+}
 
-    composeText?.let { text ->
-        HighlightComposeDialog(
-            selectedText = text,
-            onDismiss = { composeText = null },
-            onSave = { note ->
-                onSaveHighlight(text, note)
-                composeText = null
-            },
+/** Coral pill that floats at the screen's bottom-right (mirrors the PWA #hl-add-btn). */
+@Composable
+private fun HlFloatingButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(999.dp)
+    Row(
+        modifier = modifier
+            .shadow(8.dp, shape)
+            .background(Cta, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "하이라이트 추가",
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.08.em,
+            ),
         )
     }
 }
@@ -378,6 +460,25 @@ private fun ScriptBody(
 private class SpeakerBoldTransformation(private val names: List<String>) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText =
         TransformedText(boldSpeakerLines(text.text, names), OffsetMapping.Identity)
+}
+
+// Yellow 형광펜 text selection (mirrors the PWA .hl-rect rgba(244,194,13,0.55)).
+private val HighlightSelectionColors = TextSelectionColors(
+    handleColor = Color(0xFFF4C20D),
+    backgroundColor = Color(0x8CF4C20D),
+)
+
+// No-op toolbar → suppress Android's native "Copy / Select all" popup over the script.
+private object NoTextToolbar : TextToolbar {
+    override val status: TextToolbarStatus = TextToolbarStatus.Hidden
+    override fun showMenu(
+        rect: Rect,
+        onCopyRequested: (() -> Unit)?,
+        onPasteRequested: (() -> Unit)?,
+        onCutRequested: (() -> Unit)?,
+        onSelectAllRequested: (() -> Unit)?,
+    ) { /* intentionally empty */ }
+    override fun hide() { /* intentionally empty */ }
 }
 
 @Composable

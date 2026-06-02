@@ -18,7 +18,7 @@ class CommentRepository {
     )
 
     private val myCommentSelect = Columns.raw(
-        "comment_id, card_id, body, created_at, " +
+        "comment_id, card_id, parent_comment_id, body, created_at, " +
             "cards ( card_id, work_id, quote, script_excerpt, keywords, temperature, intensity, " +
             "works ( work_id, title, subtitle, format, author, release_year ) )"
     )
@@ -74,6 +74,16 @@ class CommentRepository {
 
     suspend fun deleteComment(commentId: Long, userId: Long) {
         client.postgrest["card_comments"].delete {
+            filter {
+                eq("comment_id", commentId)
+                eq("user_id", userId)
+            }
+        }
+    }
+
+    /** Edit a user's own comment body (for the "내 댓글" inline editor). */
+    suspend fun updateComment(commentId: Long, userId: Long, body: String) {
+        client.postgrest["card_comments"].update({ set("body", body) }) {
             filter {
                 eq("comment_id", commentId)
                 eq("user_id", userId)

@@ -62,7 +62,9 @@ fun SettingsScreen(
     onUpdateProfile: (nickname: String, gender: String?, ageGroup: String?) -> Unit,
     onOpenMyComments: () -> Unit,
     onOpenMyFeed: () -> Unit,
-    onReplayGuide: () -> Unit,
+    onOpenGuide: () -> Unit,
+    onOpenTerms: () -> Unit,
+    onOpenPrivacy: () -> Unit,
     onConsumeMessage: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel()
@@ -117,7 +119,7 @@ fun SettingsScreen(
         Text(
             text = stringResource(R.string.profile_bio),
             style = MaterialTheme.typography.bodySmall,
-            color = Walnut.copy(alpha = 0.55f),
+            color = Walnut.copy(alpha = 0.4f),
         )
 
         authMessage?.let { msg ->
@@ -187,8 +189,8 @@ fun SettingsScreen(
         )
         SettingRow(
             title = stringResource(R.string.taste_recommendation),
-            subtitle = if (tasteEnabled) tasteProfile ?: stringResource(R.string.taste_recommendation_desc)
-            else stringResource(R.string.taste_recommendation_desc),
+            subtitle = stringResource(R.string.taste_recommendation_desc),
+            note = if (tasteEnabled) tasteProfile else null,
             trailing = {
                 EditorialToggle(checked = tasteEnabled, onChange = { vm.setTasteEnabled(it, session.userId) })
             },
@@ -197,9 +199,9 @@ fun SettingsScreen(
         // --- 약관 및 정보 ---
         Box(modifier = Modifier.height(40.dp))
         SectionLabel(text = stringResource(R.string.legal_about))
-        SettingRow(title = stringResource(R.string.app_guide), onClick = onReplayGuide, trailingArrow = true)
-        SettingRow(title = stringResource(R.string.terms_of_service), trailingArrow = true)
-        SettingRow(title = stringResource(R.string.privacy_policy), trailingArrow = true)
+        SettingRow(title = stringResource(R.string.app_guide), onClick = onOpenGuide, trailingArrow = true)
+        SettingRow(title = stringResource(R.string.terms_of_service), onClick = onOpenTerms, trailingArrow = true)
+        SettingRow(title = stringResource(R.string.privacy_policy), onClick = onOpenPrivacy, trailingArrow = true)
         SettingRow(title = stringResource(R.string.version_info), trailingText = "v${BuildConfig.VERSION_NAME}")
 
         Box(modifier = Modifier.height(40.dp))
@@ -420,6 +422,7 @@ private fun SectionLabel(text: String) {
 private fun SettingRow(
     title: String,
     subtitle: String? = null,
+    note: String? = null,
     trailingText: String? = null,
     trailingArrow: Boolean = false,
     onClick: (() -> Unit)? = null,
@@ -438,6 +441,10 @@ private fun SettingRow(
             subtitle?.let {
                 Box(modifier = Modifier.height(4.dp))
                 Text(text = it, style = MaterialTheme.typography.bodySmall, color = Walnut)
+            }
+            note?.let {
+                Box(modifier = Modifier.height(8.dp))
+                Text(text = it, style = MaterialTheme.typography.labelSmall, color = Walnut)
             }
         }
         when {

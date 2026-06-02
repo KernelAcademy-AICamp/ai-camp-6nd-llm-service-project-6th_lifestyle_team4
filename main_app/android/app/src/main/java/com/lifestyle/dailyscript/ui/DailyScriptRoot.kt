@@ -12,10 +12,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -27,7 +28,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.repo.UserSession
 import com.lifestyle.dailyscript.ui.archive.ArchiveScreen
 import com.lifestyle.dailyscript.ui.components.BottomNavBar
@@ -41,9 +41,15 @@ import com.lifestyle.dailyscript.ui.home.HomeScreen
 import com.lifestyle.dailyscript.ui.nav.Routes
 import com.lifestyle.dailyscript.ui.notice.NoticeScreen
 import com.lifestyle.dailyscript.ui.notice.NoticeViewModel
+import com.lifestyle.dailyscript.ui.onboarding.CoachController
+import com.lifestyle.dailyscript.ui.onboarding.CoachTourOverlay
+import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
+import com.lifestyle.dailyscript.ui.settings.LegalScreen
 import com.lifestyle.dailyscript.ui.settings.MyCommentsScreen
 import com.lifestyle.dailyscript.ui.settings.MyFeedScreen
 import com.lifestyle.dailyscript.ui.settings.SettingsScreen
+import com.lifestyle.dailyscript.ui.settings.privacyDoc
+import com.lifestyle.dailyscript.ui.settings.termsDoc
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Walnut
 
@@ -87,15 +93,38 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val noticeVm: NoticeViewModel = viewModel()
     val noticeBadge by noticeVm.unread.collectAsState()
 
-    val scope = rememberCoroutineScope()
+    // Interactive spotlight onboarding tour (앱 사용법 / 첫 실행). Starts only once HOME is shown.
+    val coach = remember { CoachController() }
+    LaunchedEffect(currentRoute, coach.pending) {
+        if (coach.pending && currentRoute == Routes.HOME) coach.start()
+    }
+    LaunchedEffect(navController) {
+        // "전문 읽으러 가기" → 오늘 카드 상세 / "하이라이트 저장" → 피드로 이어짐.
+        coach.onAction = { action ->
+            when (action) {
+                "openDetail" -> coach.tourCardId?.let { navController.navigate(Routes.detail(it)) }
+                "openFeed" -> navController.navigate(Routes.FEED) { launchSingleTop = true }
+            }
+        }
+        // 마침/건너뛰기 → 홈으로 복귀(상세에서 시작했다면 닫고 돌아옴).
+        coach.onEnd = {
+            navController.navigate(Routes.HOME) {
+                popUpTo(Routes.HOME) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+    }
+
     val mainTabs = setOf(Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE, Routes.SETTINGS)
     val isDetail = currentRoute?.startsWith("detail/") == true || currentRoute == Routes.DETAIL
-    val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED)
+    val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.TERMS, Routes.PRIVACY)
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
     val showBottomBar = !isFullScreen && currentRoute in mainTabs
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalCoachController provides coach) {
+      Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
         if (showTopBar) {
             when (currentRoute) {
                 Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(onMyPageClick = {
@@ -143,13 +172,15 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onUpdateProfile = sessionVm::updateProfile,
                         onOpenMyComments = { navController.navigate(Routes.MY_COMMENTS) },
                         onOpenMyFeed = { navController.navigate(Routes.MY_FEED) },
-                        onReplayGuide = {
-                            scope.launch { AppPreferences.resetGuideSeen() }
+                        onOpenGuide = {
+                            coach.requestStart()
                             navController.navigate(Routes.HOME) {
                                 popUpTo(Routes.HOME) { inclusive = false }
                                 launchSingleTop = true
                             }
                         },
+                        onOpenTerms = { navController.navigate(Routes.TERMS) },
+                        onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
                         onConsumeMessage = sessionVm::consumeAuthMessage,
                     )
                 }
@@ -173,6 +204,12 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onBack = { navController.popBackStack() },
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
+                }
+                composable(Routes.TERMS) {
+                    LegalScreen(doc = termsDoc(), onBack = { navController.popBackStack() })
+                }
+                composable(Routes.PRIVACY) {
+                    LegalScreen(doc = privacyDoc(), onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = Routes.DETAIL,
@@ -203,6 +240,9 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 },
             )
         }
+        }
+        CoachTourOverlay(coach)
+      }
     }
 }
 

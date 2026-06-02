@@ -3,7 +3,6 @@ package com.lifestyle.dailyscript.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifestyle.dailyscript.data.AppPreferences
-import com.lifestyle.dailyscript.data.Recommend
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -11,6 +10,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+// Bookmarks required before personalized recommendations kick in (mirrors the PWA's
+// MIN_BOOKMARKS_FOR_TASTE). Below this we surface a progress note; at/above it we hide
+// the note entirely and never expose the criteria used.
+private const val MIN_BOOKMARKS_FOR_TASTE = 10
 
 class SettingsViewModel : ViewModel() {
 
@@ -43,17 +47,19 @@ class SettingsViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Progress note for the 맞춤 추천 row — only meaningful below the bookmark threshold.
+     * Mirrors the PWA's paintTasteProfile: show "N개 이상부터…(현재 x/N)" while under the
+     * threshold, otherwise null (hidden) so the recommendation criteria stay private.
+     */
     fun loadTasteProfile(userId: Long) {
         viewModelScope.launch {
-            val cards = runCatching { bookmarkRepo.list(userId) }
-                .getOrNull()?.mapNotNull { it.cards } ?: emptyList()
-            val taste = Recommend.computeTaste(cards)
-            _tasteProfile.value = if (taste == null) {
-                "아직 북마크가 없어요 — 카드를 수집하면 분석이 시작됩니다."
+            val count = runCatching { bookmarkRepo.list(userId) }
+                .getOrNull()?.count { it.cards != null } ?: 0
+            _tasteProfile.value = if (count < MIN_BOOKMARKS_FOR_TASTE) {
+                "북마크 ${MIN_BOOKMARKS_FOR_TASTE}개 이상부터 추천이 적용됩니다 (현재 $count/$MIN_BOOKMARKS_FOR_TASTE)"
             } else {
-                "온도 %.1f · 강도 %.1f (북마크 %d개 기반)".format(
-                    taste.avgTemperature, taste.avgIntensity, taste.count,
-                )
+                null
             }
         }
     }

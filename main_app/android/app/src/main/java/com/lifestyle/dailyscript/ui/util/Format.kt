@@ -2,6 +2,11 @@ package com.lifestyle.dailyscript.ui.util
 
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.WorkDto
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlin.math.roundToInt
 
 /**
@@ -57,4 +62,22 @@ fun CardDto.keywordsFor(useEnglish: Boolean): List<String> {
         if (en.isNotEmpty()) return en
     }
     return keywordList()
+}
+
+/**
+ * Absolute "<월>. <일>  오전/오후 h:mm" stamp used by the bookmark/feed/comment lists.
+ * Mirrors the PWA's formatBookmarkDate (m-app.js:1481). Returns "" on unparseable input.
+ */
+fun formatBookmarkDate(iso: String): String {
+    val instant = runCatching { OffsetDateTime.parse(iso).toInstant() }.getOrNull()
+        ?: runCatching { Instant.parse(iso) }.getOrNull()
+        ?: runCatching { LocalDateTime.parse(iso).toInstant(ZoneOffset.UTC) }.getOrNull()
+        ?: return ""
+    val dt = OffsetDateTime.ofInstant(instant, ZoneId.systemDefault())
+    var h = dt.hour
+    val min = "%02d".format(dt.minute)
+    val ampm = if (h < 12) "오전" else "오후"
+    h %= 12
+    if (h == 0) h = 12
+    return "${dt.monthValue}. ${dt.dayOfMonth}  $ampm $h:$min"
 }

@@ -35,7 +35,7 @@
     <string name="version_info">버전 정보</string>
     <string name="sign_out">로그아웃</string>
     <!-- MY: account + activity -->
-    <string name="account">계정</string>
+    <string name="account">ACCOUNT</string>
     <string name="account_desc">아이디와 비밀번호로 로그인하면 다른 기기에서도 북마크가 동기화됩니다.</string>
     <string name="login_or_signup">로그인 · 회원가입</string>
     <string name="signup_migrate_note">가입 시 현재 익명 북마크는 자동으로 새 계정에 옮겨집니다.</string>
@@ -58,8 +58,8 @@
     <string name="home_recent_empty">새로고침하면 이전 카드가 여기에 쌓입니다.</string>
 
     <!-- Settings: recommendation -->
-    <string name="taste_recommendation">취향 추천</string>
-    <string name="taste_recommendation_desc">북마크 기반 맞춤 추천</string>
+    <string name="taste_recommendation">맞춤 추천</string>
+    <string name="taste_recommendation_desc">북마크와 비슷한 카드를 추천합니다</string>
 
     <!-- Settings: sign-in -->
     <string name="sign_in">Sign In</string>

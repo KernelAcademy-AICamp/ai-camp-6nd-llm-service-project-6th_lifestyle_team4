@@ -63,6 +63,13 @@ class FeedRepository {
         }
     }
 
+    /** Edit a user's own one-liner body (for the "내 피드 · ONE LINERS" inline editor). */
+    suspend fun updatePost(postId: Long, userId: Long, body: String) {
+        client.postgrest["feed_posts"].update({ set("body", body) }) {
+            filter { eq("post_id", postId); eq("user_id", userId) }
+        }
+    }
+
     suspend fun deleteHighlight(highlightId: Long, userId: Long) {
         client.postgrest["card_highlights"].delete {
             filter { eq("highlight_id", highlightId); eq("user_id", userId) }

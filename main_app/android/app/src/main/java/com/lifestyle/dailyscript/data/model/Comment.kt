@@ -36,6 +36,7 @@ data class CommentLikeRow(
 data class MyComment(
     @SerialName("comment_id") val commentId: Long,
     @SerialName("card_id") val cardId: Long,
+    @SerialName("parent_comment_id") val parentCommentId: Long? = null,
     val body: String,
     @SerialName("created_at") val createdAt: String,
     val cards: CardDto? = null,

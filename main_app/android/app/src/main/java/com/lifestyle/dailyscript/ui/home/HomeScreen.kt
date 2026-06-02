@@ -56,7 +56,8 @@ import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.ChipTag
 import com.lifestyle.dailyscript.ui.components.LangSegmented
 import com.lifestyle.dailyscript.ui.components.SharpButton
-import com.lifestyle.dailyscript.ui.onboarding.CoachmarkOverlay
+import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
+import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
 import kotlinx.coroutines.launch
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -88,12 +89,17 @@ fun HomeScreen(
 
     LaunchedEffect(userId) { vm.load(userId) }
 
-    // First-run onboarding (default true → never flashes before the real value loads).
+    // First-run onboarding → the interactive spotlight tour (rendered in DailyScriptRoot).
+    val coach = LocalCoachController.current
     val guideSeen by AppPreferences.guideSeen.collectAsState(initial = true)
     val scope = rememberCoroutineScope()
-    var showGuide by remember { mutableStateOf(false) }
+    // Keep the tour's target card in sync so "전문 읽으러 가기" opens today's detail.
+    LaunchedEffect(state.todayCard?.cardId) { coach?.tourCardId = state.todayCard?.cardId }
     LaunchedEffect(guideSeen, state.loading, state.todayCard) {
-        if (!guideSeen && !state.loading && state.todayCard != null) showGuide = true
+        if (!guideSeen && !state.loading && state.todayCard != null && coach != null && !coach.active) {
+            coach.start()
+            scope.launch { AppPreferences.setGuideSeen() }
+        }
     }
 
     Box(
@@ -127,7 +133,7 @@ fun HomeScreen(
             RefreshButton(
                 enabled = !state.loading,
                 onClick = { vm.refresh(userId, isAnonymous) },
-                modifier = Modifier.align(Alignment.CenterEnd),
+                modifier = Modifier.align(Alignment.CenterEnd).coachAnchor(coach, "home_refresh"),
             )
         }
         Box(modifier = Modifier.height(20.dp))
@@ -184,13 +190,6 @@ fun HomeScreen(
         }
         Box(modifier = Modifier.height(40.dp))
       }
-
-      if (showGuide) {
-          CoachmarkOverlay(onFinish = {
-              showGuide = false
-              scope.launch { AppPreferences.setGuideSeen() }
-          })
-      }
     }
 }
 
@@ -205,6 +204,7 @@ private fun TodayCard(
     onOpen: () -> Unit,
 ) {
     val shape = RoundedCornerShape(8.dp)
+    val coach = LocalCoachController.current
     // EN/KO toggle is ephemeral per-card UI state — resets when the card changes.
     var english by remember(card?.cardId) { mutableStateOf(false) }
 
@@ -246,6 +246,7 @@ private fun TodayCard(
                     tint = if (bookmarked) Cta else Walnut,
                     modifier = Modifier
                         .size(24.dp)
+                        .coachAnchor(coach, "today_bookmark")
                         .clickable(
                             enabled = card != null && !bookmarkActionInFlight,
                             onClick = onBookmarkToggle,
@@ -310,7 +311,7 @@ private fun TodayCard(
         SharpButton(
             label = stringResource(R.string.read_full_script),
             onClick = onOpen,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().coachAnchor(coach, "today_read"),
             enabled = card != null,
         )
     }
