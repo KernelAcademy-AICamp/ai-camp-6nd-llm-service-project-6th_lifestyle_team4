@@ -19,34 +19,62 @@ function containsKorean(s) {
   return /[가-힯]/.test(String(s || ''));
 }
 
-async function getJson(url) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA, Accept: 'application/json' },
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`gutendex HTTP ${res.status}`);
-    return await res.json();
-  } finally {
-    clearTimeout(t);
+// gutendex.com / gutenberg.org 가 일시적으로 응답 안 할 때(Node native fetch 의 'fetch failed')
+// 를 자동으로 재시도. 3회 시도, 백오프 1.5/3/6초. Vercel 함수 timeout 안에서 안전.
+async function fetchWithRetry(url, opts = {}, label = 'gutendex') {
+  const MAX_ATTEMPTS = 3;
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, { ...opts, signal: ctrl.signal });
+      clearTimeout(t);
+      if (!res.ok) {
+        // 5xx 만 재시도. 4xx 는 그대로 throw (요청 오류라 재시도해도 의미 없음)
+        if (res.status >= 500 && attempt < MAX_ATTEMPTS) {
+          lastErr = new Error(`${label} HTTP ${res.status}`);
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+          continue;
+        }
+        throw new Error(`${label} HTTP ${res.status}`);
+      }
+      return res;
+    } catch (err) {
+      clearTimeout(t);
+      // 'fetch failed' (Node native fetch 의 underlying network 실패) — cause 에 자세한 에러
+      const cause = err?.cause?.message || err?.cause?.code || '';
+      const msg = err?.message || String(err);
+      console.warn(`[${label}] attempt ${attempt} failed: ${msg}${cause ? ' / cause: ' + cause : ''}`);
+      lastErr = err;
+      if (attempt === MAX_ATTEMPTS) break;
+      // AbortError 는 timeout — 다음 시도
+      // network error 는 다음 시도 (DNS/TLS 일시 오류 흔함)
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+    }
   }
+  // 마지막 에러를 사용자가 이해할 만하게 다시 throw
+  const cause = lastErr?.cause?.message || lastErr?.cause?.code;
+  const friendly = cause
+    ? `${label} 연결 실패 (${cause}) — gutendex.com 일시 장애일 수 있어요. 잠시 후 다시 시도해주세요.`
+    : `${label} 응답 없음 — ${lastErr?.message || '네트워크 오류'}`;
+  const e = new Error(friendly);
+  e.status = 502;
+  throw e;
+}
+
+async function getJson(url) {
+  const res = await fetchWithRetry(url, {
+    headers: { 'User-Agent': UA, Accept: 'application/json' },
+  }, 'gutendex');
+  return await res.json();
 }
 
 async function getText(url) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA, Accept: 'text/plain' },
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`gutenberg HTTP ${res.status}`);
-    return await res.text();
-  } finally {
-    clearTimeout(t);
-  }
+  const res = await fetchWithRetry(url, {
+    headers: { 'User-Agent': UA, Accept: 'text/plain' },
+  }, 'gutenberg');
+  return await res.text();
 }
 
 // 한국어 작품명 → 영어 작품명. ko.wikipedia 의 langlinks(lllang=en) 사용.
