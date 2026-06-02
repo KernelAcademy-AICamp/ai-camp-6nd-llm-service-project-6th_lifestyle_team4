@@ -468,7 +468,10 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
   const chunks = splitScriptIntoChunks(scriptText);
   if (chunks.length === 1) {
     onProgress?.({ t: 'stage', m: '본문 분석 중 (단일 청크)' });
-    return runExtractSingle(scriptText, category, seedBlock, model, null, { signal, onProgress });
+    const single = await runExtractSingle(scriptText, category, seedBlock, model, null, { signal, onProgress });
+    // 단일 청크 경로도 동일하게 검증 — quote==script_excerpt 제거 + 길이 미달 경고
+    const validated = validateAndFilterCards(single?.cards || [], category);
+    return { ...single, cards: validated.cards, __validation: validated.summary };
   }
 
   // 자동 결정된 실제 청크 사이즈 — 영문 PDF 는 더 큼.
@@ -544,8 +547,11 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
     console.warn('[anthropic] chunk finalization failed, returning deterministic merge:', err?.message || err);
   }
 
+  // 카드 후처리 — 잘못된 카드(quote==script_excerpt) 제거 + 길이 미달 경고 로그.
+  const validated = validateAndFilterCards(finalResult?.cards || [], category);
   return {
     ...finalResult,
+    cards: validated.cards,
     __chunked: {
       chunks: chunks.length,
       target_chars: EXTRACT_CHUNK_TARGET_CHARS,
@@ -553,6 +559,54 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
       overlap_chars: EXTRACT_CHUNK_OVERLAP_CHARS,
       finalize_failed: finalizeFailed || undefined,
     },
+    __validation: validated.summary,
+  };
+}
+
+// 추출된 카드 후처리:
+//  1) quote 와 script_excerpt 가 완전히 같은 카드는 제거 (LLM 이 지문 확장을 안 한 케이스).
+//     '명대사가 발췌 안에 포함'은 정상이므로 contains 가 아닌 strict equal 만 제거.
+//  2) script_excerpt 가 2000자 미만인 카드는 경고 로그 (카테고리별 예외 적용 — 시는 하한 없음).
+//  3) 응답 work + filtered cards 그대로.
+const MIN_SCRIPT_CHARS_BY_CATEGORY = {
+  // 시는 짧을수록 좋음 — 하한 없음
+  poem: 0,
+  // 산문은 짧은 글 한 편이 그보다 짧을 수 있음 — 권장 하한만 (드랍은 안 함)
+  prose: 500,
+  essay: 500,
+  // 그 외(영화/드라마/소설/연극/오페라 등): 2000자 강제
+  screen: 2000, novel: 2000, play: 2000, opera: 2000,
+};
+
+function _norm(s) { return String(s ?? '').trim().replace(/\s+/g, ' '); }
+
+function validateAndFilterCards(cards, category) {
+  if (!Array.isArray(cards)) return { cards: [], summary: { total: 0, dropped: 0, shortExcerpt: 0 } };
+  const minChars = MIN_SCRIPT_CHARS_BY_CATEGORY[category] ?? 2000;
+
+  let droppedIdentical = 0;
+  let shortExcerpt = 0;
+  const survivors = [];
+  for (const c of cards) {
+    const q = _norm(c?.quote);
+    const s = _norm(c?.script_excerpt);
+    if (q && s && q === s) {
+      droppedIdentical++;
+      console.warn(`[extract] dropping card: quote == script_excerpt (len=${q.length})`);
+      continue;
+    }
+    if (minChars > 0 && c?.script_excerpt && String(c.script_excerpt).length < minChars) {
+      shortExcerpt++;
+      console.warn(`[extract] short script_excerpt: ${String(c.script_excerpt).length}<${minChars} (category=${category}) — kept but warned`);
+    }
+    survivors.push(c);
+  }
+  if (droppedIdentical || shortExcerpt) {
+    console.log(`[extract] validation: in=${cards.length} out=${survivors.length} dropped_identical=${droppedIdentical} short_excerpt_warn=${shortExcerpt} (min=${minChars})`);
+  }
+  return {
+    cards: survivors,
+    summary: { total: cards.length, kept: survivors.length, dropped_identical: droppedIdentical, short_excerpt_warn: shortExcerpt, min_chars: minChars, category },
   };
 }
 

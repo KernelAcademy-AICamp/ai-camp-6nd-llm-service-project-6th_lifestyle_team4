@@ -225,9 +225,17 @@ export default async function handler(req, res) {
       signal,
       onProgress: onProgressForRun,
     });
-    const { __chunked, ...extractPayload } = result || {};
+    const { __chunked, __validation, ...extractPayload } = result || {};
     const cardCount = Array.isArray(extractPayload.cards) ? extractPayload.cards.length : 0;
     emit({ t: 'log', m: `카드 ${cardCount}장 추출됨` });
+    if (__validation) {
+      if (__validation.dropped_identical) {
+        emit({ t: 'log', m: `검증: 명대사=대본 발췌 중복 ${__validation.dropped_identical}장 제거됨` });
+      }
+      if (__validation.short_excerpt_warn) {
+        emit({ t: 'log', m: `검증: 대본 발췌 ${__validation.min_chars}자 미달 ${__validation.short_excerpt_warn}장 (보존, 검토에서 확인)` });
+      }
+    }
 
     // works.full_script_text는 NOT NULL이므로 저장 단계에서 다시 필요.
     // 응답에 함께 실어 클라이언트 state에 보관 → /api/save 호출 시 다시 전송.
