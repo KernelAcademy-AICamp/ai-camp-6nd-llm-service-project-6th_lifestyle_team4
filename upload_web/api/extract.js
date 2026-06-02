@@ -230,10 +230,8 @@ export default async function handler(req, res) {
     emit({ t: 'log', m: `카드 ${cardCount}장 추출됨` });
     if (__validation) {
       if (__validation.rescued) {
-        emit({ t: 'log', m: `자동 복구: 짧거나 중복된 대본 발췌 ${__validation.rescued}장을 원본에서 재발췌함` });
-      }
-      if (__validation.unrescuable) {
-        emit({ t: 'log', m: `복구 불가: ${__validation.unrescuable}장은 명대사가 원본에 없음 (LLM 환각 가능성)` });
+        const fb = __validation.unrescuable ? ` (그중 ${__validation.unrescuable}장은 명대사 위치 못 찾아 본문 임의 청크로 대체 — 검토에서 위치 확인)` : '';
+        emit({ t: 'log', m: `자동 복구: 짧거나 중복된 대본 발췌 ${__validation.rescued}장 보완${fb}` });
       }
       if (__validation.dropped_identical) {
         emit({ t: 'log', m: `검증: 명대사=대본 발췌 중복 ${__validation.dropped_identical}장 제거됨 (복구 실패)` });

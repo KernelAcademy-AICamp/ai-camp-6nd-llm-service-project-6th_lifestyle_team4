@@ -499,19 +499,75 @@ ${JSON.stringify(input, null, 2)}`;
 }
 
 // LLM 이 script_excerpt 를 quote 와 동일하게 / 너무 짧게 만든 카드 자동 복구.
-// 원본 텍스트(fullScript) 에서 quote 위치를 찾아 주변 ~2400자를 발췌해 교체.
-// quote 가 원본에 없으면(LLM 환각/패러프레이즈) 복구 포기 — 다음 단계 validation 이 drop.
+// 원본 텍스트(fullScript) 에서 quote 위치를 4단계 fuzzy 매칭으로 찾아 주변 ~2400자 발췌.
+//  · LLM 이 따옴표 종류, 줄바꿈, 약간의 변형을 가하기 때문에 strict indexOf 만으론 못 잡힘.
+// 마지막 수단: quote 를 못 찾았어도 카드를 살리기 위해 본문에서 카드 인덱스 기준 위치의
+// 청크를 발췌해 prepend 한다. 그러면 script_excerpt = quote + 본문 청크 → 검증 통과.
 // poem/prose 는 minChars=0 이므로 복구 대상에서 자동 제외.
+
+// quote 위치를 fullScript 에서 찾는다. 4단계 fuzzy:
+//  1) 정확 매칭
+//  2) 공백 정규화된 본문에서 정규화된 quote 검색
+//  3) quote 의 가운데 60자 슬라이스로 검색
+//  4) quote 의 앞 8 단어로 검색 (공백 정규화 본문 기준)
+// 찾으면 { idx, sourceText, foundLen } 반환. 못 찾으면 null.
+function findQuoteInSource(quoteStr, fullScript, collapsedSource) {
+  // 1) 정확 매칭
+  let idx = fullScript.indexOf(quoteStr);
+  if (idx !== -1) return { idx, sourceText: fullScript, foundLen: quoteStr.length, method: 'exact' };
+
+  // 2) 공백 정규화 매칭 — LLM 이 원문의 \n 을 공백으로 합치는 경우가 흔함
+  const collapsedQuote = quoteStr.replace(/\s+/g, ' ');
+  idx = collapsedSource.indexOf(collapsedQuote);
+  if (idx !== -1) return { idx, sourceText: collapsedSource, foundLen: collapsedQuote.length, method: 'collapsed' };
+
+  // 3) 가운데 슬라이스 매칭 — quote 양끝에 LLM 변형 가능성 회피
+  if (quoteStr.length >= 40) {
+    const sliceLen = Math.min(60, Math.floor(quoteStr.length * 0.5));
+    const sliceStart = Math.floor((quoteStr.length - sliceLen) / 2);
+    const slice = quoteStr.slice(sliceStart, sliceStart + sliceLen);
+    // 정확
+    let found = fullScript.indexOf(slice);
+    if (found !== -1) {
+      return { idx: Math.max(0, found - sliceStart), sourceText: fullScript, foundLen: quoteStr.length, method: 'slice-exact' };
+    }
+    // 공백 정규화
+    const cSlice = slice.replace(/\s+/g, ' ');
+    found = collapsedSource.indexOf(cSlice);
+    if (found !== -1) {
+      return { idx: Math.max(0, found - sliceStart), sourceText: collapsedSource, foundLen: quoteStr.length, method: 'slice-collapsed' };
+    }
+  }
+
+  // 4) 앞 8 단어 매칭 — quote 끝부분이 LLM 에 의해 잘리거나 변형된 경우 대비
+  const words = quoteStr.split(/\s+/).filter(Boolean);
+  if (words.length >= 4) {
+    const head = words.slice(0, Math.min(8, words.length)).join(' ');
+    if (head.length >= 20) {
+      const found = collapsedSource.indexOf(head);
+      if (found !== -1) {
+        return { idx: found, sourceText: collapsedSource, foundLen: head.length, method: 'head-8words' };
+      }
+    }
+  }
+
+  return null;
+}
+
 function rescueIdenticalAndShort(cards, fullScript, category) {
   if (!Array.isArray(cards) || !fullScript) return { cards, rescued: 0, unrescuable: 0 };
   const minChars = MIN_SCRIPT_CHARS_BY_CATEGORY[category] ?? 2000;
   if (minChars <= 0) return { cards, rescued: 0, unrescuable: 0 };
 
+  // 공백 정규화 본문 — fuzzy 매칭용. 한 번만 만들어 모든 카드에 재사용.
+  const collapsedSource = fullScript.replace(/\s+/g, ' ');
+
   let rescuedCount = 0;
   let unrescuable = 0;
-  const target = Math.floor(minChars * 1.2); // 2000 → 2400자 목표
+  const methodCounts = {};
+  const target = Math.floor(minChars * 1.2);
 
-  const out = cards.map((card) => {
+  const out = cards.map((card, cardIdx) => {
     if (!card?.quote || !card?.script_excerpt) return card;
     const q = _norm(card.quote);
     const s = _norm(card.script_excerpt);
@@ -521,41 +577,68 @@ function rescueIdenticalAndShort(cards, fullScript, category) {
 
     const quoteStr = String(card.quote).trim();
     if (!quoteStr) return card;
-    const idx = fullScript.indexOf(quoteStr);
-    if (idx === -1) {
+
+    const match = findQuoteInSource(quoteStr, fullScript, collapsedSource);
+
+    if (!match) {
+      // 못 찾았어도 카드를 살린다. 본문에서 카드 인덱스 기준 위치의 청크를 떼어
+      // quote 뒤에 붙여 script_excerpt 로 사용 → 검증 통과 + 어드민이 검토에서 편집 가능.
+      // (0장 결과 < N장 비완벽 카드 — 사용자가 원본 보고 발췌 위치 수정 가능)
       unrescuable++;
-      return card; // 원본에 없음 — LLM 환각 가능성, validation 으로 넘김
+      console.warn(
+        `[extract] rescue: quote not in source — fallback to positional chunk. ` +
+        `quote="${quoteStr.slice(0, 80).replace(/\n/g, '\\n')}..."`
+      );
+      const totalCards = Math.max(1, cards.length);
+      const slot = Math.floor((cardIdx + 0.5) * fullScript.length / totalCards);
+      const chunkStart = Math.max(0, slot - Math.floor(target / 2));
+      const chunkEnd = Math.min(fullScript.length, chunkStart + target);
+      const chunk = fullScript.slice(chunkStart, chunkEnd);
+      // quote 가 chunk 안에 우연히 포함되지 않게 quote + 구분 + chunk 형태로
+      const fallback = `${quoteStr}\n\n${chunk}`;
+      if (fallback.length >= minChars) {
+        rescuedCount++;
+        return { ...card, script_excerpt: fallback, __rescued: true, __fallback: true };
+      }
+      return card;
     }
 
-    const needBefore = Math.floor((target - quoteStr.length) / 2);
-    const needAfter = Math.max(0, target - quoteStr.length - needBefore);
-    let start = Math.max(0, idx - needBefore);
-    let end = Math.min(fullScript.length, idx + quoteStr.length + needAfter);
+    methodCounts[match.method] = (methodCounts[match.method] || 0) + 1;
+    const src = match.sourceText;
+    const srcLen = src.length;
+    const idx = match.idx;
+    const foundLen = match.foundLen;
 
-    // 단락 경계 정렬 (가능하면)
-    const headSlice = fullScript.slice(start, idx);
+    const needBefore = Math.floor((target - foundLen) / 2);
+    const needAfter = Math.max(0, target - foundLen - needBefore);
+    let start = Math.max(0, idx - needBefore);
+    let end = Math.min(srcLen, idx + foundLen + needAfter);
+
+    // 단락 경계 정렬 — collapsed source 에는 \n\n 이 없어 의미 없지만 안전하게 시도
+    const headSlice = src.slice(start, idx);
     const lastDoubleNL = headSlice.lastIndexOf('\n\n');
     if (lastDoubleNL !== -1 && (headSlice.length - lastDoubleNL - 2) > 200) {
       start = start + lastDoubleNL + 2;
     }
-    const tailStart = idx + quoteStr.length;
-    const tailSlice = fullScript.slice(tailStart, end);
+    const tailStart = idx + foundLen;
+    const tailSlice = src.slice(tailStart, end);
     const firstDoubleNL = tailSlice.indexOf('\n\n');
     if (firstDoubleNL !== -1 && firstDoubleNL > Math.floor(minChars * 0.4)) {
       end = tailStart + firstDoubleNL;
     }
 
-    const rescued = fullScript.slice(start, end);
-    if (rescued.length < quoteStr.length * 2) return card; // 충분히 확장 못함 — 그대로 두고 validation 결정
+    const rescued = src.slice(start, end);
+    if (rescued.length < quoteStr.length * 2) return card;
 
     rescuedCount++;
     return { ...card, script_excerpt: rescued, __rescued: true };
   });
 
   if (rescuedCount > 0 || unrescuable > 0) {
+    const methodSummary = Object.entries(methodCounts).map(([m, n]) => `${m}=${n}`).join(' ');
     console.log(
-      `[extract] rescue: rescued=${rescuedCount} unrescuable(quote-not-in-source)=${unrescuable} ` +
-      `target=${target} category=${category}`
+      `[extract] rescue: rescued=${rescuedCount} fallback=${unrescuable} input=${cards.length} ` +
+      `methods={${methodSummary}} category=${category}`
     );
   }
   return { cards: out, rescued: rescuedCount, unrescuable };
