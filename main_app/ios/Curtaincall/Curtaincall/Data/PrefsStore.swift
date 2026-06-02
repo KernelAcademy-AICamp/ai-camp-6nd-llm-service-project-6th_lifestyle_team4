@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// User preferences mirrored from the PWA's localStorage flags.
 /// Observable so toggling dark mode flips the app theme live.

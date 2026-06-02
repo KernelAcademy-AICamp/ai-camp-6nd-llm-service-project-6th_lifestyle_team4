@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// Shared bookmark state so Home / Archive / Detail stay in sync.
 @MainActor

@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Supabase
 
 /// App session: anonymous bootstrap + ID/password login + nickname, mirroring
