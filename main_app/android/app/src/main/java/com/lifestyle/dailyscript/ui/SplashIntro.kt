@@ -28,10 +28,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.LastBaseline
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,7 +95,6 @@ fun SplashIntro(onFinished: () -> Unit) {
             },
         ) {
             WordLine(pre = "Da", post = "ly", withDot = false)
-            Spacer(Modifier.height(2.dp))
             WordLine(pre = "Scr", post = "pt", withDot = true)
         }
 
@@ -125,7 +126,13 @@ private val wordStyle = TextStyle(
     fontFamily = BodoniModa,
     fontWeight = FontWeight.Normal,
     fontSize = 50.sp,
+    lineHeight = 50.sp,                                   // 타이트한 행간(1.0em)
     color = Cream,
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = LineHeightStyle(
+        alignment = LineHeightStyle.Alignment.Center,
+        trim = LineHeightStyle.Trim.Both,
+    ),
 )
 
 /** 책등(Box) 바닥을 텍스트 베이스라인에 맞추기 위해 baseline = 높이(=바닥)로 지정. */

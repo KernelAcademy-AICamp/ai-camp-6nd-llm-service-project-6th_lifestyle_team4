@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
-<title>Daily Script</title>
+<title>온보딩 미리보기 — Daily Script</title>
 <link rel="manifest" href="/manifest.webmanifest" />
 <meta name="theme-color" content="#FAF8F2" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="192x192" href="/m/icons/icon-book-192.png" />
 <link rel="apple-touch-icon" sizes="512x512" href="/m/icons/icon-book-512.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="/m/icons/icon-book-192.png" />
-<link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg?v=18" />
+<link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg?v=2" />
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;500;700;800&family=Noto+Sans+KR:wght@400;500;700;900&family=IM+Fell+DW+Pica:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <script>
   /* FOUC 방지 — 페이지 렌더 직전에 테마 적용 */
@@ -257,20 +257,17 @@
   .top-bar-brand {
     display: flex; align-items: center; gap: 10px;
   }
-  /* 로고 워드마크 — Bodoni 72 */
+  /* 로고 워드마크 */
   .brand-logo {
-    font-family: 'Bodoni 72', 'Bodoni 72 Oldstyle', Didot, 'Nanum Myeongjo', Georgia, serif;
+    font-family: 'IM Fell DW Pica', 'Nanum Myeongjo', Georgia, serif;
     font-weight: 400;
     font-size: 24px;
     line-height: 1;
-    letter-spacing: 0.02em;     /* 아주 살짝 넓힘 */
+    letter-spacing: 0;
     color: var(--espresso);
     cursor: pointer;
     user-select: none;
-    white-space: nowrap;
   }
-  .brand-logo .cap { font-size: 1.08em; }     /* D, S 살짝 크게 */
-  .brand-logo .dot { margin-left: 0.12em; color: var(--cta); }   /* t와 마침표 사이 간격 + 브랜드 포인트색 */
   .brand-logo:active { opacity: 0.55; }
   /* 상세 화면 헤더는 제목이 세로로 3줄(DAILY SCRIPT/작품명/부제) 쌓이므로 높이를 늘려 잘림 방지 */
   #detail-screen .top-bar {
@@ -1006,58 +1003,87 @@
     text-transform: uppercase; color: var(--sand);
   }
 
-  /* ===== Feed (오늘의 한줄) — 소셜 리뷰 카드 (Android FeedPostCard 미러) ===== */
-  /* 카드: 헤더(원형 아바타 + 닉네임 + "한 줄 리뷰·시간") → 명조 인용 패널 → 책 제목·저자 */
+  /* ===== Feed (오늘의 한줄) ===== */
+  /* 회색 컨테이너 안에: [닉네임·시간] + 흰 종이가 책 금박 단면에 꽂혀 얹힌 모양.
+     책은 컨테이너에 꽉 차지 않고 사방 여백을 두고 인셋(목업 기준). */
   .feed-item {
-    background: var(--paper);
-    border: 0.5px solid var(--latte);   /* 다크 모드에서 카드 경계 (그림자는 어두운 배경에서 안 보임) */
-    border-radius: 16px;
-    margin-bottom: 14px;
+    background: var(--feed-card);
+    padding: 16px 28px 0;       /* 좌우 여백 늘려 책 폭 줄임 — 하단은 붙음 */
+    margin-bottom: 24px;
     overflow: hidden;
-    box-shadow: 0 2px 6px rgba(14,12,10,0.16);
-    cursor: pointer;
   }
-  /* 헤더 — 원형 아바타 + 닉네임 + "한 줄 리뷰 · 시간" */
   .feed-item-head {
-    display: flex; align-items: center; gap: 12px;
-    padding: 16px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.13);   /* 섹션 구분선 */
+    margin-bottom: 14px;
   }
-  .feed-avatar {
-    flex: 0 0 auto;
-    width: 44px; height: 44px; border-radius: 50%;
-    background: var(--latte);
-    display: flex; align-items: center; justify-content: center;
-  }
-  .feed-avatar .material-symbols-outlined { font-size: 22px; color: var(--walnut); }
-  .feed-head-text { flex: 1; min-width: 0; }
   .feed-item-head .feed-nick {
-    font-size: 15px; font-weight: 400; color: var(--espresso);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    /* 시간과 완전히 동일한 텍스트 스타일 (sans-serif · 12px · roast · 0.04em) */
+    font-size: 12px; font-weight: 400; color: var(--roast);
+    letter-spacing: 0.04em;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .feed-item-head .feed-time {
-    font-size: 11px; letter-spacing: 0.02em; color: var(--roast);
-    margin-top: 2px;
+    flex: 0 0 auto; font-size: 12px; letter-spacing: 0.04em; color: var(--roast);
   }
-  /* 인용 패널 — CardWarm 배경, 가운데 명조 볼드 (post.body) */
-  .feed-quote-panel {
-    background: var(--card-warm);
-    padding: 40px 28px;
-    font-family: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
-    font-weight: 700;
-    font-size: 18px; line-height: 30px; color: var(--espresso);
-    text-align: center; white-space: pre-wrap; word-break: keep-all;
+  /* 책 + 종이 겹침 컨텍스트 */
+  .feed-book-wrap { position: relative; }
+  /* 흰 종이 — 책보다 좁고 가운데, 아래쪽이 책 금박 단면에 꽂힌 듯 */
+  .feed-paper {
+    position: relative; z-index: 1;
+    width: 74%; margin: 0 auto;
+    background: #FFFDF7;
+    padding: 20px 16px 32px;   /* 하단 여백: 책이 겹쳐도 글 안 가려지게 */
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 15px; line-height: 27px; color: #2C2620;
+    white-space: pre-wrap; word-break: keep-all; text-align: center;
+    box-shadow: 0 8px 16px rgba(14,12,10,0.16);
   }
-  /* 책 줄 — 제목 + 저자 */
-  .feed-book-line {
-    background: var(--paper);
-    padding: 16px 20px;
+  /* 책 — 가죽색(인라인). 사방 인셋 + 높이 낮게.
+     왼쪽 책등·오른쪽 페이지 단면·아래 음영을 inset 그림자로 → '책'처럼 입체감 */
+  .feed-book {
+    position: relative; z-index: 2;
+    margin-top: -22px;          /* 종이 하단을 덮어 '꽂힌' 느낌 */
+    padding: 0 16px 14px;       /* 컨테이너 하단에 붙음 */
+    box-shadow:
+      inset 7px 0 9px -6px rgba(0,0,0,0.42),     /* 왼쪽 책등 그림자 */
+      inset -5px 0 8px -6px rgba(0,0,0,0.28),    /* 오른쪽 단면 */
+      inset 0 -10px 14px -10px rgba(0,0,0,0.32); /* 아래쪽 입체 음영 */
+    /* background: leatherColorFor(title) — 인라인 */
   }
-  .feed-book-line .fb-title {
-    font-size: 15px; color: var(--espresso);
+  /* 금색 가죽 밴드 — 아카이브 책등(.spine)의 띠와 동일 스타일(가운데 금색, 위아래 음영 양각) */
+  .feed-book-band {
+    height: 14px; margin: 7px -16px 11px;   /* 위 가죽 lip + 띠 */
+    background: linear-gradient(180deg,
+      transparent 0%, rgba(0,0,0,0.5) 26%, #C9A24B 50%, rgba(0,0,0,0.5) 74%, transparent 100%);
+    border-top: 0.5px solid rgba(255,230,180,0.4);
+    border-bottom: 0.5px solid rgba(0,0,0,0.7);
+  }
+  .feed-book .fb-title {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 14px; font-weight: 700; color: #E6CC82;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .feed-book .fb-name {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .feed-book .fb-year { flex: 0 0 auto; font-size: 12px; color: #C9A24B; font-weight: 400; }
+  .feed-book .fb-mid {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    margin-top: 5px;
+  }
+  .feed-book .fb-sub {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 12px; color: #E6CC82; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .feed-book-line .fb-author {
-    font-size: 14px; color: var(--walnut); margin-top: 4px;
+  .feed-book .fb-num {
+    flex: 0 0 auto; font-size: 12px; letter-spacing: 0.06em; color: #C9A24B;
+  }
+  .feed-book .fb-bottom {
+    margin-top: 5px; font-size: 10px; letter-spacing: 0.1em;
+    color: #C9A24B;
   }
   #feed-fab {
     position: fixed; right: 20px; bottom: 80px; z-index: 29;
@@ -1236,83 +1262,10 @@
 </head>
 <body>
 
-<!-- ===== 로고 인트로 스플래시 (로딩 중 표시, JS 없이 즉시 재생) ===== -->
-<style>
-  #ds-splash{position:fixed;inset:0;z-index:9999;background:#0E0C0A;display:flex;align-items:center;justify-content:center;
-    transition:opacity .55s ease;}
-  #ds-splash.ds-out{opacity:0;pointer-events:none;}
-  #ds-splash .layer{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
-  /* 워드마크 */
-  #ds-splash .word{font-family:'Bodoni 72','Bodoni 72 Oldstyle',Didot,Georgia,serif;color:#FBF8F1;
-    font-size:clamp(40px,13vmin,84px);line-height:0.96;letter-spacing:0.01em;
-    display:flex;flex-direction:column;align-items:center;transform-origin:50% 50%;
-    animation:dsGather .46s cubic-bezier(.55,0,.85,.2) 1.7s forwards;}
-  #ds-splash .wline{display:inline-block;white-space:nowrap;opacity:0;}
-  #ds-splash .wline1{animation:dsFadeUp .6s cubic-bezier(.2,.8,.2,1) .1s both;}
-  #ds-splash .wline2{animation:dsFadeUp .6s cubic-bezier(.2,.8,.2,1) .28s both;}
-  #ds-splash .cap{font-size:1.08em;}
-  #ds-splash .per{color:#D85A30;margin-left:.06em;}
-  /* 책등(i) — 양쪽 동일 */
-  #ds-splash .bk{display:inline-block;position:relative;width:.11em;height:.64em;background:#D85A30;
-    border-radius:.03em;vertical-align:baseline;margin:0 .04em;transform-origin:50% 100%;
-    animation:dsBookDrop .55s cubic-bezier(.2,.85,.25,1) .3s both;}
-  #ds-splash .wline2 .bk{animation-delay:.46s;}
-  #ds-splash .bk::before{content:"";position:absolute;left:.016em;right:.016em;top:25%;height:.05em;background:rgba(255,253,247,.95);border-radius:999px;opacity:0;animation:dsFadeIn .3s ease .8s both;}
-  #ds-splash .bk::after{content:"";position:absolute;left:.016em;right:.016em;top:40%;height:.03em;background:rgba(255,253,247,.8);border-radius:999px;opacity:0;animation:dsFadeIn .3s ease .9s both;}
-  /* 심볼(최종 로고) */
-  #ds-splash .symbol{opacity:0;transform-origin:50% 50%;animation:dsSymUp .6s cubic-bezier(.2,.9,.25,1.12) 1.92s both;}
-  #ds-splash .mark{display:flex;align-items:flex-end;gap:3.9vmin;transform:translateX(4.2vmin);
-    animation:dsBreathe 2.6s ease-in-out 3.4s infinite;}
-  #ds-splash .sp{position:relative;width:9.6vmin;height:34vmin;background:#D85A30;border-radius:1.4vmin;}
-  #ds-splash .sp::before{content:"";position:absolute;left:1.4vmin;right:1.4vmin;top:25%;height:1.3vmin;background:rgba(255,253,247,.95);border-radius:999px;}
-  #ds-splash .sp::after{content:"";position:absolute;left:1.4vmin;right:1.4vmin;top:40%;height:.8vmin;background:rgba(255,253,247,.8);border-radius:999px;}
-  #ds-splash .dt{width:4.5vmin;height:4.5vmin;border-radius:50%;background:#D85A30;margin-bottom:.3vmin;
-    transform-origin:50% 50%;animation:dsDotPop .5s cubic-bezier(.2,1.5,.4,1) 2.5s both;}
-  @keyframes dsFadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:none;}}
-  @keyframes dsFadeIn{to{opacity:1;}}
-  @keyframes dsBookDrop{from{opacity:0;transform:scaleY(0);}to{opacity:1;transform:scaleY(1);}}
-  /* 워드마크가 중앙으로 확 모임(수평 수축) */
-  @keyframes dsGather{0%{transform:scaleX(1);opacity:1;}70%{opacity:.5;}100%{transform:scaleX(0.04);opacity:0;}}
-  /* 모인 자리에서 심볼이 위로 솟음(세로 성장) */
-  @keyframes dsSymUp{0%{opacity:0;transform:scaleY(0.16);}40%{opacity:1;}100%{opacity:1;transform:scaleY(1);}}
-  @keyframes dsDotPop{0%{opacity:0;transform:scale(0);}70%{opacity:1;transform:scale(1.12);}100%{transform:scale(1);}}
-  @keyframes dsBreathe{0%,100%{transform:translateX(4.2vmin) scale(1);}50%{transform:translateX(4.2vmin) scale(1.035);}}
-  @media (prefers-reduced-motion: reduce){
-    #ds-splash .word,#ds-splash .wline,#ds-splash .bk,#ds-splash .bk::before,#ds-splash .bk::after,
-    #ds-splash .symbol,#ds-splash .dt,#ds-splash .mark{animation:none!important;}
-    #ds-splash .word{display:none;} #ds-splash .symbol{opacity:1;}
-  }
-</style>
-<div id="ds-splash" aria-hidden="true">
-  <div class="layer">
-    <div class="word">
-      <span class="wline wline1"><span class="cap">D</span>a<span class="bk"></span>ly</span>
-      <span class="wline wline2"><span class="cap">S</span>cr<span class="bk"></span>pt<span class="per">.</span></span>
-    </div>
-  </div>
-  <div class="layer">
-    <div class="symbol"><div class="mark"><div class="sp"></div><div class="dt"></div></div></div>
-  </div>
-</div>
-<script>
-  /* 스플래시 해제: 인트로(최소 3.1s) 후 홈 준비되면 페이드아웃, 최대 8s 캡 */
-  (function(){
-    var splash = document.getElementById('ds-splash');
-    if (!splash) return;
-    var start = Date.now(), MIN = 3100, CAP = 8000;
-    function ready(){ var c = document.getElementById('home-content'); return c && c.style.display !== 'none'; }
-    function dismiss(){ splash.classList.add('ds-out'); setTimeout(function(){ if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }, 600); }
-    var iv = setInterval(function(){
-      var el = Date.now() - start;
-      if (el >= CAP || (el >= MIN && ready())) { clearInterval(iv); dismiss(); }
-    }, 120);
-  })();
-</script>
-
 <!-- ===== Top Bar (Home/Archive show HomeTopBar; Settings shows SettingsTopBar; Detail shows DetailTopBar) ===== -->
 <header id="top-bar-home" class="top-bar">
   <div class="top-bar-brand">
-    <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
+    <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동">Daily Script.</span>
   </div>
   <div style="display:flex;align-items:center;gap:14px;">
     <div title="실시간 동기화 상태" style="display:flex;align-items:center;gap:6px;">
@@ -1326,7 +1279,7 @@
 </header>
 
 <header id="top-bar-settings" class="top-bar" style="display:none;">
-  <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
+  <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동">Daily Script.</span>
   <button id="feedback-entry"
           style="background:var(--espresso);border:0.5px solid var(--espresso);color:var(--paper);-webkit-text-fill-color:var(--paper);
                  padding:6px 10px 6px 12px;font-family:'Noto Sans KR',sans-serif;font-size:10px;letter-spacing:0.2em;text-align:center;text-transform:uppercase;
@@ -2189,7 +2142,95 @@
 <!-- ===== Toast ===== -->
 <div id="toast" class="t-label-sm"></div>
 
-<script type="module" src="/m/assets/m-app.js"></script>
-<script type="module" src="/assets/pwa.js"></script>
+<!-- ===== 로컬 미리보기 전용 부트 (실서비스 m-app.js 대체) ===== -->
+<style>
+  #pv-pill {
+    position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 12px; z-index: 60;
+    background: rgba(14,12,10,0.85); color: #FAF8F2; border: none; border-radius: 999px;
+    padding: 8px 14px; font-size: 11px; letter-spacing: 0.08em; cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+</style>
+<button id="pv-pill" type="button">투어 다시 보기</button>
+<script type="module">
+  import { startCoachmarkTour } from './assets/onboarding.js?v=1780300698740';
+  const q = (s) => document.querySelector(s);
+  const qa = (s) => document.querySelectorAll(s);
+
+  function showView(name) {
+    qa('main > section[id^="view-"]').forEach((s) => { s.style.display = (s.id === 'view-' + name) ? 'block' : 'none'; });
+    qa('.bottom-nav .nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
+  }
+
+  // --- 홈 목업 ---
+  q('#home-loading') && (q('#home-loading').style.display = 'none');
+  const hc = q('#home-content'); if (hc) hc.style.display = 'block';
+  q('#home-date') && (q('#home-date').textContent = '2026 · 06 · 01');
+  q('#today-chips') && (q('#today-chips').innerHTML = '<span class="chip filled">소설</span><span class="chip">세계문학</span>');
+  const speaker = q('#today-speaker'); if (speaker) { speaker.style.display = 'block'; speaker.textContent = '산티아고'; }
+  q('#today-quote') && (q('#today-quote').textContent = '"인간은 패배하도록 만들어지지 않았어. 파괴될 수는 있어도 패배하진 않아."');
+  const work = q('#today-work'); if (work) { work.style.display = 'block'; work.textContent = '어니스트 헤밍웨이 · 노인과 바다'; }
+  q('#today-keywords') && (q('#today-keywords').innerHTML = '<span class="t-label-sm c-walnut">#의지</span><span class="t-label-sm c-walnut">#존엄</span><span class="t-label-sm c-walnut">#바다</span>');
+
+  // --- 전문(상세) 채우기 + 열기 ---
+  function fillDetail() {
+    q('#detail-work-title') && (q('#detail-work-title').textContent = '노인과 바다');
+    q('#detail-meta') && (q('#detail-meta').innerHTML = '<span class="t-label-sm c-walnut">NOVEL</span><span class="t-label-sm c-walnut">어니스트 헤밍웨이</span><span class="t-label-sm c-walnut">1952</span>');
+    const db = q('#detail-description-block'), dd = q('#detail-description');
+    if (db && dd) { dd.textContent = '여든네 날째 고기 한 마리 잡지 못한 노인이, 홀로 먼 바다로 나가 거대한 청새치와 사흘 밤낮을 겨룬다. 뼈만 남은 청새치를 끌고 돌아온 밤, 노인은 소년에게 다시 바다 이야기를 들려준다.'; db.style.display = 'block'; }
+    const sc = q('#detail-script');
+    if (sc) sc.innerHTML = '“하지만 인간은 패배하도록 만들어지지 않았어.”\n그는 말했다.\n“인간은 파괴될 수는 있어도 패배하진 않아.”\n\n노인은 청새치를 향해 고개를 끄덕였다.\n바다는 그 어떤 말도 돌려주지 않았지만,\n그는 자신이 무엇을 지켜냈는지 알고 있었다.';
+    const sb = q('#detail-significance-block'), sg = q('#detail-significance');
+    if (sb && sg) { sg.textContent = '인간의 존엄은 승패가 아니라 끝까지 맞서는 태도에 있음을 보여준 20세기 문학의 정수. 헤밍웨이에게 노벨문학상을 안긴 작품이다.'; sb.style.display = 'block'; }
+  }
+  function openDetailMock() {
+    return new Promise((resolve) => {
+      fillDetail();
+      const ds = q('#detail-screen');
+      if (ds) { ds.style.display = 'flex'; requestAnimationFrame(() => ds.classList.add('open')); }
+      setTimeout(resolve, 360);
+    });
+  }
+
+  // --- 피드(하이라이트 탭) + 데모 카드 ---
+  function injectDemo() {
+    const list = q('#highlights-list'); if (!list) return;
+    q('#cm-demo-hl')?.remove();
+    const item = document.createElement('div');
+    item.className = 'hl-card'; item.id = 'cm-demo-hl';
+    item.innerHTML = '<div class="hl-card-head"><p class="nickname">나</p><p class="meta">NOVEL · 방금</p></div>'
+      + '<div class="hl-bookcover" style="background:#3a2c22;"><p class="bc-title">노인과 바다</p><p class="bc-author">어니스트 헤밍웨이</p></div>'
+      + '<div class="hl-quote"><span class="open-q">“</span><p>인간은 파괴될 수는 있어도 패배하진 않아.</p><span class="close-q">”</span></div>'
+      + '<p class="hl-card-foot">#00042</p>';
+    list.prepend(item);
+  }
+  function openFeedMock() {
+    return new Promise((resolve) => {
+      const ds = q('#detail-screen'); if (ds) { ds.classList.remove('open'); setTimeout(() => { ds.style.display = 'none'; }, 250); }
+      showView('feed');
+      qa('#feed-chips .a-chip').forEach((b) => b.classList.toggle('active', b.dataset.feedCat === 'highlight'));
+      q('#feed-today') && (q('#feed-today').style.display = 'none');
+      q('#feed-highlight') && (q('#feed-highlight').style.display = 'block');
+      q('#highlights-empty') && (q('#highlights-empty').style.display = 'none');
+      injectDemo();
+      setTimeout(resolve, 360);
+    });
+  }
+  function goHome() {
+    q('#cm-demo-hl')?.remove();
+    const ds = q('#detail-screen'); if (ds) { ds.classList.remove('open'); ds.style.display = 'none'; }
+    showView('home');
+  }
+
+  const startAt = parseInt(new URLSearchParams(location.search).get('step') || '0', 10) || 0;
+  async function run() {
+    if (startAt >= 10) await openFeedMock();
+    else if (startAt >= 5) await openDetailMock();
+    startCoachmarkTour({ startAt, onOpenDetail: openDetailMock, onOpenFeed: openFeedMock, onEnd: goHome });
+  }
+  q('#pv-pill').addEventListener('click', () => { goHome(); startCoachmarkTour({ onOpenDetail: openDetailMock, onOpenFeed: openFeedMock, onEnd: goHome }); });
+  run();
+</script>
+
 </body>
 </html>
