@@ -131,7 +131,17 @@ final class Supa {
             .value
         guard !old.isEmpty else { return }
         let rows = old.map { BookmarkInsert(userId: newUserId, cardId: $0.cardId) }
-        _ = try? await client.from("user_bookmarks").insert(rows).execute()
+        // True union with dedupe, mirroring the PWA (web_pwa m-app.js:864). Relies on
+        // the unique constraint user_bookmarks_user_card_unique (user_id, card_id).
+        // `try` (not `try?`) so a botched merge propagates instead of vanishing.
+        try await client.from("user_bookmarks")
+            .upsert(rows, onConflict: "user_id,card_id", ignoreDuplicates: true)
+            .execute()
+        // Cleanup of the old anonymous rows runs AFTER the auth identity has switched
+        // to the new user, so under the current RLS these are scoped to the NEW user
+        // and effectively no-op (the users delete is additionally blocked: no DELETE
+        // policy/grant). Left best-effort on purpose — the correct home for this is a
+        // server-side SECURITY DEFINER function. See review notes on RLS (#3).
         _ = try? await client.from("user_bookmarks").delete().eq("user_id", value: oldUserId).execute()
         _ = try? await client.from("users").delete().eq("user_id", value: oldUserId).execute()
     }
