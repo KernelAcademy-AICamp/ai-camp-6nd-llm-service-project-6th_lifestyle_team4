@@ -62,7 +62,7 @@ struct HomeView: View {
                     if !recent.isEmpty {
                         ForEach(recent) { card in
                             NavigationLink(value: card) {
-                                ArchiveRow(card: card, daysAgo: 1)
+                                ArchiveRow(card: card)
                             }
                             .buttonStyle(.plain)
                         }
@@ -192,7 +192,7 @@ private struct TodayCardBody: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                if let format = card?.work.format.rawValue, !format.isEmpty {
+                if let format = card?.work.format.displayName, !format.isEmpty {
                     Chip(text: format, filled: true)
                 }
                 if let kw = card?.keywords.first {

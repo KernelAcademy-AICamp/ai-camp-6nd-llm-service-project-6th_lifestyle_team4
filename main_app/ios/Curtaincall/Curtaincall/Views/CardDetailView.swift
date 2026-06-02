@@ -164,7 +164,7 @@ struct CardDetailView: View {
     private var metadataChipsRow: some View {
         HStack(spacing: 12) {
             let items: [String] = [
-                card.work.format.rawValue.uppercased(),
+                card.work.format.displayName,
                 card.work.author?.uppercased() ?? "",
                 card.work.releaseYear.map(String.init) ?? "",
             ].filter { !$0.isEmpty }

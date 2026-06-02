@@ -241,7 +241,7 @@ struct CommentsSection: View {
     }
 
     static func relativeTime(_ iso: String) -> String {
-        guard let date = parseDate(iso) else { return "" }
+        guard let date = parseISODate(iso) else { return "" }
         let diff = max(0, Date.now.timeIntervalSince(date))
         let minutes = Int(diff / 60)
         if minutes < 1 { return "방금" }
@@ -254,18 +254,5 @@ struct CommentsSection: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy.MM.dd"
         return f.string(from: date)
-    }
-
-    private static func parseDate(_ iso: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = withFraction.date(from: iso) { return d }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        if let d = plain.date(from: iso) { return d }
-        let fallback = DateFormatter()
-        fallback.locale = Locale(identifier: "en_US_POSIX")
-        fallback.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        return fallback.date(from: String(iso.prefix(19)))
     }
 }

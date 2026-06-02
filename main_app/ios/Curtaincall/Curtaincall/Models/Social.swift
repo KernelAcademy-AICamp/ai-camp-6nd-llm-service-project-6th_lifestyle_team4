@@ -1,5 +1,19 @@
 import Foundation
 
+/// Parses Postgres/ISO8601 timestamps, with or without fractional seconds.
+nonisolated func parseISODate(_ iso: String) -> Date? {
+    let withFraction = ISO8601DateFormatter()
+    withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let d = withFraction.date(from: iso) { return d }
+    let plain = ISO8601DateFormatter()
+    plain.formatOptions = [.withInternetDateTime]
+    if let d = plain.date(from: iso) { return d }
+    let fallback = DateFormatter()
+    fallback.locale = Locale(identifier: "en_US_POSIX")
+    fallback.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+    return fallback.date(from: String(iso.prefix(19)))
+}
+
 // MARK: - Users
 
 nonisolated struct UserRow: Decodable, Sendable {
@@ -31,6 +45,7 @@ nonisolated struct BookmarkRow: Decodable, Identifiable, Sendable {
     let card: Card?
 
     var id: Int { bookmarkId }
+    var createdDate: Date? { createdAt.flatMap(parseISODate) }
 
     enum CodingKeys: String, CodingKey {
         case bookmarkId = "bookmark_id"
