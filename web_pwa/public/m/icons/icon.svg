@@ -1,13 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs><style>
-    .wm { font-family:'Bodoni 72','Bodoni 72 Oldstyle',Didot,Georgia,serif; font-weight:400; fill:#FBF8F1; }
-    .cap { font-size:1.08em; }
-    .pd { fill:#D85A30; }
-  </style></defs>
-  <rect width="512" height="512" fill="#0E0C0A"/>
-  <g class="wm" font-size="122.88" text-anchor="middle" letter-spacing="1.23">
-    <text x="256" y="238" font-size="110.6"><tspan class="cap">D</tspan>aily</text>
-    <text x="249" y="353"><tspan fill="none">.</tspan><tspan class="cap">S</tspan>cr<tspan fill="none">&#x131;</tspan>pt<tspan class="pd">.</tspan></text>
-  </g>
-  <rect x="273.5" y="272.0" width="13" height="81" rx="2.5" fill="#D85A30"/><rect x="275.2" y="292.3" width="9.6" height="6.2" rx="3.1" fill="rgba(255,253,247,0.95)"/><rect x="275.2" y="304.4" width="9.6" height="3.4" rx="1.7" fill="rgba(255,253,247,0.8)"/>
+  <rect x="60" y="60" width="392" height="392" rx="90" fill="#0E0C0A"/>
+  <rect x="227.7" y="156.2" width="56.3" height="199.7" rx="8.2" fill="#D85A30"/>
+  <rect x="235.9" y="204.1" width="39.9" height="7.7" rx="3.85" fill="rgba(255,253,247,0.95)"/>
+  <rect x="235.9" y="228.0" width="39.9" height="4.6" rx="2.3" fill="rgba(255,253,247,0.8)"/>
+  <circle cx="320.3" cy="340.6" r="13.3" fill="#D85A30"/>
 </svg>
