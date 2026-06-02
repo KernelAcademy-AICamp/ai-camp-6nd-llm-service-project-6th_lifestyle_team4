@@ -1434,17 +1434,19 @@ async function onTranslateClick(idx) {
   }
 }
 
-// 전체 번역하기 — 아직 번역 안 된 카드를 카드별로 순차 번역.
-// (모든 카드를 한 번에 LLM에 보내면 응답 JSON이 너무 길어 잘리므로 카드별로 호출)
+// 전체 번역하기 — 모든 미번역 카드를 5장씩 묶어 통합 endpoint 1번 호출로 양방향 일괄 처리.
+// 이전 흐름:
+//   카드별 /api/translate (N회) + /api/translate-commentary-batch (N/5회)  →  ≈ N + N/5 호출
+// 새 흐름:
+//   /api/translate-card-batch (N/5회)  →  ≈ N/5 호출   (5분의 1로 절감)
 async function onTranslateAll() {
   if (!state.cards.length) return;
 
-  const targets = state.cards
+  const targetIdxs = state.cards
     .map((c, i) => i)
-    .filter((i) => !state.cards[i].translated);
+    .filter((i) => !state.cards[i].translated || !state.cards[i].translated_commentary);
 
-  // 이미 전부 번역돼 있으면 → 모두 번역본 보기로 전환
-  if (!targets.length) {
+  if (!targetIdxs.length) {
     state.cards.forEach((c) => { if (c.translated) c.showingTranslation = true; });
     render();
     toast('이미 모든 카드가 번역되어 있습니다.', 'info');
@@ -1453,44 +1455,106 @@ async function onTranslateAll() {
 
   translateAllBtn.disabled = true;
   const orig = translateAllBtn.innerHTML;
+  // CHUNK 3 — 한 호출이 카드 3장 × 5필드 = 15 OUT 섹션. LLM 이 빠뜨릴 가능성 낮음.
+  // 5장이면 25 섹션이라 가끔 누락 발생 → 3장이 품질·안정성 균형점.
+  // 31장 작품: 11 batch × 1 LLM 호출 = 11회. 이전 흐름의 38회 대비 71% 절감.
+  const CHUNK = 3;
+  const CONCURRENCY = 2;
+  const chunks = [];
+  for (let i = 0; i < targetIdxs.length; i += CHUNK) chunks.push(targetIdxs.slice(i, i + CHUNK));
+
   let done = 0;
   let failed = 0;
+  const errors = [];
+
   try {
     const token = await getAccessToken();
-    for (const i of targets) {
-      translateAllBtn.innerHTML =
-        `<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>` +
-        `<span>번역 중⋯ (${done + failed}/${targets.length})</span>`;
-      try {
-        const json = await requestTranslation(token, state.cards[i]);
-        state.cards[i].translated = json;
-        state.cards[i].showingTranslation = true;
-        done += 1;
-      } catch (err) {
-        console.error('[translate-all] card', i, err);
-        failed += 1;
+
+    async function processChunk(chunkIdxs) {
+      const cardsPayload = chunkIdxs.map((idx) => {
+        const c = state.cards[idx];
+        return {
+          id: idx,
+          quote: c.quote || '',
+          script_excerpt: c.script_excerpt || '',
+          excerpt_description: c.excerpt_description || '',
+          significance: c.significance || '',
+          keywords: Array.isArray(c.keywords) ? c.keywords : [],
+        };
+      });
+      const res = await fetch('/api/translate-card-batch', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cards: cardsPayload, work: state.work || null }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const e = new Error(body?.error || `HTTP ${res.status}`);
+        e.status = res.status;
+        throw e;
       }
-      render(); // 진행 상황을 카드에 즉시 반영 (translate-all 버튼은 render가 건드리지 않음)
+      const results = Array.isArray(body?.results) ? body.results : [];
+      results.forEach((r) => {
+        const idx = Number(r?.id);
+        if (Number.isNaN(idx) || !state.cards[idx]) return;
+        // EN→KO 번역 결과 (quote / script_excerpt) — translated 객체에 부착
+        if (r.quote_translated || r.script_excerpt_translated) {
+          state.cards[idx].translated = {
+            quote_translated: r.quote_translated || null,
+            script_excerpt_translated: r.script_excerpt_translated || null,
+            confidence: 'high',
+            note: '',
+          };
+          state.cards[idx].showingTranslation = true;
+        }
+        // KO→EN 번역 결과 (description / significance / keywords) — translated_commentary
+        if (r.excerpt_description_en || r.significance_en || (Array.isArray(r.keywords_en) && r.keywords_en.length)) {
+          state.cards[idx].translated_commentary = {
+            excerpt_description_original: r.excerpt_description_en || null,
+            significance_original:        r.significance_en || null,
+            keywords_original: Array.isArray(r.keywords_en) ? r.keywords_en : null,
+          };
+        }
+        done++;
+      });
     }
+
+    // 동시성 워커
+    let cursor = 0;
+    async function worker() {
+      while (cursor < chunks.length) {
+        const idx = cursor++;
+        const chunk = chunks[idx];
+        translateAllBtn.innerHTML =
+          `<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>` +
+          `<span>번역 중⋯ (청크 ${idx + 1}/${chunks.length})</span>`;
+        try {
+          await processChunk(chunk);
+        } catch (e) {
+          // 청크 실패 — 절반으로 쪼개 1회 재시도 (응답 잘림 / 일시 오류 대응)
+          console.warn(`[translate-all] chunk ${idx + 1}/${chunks.length} failed (${e.message}) — 절반 크기로 재시도`);
+          if (chunk.length > 1) {
+            const half = Math.ceil(chunk.length / 2);
+            try { await processChunk(chunk.slice(0, half)); } catch (e2) { failed += half; errors.push(e2.message || String(e2)); }
+            try { await processChunk(chunk.slice(half));   } catch (e3) { failed += (chunk.length - half); errors.push(e3.message || String(e3)); }
+          } else {
+            failed += chunk.length;
+            errors.push(e?.message || String(e));
+          }
+        }
+        render();
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker));
+
     if (failed === 0) {
       toast(`전체 번역 완료 (${done}장)`, 'success');
     } else {
-      toast(`전체 번역 종료 · 성공 ${done} / 실패 ${failed}`, done ? 'info' : 'error');
-    }
-
-    // ★ 추가 — quote/script 번역 끝나면 description/significance/keywords KO→EN 도 채움.
-    // 카드 N장이 많을 때 한 번의 LLM 호출은 응답 잘림 위험 → 10장씩 청크로 동시 3개 호출.
-    // 일부 청크가 실패해도 나머지는 저장되어 검토 단계에서 ↻KO 또는 영문 일괄 채우기로 보충 가능.
-    try {
-      await fillCommentaryEn(token);
-      toast('해설(의의·설명) 영문도 채웠어요', 'success');
-    } catch (e) {
-      console.warn('[translate-all] commentary fill failed:', e);
-      if (e.partial) {
-        toast(`해설 일부 청크 실패 — 성공한 카드는 저장됩니다. 검토에서 ↻KO 또는 영문 일괄 채우기로 보충`, 'info');
-      } else {
-        toast(`해설 영문화 실패 — 저장 후 검토 페이지에서 영문 일괄 채우기로 보충 가능`, 'info');
-      }
+      const firstErr = errors[0] || '알 수 없음';
+      toast(`전체 번역 종료 · 성공 ${done} / 실패 ${failed} — 예: ${firstErr}`, done ? 'info' : 'error');
     }
   } catch (err) {
     console.error(err);
@@ -1502,112 +1566,9 @@ async function onTranslateAll() {
   }
 }
 
-// 모든 카드의 description / significance / keywords 를 KO→EN 일괄 번역.
-// 카드 N장이 많을 때 한 번의 LLM 호출은 응답 토큰이 넘쳐 잘리거나 timeout 위험 →
-// 5장씩 청크로 나눠 동시 2개씩 호출. 청크별 실패시 절반 크기로 1회 재시도 후 격리.
-async function fillCommentaryEn(token) {
-  const all = state.cards.map((c, i) => ({
-    id: i,
-    description: c.excerpt_description || '',
-    significance: c.significance || '',
-    keywords: Array.isArray(c.keywords) ? c.keywords : [],
-  })).filter((p) => p.description || p.significance || (p.keywords && p.keywords.length));
-  if (!all.length) return;
-
-  const CHUNK = 5;
-  const chunks = [];
-  for (let i = 0; i < all.length; i += CHUNK) chunks.push(all.slice(i, i + CHUNK));
-
-  // 청크별 호출. 동시성 2 — Anthropic 레이트 보호 + 안정성 우선.
-  const CONCURRENCY = 2;
-  let cursor = 0;
-  const errors = [];
-  const totalChunks = chunks.length;
-  let doneCount = 0;
-
-  // 단일 청크 처리 — 실패시 caller 가 잡아서 재시도 결정.
-  async function callOnce(chunkCards) {
-    const res = await fetch('/api/translate-commentary-batch', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ cards: chunkCards, work: state.work || null }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const e = new Error(body?.error || `HTTP ${res.status}`);
-      e.status = res.status;
-      throw e;
-    }
-    return Array.isArray(body?.results) ? body.results : [];
-  }
-
-  function applyResults(results) {
-    results.forEach((r) => {
-      const i = Number(r?.id);
-      if (Number.isNaN(i) || !state.cards[i]) return;
-      state.cards[i].translated_commentary = {
-        excerpt_description_original: r.description_en || null,
-        significance_original:        r.significance_en || null,
-        keywords_original: Array.isArray(r.keywords_en) ? r.keywords_en : null,
-      };
-    });
-  }
-
-  async function worker() {
-    while (cursor < chunks.length) {
-      const idx = cursor++;
-      const chunk = chunks[idx];
-      translateAllBtn.innerHTML =
-        `<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>` +
-        `<span>해설 영문화 중⋯ (${doneCount}/${totalChunks} 완료)</span>`;
-      try {
-        const results = await callOnce(chunk);
-        applyResults(results);
-        doneCount++;
-      } catch (e) {
-        const transientStatuses = new Set([429, 502, 503, 504]);
-        const isTransient = transientStatuses.has(e.status) || /JSON|timeout|aborted/i.test(e.message || '');
-        // 1회 재시도 — 청크를 반으로 쪼개서 다시 시도 (응답 잘림·rate-limit 대응)
-        if (isTransient && chunk.length > 1) {
-          console.warn(`[translate-all] chunk ${idx + 1}/${totalChunks} failed (${e.message}) — 절반 크기로 재시도`);
-          const half = Math.ceil(chunk.length / 2);
-          const a = chunk.slice(0, half);
-          const b = chunk.slice(half);
-          try {
-            const [ra, rb] = await Promise.allSettled([callOnce(a), callOnce(b)]);
-            let partialOk = false;
-            if (ra.status === 'fulfilled') { applyResults(ra.value); partialOk = true; }
-            if (rb.status === 'fulfilled') { applyResults(rb.value); partialOk = true; }
-            const fails = [];
-            if (ra.status === 'rejected') fails.push(ra.reason?.message || 'half-A 실패');
-            if (rb.status === 'rejected') fails.push(rb.reason?.message || 'half-B 실패');
-            if (fails.length) errors.push({ chunk: idx + 1, error: `재시도 후 부분 실패: ${fails.join(' / ')}`, partialOk });
-            else doneCount++;
-          } catch (e2) {
-            errors.push({ chunk: idx + 1, error: `재시도 실패: ${e2?.message || e2}` });
-          }
-        } else {
-          console.warn(`[translate-all] commentary chunk ${idx + 1}/${totalChunks} failed:`, e?.message || e);
-          errors.push({ chunk: idx + 1, error: e?.message || String(e) });
-        }
-      }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker));
-
-  if (errors.length) {
-    // 사용자에게는 첫 에러 메시지 1개만 — 너무 길어지지 않게.
-    const firstMsg = errors[0]?.error || '알 수 없는 오류';
-    const detail = `${errors.length}/${totalChunks} 청크 실패 — 예: ${firstMsg}`;
-    const err = new Error(detail);
-    err.partial = errors.length < totalChunks;
-    err.errors = errors;
-    throw err;
-  }
-}
+// (이전 fillCommentaryEn 함수는 제거됨 — 새 onTranslateAll 이 /api/translate-card-batch 하나로
+//  양방향 번역을 모두 처리하므로 별도 호출 불필요. 검토 큐의 "영문 일괄 채우기" 는 review.js 가
+//  /api/translate-fields 를 사용해 카드별 1회 호출로 처리.)
 
 translateAllBtn?.addEventListener('click', onTranslateAll);
 

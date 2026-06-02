@@ -64,11 +64,12 @@ async function callClaude(
     rawText = false,      // true → JSON 파싱 건너뛰고 LLM 응답 문자열 그대로 반환 (단일 필드 번역용)
   } = {}
 ) {
-  // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper는 1회 추가 시도까지만 (총 ≤2회).
-  // 외부 재시도 횟수가 많으면 Vercel 함수 timeout(300s)을 잡아먹어 전체 실패.
+  // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper 는 더 시도하지 않는다.
+  // 외부 재시도는 사실상 토큰만 두 번 쓰고 동일 실패를 반복하는 경우가 다수였음.
+  // SDK 가 처리 못 한 에러(파싱 실패, 4xx 등)는 retry 해도 결과 같음.
   const useModel = resolveModel(model);
   console.log(`[anthropic] call model=${useModel} max_tokens=${maxTokens}`);
-  const MAX_OUTER_ATTEMPTS = 2;
+  const MAX_OUTER_ATTEMPTS = 1;
   let lastErr;
   const messages = [{ role: 'user', content: prompt }];
   if (prefill) {
@@ -412,7 +413,8 @@ export function splitScriptIntoChunks(
 
 async function runExtractSingle(scriptText, category, seedBlock, model, chunkInfo = null, { signal = null, onProgress = null } = {}) {
   const prompt = buildExtractPrompt(scriptText, category, seedBlock, chunkInfo);
-  return callClaude(prompt, { maxTokens: 16000, model, signal, onProgress });
+  // 추출 1청크 출력: 카드 5~10장 × 카드당 ~3000자 ≈ 8K~15K 토큰. 마진 포함 12000.
+  return callClaude(prompt, { maxTokens: 12000, model, signal, onProgress });
 }
 
 function arrayOfStrings(value) {
@@ -505,7 +507,8 @@ Rules:
 INPUT_JSON:
 ${JSON.stringify(input, null, 2)}`;
 
-  const finalResult = await callClaude(prompt, { maxTokens: 16000, model, signal, onProgress });
+  // finalize 출력: 최대 40 카드 × script_excerpt 가 큼 — 7000 토큰으로 마진.
+  const finalResult = await callClaude(prompt, { maxTokens: 7000, model, signal, onProgress });
   return {
     work: mergeWork(merged.work, finalResult?.work),
     cards: Array.isArray(finalResult?.cards) && finalResult.cards.length ? finalResult.cards : merged.cards,
@@ -916,13 +919,122 @@ export async function runClassifyKeywords(keywords) {
   return assignments;
 }
 
+// 자주 등장하는 영문 작가명의 통용 한국어 표기 — LLM 호출 없이 즉시 반환.
+// 키는 lowercase, "the " prefix 제거 후 매칭. 매칭 안 되면 LLM fallback.
+// 추가는 안전 — 잘못 추가해도 LLM 결과로 덮어쓸 일 없음 (lookup 우선).
+const AUTHOR_LOOKUP = {
+  // 영미 고전·근대
+  'william shakespeare': '윌리엄 셰익스피어',
+  'shakespeare': '윌리엄 셰익스피어',
+  'mark twain': '마크 트웨인',
+  'samuel clemens': '마크 트웨인',
+  'charles dickens': '찰스 디킨스',
+  'jane austen': '제인 오스틴',
+  'emily brontë': '에밀리 브론테',
+  'emily bronte': '에밀리 브론테',
+  'charlotte brontë': '샬럿 브론테',
+  'charlotte bronte': '샬럿 브론테',
+  'oscar wilde': '오스카 와일드',
+  'arthur conan doyle': '아서 코난 도일',
+  'conan doyle': '아서 코난 도일',
+  'edgar allan poe': '에드거 앨런 포',
+  'herman melville': '허먼 멜빌',
+  'nathaniel hawthorne': '너새니얼 호손',
+  'ernest hemingway': '어니스트 헤밍웨이',
+  'f. scott fitzgerald': 'F. 스콧 피츠제럴드',
+  'scott fitzgerald': 'F. 스콧 피츠제럴드',
+  'john steinbeck': '존 스타인벡',
+  'william faulkner': '윌리엄 포크너',
+  'virginia woolf': '버지니아 울프',
+  'james joyce': '제임스 조이스',
+  'h. g. wells': 'H. G. 웰스',
+  'hg wells': 'H. G. 웰스',
+  'jules verne': '쥘 베른',
+  'george orwell': '조지 오웰',
+  'aldous huxley': '올더스 헉슬리',
+  // 러시아
+  'leo tolstoy': '레프 톨스토이',
+  'tolstoy': '레프 톨스토이',
+  'fyodor dostoevsky': '표도르 도스토옙스키',
+  'dostoevsky': '표도르 도스토옙스키',
+  'anton chekhov': '안톤 체호프',
+  'chekhov': '안톤 체호프',
+  'ivan turgenev': '이반 투르게네프',
+  'alexander pushkin': '알렉산드르 푸시킨',
+  'nikolai gogol': '니콜라이 고골',
+  // 프랑스
+  'victor hugo': '빅토르 위고',
+  'gustave flaubert': '귀스타브 플로베르',
+  'honoré de balzac': '오노레 드 발자크',
+  'honore de balzac': '오노레 드 발자크',
+  'alexandre dumas': '알렉상드르 뒤마',
+  'émile zola': '에밀 졸라',
+  'emile zola': '에밀 졸라',
+  'guy de maupassant': '기 드 모파상',
+  'antoine de saint-exupéry': '앙투안 드 생텍쥐페리',
+  'antoine de saint-exupery': '앙투안 드 생텍쥐페리',
+  'molière': '몰리에르',
+  'moliere': '몰리에르',
+  // 독일·오스트리아
+  'franz kafka': '프란츠 카프카',
+  'hermann hesse': '헤르만 헤세',
+  'thomas mann': '토마스 만',
+  'johann wolfgang von goethe': '요한 볼프강 폰 괴테',
+  'goethe': '요한 볼프강 폰 괴테',
+  'friedrich schiller': '프리드리히 실러',
+  // 그리스
+  'homer': '호메로스',
+  'sophocles': '소포클레스',
+  'euripides': '에우리피데스',
+  'aeschylus': '아이스킬로스',
+  'aristophanes': '아리스토파네스',
+  // 오페라 작곡가
+  'giuseppe verdi': '주세페 베르디',
+  'verdi': '주세페 베르디',
+  'giacomo puccini': '자코모 푸치니',
+  'puccini': '자코모 푸치니',
+  'wolfgang amadeus mozart': '볼프강 아마데우스 모차르트',
+  'mozart': '볼프강 아마데우스 모차르트',
+  'richard wagner': '리하르트 바그너',
+  'wagner': '리하르트 바그너',
+  'gioachino rossini': '조아키노 로시니',
+  'rossini': '조아키노 로시니',
+  // 시인
+  'walt whitman': '월트 휘트먼',
+  'emily dickinson': '에밀리 디킨슨',
+  'robert frost': '로버트 프로스트',
+  't. s. eliot': 'T. S. 엘리엇',
+  'ts eliot': 'T. S. 엘리엇',
+  'william wordsworth': '윌리엄 워즈워스',
+  'lord byron': '바이런',
+  'percy bysshe shelley': '퍼시 비시 셸리',
+  'john keats': '존 키츠',
+  // 일본
+  'haruki murakami': '무라카미 하루키',
+  'natsume sōseki': '나쓰메 소세키',
+  'natsume soseki': '나쓰메 소세키',
+  'yasunari kawabata': '가와바타 야스나리',
+  'yukio mishima': '미시마 유키오',
+  // 라이너 마리아 릴케 등
+  'rainer maria rilke': '라이너 마리아 릴케',
+  'rilke': '라이너 마리아 릴케',
+};
+
 // 영문 작가명을 통용 한국어 표기로 변환. (저장 직전 가드 + 백필용)
 // - 입력이 비어있거나 이미 한글만 있으면 그대로 반환 (LLM 호출 안 함).
-// - 매핑 모호 시 음역. 작품 제목·역할 설명은 빼고 사람 이름만.
+// - AUTHOR_LOOKUP 에 있으면 즉시 반환 (LLM 호출 안 함).
+// - 그 외엔 LLM 으로 변환. 매핑 모호 시 음역. 작품 제목·역할 설명은 빼고 사람 이름만.
 export async function runKoreanizeAuthor(rawAuthor) {
   const s = String(rawAuthor ?? '').trim();
   if (!s) return null;
   if (!/[A-Za-z]/.test(s)) return s;
+  // Lookup 시도 — "The Brothers Grimm" 같은 "the " prefix 도 처리.
+  const lookupKey = s.toLowerCase().replace(/^the\s+/i, '').trim();
+  const cached = AUTHOR_LOOKUP[lookupKey];
+  if (cached) {
+    console.log(`[koreanizeAuthor] cache hit: "${s}" → "${cached}"`);
+    return cached;
+  }
   const prompt = `다음 작가 이름을 한국에서 통용되는 한국어 표기로 변환하라. 반드시 JSON 한 줄로만 응답.
 규칙:
 - 통용 표기가 있으면 그것을 사용 (예: "Arthur Conan Doyle" → "아서 코난 도일", "Giuseppe Verdi" → "주세페 베르디", "Shakespeare" → "윌리엄 셰익스피어").
@@ -940,9 +1052,9 @@ export async function runKoreanizeAuthor(rawAuthor) {
 }
 
 export async function runTranslate(work, card) {
-  // TRANSLATE_PROMPT는 {work, card} 봉투를 받고, 응답은 {quote, script_excerpt} 두 필드만.
-  // 출력 스키마를 단순화해 모델이 형식 검열에 토큰을 덜 쓰게 하고,
-  // 작품 메타·excerpt_description을 컨텍스트로 함께 넘겨 말투·시대 톤을 잡게 한다.
+  // TRANSLATE_PROMPT 는 {work, card} 봉투를 받아 quote / script_excerpt 두 필드 번역.
+  // 출력 형식: 이전엔 JSON 이었지만 번역문 안의 따옴표·줄바꿈 escape 실수가 누적되어
+  // parseJson 실패가 잦았다 → 마커 기반 plain text 로 전환. 절대 깨지지 않음.
   const w = work && typeof work === 'object' ? work : {};
   const envelope = {
     work: {
@@ -962,28 +1074,65 @@ export async function runTranslate(work, card) {
     },
   };
 
-  const prompt = TRANSLATE_PROMPT.replace('{{INPUT_JSON}}', JSON.stringify(envelope, null, 2));
-  // script_excerpt가 2000자 이상으로 길어, 영문→한국어 번역 출력이 4096 토큰을 넘어
-  // JSON이 중간에 잘리는 문제(=valid JSON 실패)를 막기 위해 넉넉히 16000으로.
-  // prefill로 응답 JSON 헤더를 미리 박아 모델이 형식 토큰에 자원을 덜 쓰게 한다.
-  // 신형 모델은 temperature 와 top_p 동시 지정 시 400 에러. temperature 만 사용.
-  const result = await callClaude(prompt, {
-    maxTokens: 16000,
+  const basePrompt = TRANSLATE_PROMPT.replace('{{INPUT_JSON}}', JSON.stringify(envelope, null, 2));
+  // 출력 형식 override — TRANSLATE_PROMPT 안의 JSON 출력 지시는 무시하고 마커 사용.
+  // 마커 사이 텍스트는 어떤 문자(따옴표·줄바꿈·괄호 등)도 escape 없이 그대로 둠.
+  const markerInstructions = `
+
+[OUTPUT FORMAT OVERRIDE — 위 [02] 의 JSON 출력 지시는 무시하고 아래 형식을 따른다.]
+다음 마커로 정확히 구분해서 출력. 각 마커는 자기 줄에 단독으로. 마커 사이 본문은 plain text — 따옴표·줄바꿈·괄호 다 그대로, escape 절대 하지 말 것.
+
+<<<QUOTE>>>
+{여기에 quote 의 한국어 번역. 한 줄, 한 호흡}
+<<<SCRIPT>>>
+{여기에 script_excerpt 의 한국어 번역. 원본 줄바꿈·인물명·지문 형식 유지}
+<<<CONFIDENCE>>>
+{high 또는 low 한 단어}
+<<<NOTE>>>
+{confidence 가 low 일 때만 한 줄 사유. high 면 빈 줄}
+<<<END>>>
+
+마커 밖에는 어떤 문자도 출력하지 말 것 (설명·코드펜스·라벨 금지).`;
+
+  // 출력: quote(짧음) + script_excerpt(2000~3000자 한국어 ≈ 4000 토큰) + 마커. 6000 으로 충분.
+  const result = await callClaude(basePrompt + markerInstructions, {
+    maxTokens: 6000,
     system: TRANSLATE_SYSTEM,
     temperature: 0.3,
-    prefill: '{"quote":"',
+    rawText: true,
+    model: 'haiku',
   });
 
-  if (!result || typeof result.quote !== 'string') {
-    throw new Error('Translation response missing quote');
+  const text = String(result || '');
+  // 마커 사이 텍스트 추출. 마커가 누락된 경우 다음 마커까지 fallback.
+  function between(s, startMarker, endMarker) {
+    const start = s.indexOf(startMarker);
+    if (start === -1) return null;
+    const valueStart = start + startMarker.length;
+    const end = s.indexOf(endMarker, valueStart);
+    if (end === -1) return null;
+    return s.slice(valueStart, end).trim();
   }
-  const confidence = result.confidence === 'low' ? 'low' : 'high';
-  const note = typeof result.note === 'string' ? result.note : '';
+
+  const quote = between(text, '<<<QUOTE>>>', '<<<SCRIPT>>>');
+  const script = between(text, '<<<SCRIPT>>>', '<<<CONFIDENCE>>>')
+              || between(text, '<<<SCRIPT>>>', '<<<NOTE>>>')
+              || between(text, '<<<SCRIPT>>>', '<<<END>>>');
+  const confRaw = between(text, '<<<CONFIDENCE>>>', '<<<NOTE>>>')
+               || between(text, '<<<CONFIDENCE>>>', '<<<END>>>')
+               || '';
+  const noteRaw = between(text, '<<<NOTE>>>', '<<<END>>>') || '';
+
+  if (!quote) {
+    console.warn('[translate] marker QUOTE 없음. raw 앞 200자:', text.slice(0, 200));
+    throw new Error('Translation response missing QUOTE marker');
+  }
+
   return {
-    quote_translated: result.quote,
-    script_excerpt_translated: result.script_excerpt,
-    confidence,
-    note,
+    quote_translated: quote,
+    script_excerpt_translated: script || '',
+    confidence: /low/i.test(confRaw) ? 'low' : 'high',
+    note: noteRaw,
   };
 }
 
@@ -1075,8 +1224,12 @@ ${src}
 
   // rawText: true → callClaude 가 JSON 파싱 안 하고 LLM 응답 문자열 그대로 반환.
   // prefill 없음 (JSON 안 만들 거니까). Haiku 명시 — 빠르고 안정적.
+  // maxTokens — script_excerpt 만 큼, 짧은 필드(title/author/keywords)는 512 면 충분.
+  const tokenBudget = field === 'script_excerpt' ? 5000
+                    : (field === 'excerpt_description' || field === 'significance') ? 1024
+                    : 512;
   const result = await callClaude(prompt, {
-    maxTokens: field === 'script_excerpt' ? 8000 : 1024,
+    maxTokens: tokenBudget,
     system,
     temperature: 0.3,
     rawText: true,
@@ -1096,6 +1249,348 @@ ${src}
     out = inner.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
   }
   if (!out) throw new Error('Translation response missing text');
+  return out;
+}
+
+// 한 카드 / 한 작품의 여러 필드를 한 LLM 호출로 일괄 번역.
+// autoFillEnglishForCard 가 5+ 회 호출하던 걸 1회로 줄이는 데 사용.
+//
+// 입력 fields: [{ name, text, kind? }] — name 은 결과 객체의 키.
+//   kind 는 선택적: 'title' | 'author' | 'quote' | 'script_excerpt' | 'excerpt_description' | 'significance' | 'keywords'
+//   미지정시 일반 산문 취급.
+// direction: 'en2ko' | 'ko2en'
+// 응답: { [name]: translated_text } — 입력 fields 의 name 그대로. 누락 필드는 빈 문자열.
+export async function runTranslateFields({ fields, direction = 'en2ko', work }) {
+  const valid = (Array.isArray(fields) ? fields : [])
+    .filter((f) => f && f.name && f.text != null && String(f.text).trim());
+  if (!valid.length) return {};
+
+  // 단일 필드면 기존 runTranslateField 로 위임 — 동일 결과, 동일 토큰.
+  if (valid.length === 1) {
+    const f = valid[0];
+    const out = await runTranslateField({
+      text: String(f.text),
+      field: f.kind || 'excerpt_description',
+      work, direction,
+    });
+    return { [f.name]: out };
+  }
+
+  const w = work && typeof work === 'object' ? work : {};
+  const ctx = [
+    w.title  ? (direction === 'ko2en' ? `Title: ${w.title}` : `작품 제목: ${w.title}`) : null,
+    w.author ? (direction === 'ko2en' ? `Author: ${w.author}` : `작가: ${w.author}`)   : null,
+    w.format ? (direction === 'ko2en' ? `Format: ${w.format}` : `형식: ${w.format}`)   : null,
+  ].filter(Boolean).join('\n');
+
+  // 입력 필드 블록 — 마커로 구분, 본문은 escape 없이 그대로.
+  // LLM 이 응답에서 같은 name 마커로 번역문을 채워 보내도록 한다.
+  const inputBlocks = valid.map((f) =>
+    `<<<FIELD name=${f.name} kind=${f.kind || 'general'}>>>\n${String(f.text).trim()}\n<<<END_FIELD>>>`
+  ).join('\n\n');
+
+  const system = direction === 'ko2en'
+    ? 'You are a precise Korean→English literary translator. Translate each field faithfully and literally — match source length, preserve sentence count and every detail. Output ONLY the marker-delimited format specified. No JSON, no markdown, no explanations.'
+    : '너는 한국어 정전 감각을 가진 번역가다. 각 필드를 자연스럽고 정확하게 한국어로 옮긴다. 응답은 지정된 마커 형식만 — JSON·마크다운·설명 금지.';
+
+  const directionLabel = direction === 'ko2en' ? 'Korean → English' : 'English → Korean';
+  const targetLang = direction === 'ko2en' ? 'English' : 'Korean (한국어)';
+
+  const fieldGuides = valid.map((f) => {
+    const kind = f.kind || 'general';
+    if (direction === 'ko2en') {
+      const g = {
+        title: 'title — natural English. Use canonical English title if known.',
+        author: 'author — standard English spelling if known; otherwise transliterate.',
+        quote: 'quote — a speakable single line of dialogue. Preserve tone.',
+        script_excerpt: 'script_excerpt — preserve speaker labels and stage direction linebreaks.',
+        excerpt_description: 'excerpt_description — literal narrative translation, same sentence count.',
+        significance: 'significance — literal commentary translation, preserve every claim.',
+        keywords: 'keywords — comma-separated short English tags. SAME count and order as input. No quotes, no Oxford commas.',
+      };
+      return `· ${f.name}: ${g[kind] || 'natural English, faithful to the source'}`;
+    }
+    const g = {
+      title: '제목 — 한국 통용 표기 우선.',
+      author: '작가명 — 한국 통용 표기 우선, 모호하면 음역. 한자/영문 그대로 두지 말 것.',
+      quote: '명대사 — 무대 위 배우가 한 호흡에 말할 수 있게. 번역체 금지.',
+      script_excerpt: '대본 발췌 — 인물명·지문·줄바꿈 형식 유지, 관계에 맞는 위계 어투.',
+      excerpt_description: '장면 설명 — 자연스러운 한국어 한 단락.',
+      significance: '작품 의의 — 자연스러운 한국어 산문.',
+      keywords: '키워드 — 쉼표로 구분. 입력과 동일 개수·순서. 따옴표·옥스퍼드 쉼표 금지.',
+    };
+    return `· ${f.name}: ${g[kind] || '자연스러운 한국어로'}`;
+  }).join('\n');
+
+  // 입력 name 명시적 나열 — LLM 이 빠뜨릴 가능성 차단
+  const requiredNames = valid.map((f) => `· ${f.name}`).join('\n');
+
+  const prompt = direction === 'ko2en'
+    ? `Translate ${valid.length} field(s) ${directionLabel}.
+
+[Work context — for terminology consistency only]
+${ctx || '(none)'}
+
+[Per-field guide]
+${fieldGuides}
+
+[Input — each field is delimited by markers; content is plain text, no escaping]
+${inputBlocks}
+
+[Required output blocks — emit ALL of these, no exceptions]
+${requiredNames}
+
+[Output format — STRICT]
+For each input field, emit ONE block using the SAME name. Content between markers is plain ${targetLang}.
+
+<<<OUT name=<field_name>>>>
+{translated text — keep original line breaks where they aid readability}
+<<<END_OUT>>>
+
+★ COMPLETENESS REQUIREMENTS:
+1. Emit EXACTLY ${valid.length} OUT block(s), one per input FIELD, using the exact same names.
+2. Translate every field FULLY — do not abbreviate or summarize.
+3. Marker content is plain text — do NOT escape quotes, newlines, brackets.
+4. No greetings, no JSON, no markdown, no commentary outside OUT blocks.`
+    : `다음 ${valid.length} 개 필드를 ${directionLabel} 으로 옮긴다.
+
+[작품 컨텍스트 — 용어 일관성 참고용]
+${ctx || '(없음)'}
+
+[필드별 가이드]
+${fieldGuides}
+
+[입력 — 각 필드는 마커로 구분. 본문은 plain text, escape 없음]
+${inputBlocks}
+
+[반드시 출력해야 하는 블록 — 빠뜨리지 말 것]
+${requiredNames}
+
+[출력 형식 — 엄격]
+각 입력 필드마다 같은 name 으로 OUT 블록 하나씩. 마커 사이는 plain ${targetLang}.
+
+<<<OUT name=<field_name>>>>
+{번역된 본문 — 가독성에 도움이 되는 줄바꿈은 유지}
+<<<END_OUT>>>
+
+★ 완결성 요구사항:
+1. 정확히 ${valid.length} 개 OUT 블록, 입력 FIELD 마다 1개씩, name 은 입력과 정확히 동일.
+2. 각 필드를 완전 번역 — 축약·요약·생략 금지.
+3. 마커 본문은 plain text — 따옴표·줄바꿈·괄호 escape 금지.
+4. 인사·JSON·마크다운·OUT 밖 텍스트 금지.`;
+
+  // 토큰 예산 — 입력 필드 합산의 1.5배 + 마진 (마커 오버헤드 ~50tok/field).
+  const inputCharTotal = valid.reduce((sum, f) => sum + String(f.text).length, 0);
+  const maxTokens = Math.max(1024, Math.min(8000, Math.floor(inputCharTotal * 1.5) + valid.length * 100));
+
+  const text = await callClaude(prompt, {
+    maxTokens,
+    system,
+    temperature: 0.3,
+    rawText: true,
+    model: 'haiku',
+  });
+
+  const raw = String(text || '');
+  const out = {};
+  // OUT 블록 파싱
+  const blockRe = /<<<OUT\s+name=([^>]+?)>>>([\s\S]*?)<<<END_OUT>>>/g;
+  let m;
+  while ((m = blockRe.exec(raw)) !== null) {
+    const name = m[1].trim();
+    const value = m[2].trim();
+    if (name && value) out[name] = value;
+  }
+  // 누락된 필드는 빈 문자열로 (호출자가 null 처리 가능).
+  for (const f of valid) {
+    if (!(f.name in out)) out[f.name] = '';
+  }
+  return out;
+}
+
+// "전체 번역" 최적 경로 — 카드 N장의 5필드를 한 LLM 호출로 양방향 일괄 처리.
+//   EN→KO: quote, script_excerpt           (원본은 영문, 한국어로)
+//   KO→EN: description, significance, keywords  (LLM 생성 한국어 해설, 영문으로)
+//
+// 이전 흐름: runTranslate × N (per card) + runTranslateCommentaryBatch × (N/5) ≈ N + N/5 회.
+// 새 흐름:   이 함수 × (N/CHUNK_SIZE) 회.  (5장씩 묶으면 N/5)
+//
+// 입력 cards: [{ id, quote, script_excerpt, excerpt_description, significance, keywords }]
+//   - quote/script_excerpt: 영문 원본 (없거나 이미 한국어면 건너뜀)
+//   - excerpt_description/significance/keywords: 한국어 (없거나 영문이면 건너뜀)
+// 응답: [{ id,
+//   quote_translated, script_excerpt_translated,
+//   excerpt_description_en, significance_en, keywords_en: string[]
+// }]
+export async function runTranslateCardBatch({ cards, work }) {
+  const items = Array.isArray(cards) ? cards : [];
+  if (!items.length) return [];
+
+  const w = work && typeof work === 'object' ? work : {};
+  const ctx = [
+    w.title    ? `Title: ${w.title}`        : null,
+    w.subtitle ? `Subtitle: ${w.subtitle}`  : null,
+    w.author   ? `Author: ${w.author}`      : null,
+    w.format   ? `Format: ${w.format}`      : null,
+  ].filter(Boolean).join('\n');
+
+  // 입력 카드 블록 — 마커로 카드와 필드 명확히 구분. 본문은 escape 없는 plain text.
+  // 빈/이미 번역된 필드는 빼서 토큰 절약.
+  const cardBlocks = items.map((c, i) => {
+    const id = c.id ?? i;
+    const parts = [`<<<CARD id=${id}>>>`];
+    if (c.quote && String(c.quote).trim())                   parts.push(`<<<EN_QUOTE>>>\n${String(c.quote).trim()}\n<<<END_EN_QUOTE>>>`);
+    if (c.script_excerpt && String(c.script_excerpt).trim()) parts.push(`<<<EN_SCRIPT>>>\n${String(c.script_excerpt).trim()}\n<<<END_EN_SCRIPT>>>`);
+    if (c.excerpt_description && String(c.excerpt_description).trim()) parts.push(`<<<KO_DESC>>>\n${String(c.excerpt_description).trim()}\n<<<END_KO_DESC>>>`);
+    if (c.significance && String(c.significance).trim())     parts.push(`<<<KO_SIG>>>\n${String(c.significance).trim()}\n<<<END_KO_SIG>>>`);
+    if (Array.isArray(c.keywords) && c.keywords.length)      parts.push(`<<<KO_KW>>>\n${c.keywords.map((k) => String(k).trim()).filter(Boolean).join(', ')}\n<<<END_KO_KW>>>`);
+    parts.push('<<<END_CARD>>>');
+    return parts.join('\n');
+  }).join('\n\n');
+
+  const system =
+    'You are a precise bilingual literary translator (English ↔ Korean). For each input card, translate ONLY the fields present. EN_QUOTE/EN_SCRIPT → Korean (natural, speakable). KO_DESC/KO_SIG/KO_KW → English (literal, same sentence count). Output ONLY the marker-delimited format specified — no JSON, no markdown, no extra prose.';
+
+  // 입력 카드별로 어떤 OUT 섹션이 필요한지 명시 — LLM 이 빠뜨릴 가능성 차단.
+  const cardRequirements = items.map((c, i) => {
+    const id = c.id ?? i;
+    const need = [];
+    if (c.quote && String(c.quote).trim())                   need.push('KO_QUOTE');
+    if (c.script_excerpt && String(c.script_excerpt).trim()) need.push('KO_SCRIPT');
+    if (c.excerpt_description && String(c.excerpt_description).trim()) need.push('EN_DESC');
+    if (c.significance && String(c.significance).trim())     need.push('EN_SIG');
+    if (Array.isArray(c.keywords) && c.keywords.length)      need.push('EN_KW');
+    return `· id=${id} requires: ${need.join(', ')}`;
+  }).join('\n');
+
+  const prompt = `Translate ${items.length} card(s) in both directions.
+
+[Work context — for terminology consistency]
+${ctx || '(none)'}
+
+[Translation rules]
+EN → KO (quote, script_excerpt):
+· 자연스러운 한국어. 무대 위 배우가 한 호흡에 말할 수 있게.
+· 번역체 ("당신", "그/그녀", "~인 것이다") 금지.
+· 인물 관계에 맞는 위계 어투(반말/존댓말/하오체).
+· script: 인물명·지문·줄바꿈 형식 그대로.
+
+KO → EN (description, significance, keywords):
+· Literal English. Same sentence count. Preserve every claim and detail.
+· keywords: comma-separated short tags, SAME count and order, no quotes, no Oxford commas.
+
+[Input cards — markers delimit cards and fields; content is plain text, no escaping]
+${cardBlocks}
+
+[Required output blocks per card — emit ALL of these, no exceptions]
+${cardRequirements}
+
+[Output format — STRICT]
+For each input card, emit ONE <<<RESULT id=N>>> ... <<<END_RESULT>>> block. Inside, emit EACH required OUT section listed above. Field markers and content format:
+
+<<<RESULT id=1>>>
+<<<KO_QUOTE>>>
+{Korean translation of EN_QUOTE}
+<<<END_KO_QUOTE>>>
+<<<KO_SCRIPT>>>
+{Korean translation of EN_SCRIPT — preserve original line breaks}
+<<<END_KO_SCRIPT>>>
+<<<EN_DESC>>>
+{English translation of KO_DESC}
+<<<END_EN_DESC>>>
+<<<EN_SIG>>>
+{English translation of KO_SIG}
+<<<END_EN_SIG>>>
+<<<EN_KW>>>
+{English keywords, comma-separated, same count and order as input}
+<<<END_EN_KW>>>
+<<<END_RESULT>>>
+
+★ COMPLETENESS REQUIREMENTS (do not skip):
+1. Emit EXACTLY ${items.length} <<<RESULT>>> block(s), one per input card, in the SAME ORDER as input.
+2. Use the EXACT input id from the corresponding <<<CARD id=N>>>.
+3. Within each RESULT, emit EVERY required OUT section listed above for that card.
+4. Marker content is plain text — do NOT escape quotes, newlines, brackets, or any character.
+5. No text outside RESULT blocks. No greetings, no JSON wrapper, no markdown.
+6. Translate every field FULLY — do not abbreviate, do not summarize, do not write "..." or placeholders.`;
+
+  // 토큰 예산 — 카드당 입력 ~3000자(EN script가 큼) + 출력 1.3배(KO 비슷) + 마커 ~200.
+  // 카드당 평균 5000 토큰. 최대 16000.
+  const maxTokens = Math.min(16000, Math.max(3000, items.length * 5000));
+
+  const startedAt = Date.now();
+  const text = await callClaude(prompt, {
+    maxTokens,
+    system,
+    temperature: 0.3,
+    rawText: true,
+    model: 'haiku',
+  });
+  const llmMs = Date.now() - startedAt;
+
+  // RESULT 블록 파싱 — 관대한 id 매칭 (공백, "1.0" 표기 등 처리).
+  // id 형식: "1", "card_1", "1.0" 등 어떤 거든 trim 후 숫자만 추출해 비교용 표준화.
+  const raw = String(text || '');
+  const resultRe = /<<<RESULT\s+id\s*=\s*([^>]+?)\s*>>>([\s\S]*?)<<<END_RESULT>>>/g;
+  function normalizeId(id) {
+    if (id == null) return '';
+    const s = String(id).trim();
+    // "1.0" → "1", "card_1" → "1" 등 첫 번째 정수만 추출
+    const numMatch = s.match(/\d+/);
+    return numMatch ? numMatch[0] : s;
+  }
+  const byId = new Map();
+  let m;
+  let blocksFound = 0;
+  while ((m = resultRe.exec(raw)) !== null) {
+    blocksFound++;
+    const rawId = m[1];
+    const id = normalizeId(rawId);
+    const inside = m[2];
+
+    function section(open, close) {
+      const s = inside.indexOf(open);
+      if (s === -1) return null;
+      const valueStart = s + open.length;
+      const e = inside.indexOf(close, valueStart);
+      if (e === -1) return null;
+      return inside.slice(valueStart, e).trim() || null;
+    }
+
+    const koQuote = section('<<<KO_QUOTE>>>', '<<<END_KO_QUOTE>>>');
+    const koScript = section('<<<KO_SCRIPT>>>', '<<<END_KO_SCRIPT>>>');
+    const enDesc  = section('<<<EN_DESC>>>', '<<<END_EN_DESC>>>');
+    const enSig   = section('<<<EN_SIG>>>', '<<<END_EN_SIG>>>');
+    const enKwRaw = section('<<<EN_KW>>>', '<<<END_EN_KW>>>');
+    const enKw = enKwRaw ? enKwRaw.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean) : null;
+
+    byId.set(id, {
+      quote_translated: koQuote,
+      script_excerpt_translated: koScript,
+      excerpt_description_en: enDesc,
+      significance_en: enSig,
+      keywords_en: enKw && enKw.length ? enKw : null,
+    });
+  }
+
+  // 입력 순서대로 정렬해서 반환. 누락된 카드는 빈 객체.
+  const out = items.map((c, i) => {
+    const r = byId.get(normalizeId(c.id ?? i)) || {};
+    return {
+      id: c.id ?? i,
+      quote_translated: r.quote_translated || null,
+      script_excerpt_translated: r.script_excerpt_translated || null,
+      excerpt_description_en: r.excerpt_description_en || null,
+      significance_en: r.significance_en || null,
+      keywords_en: Array.isArray(r.keywords_en) ? r.keywords_en : null,
+    };
+  });
+
+  // 진단 로그 — Vercel 함수 로그에서 batch 품질 모니터링용. 응답엔 안 들어감.
+  console.log(
+    `[translate-card-batch] input=${items.length} blocks=${blocksFound} ` +
+    `maxTokens=${maxTokens} llmMs=${llmMs}`
+  );
   return out;
 }
 
@@ -1126,10 +1621,12 @@ export async function runTranslateCommentaryBatch({ cards, work }) {
     w.format   ? `Format: ${w.format}`      : null,
   ].filter(Boolean).join('\n');
 
+  // 출력 형식: 마커 기반 plain text. JSON 안 쓰니까 따옴표·줄바꿈 escape 문제 없음.
+  // 카드별 블록 구조 — id 와 영문 필드들이 마커로 명확히 구분됨.
   const system =
-    'You are a precise Korean→English literary translator. Translate each item faithfully and literally — match source length closely (do not exceed 1.8x), preserve sentence count, every detail. Output JSON only — no prose, no markdown.';
+    'You are a precise Korean→English literary translator. Translate each item faithfully and literally — match source length, preserve sentence count, every detail. Output ONLY the marker-delimited plain text format specified — no JSON, no markdown, no code fences, no extra prose.';
 
-  const prompt = `Translate Korean commentary fields into English for ${payload.length} card(s). One LLM call for all cards.
+  const prompt = `Translate Korean commentary fields into English for ${payload.length} card(s).
 
 [Translation rules — hard requirements]
 1. Translate Korean directly — no paraphrase, no reinterpretation, no added context.
@@ -1137,7 +1634,7 @@ export async function runTranslateCommentaryBatch({ cards, work }) {
 3. Length per field ≤ ~1.8x of the Korean source.
 4. Preserve every detail, name, claim. Match tone (narrative commentary).
 5. keywords: same count and order as input. Each tag = single English word or short phrase. No quotes, no Oxford commas.
-6. If an input field is absent, omit it from the output (do NOT invent content).
+6. If an input field is absent, omit that field's marker block from the output.
 7. Match the id of each input item exactly.
 
 [Work context — for terminology consistency]
@@ -1146,40 +1643,83 @@ ${ctx || '(none)'}
 [Input — array of cards]
 ${JSON.stringify(payload, null, 2)}
 
-Output: a single JSON object with key "results" whose value is an array. Same length and order as input.
-Each result object has: id (same as input), and optionally description_en, significance_en, keywords_en (array of strings).
-Example:
-{"results":[{"id":1,"description_en":"...","significance_en":"...","keywords_en":["love","betrayal"]}]}`;
+[Output format — STRICT]
+For each card, emit one block in this exact form. Markers are on their own lines.
+Between <<<DESC>>> / <<<SIG>>> / <<<KW>>> markers the content is plain English text — no escaping needed.
+
+<<<CARD id=1>>>
+<<<DESC>>>
+{English description here, plain text}
+<<<SIG>>>
+{English significance here, plain text}
+<<<KW>>>
+{comma-separated English keywords, e.g. love, betrayal, faith}
+<<<END_CARD>>>
+
+<<<CARD id=2>>>
+...
+<<<END_CARD>>>
+
+Rules:
+- Use the EXACT input id after "id=" in <<<CARD id=N>>>.
+- Omit <<<DESC>>>/<<<SIG>>>/<<<KW>>> blocks if the input doesn't have that field.
+- No text outside CARD blocks. No closing JSON, no markdown, no greetings.`;
 
   // 출력 토큰: 카드 N장 × 평균 ~300자 영문 = ~150 tokens × 3필드 × N = N × 450 tokens.
-  // 안전 마진으로 cards 수 × 1500 토큰 또는 최소 6000 토큰 보장.
-  const maxTokens = Math.max(6000, Math.min(16000, payload.length * 1500));
+  // 마커 오버헤드 ~50 tokens/card. 안전 마진 1200/card.
+  const maxTokens = Math.max(4000, Math.min(12000, payload.length * 1200));
 
-  // KO→EN 번역은 단순 작업 — Haiku 명시 (빠르고 안정적, 비용 절약).
-  // 환경변수로 다른 모델 강제됐을 가능성 차단.
-  const result = await callClaude(prompt, {
+  const text = await callClaude(prompt, {
     maxTokens,
     system,
     temperature: 0.3,
-    prefill: '{"results":[',
+    rawText: true,
     model: 'haiku',
   });
 
-  const arr = Array.isArray(result?.results) ? result.results : [];
-  // id 매칭이 어긋날 가능성 — 안전 가드.
+  // 카드 블록 파싱
+  const raw = String(text || '');
+  const cardBlocks = raw.split(/<<<CARD\s+id=([^>]+?)>>>/);
+  // split 결과: [pre, id1, block1, id2, block2, ...]
   const byId = new Map();
-  arr.forEach((r) => {
-    if (r && r.id != null) byId.set(String(r.id), r);
-  });
+  for (let i = 1; i < cardBlocks.length; i += 2) {
+    const id = String(cardBlocks[i]).trim();
+    const body = String(cardBlocks[i + 1] || '');
+    const endIdx = body.indexOf('<<<END_CARD>>>');
+    const inside = endIdx === -1 ? body : body.slice(0, endIdx);
+
+    function block(marker, ...nextMarkers) {
+      const start = inside.indexOf(marker);
+      if (start === -1) return null;
+      const valueStart = start + marker.length;
+      let end = inside.length;
+      for (const nm of nextMarkers) {
+        const e = inside.indexOf(nm, valueStart);
+        if (e !== -1 && e < end) end = e;
+      }
+      return inside.slice(valueStart, end).trim() || null;
+    }
+
+    const desc = block('<<<DESC>>>', '<<<SIG>>>', '<<<KW>>>');
+    const sig  = block('<<<SIG>>>',  '<<<KW>>>');
+    const kwRaw = block('<<<KW>>>');
+    const kw = kwRaw ? kwRaw.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean) : null;
+
+    byId.set(id, {
+      description_en: desc,
+      significance_en: sig,
+      keywords_en: kw && kw.length ? kw : null,
+    });
+  }
 
   // 입력 순서대로 정렬해서 반환. 누락된 카드는 빈 객체.
   return payload.map((p) => {
     const r = byId.get(String(p.id)) || {};
     return {
       id: p.id,
-      description_en: r.description_en ? String(r.description_en).trim() : null,
-      significance_en: r.significance_en ? String(r.significance_en).trim() : null,
-      keywords_en: Array.isArray(r.keywords_en) ? r.keywords_en.map((s) => String(s).trim()).filter(Boolean) : null,
+      description_en: r.description_en || null,
+      significance_en: r.significance_en || null,
+      keywords_en: Array.isArray(r.keywords_en) ? r.keywords_en : null,
     };
   });
 }
