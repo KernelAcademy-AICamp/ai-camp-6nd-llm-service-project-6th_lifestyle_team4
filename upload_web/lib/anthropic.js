@@ -264,12 +264,20 @@ function buildCriticalRulesPreamble(category) {
     prose:  '· script_excerpt 는 가능한 2000자 이상이지만, 글 한 편이 짧으면 전체 그대로 (짧은 산문 예외).',
   })[category] || '· script_excerpt 는 **무조건 2000자 이상** (poem/prose 제외).';
 
-  return `[★ CRITICAL — 아래 규칙은 절대 위반 금지 ★]
-1. quote ≠ script_excerpt — 같으면 카드 자체가 무효. quote 는 script_excerpt 안에 포함되어야 하지만, script_excerpt 는 quote 의 **앞뒤 맥락(다른 turn / 단락)** 을 반드시 더 포함해야 한다.
+  return `[★★★ CRITICAL — 아래 규칙은 절대 위반 금지. 위반 카드는 서버에서 즉시 삭제됨 ★★★]
+1. quote ≠ script_excerpt — 같거나 95% 이상 겹치면 카드 자체가 무효.
+   quote 는 짧은 명대사(≤200자), script_excerpt 는 그 명대사를 **둘러싼 앞뒤 맥락까지 포함한 긴 발췌**.
+   ❌ 잘못된 예: quote = "If you are with the quality..." / script_excerpt = "If you are with the quality..." (동일)
+   ✅ 올바른 예: quote = "If you are with the quality..." / script_excerpt = "[앞 단락 200자] ... If you are with the quality... [뒤 단락 1700자]"
+   즉 script_excerpt 의 길이는 반드시 quote 보다 압도적으로 길고, quote 가 그 일부로 포함되어야 한다.
 2. ${lengthRule}
 3. quote 는 작품 원문 그대로 (한 글자도 바꾸지 않음, 200자 이내).
-4. 출력 직전 self-check: 각 카드별로 (a) quote ≠ script_excerpt, (b) 길이 규칙 충족, (c) quote ⊂ script_excerpt 모두 통과하는지 한 번 더 확인. 위반된 카드는 출력에서 빼거나 수정한다.
-[★ CRITICAL 끝 ★]
+4. 출력 직전 self-check: 각 카드별로 다음을 모두 확인하고, 하나라도 어기는 카드는 출력에서 제외하거나 수정한다.
+   (a) quote 와 script_excerpt 의 문자열이 다른가?
+   (b) script_excerpt 의 길이가 quote 의 길이보다 최소 5배 이상인가?
+   (c) script_excerpt 가 카테고리별 최소 길이를 충족하는가?
+   (d) quote 의 모든 문자가 script_excerpt 안에 그대로 포함되는가?
+[★★★ CRITICAL 끝 ★★★]
 
 `;
 }
@@ -607,9 +615,25 @@ const MIN_SCRIPT_CHARS_BY_CATEGORY = {
 // 그 미만은 strict drop. 프롬프트 무시 자체를 허용하지 않음.
 const DROP_RATE_SAFETY = 0.9;
 
-function _norm(s) { return String(s ?? '').trim().replace(/\s+/g, ' '); }
+// 비교 정규화 — strict equal 만으로는 미세 차이(따옴표 종류, 유니코드 제어문자, 끝 단어 한 두 개) 못 잡음.
+// trim + 공백 정규화 + 유니코드 NFC + 스마트따옴표·대시·생략부호 정규화 + 영숫자 외 제거.
+function _norm(s) {
+  return String(s ?? '')
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[‘’‚‛′]/g, "'")
+    .replace(/[“”„‟″]/g, '"')
+    .replace(/[–—―]/g, '-')
+    .replace(/[…]/g, '...')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-function validateAndFilterCards(cards, category) {
+// 명대사가 발췌 안에서 차지하는 비율 — 95% 초과면 사실상 동일한 카드로 본다.
+// 예: quote 200자, script_excerpt 210자 → 95% → 발췌가 의미 있게 확장 안 됨 → drop.
+const QUOTE_RATIO_TOO_HIGH = 0.95;
+
+export function validateAndFilterCards(cards, category) {
   if (!Array.isArray(cards)) {
     return { cards: [], summary: { total: 0, kept: 0, dropped_identical: 0, dropped_short: 0, min_chars: 0, category } };
   }
@@ -617,9 +641,18 @@ function validateAndFilterCards(cards, category) {
 
   // 1차: drop 판정 (분류만 — 실제 drop 은 안전망 검사 후)
   const verdicts = cards.map((c) => {
-    const q = _norm(c?.quote);
-    const s = _norm(c?.script_excerpt);
+    const qRaw = String(c?.quote ?? '');
+    const sRaw = String(c?.script_excerpt ?? '');
+    const q = _norm(qRaw);
+    const s = _norm(sRaw);
+    // 완전 동일
     if (q && s && q === s) return { c, drop: 'identical' };
+    // 거의 동일 — quote 가 script_excerpt 의 95% 이상 차지하면 사실상 같은 카드
+    if (q && s && s.length > 0) {
+      const ratio = q.length / s.length;
+      if (ratio >= QUOTE_RATIO_TOO_HIGH) return { c, drop: 'identical' };
+    }
+    // 길이 미달
     if (minChars > 0 && (!c?.script_excerpt || String(c.script_excerpt).length < minChars)) {
       return { c, drop: 'short' };
     }
