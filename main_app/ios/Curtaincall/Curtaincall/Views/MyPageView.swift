@@ -52,9 +52,6 @@ struct MyPageView: View {
 
                     Spacer().frame(height: 40)
                     sectionLabel("GENERAL PREFERENCES")
-                    settingRow(title: "Push Notifications", subtitle: "Daily digest and breaking insights") {
-                        EditorialToggle(isOn: $prefs.pushEnabled)
-                    }
                     settingRow(
                         title: "취향 추천",
                         subtitle: prefs.tasteEnabled ? tasteProfileText : "북마크 기반 맞춤 추천"
