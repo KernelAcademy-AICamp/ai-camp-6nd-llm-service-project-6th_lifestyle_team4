@@ -332,46 +332,10 @@ async function decideCandidate(req, res, body, adminUser) {
       throw new HttpError(`promote failed: ${rpcErr.message || rpcErr}`, 500);
     }
     promotedCardId = rpcData;
-
-    // 자동 영문 채우기 — 새로 promote 된 카드의 빈 *_original 만 KO→EN 번역해서 채움.
-    // ★ 사전 체크: 후보 단계에서 이미 모든 *_original 이 채워져 있으면 즉시 스킵 (DB 추가 조회·LLM 호출 모두 안 함).
-    //   편집(edits / workEdits) 이 _original 을 덮어쓸 수 있으니 final 값으로 검사.
-    //   v88 이후 흐름에서는 추출+전체 번역 시점에 이미 다 채워져 있어 99% 이 분기 탄다.
-    if (promotedCardId) {
-      const w = row.works || {};
-      const finalCard = {
-        quote:                            edits.quote                            ?? row.quote,
-        script_excerpt:                   edits.script_excerpt                   ?? row.script_excerpt,
-        excerpt_description:              edits.excerpt_description              ?? row.excerpt_description,
-        significance:                     edits.significance                     ?? row.significance,
-        keywords:                         edits.keywords                         ?? row.keywords,
-        quote_original:                   edits.quote_original                   ?? row.quote_original,
-        script_excerpt_original:          edits.script_excerpt_original          ?? row.script_excerpt_original,
-        excerpt_description_original:     edits.excerpt_description_original     ?? row.excerpt_description_original,
-        significance_original:            edits.significance_original            ?? row.significance_original,
-        keywords_original:                edits.keywords_original                ?? row.keywords_original,
-      };
-      const finalWork = {
-        title:             workEdits.title             ?? w.title,
-        title_original:    workEdits.title_original    ?? w.title_original,
-        subtitle:          workEdits.subtitle          ?? w.subtitle,
-        subtitle_original: workEdits.subtitle_original ?? w.subtitle_original,
-        author:            workEdits.author            ?? w.author,
-        author_original:   workEdits.author_original   ?? w.author_original,
-      };
-      const allFilled = isEnglishFullyFilled(finalCard, finalWork);
-      if (allFilled) {
-        autoFillSummary = { ok: true, skipped: 'already-bilingual', work_filled: [], card_filled: [] };
-        console.log(`[candidates] approve card_id=${promotedCardId} — 영문 이미 완성, autoFill 스킵`);
-      } else {
-        // 실패해도 승인 자체는 성공이므로 throw 하지 않고 로그만 남김.
-        try {
-          autoFillSummary = await autoFillEnglishForCard(promotedCardId);
-        } catch (e) {
-          console.warn(`[candidates] auto-fill EN failed card_id=${promotedCardId}:`, e?.message || e);
-        }
-      }
-    }
+    // ★ autoFillEnglishForCard 호출 제거 — 사용자 요청: "그냥 바로 조회로 올려".
+    //   영문이 비어 있더라도 LLM 호출하지 않음. 라이브러리 EN 토글에서 lazy 번역 가능.
+    //   추출+전체번역 단계에서 이미 양 언어 모두 채워지는 게 정상 흐름.
+    autoFillSummary = { ok: true, skipped: 'autofill-disabled-on-approve' };
   }
 
   return res.status(200).json({

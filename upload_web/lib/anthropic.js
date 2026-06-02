@@ -307,6 +307,10 @@ FIELD IN ENGLISH.
 - work.title          → English (verbatim from source, e.g., "Adventures of Huckleberry Finn")
 - work.subtitle       → English (from source) or null
 - work.author         → English (verbatim from source, e.g., "Mark Twain")
+                        ★★ DO NOT KOREANIZE. 본문 템플릿의 "영문 작가는 반드시 통용되는
+                        한국어 표기로 변환" 지시는 한국어 source 전용이며, 이 영어 source 에선
+                        OVERRIDDEN. author 를 "마크 트웨인" / "찰스 디킨스" 같은 한국어
+                        음역으로 변환 절대 금지. 원문 그대로 영문 표기 유지.
 - work.release_year   → integer (language-neutral)
 - work.genres         → ★ EXCEPTION: 한국어 유지. 본문에 명시된 고정 13개 한국어 값
                         (로맨스, 코미디, 스릴러/서스펜스, 드라마, 비극, 미스터리,

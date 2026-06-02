@@ -1530,14 +1530,19 @@ async function onTranslateAll() {
         const wen = workMeta.en || {};
         const workSourceIsEN = workMeta.source_lang === 'en';
         if (workSourceIsEN) {
-          // EN 원문 — primary KO 가 새 정보, _original EN 은 source echo
-          if (wko.title    && !state.work.title)              state.work.title             = wko.title;
-          if (wko.subtitle && !state.work.subtitle)           state.work.subtitle          = wko.subtitle;
-          // author 은 추출 시 한국어 표기로 변환되었을 수 있으므로 KO 가 비어있을 때만 채움
-          if (wko.author   && !state.work.author)             state.work.author            = wko.author;
-          if (wen.title    && !state.work.title_original)     state.work.title_original    = wen.title;
-          if (wen.subtitle && !state.work.subtitle_original)  state.work.subtitle_original = wen.subtitle;
-          if (wen.author   && !state.work.author_original)    state.work.author_original   = wen.author;
+          // EN 원문 — 추출된 primary (EN) 를 _original 로 이동, KO 번역을 primary 로.
+          //   기존 primary 가 EN 이면 그 자체가 _original 값이어야 함.
+          if (state.work.title    && !state.work.title_original)    state.work.title_original    = state.work.title;
+          if (state.work.subtitle && !state.work.subtitle_original) state.work.subtitle_original = state.work.subtitle;
+          if (state.work.author   && !state.work.author_original)   state.work.author_original   = state.work.author;
+          // KO 번역으로 primary 덮어쓰기 (LLM 응답 우선)
+          if (wko.title)    state.work.title    = wko.title;
+          if (wko.subtitle) state.work.subtitle = wko.subtitle;
+          if (wko.author)   state.work.author   = wko.author;
+          // _original 빈 자리는 응답 en (source echo) 으로
+          if (wen.title    && !state.work.title_original)    state.work.title_original    = wen.title;
+          if (wen.subtitle && !state.work.subtitle_original) state.work.subtitle_original = wen.subtitle;
+          if (wen.author   && !state.work.author_original)   state.work.author_original   = wen.author;
         } else {
           // KO 원문 — primary 이미 KO, _original EN 만 채움
           if (wen.title    && !state.work.title_original)     state.work.title_original    = wen.title;
