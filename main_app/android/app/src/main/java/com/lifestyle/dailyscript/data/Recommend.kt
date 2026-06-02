@@ -1,27 +1,26 @@
 package com.lifestyle.dailyscript.data
 
 import com.lifestyle.dailyscript.data.model.CardDto
-import java.time.LocalDate
-import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
- * Today's-card + recommendation logic, ported from the PWA (m-app.js).
+ * Card-selection logic ported from the PWA (m-app.js).
  *
- *  - Taste OFF → deterministic seed pick for "today", uniform random for refresh.
- *  - Taste ON  → weighted by similarity to the average temperature/intensity of
- *    the user's bookmarked cards. Today's pick stays deterministic per day.
+ *  - Home entry restores the last-shown card (or a random one for new users) —
+ *    there is no fixed "card of the day".
+ *  - A refresh picks a fresh card, excluding the recently-shown queue and any
+ *    already-bookmarked cards (PWA candidatesExcludingRecent, 3-tier fallback).
+ *  - Taste weighting (similarity to the average temperature/intensity of the
+ *    user's bookmarks) only kicks in once there are >= 10 bookmarks.
  */
 object Recommend {
 
+    private const val MIN_BOOKMARKS_FOR_TASTE = 10
+
     data class Taste(val avgTemperature: Double, val avgIntensity: Double, val count: Int)
 
-    fun todaySeed(date: LocalDate = LocalDate.now()): Long =
-        date.year * 10000L + date.monthValue * 100L + date.dayOfMonth
-
+    /** Average temperature/intensity of the bookmarked cards (null if none). */
     fun computeTaste(bookmarkCards: List<CardDto>): Taste? {
         if (bookmarkCards.isEmpty()) return null
         return Taste(
@@ -37,28 +36,42 @@ object Recommend {
         return sqrt(dt * dt + di * di)
     }
 
-    /** Deterministic per-day pick. */
-    fun pickToday(
+    /**
+     * The most-recently shown card the user hasn't since bookmarked
+     * (mirrors the PWA restoreLastShownCard). null if the queue has none.
+     */
+    fun restoreLastShown(
         all: List<CardDto>,
-        tasteEnabled: Boolean,
+        recentIds: List<Long>,
         bookmarkCards: List<CardDto>,
     ): CardDto? {
-        if (all.isEmpty()) return null
-        val seed = todaySeed()
-        if (!tasteEnabled) return all[(abs(seed) % all.size).toInt()]
-        val taste = computeTaste(bookmarkCards) ?: return all[(abs(seed) % all.size).toInt()]
-
-        val sorted = all.sortedBy { distance(it, taste) }
-        val variety = (abs(seed) % 10) == 0L
-        val pool = if (variety) {
-            sorted.subList((sorted.size * 0.3).toInt(), sorted.size)
-        } else {
-            sorted.subList(0, max(1, ceil(sorted.size * 0.3).toInt()))
+        if (recentIds.isEmpty() || all.isEmpty()) return null
+        val bookmarked = bookmarkCards.mapTo(HashSet()) { it.cardId }
+        for (i in recentIds.indices.reversed()) {
+            val card = all.firstOrNull { it.cardId == recentIds[i] }
+            if (card != null && card.cardId !in bookmarked) return card
         }
-        return pool[(abs(seed) % pool.size).toInt()]
+        return null
     }
 
-    /** Non-deterministic refresh pick, excluding recently shown cards. */
+    /**
+     * Candidate pool excluding recently-shown + bookmarked cards, with the PWA's
+     * three-tier fallback (allow recent again, then allow bookmarked again).
+     */
+    private fun candidates(
+        all: List<CardDto>,
+        recentIds: List<Long>,
+        bookmarkCards: List<CardDto>,
+    ): List<CardDto> {
+        val recent = recentIds.toHashSet()
+        val bookmarked = bookmarkCards.mapTo(HashSet()) { it.cardId }
+        all.filter { it.cardId !in recent && it.cardId !in bookmarked }.let { if (it.isNotEmpty()) return it }
+        all.filter { it.cardId !in bookmarked }.let { if (it.isNotEmpty()) return it }
+        all.filter { it.cardId !in recent }.let { if (it.isNotEmpty()) return it }
+        return all
+    }
+
+    /** Fresh pick excluding recent + bookmarked; taste-weighted once >= 10 bookmarks. */
     fun pickRandom(
         all: List<CardDto>,
         tasteEnabled: Boolean,
@@ -66,25 +79,29 @@ object Recommend {
         recentIds: List<Long>,
     ): CardDto? {
         if (all.isEmpty()) return null
-        val exclude = recentIds.toSet()
-        fun excludingRecent(): List<CardDto> =
-            all.filterNot { it.cardId in exclude }.ifEmpty { all }
+        val taste = if (tasteEnabled && bookmarkCards.size >= MIN_BOOKMARKS_FOR_TASTE)
+            computeTaste(bookmarkCards) else null
 
-        val taste = if (tasteEnabled) computeTaste(bookmarkCards) else null
-        if (taste == null) return excludingRecent().random()
-
-        // 10% variety — pure random.
-        if (Random.nextDouble() < 0.1) return excludingRecent().random()
-
-        val candidates = excludingRecent()
-        val weights = candidates.map { 1.0 / (1.0 + distance(it, taste)) }
-        val total = weights.sum()
-        if (total <= 0.0) return candidates.random()
-        var r = Random.nextDouble() * total
-        for (i in candidates.indices) {
-            r -= weights[i]
-            if (r <= 0.0) return candidates[i]
+        // No taste profile, or a 10% variety roll → uniform random over the pool.
+        if (taste == null || Random.nextDouble() < 0.1) {
+            return candidates(all, recentIds, bookmarkCards).random()
         }
-        return candidates.last()
+
+        // Distance-weighted: prefer cards near the taste centroid (recent + bookmarked excluded).
+        val recent = recentIds.toHashSet()
+        val bookmarked = bookmarkCards.mapTo(HashSet()) { it.cardId }
+        var pool = all.filter { it.cardId !in recent && it.cardId !in bookmarked }
+        if (pool.isEmpty()) pool = all.filter { it.cardId !in bookmarked }
+        if (pool.isEmpty()) return candidates(all, recentIds, bookmarkCards).random()
+
+        val weights = pool.map { 1.0 / (1.0 + distance(it, taste)) }
+        val total = weights.sum()
+        if (total <= 0.0) return pool.random()
+        var r = Random.nextDouble() * total
+        for (i in pool.indices) {
+            r -= weights[i]
+            if (r <= 0.0) return pool[i]
+        }
+        return pool.last()
     }
 }

@@ -25,7 +25,7 @@ class HomeViewModel : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
-    /** Initial load — deterministic seed/taste pick for "today". */
+    /** Initial load / screen entry — restore the last-shown card (PWA renderHome). */
     fun load(userId: Long) {
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
@@ -35,10 +35,15 @@ class HomeViewModel : ViewModel() {
             bookmarkCards = bookmarksResult.getOrNull()?.mapNotNull { it.cards } ?: emptyList()
 
             val tasteEnabled = AppPreferences.tasteEnabled.first()
-            val today = Recommend.pickToday(allCards, tasteEnabled, bookmarkCards)
-            if (today != null) AppPreferences.rememberShown(today.cardId)
             val recentIds = AppPreferences.recentlyShown.first()
-            val recent = buildRecent(recentIds)
+            // Show the card the user was last looking at; a brand-new user (no queue)
+            // gets a random pick, which we then remember as the last-shown.
+            var today = Recommend.restoreLastShown(allCards, recentIds, bookmarkCards)
+            if (today == null) {
+                today = Recommend.pickRandom(allCards, tasteEnabled, bookmarkCards, recentIds)
+                if (today != null) AppPreferences.rememberShown(today.cardId)
+            }
+            val recent = buildRecent(AppPreferences.recentlyShown.first())
 
             _state.value = HomeState(
                 loading = false,

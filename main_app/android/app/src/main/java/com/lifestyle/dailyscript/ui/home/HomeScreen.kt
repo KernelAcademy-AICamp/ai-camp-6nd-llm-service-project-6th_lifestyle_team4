@@ -101,7 +101,7 @@ fun HomeScreen(
 
     PullToRefreshBox(
         isRefreshing = state.loading,
-        onRefresh = { vm.load(userId) },
+        onRefresh = { vm.refresh(userId, isAnonymous) },
         modifier = Modifier
             .fillMaxSize()
             .background(Paper),
@@ -287,6 +287,15 @@ private fun TodayCard(
             Text(
                 text = workMeta,
                 style = MaterialTheme.typography.bodyMedium,
+                color = Walnut,
+            )
+        }
+        if (card != null) {
+            // Card serial (일련번호) — card_id with no leading zeros, under the work meta.
+            Box(modifier = Modifier.height(if (workMeta.isNullOrBlank()) 18.dp else 6.dp))
+            Text(
+                text = "#${card.cardId}",
+                style = MaterialTheme.typography.labelSmall,
                 color = Walnut,
             )
         }

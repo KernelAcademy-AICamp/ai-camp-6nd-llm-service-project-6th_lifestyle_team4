@@ -1,5 +1,6 @@
 package com.lifestyle.dailyscript.ui.feed
 
+import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,10 +42,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -422,21 +427,13 @@ private fun leatherColorFor(title: String?): Color {
     return FeedLeathers[key.hashCode().absoluteValue % FeedLeathers.size]
 }
 
-/** Cylindrical leather sheen — lit down the centre, darker at both edges (mirrors the spine gradient). */
-private fun leatherSheen(base: Color): Brush = Brush.horizontalGradient(
-    0f to lerp(base, Color.Black, 0.34f),
-    0.5f to lerp(base, Color.White, 0.08f),
-    1f to lerp(base, Color.Black, 0.40f),
-)
-
-// Glossy raised gilt band — bright gold center fading to dark edges (PWA .feed-book-band).
-private val GiltBandBrush = Brush.verticalGradient(
-    0.0f to Color.Transparent,
-    0.28f to Color(0x99000000),
-    0.5f to FeedGold,
-    0.72f to Color(0x99000000),
-    1.0f to Color.Transparent,
-)
+/** Drop HSV saturation by [by] (0..1) — e.g. 0.30 = "−30" on a 0–100 scale. */
+private fun Color.desaturated(by: Float): Color {
+    val hsv = FloatArray(3)
+    AndroidColor.colorToHSV(toArgb(), hsv)
+    hsv[1] = (hsv[1] - by).coerceIn(0f, 1f)
+    return Color(AndroidColor.HSVToColor(hsv))
+}
 
 @Composable
 private fun FeedChip(text: String, active: Boolean, onClick: () -> Unit) {
@@ -498,8 +495,11 @@ private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        // leather book — pulled up to tuck under the paper, with no trailing gap.
-        Column(
+        // The book — a flat (no-gradient) leather cover, desaturated by 30, resting on a
+        // cream page block that peeks along the right & bottom; a darker spine down the left.
+        val cover = leatherColorFor(w?.title).desaturated(0.30f)
+        val spine = lerp(cover, Color.Black, 0.22f)
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .layout { measurable, constraints ->
@@ -507,16 +507,38 @@ private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
                     layout(placeable.width, (placeable.height - overlapPx).coerceAtLeast(0)) {
                         placeable.place(0, -overlapPx)
                     }
-                }
-                .background(leatherSheen(leatherColorFor(w?.title))),
+                },
         ) {
-            // glossy gilt band (full-bleed) with raised highlight + shadow edges
-            Column(modifier = Modifier.fillMaxWidth().padding(top = 7.dp)) {
-                Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x66E6CCB4)))
-                Box(Modifier.fillMaxWidth().height(13.dp).background(GiltBandBrush))
-                Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xB3000000)))
-            }
-            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 11.dp, bottom = 16.dp)) {
+            // page block behind the cover — cream edge showing on the right & bottom
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 4.dp, bottomEnd = 4.dp, bottomStart = 3.dp))
+                    .background(BookCream),
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = 5.dp, bottom = 5.dp)
+                    .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 3.dp, bottomEnd = 3.dp, bottomStart = 2.dp))
+                    .background(cover)
+                    // spine hinge — a darker band down the left edge + a thin groove line
+                    .drawBehind {
+                        drawRect(spine, Offset.Zero, Size(7.dp.toPx(), size.height))
+                        drawRect(
+                            lerp(cover, Color.Black, 0.42f),
+                            Offset(7.dp.toPx(), 0f),
+                            Size(1.dp.toPx(), size.height),
+                        )
+                    },
+            ) {
+                // gilt band (flat gold) with thin raised highlight + shadow edges
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 7.dp)) {
+                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x66E6CCB4)))
+                    Box(Modifier.fillMaxWidth().height(13.dp).background(FeedGold))
+                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xB3000000)))
+                }
+                Column(modifier = Modifier.padding(start = 18.dp, end = 16.dp, top = 11.dp, bottom = 16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -566,6 +588,7 @@ private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
                 }
             }
         }
+        }
     }
 }
 
@@ -608,7 +631,7 @@ private fun HighlightCard(hl: Highlight) {
 
         Box(modifier = Modifier.height(18.dp))
         Text(
-            text = "#${"%05d".format(hl.cardId)}",
+            text = "#${hl.cardId}",
             style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.18.em),
             color = Sand,
         )

@@ -416,29 +416,38 @@ private fun HighlightComposeDialog(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MetadataChipsRow(card: CardDto, english: Boolean, bookmarkCount: Int) {
-    // Centered, wrapping row: FORMAT · AUTHOR · YEAR · 👁 views · 🔖 bookmarks (mirrors #detail-meta).
-    FlowRow(
+    // Two centered lines (mirrors #detail-meta flex-direction:column):
+    //   1) FORMAT · AUTHOR     2) YEAR · 👁 views · 🔖 bookmarks
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        val items = listOfNotNull(
+        val head = listOfNotNull(
             card.works?.format?.uppercase(),
             card.works.displayAuthor(english)?.uppercase(),
-            card.works?.releaseYear?.toString(),
         )
-        items.forEach { value ->
-            Text(
-                text = value,
-                style = MaterialTheme.typography.labelSmall,
-                color = Walnut,
-                modifier = Modifier.align(Alignment.CenterVertically),
-            )
+        if (head.isNotEmpty()) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                head.forEach { value ->
+                    Text(text = value, style = MaterialTheme.typography.labelSmall, color = Walnut)
+                }
+            }
+            Box(modifier = Modifier.height(6.dp))
         }
-        CardCounts(
-            viewCount = card.viewCount,
-            bookmarkCount = bookmarkCount,
-            modifier = Modifier.align(Alignment.CenterVertically),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            val year = card.works?.releaseYear?.toString()
+            if (!year.isNullOrBlank()) {
+                Text(text = year, style = MaterialTheme.typography.labelSmall, color = Walnut)
+                Text(text = "·", style = MaterialTheme.typography.labelSmall, color = Walnut)
+            }
+            CardCounts(viewCount = card.viewCount, bookmarkCount = bookmarkCount)
+        }
     }
 }
