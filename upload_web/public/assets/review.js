@@ -398,6 +398,151 @@ function collectWorkEditsForCtx() {
   return { title: we.title, subtitle: we.subtitle, author: we.author };
 }
 
+// 검토 큐 전체에서 영문이 비어 있는 *_original 필드만 골라 KO→EN 자동 채우기.
+// 본문 재번역 X — 이미 채워진 영문은 그대로 보존.
+// 후보 카드별로 누락 필드 모아 /api/translate-field 호출 → 'save' 액션으로 candidate UPDATE.
+// works 메타(title/subtitle/author)는 같은 work_id 마다 한 번씩만 처리(memoize).
+async function onQueueFillEn() {
+  if (!Array.isArray(state.items) || state.items.length === 0) {
+    toast('처리할 카드가 없습니다', 'err');
+    return;
+  }
+  const btn = document.getElementById('queue-fill-en-btn');
+  const refresh = document.getElementById('refresh-btn');
+  btn.disabled = true; refresh.disabled = true;
+  const origHtml = btn.innerHTML;
+
+  // 1) 누락 필드 있는 카드 골라내기
+  const targets = state.items.filter((it) => {
+    const w = it.works || {};
+    return (
+      (!it.quote_original                  && it.quote) ||
+      (!it.script_excerpt_original         && it.script_excerpt) ||
+      (!it.excerpt_description_original    && it.excerpt_description) ||
+      (!it.significance_original           && it.significance) ||
+      ((!Array.isArray(it.keywords_original) || !it.keywords_original.length) && Array.isArray(it.keywords) && it.keywords.length) ||
+      (!w.title_original    && w.title) ||
+      (!w.subtitle_original && w.subtitle) ||
+      (!w.author_original   && w.author)
+    );
+  });
+  if (targets.length === 0) {
+    toast('모든 카드에 영문 원본이 이미 채워져 있어요', 'ok');
+    btn.disabled = false; refresh.disabled = false;
+    return;
+  }
+
+  toast(`${targets.length}장 처리 시작 — 빈 영문만 채웁니다 (본문 재번역 X)`);
+
+  // 같은 work_id 의 메타는 한 번만 번역 (memoize). 첫 카드가 작품 메타 처리 후 다른 카드는 skip.
+  const workMetaDone = new Map(); // work_id → true (이미 처리됨)
+  let done = 0, failedCards = [];
+  for (let i = 0; i < targets.length; i++) {
+    const it = targets[i];
+    btn.innerHTML = `<span class="material-symbols-outlined animate-spin" style="font-size:18px;">progress_activity</span> ${i + 1}/${targets.length}`;
+    try {
+      await fillEnForCandidate(it, workMetaDone);
+      done++;
+    } catch (e) {
+      console.warn(`[review] queue-fill candidate ${it.candidate_id} failed:`, e?.message || e);
+      failedCards.push(it.candidate_id);
+    }
+  }
+
+  btn.innerHTML = origHtml;
+  btn.disabled = false; refresh.disabled = false;
+  if (failedCards.length) {
+    toast(`완료 — 성공 ${done}/${targets.length} · 실패 ${failedCards.length}장 (콘솔 확인)`, 'err');
+    console.warn('[review] queue-fill failed candidate_ids:', failedCards);
+  } else {
+    toast(`영문 일괄 채우기 완료 — ${done}장`, 'ok');
+  }
+  await loadList();
+}
+
+// 후보 카드 한 장의 비어 있는 영문 필드를 모두 채우고 'save' 액션으로 commit.
+async function fillEnForCandidate(it, workMetaDone) {
+  const w = it.works || {};
+  const workCtx = {
+    title: w.title || '', subtitle: w.subtitle || '',
+    author: w.author || '', format: w.format || '',
+  };
+
+  // 단일 필드 호출 (안전 격리)
+  async function callTrans(text, field) {
+    if (!text || !String(text).trim()) return null;
+    try {
+      const j = await apiFetch('/api/translate-field', {
+        method: 'POST',
+        body: JSON.stringify({ text, field, direction: 'ko2en', work: workCtx }),
+      });
+      return j?.translated ? String(j.translated).trim() : null;
+    } catch (e) {
+      console.warn(`[review] translate ${field} failed for #${it.candidate_id}:`, e?.message);
+      return null;
+    }
+  }
+
+  // 1) 카드 본문 (candidate)
+  const edits = {};
+  if (!it.quote_original && it.quote) {
+    const v = await callTrans(it.quote, 'quote');
+    if (v) { edits.quote_original = v; it.quote_original = v; }
+  }
+  if (!it.script_excerpt_original && it.script_excerpt) {
+    const v = await callTrans(it.script_excerpt, 'script_excerpt');
+    if (v) { edits.script_excerpt_original = v; it.script_excerpt_original = v; }
+  }
+  if (!it.excerpt_description_original && it.excerpt_description) {
+    const v = await callTrans(it.excerpt_description, 'excerpt_description');
+    if (v) { edits.excerpt_description_original = v; it.excerpt_description_original = v; }
+  }
+  if (!it.significance_original && it.significance) {
+    const v = await callTrans(it.significance, 'significance');
+    if (v) { edits.significance_original = v; it.significance_original = v; }
+  }
+  if ((!Array.isArray(it.keywords_original) || !it.keywords_original.length)
+      && Array.isArray(it.keywords) && it.keywords.length) {
+    const v = await callTrans(it.keywords.join(', '), 'keywords');
+    if (v) {
+      const arr = v.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
+      if (arr.length) { edits.keywords_original = arr; it.keywords_original = arr; }
+    }
+  }
+
+  // 2) 작품 메타 — 같은 work_id 는 한 번만 (다른 카드도 즉시 반영됨)
+  const workEdits = {};
+  const wid = it.work_id;
+  if (wid && !workMetaDone.get(wid)) {
+    if (!w.title_original && w.title) {
+      const v = await callTrans(w.title, 'title');
+      if (v) { workEdits.title_original = v; w.title_original = v; }
+    }
+    if (!w.subtitle_original && w.subtitle) {
+      const v = await callTrans(w.subtitle, 'subtitle');
+      if (v) { workEdits.subtitle_original = v; w.subtitle_original = v; }
+    }
+    if (!w.author_original && w.author) {
+      const v = await callTrans(w.author, 'author');
+      if (v) { workEdits.author_original = v; w.author_original = v; }
+    }
+    workMetaDone.set(wid, true);
+  }
+
+  // 3) 변경 없으면 save 호출 안 함
+  if (Object.keys(edits).length === 0 && Object.keys(workEdits).length === 0) return;
+
+  await apiFetch('/api/candidates', {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'save',
+      candidateId: it.candidate_id,
+      edits,
+      workEdits,
+    }),
+  });
+}
+
 // 🌐 영문 일괄 채우기 — 비어 있는 영문 필드만 KO→EN 자동 번역해 채움
 function wireFillEnBulk() {
   const btn = document.getElementById('fill-en-bulk-btn');
@@ -626,6 +771,7 @@ function wireKeywordEditor() {
     loadList();
   });
   $('#refresh-btn').addEventListener('click', () => loadList());
+  $('#queue-fill-en-btn')?.addEventListener('click', onQueueFillEn);
   $('#back-to-queue').addEventListener('click', onBack);
   $('#decide-approve').addEventListener('click', () => onDecide('approved'));
   $('#decide-delete').addEventListener('click', onDelete);
