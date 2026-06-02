@@ -694,6 +694,16 @@ if (wsSearchBtn) wsSearchBtn.addEventListener('click', onWsSearch);
 document.querySelector('#title-input')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); onWsSearch(); }
 });
+// 작품명을 사용자가 직접 수정하면 카테고리 피커에서 채워둔 책 ID 는 무효화
+// (다른 작품을 의미할 수 있어 검색 로직이 다시 작동해야 함)
+document.querySelector('#title-input')?.addEventListener('input', () => {
+  const bookIdInput = document.querySelector('#title-book-id');
+  if (bookIdInput?.value) {
+    bookIdInput.value = '';
+    const hint = document.getElementById('gb-cat-picked-hint');
+    if (hint) hint.classList.add('hidden');
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Project Gutenberg — Wikisource KR 과 동일한 패턴. 다만 작품명이 숫자만이면
@@ -779,10 +789,20 @@ async function onGbSearch() {
     return;
   }
   const titleInput = document.querySelector('#title-input');
+  const bookIdInput = document.querySelector('#title-book-id');
   const query = (titleInput?.value || '').trim();
   if (!query) {
     setGbStatus('위쪽 "작품명" 칸에 검색어를 입력하세요 (제목 또는 Gutenberg 책 ID).', 'err');
     titleInput?.focus();
+    return;
+  }
+  // 카테고리 피커에서 골랐으면 hidden #title-book-id 에 책 ID 가 있음 → 검색 생략하고 바로 fetch
+  const pickedBookId = (bookIdInput?.value || '').trim();
+  if (pickedBookId && /^\d+$/.test(pickedBookId)) {
+    const bookId = Number.parseInt(pickedBookId, 10);
+    setGbStatus(`Gutenberg #${bookId} 로 바로 가져옵니다 (카테고리에서 선택)…`, 'info');
+    renderGbResults([]);
+    await gbFetchAndExtract({ bookId, title: query });
     return;
   }
   // 숫자만 입력했으면 책 ID 로 바로 fetch (검색 endpoint 가 느릴 때 유용).
@@ -1595,4 +1615,226 @@ function toast(msg, kind = 'info') {
 
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.add('hidden'), 3500);
+}
+
+// ---------------------------------------------------------------------------
+// Gutenberg 카테고리 피커 — 작품명 아래 노출.
+// 2단계 드롭다운(상위 → 하위) → 작품 목록 → 작품 클릭 시 #title-input + #title-book-id 채움.
+// 작품 목록은 서버 프록시 /api/gutenberg-list?category=<id> 가 가져옴 (라이브 fetch + 캐싱).
+// ---------------------------------------------------------------------------
+const GB_CATEGORY_TREE = [
+  { section: 'Literature', cats: [
+    'Adventure', 'American Literature', 'British Literature',
+    'French Literature', 'German Literature', 'Russian Literature',
+    'Classics of Literature', 'Biographies', 'Novels',
+    'Short Stories', 'Poetry', 'Plays/Films/Dramas',
+    'Romance', 'Science-Fiction & Fantasy', 'Crime, Thrillers & Mystery',
+    'Mythology, Legends & Folklore', 'Humour',
+    'Children & Young Adult Reading', 'Literature - Other',
+  ]},
+  { section: 'Science & Technology', cats: [
+    'Engineering & Technology', 'Mathematics', 'Science - Physics',
+    'Science - Chemistry/Biochemistry', 'Science - Biology',
+    'Science - Earth/Agricultural/Farming',
+    'Research Methods/Statistics/Information Sys', 'Environmental Issues',
+  ]},
+  { section: 'History', cats: [
+    'History - American', 'History - British', 'History - European',
+    'History - Ancient', 'History - Medieval/Middle Ages',
+    'History - Early Modern (c. 1450-1750)', 'History - Modern (1750+)',
+    'History - Religious', 'History - Royalty', 'History - Warfare',
+    'History - Schools & Universities', 'History - Other',
+    'Archaeology & Anthropology',
+  ]},
+  { section: 'Social Sciences & Society', cats: [
+    'Business/Management', 'Economics', 'Law & Criminology',
+    'Gender & Sexuality Studies', 'Psychiatry/Psychology',
+    'Sociology', 'Politics', 'Parenthood & Family Relations',
+    'Old Age & the Elderly',
+  ]},
+  { section: 'Arts & Culture', cats: [
+    'Art', 'Architecture', 'Music', 'Fashion',
+    'Journalism/Media/Writing', 'Language & Communication',
+    'Essays, Letters & Speeches',
+  ]},
+  { section: 'Religion & Philosophy', cats: [
+    'Religion/Spirituality', 'Philosophy & Ethics',
+  ]},
+  { section: 'Lifestyle & Hobbies', cats: [
+    'Cooking & Drinking', 'Sports/Hobbies', 'How To ...',
+    'Travel Writing', 'Nature/Gardening/Animals', 'Sexuality & Erotica',
+  ]},
+  { section: 'Health & Medicine', cats: [
+    'Health & Medicine', 'Drugs/Alcohol/Pharmacology', 'Nutrition',
+  ]},
+  { section: 'Education & Reference', cats: [
+    'Encyclopedias/Dictionaries/Reference', 'Teaching & Education',
+    'Reports & Conference Proceedings', 'Journals',
+  ]},
+];
+
+function gbCatIdOf(name) {
+  return String(name).toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/[\/,()+]/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+(function initGutenbergCategoryPicker() {
+  const sectionSel  = document.getElementById('gb-section-select');
+  const subcatRow   = document.getElementById('gb-subcat-row');
+  const subcatSel   = document.getElementById('gb-subcat-select');
+  const subcatMeta  = document.getElementById('gb-subcat-meta');
+  const worksPanel  = document.getElementById('gb-cat-works-panel');
+  const worksList   = document.getElementById('gb-cat-works-list');
+  const worksCount  = document.getElementById('gb-cat-works-count');
+  const worksLabel  = document.getElementById('gb-cat-works-label');
+  const pickedHint  = document.getElementById('gb-cat-picked-hint');
+  if (!sectionSel || !subcatSel) return;
+
+  // 1단계 옵션 채우기
+  GB_CATEGORY_TREE.forEach((sec) => {
+    const opt = document.createElement('option');
+    opt.value = sec.section;
+    opt.textContent = `${sec.section} (${sec.cats.length}개)`;
+    sectionSel.appendChild(opt);
+  });
+
+  function setPickedHighlight(el, on) {
+    if (!el) return;
+    if (on) {
+      el.classList.add('border-amber-500', 'bg-amber-50', 'font-semibold', 'text-amber-900');
+    } else {
+      el.classList.remove('border-amber-500', 'bg-amber-50', 'font-semibold', 'text-amber-900');
+    }
+  }
+
+  let activeSection = null;
+  let activeCatId = null;
+  // 카테고리별 작품 응답 캐시 (같은 카테고리 다시 선택 시 재호출 안 함)
+  const worksCache = new Map();
+
+  sectionSel.addEventListener('change', () => {
+    const name = sectionSel.value;
+    if (!name) {
+      setPickedHighlight(sectionSel, false);
+      subcatRow.classList.add('hidden');
+      subcatRow.style.display = 'none';
+      worksPanel.classList.add('hidden');
+      worksPanel.style.display = 'none';
+      activeSection = null;
+      activeCatId = null;
+      return;
+    }
+    activeSection = GB_CATEGORY_TREE.find((s) => s.section === name);
+    if (!activeSection) return;
+    setPickedHighlight(sectionSel, true);
+
+    // 2단계 옵션 재구성
+    subcatSel.innerHTML = '<option value="">— 하위 카테고리 선택 —</option>';
+    activeSection.cats.forEach((cat) => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      subcatSel.appendChild(opt);
+    });
+    setPickedHighlight(subcatSel, false);
+    subcatMeta.textContent = `${activeSection.section} 의 ${activeSection.cats.length}개`;
+    subcatRow.classList.remove('hidden');
+    subcatRow.style.display = '';
+    worksPanel.classList.add('hidden');
+    worksPanel.style.display = 'none';
+    activeCatId = null;
+  });
+
+  subcatSel.addEventListener('change', async () => {
+    const catName = subcatSel.value;
+    if (!catName || !activeSection) {
+      setPickedHighlight(subcatSel, false);
+      worksPanel.classList.add('hidden');
+      worksPanel.style.display = 'none';
+      activeCatId = null;
+      return;
+    }
+    setPickedHighlight(subcatSel, true);
+    activeCatId = gbCatIdOf(catName);
+    worksLabel.textContent = `${activeSection.section} · ${catName}`;
+    worksCount.textContent = '⋯';
+    worksList.innerHTML =
+      '<div class="px-3 py-4 text-center text-sm text-on-surface-variant">작품 목록 불러오는 중⋯</div>';
+    worksPanel.classList.remove('hidden');
+    worksPanel.style.display = '';
+    pickedHint.classList.add('hidden');
+
+    // 캐시 우선
+    let works = worksCache.get(activeCatId);
+    if (!works) {
+      try {
+        const token = await getAccessToken();
+        const json = await apiFetch(
+          `/api/gutenberg-list?category=${encodeURIComponent(catName)}`,
+          {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        works = Array.isArray(json?.works) ? json.works : [];
+        worksCache.set(activeCatId, works);
+      } catch (e) {
+        console.warn('[gb-picker] fetch failed:', e);
+        worksList.innerHTML =
+          `<div class="px-3 py-4 text-center text-sm text-error">작품 목록 불러오기 실패: ${escapeForToast(e.message || String(e))}</div>`;
+        worksCount.textContent = '0';
+        return;
+      }
+    }
+
+    worksList.innerHTML = '';
+    worksCount.textContent = String(works.length);
+    if (!works.length) {
+      worksList.innerHTML =
+        '<div class="px-3 py-4 text-center text-sm text-on-surface-variant">이 카테고리 작품을 찾지 못했습니다.</div>';
+      return;
+    }
+    works.forEach((w) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-amber-50 transition-colors';
+      row.innerHTML = `
+        <div class="flex items-baseline justify-between gap-3">
+          <span class="font-semibold text-on-surface truncate">${escapeForToast(w.title || '')}</span>
+          <span class="text-xs text-on-surface-variant shrink-0">${w.year ? String(w.year) : ''}</span>
+        </div>
+        <div class="text-xs text-on-surface-variant mt-0.5">${escapeForToast(w.author || '')}${w.bookId ? ` · Gutenberg #${w.bookId}` : ''}</div>
+      `;
+      row.addEventListener('click', () => {
+        const titleInput = document.querySelector('#title-input');
+        const bookIdInput = document.querySelector('#title-book-id');
+        if (titleInput) titleInput.value = w.title || '';
+        if (bookIdInput) bookIdInput.value = w.bookId ? String(w.bookId) : '';
+        // 시각 강조
+        worksList.querySelectorAll('button').forEach((b) => b.classList.remove('bg-amber-200'));
+        row.classList.add('bg-amber-200');
+        pickedHint.textContent = `✓ 선택됨: ${w.title}${w.bookId ? ' · Gutenberg #' + w.bookId + ' · 검색 없이 바로 가져오기' : ''}`;
+        pickedHint.classList.remove('hidden');
+        // 하단 Gutenberg 검색 버튼 깜빡 강조
+        const gbBtn = document.getElementById('gb-search-btn');
+        if (gbBtn) {
+          gbBtn.classList.add('ring-2', 'ring-amber-400');
+          setTimeout(() => gbBtn.classList.remove('ring-2', 'ring-amber-400'), 1200);
+          gbBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+      worksList.appendChild(row);
+    });
+  });
+})();
+
+function escapeForToast(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[c]));
 }

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gutenberg 카테고리 피커 v2 — UX 미리보기</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: 'Pretendard', -apple-system, system-ui, sans-serif; background: #f7f7f9; }
+  .card-shadow { box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); }
+  .fade-in { animation: fadeIn .2s ease; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(-4px); } to { opacity:1; transform:none; } }
+  .work-row:hover { background: #fef3c7; }
+  .work-row.selected { background: #fbbf24; color: #fff; }
+  .cat-btn {
+    text-align: left; width: 100%;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: #1f2937;
+    border-radius: 4px;
+    transition: background 0.1s, color 0.1s;
+    cursor: pointer;
+  }
+  .cat-btn:hover { background: #fef3c7; color: #92400e; }
+  .cat-btn.active { background: #f59e0b; color: #fff; font-weight: 600; }
+  .cat-btn .hl { background: #fde68a; padding: 0 2px; border-radius: 2px; font-weight: 600; }
+  .cat-hidden { display: none; }
+
+  /* 카테고리 select 기본 + 선택됨 강조 */
+  #section-select, #subcat-select { border-color: #d1d5db; }
+  #section-select:focus, #subcat-select:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15); }
+  #section-select.picked, #subcat-select.picked {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    font-weight: 600;
+    color: #92400e;
+  }
+
+  /* 아코디언 섹션 */
+  .acc-section {
+    border: 1px solid #fbbf24;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .acc-section.has-active { border-color: #f59e0b; box-shadow: 0 1px 3px rgba(245,158,11,0.15); }
+  .acc-header {
+    width: 100%;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    text-align: left; cursor: pointer;
+    background: #fffbeb;
+    border: none;
+    transition: background 0.1s;
+  }
+  .acc-header:hover { background: #fef3c7; }
+  .acc-section.open .acc-header { background: #fef3c7; border-bottom: 1px solid #fcd34d; }
+  .acc-chevron {
+    display: inline-block;
+    transform: rotate(0deg);
+    transition: transform 0.15s;
+    color: #92400e;
+    font-size: 12px;
+    width: 12px;
+  }
+  .acc-section.open .acc-chevron { transform: rotate(90deg); }
+  .acc-section-title { font-weight: 700; font-size: 14px; color: #111827; flex: 1; }
+  .acc-section-count {
+    font-size: 11px; color: #92400e;
+    background: #fef3c7;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .acc-section.has-active .acc-section-count {
+    background: #f59e0b; color: #fff;
+  }
+  .acc-body {
+    display: none;
+    padding: 8px 6px;
+    background: #fff;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .acc-section.open .acc-body { display: flex; }
+  .section-empty { display: none; }
+  .badge {
+    display: inline-flex; align-items: center; padding: 1px 6px;
+    font-size: 10px; font-weight: 600; border-radius: 999px;
+    background: #fef3c7; color: #92400e;
+  }
+</style>
+</head>
+<body class="text-gray-800">
+
+<header class="bg-gradient-to-r from-indigo-900 to-purple-900 text-white">
+  <div class="max-w-6xl mx-auto px-6 py-7">
+    <div class="text-xs uppercase tracking-widest opacity-70 mb-1">Mockup v2 — 저장 안 됨</div>
+    <h1 class="text-2xl font-bold">관리자 대시보드 — Gutenberg 카테고리 피커 (전체 섹션)</h1>
+    <p class="mt-2 opacity-90 max-w-3xl text-sm">
+      Gutenberg 의 9개 섹션 전체 + 하위 카테고리를 그룹화해서 표시.
+      상단 검색창으로 카테고리 이름 실시간 필터링.
+      카테고리 클릭 → 작품 목록 → 작품 클릭 → 작품명 + 책 ID 자동 채움 → Gutenberg 본문 가져오기 + 추출 시작.
+    </p>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-6 py-8 space-y-8">
+
+<!-- ============== 작품명 + 카테고리 + 검색 통합 ============== -->
+<section>
+  <div class="bg-white rounded-xl card-shadow p-6">
+    <!-- 작품명 -->
+    <div class="mb-4">
+      <label class="block text-xs font-semibold text-gray-600 mb-1">작품명 <span class="text-[10px] text-gray-400 font-normal">· 직접 입력 또는 아래 카테고리에서 선택</span></label>
+      <input id="title-input" type="text" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:border-indigo-500 focus:outline-none text-sm" placeholder="예: Frankenstein  또는  Gutenberg 책 ID(숫자)" />
+      <input id="book-id" type="hidden" />
+      <p id="picked-hint" class="hidden text-[11px] text-amber-700 mt-1"></p>
+    </div>
+
+    <!-- 카테고리 영역 — 섹션별 그룹 + 검색 -->
+    <div class="border border-dashed border-amber-400 rounded-lg p-4 bg-amber-50/30">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-sm font-bold text-amber-700">📚 Gutenberg 카테고리에서 작품 찾기</span>
+        <span class="badge">신규</span>
+      </div>
+
+      <!-- 1단계: 상위 카테고리 — 항상 드롭다운 노출. 선택돼 있으면 강조 스타일. -->
+      <div class="mb-3">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">① 상위 카테고리</label>
+        <select id="section-select" class="w-full px-3 py-2 rounded-lg border text-sm bg-white focus:outline-none transition-colors">
+          <option value="">— 상위 카테고리 선택 —</option>
+          <!-- JS 가 채움 -->
+        </select>
+      </div>
+
+      <!-- 2단계: 하위 카테고리 — 항상 드롭다운 노출 (상위 선택 후) -->
+      <div id="subcat-picker" class="hidden mb-3">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">② 하위 카테고리 <span class="text-[10px] text-gray-400 font-normal">· <span id="subcat-section-name"></span> 의 <span id="subcat-count">0</span>개</span></label>
+        <select id="subcat-select" class="w-full px-3 py-2 rounded-lg border text-sm bg-white focus:outline-none transition-colors">
+          <option value="">— 하위 카테고리 선택 —</option>
+          <!-- JS 가 채움 -->
+        </select>
+      </div>
+
+      <!-- 작품 목록 -->
+      <div id="works-panel" class="hidden mt-4">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-xs text-gray-600">
+            <span id="works-category-label" class="font-semibold text-amber-700"></span>
+            · <span id="works-count" class="font-semibold">0</span>개 작품 (중복 제거)
+          </div>
+          <div class="text-[11px] text-gray-500">행 클릭 → 작품명에 자동 입력</div>
+        </div>
+        <div id="works-list" class="max-h-72 overflow-y-auto border border-amber-200 rounded-lg bg-white divide-y divide-gray-100">
+          <!-- JS 가 채움 -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Gutenberg 본문 가져오기 -->
+    <div class="mt-4 border border-indigo-300 rounded-lg p-4 bg-indigo-50/30">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-indigo-700 font-bold text-sm">📖 Project Gutenberg 에서 본문 불러오기</span>
+      </div>
+      <p class="text-xs text-gray-600 mb-3">
+        카테고리에서 작품을 선택했으면 책 ID 가 채워져 <b>검색 없이 바로 본문 다운로드 + 추출 시작</b>.
+        직접 작품명을 타이핑한 경우는 gutendex.com 카탈로그 검색.
+      </p>
+      <button id="gb-search-btn" type="button" class="px-4 py-2 rounded-lg border-2 border-indigo-500 text-indigo-700 text-sm font-bold hover:bg-indigo-100 flex items-center gap-2">
+        <span>🔍</span>
+        <span id="gb-search-label">Gutenberg 검색</span>
+      </button>
+      <p id="gb-status" class="text-xs mt-3"></p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="border-t bg-white py-6 mt-10">
+  <div class="max-w-6xl mx-auto px-6 text-xs text-gray-500">
+    이 페이지는 <b>UX 미리보기용 정적 mockup</b>입니다. 카테고리 트리는 https://www.gutenberg.org/ebooks/categories 기반.
+    실제 작품 데이터는 서버 프록시 (또는 정적 dump) 연결 시 채워집니다.
+  </div>
+</footer>
+
+<script>
+// ============================================================================
+// Gutenberg 카테고리 트리 — 9개 섹션 + 각 섹션의 하위 카테고리
+// (https://www.gutenberg.org/ebooks/categories 그대로 반영)
+// ============================================================================
+const CATEGORY_TREE = [
+  {
+    section: 'Literature',
+    cats: [
+      'Adventure', 'American Literature', 'British Literature',
+      'French Literature', 'German Literature', 'Russian Literature',
+      'Classics of Literature', 'Biographies', 'Novels',
+      'Short Stories', 'Poetry', 'Plays/Films/Dramas',
+      'Romance', 'Science-Fiction & Fantasy', 'Crime, Thrillers & Mystery',
+      'Mythology, Legends & Folklore', 'Humour',
+      'Children & Young Adult Reading', 'Literature - Other',
+    ],
+  },
+  {
+    section: 'Science & Technology',
+    cats: [
+      'Engineering & Technology', 'Mathematics', 'Science - Physics',
+      'Science - Chemistry/Biochemistry', 'Science - Biology',
+      'Science - Earth/Agricultural/Farming',
+      'Research Methods/Statistics/Information Sys',
+      'Environmental Issues',
+    ],
+  },
+  {
+    section: 'History',
+    cats: [
+      'History - American', 'History - British', 'History - European',
+      'History - Ancient', 'History - Medieval/Middle Ages',
+      'History - Early Modern (c. 1450-1750)', 'History - Modern (1750+)',
+      'History - Religious', 'History - Royalty', 'History - Warfare',
+      'History - Schools & Universities', 'History - Other',
+      'Archaeology & Anthropology',
+    ],
+  },
+  {
+    section: 'Social Sciences & Society',
+    cats: [
+      'Business/Management', 'Economics', 'Law & Criminology',
+      'Gender & Sexuality Studies', 'Psychiatry/Psychology',
+      'Sociology', 'Politics', 'Parenthood & Family Relations',
+      'Old Age & the Elderly',
+    ],
+  },
+  {
+    section: 'Arts & Culture',
+    cats: [
+      'Art', 'Architecture', 'Music', 'Fashion',
+      'Journalism/Media/Writing', 'Language & Communication',
+      'Essays, Letters & Speeches',
+    ],
+  },
+  {
+    section: 'Religion & Philosophy',
+    cats: [
+      'Religion/Spirituality', 'Philosophy & Ethics',
+    ],
+  },
+  {
+    section: 'Lifestyle & Hobbies',
+    cats: [
+      'Cooking & Drinking', 'Sports/Hobbies', 'How To ...',
+      'Travel Writing', 'Nature/Gardening/Animals',
+      'Sexuality & Erotica',
+    ],
+  },
+  {
+    section: 'Health & Medicine',
+    cats: [
+      'Health & Medicine', 'Drugs/Alcohol/Pharmacology', 'Nutrition',
+    ],
+  },
+  {
+    section: 'Education & Reference',
+    cats: [
+      'Encyclopedias/Dictionaries/Reference', 'Teaching & Education',
+      'Reports & Conference Proceedings', 'Journals',
+    ],
+  },
+];
+
+// 카테고리 id 만들기 — 영문 케밥 케이스로
+function catIdOf(name) {
+  return name.toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/[\/,()+]/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+// 일부 카테고리의 샘플 작품 (mockup 시각화 용). 실제 구현에선 서버 프록시.
+const WORKS_BY_CATEGORY = {
+  'science-fiction-and-fantasy': [
+    { bookId: 84,    title: 'Frankenstein',                  author: 'Mary Wollstonecraft Shelley', year: 1818 },
+    { bookId: 35,    title: 'The Time Machine',              author: 'H. G. Wells',                 year: 1895 },
+    { bookId: 36,    title: 'The War of the Worlds',         author: 'H. G. Wells',                 year: 1898 },
+    { bookId: 164,   title: 'Twenty Thousand Leagues Under the Seas', author: 'Jules Verne',        year: 1870 },
+    { bookId: 5230,  title: 'The Invisible Man',             author: 'H. G. Wells',                 year: 1897 },
+  ],
+  'crime-thrillers-and-mystery': [
+    { bookId: 1661,  title: 'The Adventures of Sherlock Holmes', author: 'Arthur Conan Doyle', year: 1892 },
+    { bookId: 244,   title: 'A Study in Scarlet',                author: 'Arthur Conan Doyle', year: 1887 },
+    { bookId: 2852,  title: 'The Hound of the Baskervilles',     author: 'Arthur Conan Doyle', year: 1902 },
+    { bookId: 155,   title: 'The Moonstone',                     author: 'Wilkie Collins',     year: 1868 },
+    { bookId: 863,   title: 'The Mysterious Affair at Styles',   author: 'Agatha Christie',    year: 1920 },
+  ],
+  'plays-films-dramas': [
+    { bookId: 1524,  title: 'Hamlet',                            author: 'William Shakespeare', year: 1603 },
+    { bookId: 1533,  title: 'Macbeth',                           author: 'William Shakespeare', year: 1606 },
+    { bookId: 1112,  title: 'Romeo and Juliet',                  author: 'William Shakespeare', year: 1597 },
+    { bookId: 1532,  title: 'King Lear',                         author: 'William Shakespeare', year: 1606 },
+    { bookId: 844,   title: 'The Importance of Being Earnest',   author: 'Oscar Wilde',         year: 1895 },
+    { bookId: 2542,  title: "A Doll's House",                    author: 'Henrik Ibsen',        year: 1879 },
+  ],
+  'poetry': [
+    { bookId: 1322,  title: 'Leaves of Grass',                    author: 'Walt Whitman',        year: 1855 },
+    { bookId: 17192, title: 'The Raven',                          author: 'Edgar Allan Poe',     year: 1845 },
+    { bookId: 1934,  title: 'Songs of Innocence and Experience', author: 'William Blake',       year: 1789 },
+    { bookId: 1321,  title: 'The Waste Land',                     author: 'T. S. Eliot',         year: 1922 },
+  ],
+  'novels': [
+    { bookId: 11,    title: "Alice's Adventures in Wonderland",  author: 'Lewis Carroll',       year: 1865 },
+    { bookId: 1342,  title: 'Pride and Prejudice',               author: 'Jane Austen',         year: 1813 },
+    { bookId: 64317, title: 'The Great Gatsby',                  author: 'F. Scott Fitzgerald', year: 1925 },
+    { bookId: 76,    title: 'Adventures of Huckleberry Finn',    author: 'Mark Twain',          year: 1884 },
+    { bookId: 768,   title: 'Wuthering Heights',                 author: 'Emily Brontë',        year: 1847 },
+    { bookId: 1260,  title: 'Jane Eyre',                         author: 'Charlotte Brontë',    year: 1847 },
+  ],
+  'philosophy-and-ethics': [
+    { bookId: 1497,  title: 'The Republic',                       author: 'Plato',                year: -380 },
+    { bookId: 8438,  title: 'Beyond Good and Evil',               author: 'Friedrich Nietzsche', year: 1886 },
+    { bookId: 4280,  title: 'Critique of Pure Reason',            author: 'Immanuel Kant',       year: 1781 },
+  ],
+};
+
+// ============================================================================
+// UI 빌드 — 2단계 셀렉터 + 칩 토글 (선택 시 접힘 / 변경 클릭 시 다시 펼침)
+// ============================================================================
+const sectionSelect     = document.getElementById('section-select');
+const subcatSelect      = document.getElementById('subcat-select');
+const subcatPicker      = document.getElementById('subcat-picker');
+const subcatSectionName = document.getElementById('subcat-section-name');
+const subcatCount       = document.getElementById('subcat-count');
+
+const titleInput = document.getElementById('title-input');
+const bookIdInput = document.getElementById('book-id');
+const pickedHint = document.getElementById('picked-hint');
+const worksPanel = document.getElementById('works-panel');
+const worksList = document.getElementById('works-list');
+const worksCount = document.getElementById('works-count');
+const worksCategoryLabel = document.getElementById('works-category-label');
+const gbSearchBtn = document.getElementById('gb-search-btn');
+const gbSearchLabel = document.getElementById('gb-search-label');
+const gbStatus = document.getElementById('gb-status');
+
+let activeSection = null;
+let activeCatId = null;
+
+// 1단계 — 상위 카테고리 옵션 채우기
+CATEGORY_TREE.forEach((sec) => {
+  const opt = document.createElement('option');
+  opt.value = sec.section;
+  opt.textContent = `${sec.section} (${sec.cats.length}개)`;
+  sectionSelect.appendChild(opt);
+});
+
+// 1단계 — 상위 선택 시 → 2단계 드롭다운 표시 (드롭다운은 그대로 노출, 강조 스타일만)
+sectionSelect.addEventListener('change', () => {
+  const sectionName = sectionSelect.value;
+  // 선택 없음 → 모두 초기화
+  if (!sectionName) {
+    sectionSelect.classList.remove('picked');
+    subcatPicker.classList.add('hidden');
+    worksPanel.classList.add('hidden');
+    activeSection = null;
+    activeCatId = null;
+    return;
+  }
+  activeSection = CATEGORY_TREE.find((s) => s.section === sectionName);
+  if (!activeSection) return;
+  sectionSelect.classList.add('picked');
+
+  // 2단계 — 하위 옵션 재구성
+  subcatSelect.innerHTML = '<option value="">— 하위 카테고리 선택 —</option>';
+  activeSection.cats.forEach((cat) => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    subcatSelect.appendChild(opt);
+  });
+  subcatSelect.classList.remove('picked');
+  subcatSectionName.textContent = activeSection.section;
+  subcatCount.textContent = activeSection.cats.length;
+  subcatPicker.classList.remove('hidden');
+  // 상위 바꾸면 작품 패널·이전 하위 선택 초기화
+  worksPanel.classList.add('hidden');
+  activeCatId = null;
+});
+
+// 2단계 — 하위 선택 시 → 작품 목록 로드
+subcatSelect.addEventListener('change', () => {
+  const catName = subcatSelect.value;
+  if (!catName || !activeSection) {
+    subcatSelect.classList.remove('picked');
+    worksPanel.classList.add('hidden');
+    activeCatId = null;
+    return;
+  }
+  subcatSelect.classList.add('picked');
+  activeCatId = catIdOf(catName);
+  loadWorks(activeSection.section, catName);
+});
+
+function loadWorks(sectionName, catName) {
+  const works = WORKS_BY_CATEGORY[activeCatId] || [];
+  worksList.innerHTML = '';
+  worksCount.textContent = works.length;
+  worksCategoryLabel.textContent = `${sectionName} · ${catName}`;
+
+  if (!works.length) {
+    worksList.innerHTML =
+      `<div class="px-3 py-6 text-center text-sm text-gray-500">
+        샘플 데이터 없음 — 실제 구현 시 <code>/api/gutenberg-list?category=${activeCatId}</code> 가 가져옵니다.<br>
+        <span class="text-xs">(이 mockup 은 5개 카테고리만 샘플 데이터를 갖고 있습니다)</span>
+      </div>`;
+  } else {
+    works.forEach((w) => {
+      const row = document.createElement('div');
+      row.className = 'work-row px-3 py-2 cursor-pointer text-sm transition-colors';
+      row.innerHTML = `
+        <div class="flex items-baseline justify-between gap-3">
+          <span class="font-semibold text-gray-800 truncate">${escapeHtml(w.title)}</span>
+          <span class="text-xs text-gray-500 shrink-0">${w.year ?? ''}</span>
+        </div>
+        <div class="text-xs text-gray-500 mt-0.5">${escapeHtml(w.author)}</div>
+      `;
+      row.addEventListener('click', () => {
+        titleInput.value = w.title;
+        bookIdInput.value = String(w.bookId);
+        pickedHint.textContent = `✓ 선택됨: ${w.title} · Gutenberg #${w.bookId} · 검색 없이 바로 가져오기 가능`;
+        pickedHint.classList.remove('hidden');
+        worksList.querySelectorAll('.work-row').forEach((r) => r.classList.remove('selected'));
+        row.classList.add('selected');
+        updateGbButtonLabel();
+        gbSearchBtn.classList.add('ring', 'ring-amber-300');
+        setTimeout(() => gbSearchBtn.classList.remove('ring', 'ring-amber-300'), 1200);
+      });
+      worksList.appendChild(row);
+    });
+  }
+  worksPanel.classList.remove('hidden');
+  worksPanel.classList.add('fade-in');
+  setTimeout(() => worksPanel.classList.remove('fade-in'), 250);
+}
+
+// 작품명 직접 타이핑 → bookId 무효화 + 버튼 라벨 갱신
+function updateGbButtonLabel() {
+  const v = (titleInput.value || '').trim();
+  const isNumericId = /^#?\d+$/.test(v);
+  const hasPickedBookId = !!bookIdInput.value;
+  if (hasPickedBookId || isNumericId) {
+    gbSearchLabel.textContent = '본문 가져오기 & 추출 시작';
+    gbSearchBtn.classList.add('bg-indigo-600', 'text-white', 'hover:bg-indigo-700');
+    gbSearchBtn.classList.remove('text-indigo-700');
+  } else {
+    gbSearchLabel.textContent = 'Gutenberg 검색';
+    gbSearchBtn.classList.remove('bg-indigo-600', 'text-white', 'hover:bg-indigo-700');
+    gbSearchBtn.classList.add('text-indigo-700');
+  }
+}
+titleInput.addEventListener('input', () => {
+  if (bookIdInput.value) {
+    bookIdInput.value = '';
+    pickedHint.classList.add('hidden');
+  }
+  updateGbButtonLabel();
+});
+
+// 검색 버튼 시뮬레이션
+gbSearchBtn.addEventListener('click', async () => {
+  const v = (titleInput.value || '').trim();
+  if (!v) {
+    gbStatus.textContent = '위쪽 "작품명" 칸에 검색어를 입력하세요 (제목 또는 Gutenberg 책 ID).';
+    gbStatus.className = 'text-xs mt-3 text-red-600 font-semibold';
+    titleInput.focus();
+    return;
+  }
+  gbSearchBtn.disabled = true;
+  const origLabel = gbSearchLabel.textContent;
+  const hasPickedBookId = !!bookIdInput.value;
+  const isNumericId = /^#?\d+$/.test(v);
+
+  if (hasPickedBookId || isNumericId) {
+    const id = bookIdInput.value || v.replace(/^#/, '');
+    gbSearchLabel.textContent = '⋯ 가져오는 중';
+    gbStatus.className = 'text-xs mt-3 text-blue-700';
+    gbStatus.textContent = `Gutenberg #${id} 본문 가져오는 중⋯`;
+    await sleep(900);
+    gbStatus.textContent = `Gutenberg #${id} 본문 487,236자 받음 — 추출 시작.`;
+    gbStatus.className = 'text-xs mt-3 text-green-700 font-semibold';
+    await sleep(900);
+    gbStatus.innerHTML = `Gutenberg #${id} 본문 487,236자 받음 — <strong>LLM 으로 카드 추출 중 ⋯</strong> <span class="text-gray-500">(모델: haiku)</span>`;
+  } else {
+    gbSearchLabel.textContent = '⋯ 검색 중';
+    gbStatus.className = 'text-xs mt-3 text-blue-700';
+    gbStatus.textContent = `Gutendex 카탈로그 검색 중: "${v}" (느릴 수 있음, 최대 60초)`;
+    await sleep(1200);
+    gbStatus.textContent = `3개 결과 — 가져올 항목 클릭.`;
+    gbStatus.className = 'text-xs mt-3 text-green-700 font-semibold';
+  }
+  await sleep(200);
+  gbSearchBtn.disabled = false;
+  gbSearchLabel.textContent = origLabel;
+});
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[c]));
+}
+</script>
+
+</body>
+</html>
