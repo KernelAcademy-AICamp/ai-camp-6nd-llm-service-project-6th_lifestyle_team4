@@ -1,6 +1,5 @@
 package com.lifestyle.dailyscript.ui.feed
 
-import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,10 +22,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -42,16 +43,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -70,9 +64,9 @@ import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.detail.relativeTime
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
+import com.lifestyle.dailyscript.ui.theme.EditorialSans
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
-import com.lifestyle.dailyscript.ui.theme.FeedCard
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Roast
@@ -412,9 +406,7 @@ private fun FeedComposeSheet(
     }
 }
 
-// --- Leather palette for feed book mockups (fixed, theme-independent — like the archive spines). ---
-private val FeedGold = Color(0xFFC9A24B)
-private val FeedGoldBright = Color(0xFFE6CC82)
+// --- Leather palette for the highlight book cover (fixed, theme-independent). ---
 private val BookCream = Color(0xFFFAF8F2)
 private val FeedLeathers = listOf(
     Color(0xFF0E0C0A), Color(0xFF5A2A24), Color(0xFF2F3A30), Color(0xFF293541),
@@ -425,14 +417,6 @@ private val FeedLeathers = listOf(
 private fun leatherColorFor(title: String?): Color {
     val key = (title ?: "").ifBlank { "?" }
     return FeedLeathers[key.hashCode().absoluteValue % FeedLeathers.size]
-}
-
-/** Drop HSV saturation by [by] (0..1) — e.g. 0.30 = "−30" on a 0–100 scale. */
-private fun Color.desaturated(by: Float): Color {
-    val hsv = FloatArray(3)
-    AndroidColor.colorToHSV(toArgb(), hsv)
-    hsv[1] = (hsv[1] - by).coerceIn(0f, 1f)
-    return Color(AndroidColor.HSVToColor(hsv))
 }
 
 @Composable
@@ -449,145 +433,109 @@ private fun FeedChip(text: String, active: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** "오늘의 한줄" — a paper note resting on a leather book strip. */
+/** "오늘의 한줄" — a social review card: header → pastel quote → book line. */
 @Composable
 private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
-    val card = post.cards
-    val w = card?.works
-    val overlapPx = with(LocalDensity.current) { 18.dp.roundToPx() }
+    val w = post.cards?.works
+    val shape = RoundedCornerShape(16.dp)
+    val nick = post.authorNickname?.ifBlank { null } ?: "익명"
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(FeedCard)
-            .clickable(onClick = onClick)
-            .padding(start = 24.dp, top = 16.dp, end = 24.dp),
+            .shadow(2.dp, shape)
+            .clip(shape)
+            .background(Paper)
+            .clickable(onClick = onClick),
     ) {
+        // Header — avatar + nickname + "한 줄 리뷰 · time"
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(post.authorNickname ?: "익명", style = MaterialTheme.typography.bodyMedium, color = Roast)
-            Text(relativeTime(post.createdAt), style = MaterialTheme.typography.labelSmall, color = Roast)
+            Box(
+                modifier = Modifier.size(44.dp).clip(CircleShape).background(Latte),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Edit,
+                    contentDescription = null,
+                    tint = Walnut,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Box(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = nick,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontFamily = EditorialSans,
+                        fontWeight = FontWeight.Normal,
+                    ),
+                    color = Espresso,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Box(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "한 줄 리뷰 · ${relativeTime(post.createdAt)}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = EditorialSans,
+                        fontWeight = FontWeight.Normal,
+                    ),
+                    color = Roast,
+                )
+            }
         }
+        // Quote — neutral panel, centred serif
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp)
-                .height(1.dp)
-                .background(Latte),
-        )
-        Box(modifier = Modifier.height(14.dp))
-        // paper note
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.82f)
-                .align(Alignment.CenterHorizontally)
-                .shadow(8.dp)
-                .background(BookCream)
-                .padding(start = 16.dp, top = 22.dp, end = 16.dp, bottom = 36.dp),
+                .background(CardWarm)
+                .padding(horizontal = 28.dp, vertical = 40.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = post.body,
-                style = MaterialTheme.typography.bodyLarge.copy(fontFamily = EditorialSerif),
-                color = Color(0xFF2C2620),
+                style = TextStyle(
+                    fontFamily = EditorialSerif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    lineHeight = 30.sp,
+                    color = Espresso,
+                ),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        // The book — a flat (no-gradient) leather cover, desaturated by 30, resting on a
-        // cream page block that peeks along the right & bottom; a darker spine down the left.
-        val cover = leatherColorFor(w?.title).desaturated(0.30f)
-        val spine = lerp(cover, Color.Black, 0.22f)
-        Box(
+        // Book line — title + author
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .layout { measurable, constraints ->
-                    val placeable = measurable.measure(constraints)
-                    layout(placeable.width, (placeable.height - overlapPx).coerceAtLeast(0)) {
-                        placeable.place(0, -overlapPx)
-                    }
-                },
+                .background(Paper)
+                .padding(horizontal = 20.dp, vertical = 16.dp),
         ) {
-            // page block behind the cover — cream edge showing on the right & bottom
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 4.dp, bottomEnd = 4.dp, bottomStart = 3.dp))
-                    .background(BookCream),
+            Text(
+                text = w.displayTitle().ifBlank { "—" },
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontFamily = EditorialSans,
+                    fontWeight = FontWeight.Normal,
+                ),
+                color = Espresso,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = 5.dp, bottom = 5.dp)
-                    .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 3.dp, bottomEnd = 3.dp, bottomStart = 2.dp))
-                    .background(cover)
-                    // spine hinge — a darker band down the left edge + a thin groove line
-                    .drawBehind {
-                        drawRect(spine, Offset.Zero, Size(7.dp.toPx(), size.height))
-                        drawRect(
-                            lerp(cover, Color.Black, 0.42f),
-                            Offset(7.dp.toPx(), 0f),
-                            Size(1.dp.toPx(), size.height),
-                        )
-                    },
-            ) {
-                // gilt band (flat gold) with thin raised highlight + shadow edges
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 7.dp)) {
-                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x66E6CCB4)))
-                    Box(Modifier.fillMaxWidth().height(13.dp).background(FeedGold))
-                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xB3000000)))
-                }
-                Column(modifier = Modifier.padding(start = 18.dp, end = 16.dp, top = 11.dp, bottom = 16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = w.displayTitle().ifBlank { "—" },
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontFamily = EditorialSerif,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                            color = FeedGoldBright,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        w?.releaseYear?.let {
-                            Text(
-                                text = it.toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = FeedGold,
-                            )
-                        }
-                    }
-                    card?.cardId?.let {
-                        Text(
-                            text = "#$it",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = FeedGold,
-                        )
-                    }
-                }
-                val bottom = listOfNotNull(
-                    w?.format?.let { genreLabel(it) },
-                    w?.author,
-                ).joinToString("  ·  ")
-                if (bottom.isNotBlank()) {
-                    Box(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = bottom,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = FeedGold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+            w?.author?.ifBlank { null }?.let {
+                Box(modifier = Modifier.height(4.dp))
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = EditorialSans,
+                        fontWeight = FontWeight.Normal,
+                    ),
+                    color = Walnut,
+                )
             }
-        }
         }
     }
 }
