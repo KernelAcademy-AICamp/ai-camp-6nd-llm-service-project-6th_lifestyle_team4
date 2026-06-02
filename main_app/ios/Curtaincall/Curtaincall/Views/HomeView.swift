@@ -81,6 +81,10 @@ struct HomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
         .task { await loadOnce() }
+        .task { await bookmarks.load(userId: session.userId) }
+        .onChange(of: session.userId) { _, newValue in
+            Task { await bookmarks.load(userId: newValue) }
+        }
     }
 
     private func todayCardView(_ card: Card) -> some View {

@@ -8,6 +8,8 @@ import Supabase
 @MainActor
 final class AuthSession: ObservableObject {
 
+    /// Indicates initial bootstrap attempt has completed (success or failure).
+    /// For detailed state, see `bootstrapStatus`.
     @Published var ready = false
     @Published var userId: Int?
     @Published var isAnonymous = true
@@ -17,6 +19,16 @@ final class AuthSession: ObservableObject {
     @Published var authInProgress = false
     @Published var authMessage: String?
 
+    enum BootstrapStatus: Equatable {
+        case idle
+        case bootstrapping
+        case ready
+        case failed(String)
+    }
+
+    @Published private(set) var bootstrapInProgress = false
+    @Published var bootstrapStatus: BootstrapStatus = .idle
+
     private var auth: AuthClient { Supa.shared.client.auth }
 
     func start() async {
@@ -24,6 +36,11 @@ final class AuthSession: ObservableObject {
     }
 
     func bootstrap(migrateFromUserId: Int? = nil, carryNickname: String? = nil) async {
+        guard !bootstrapInProgress else { return }
+        bootstrapInProgress = true
+        bootstrapStatus = .bootstrapping
+        defer { bootstrapInProgress = false }
+
         do {
             if auth.currentSession == nil {
                 _ = try await auth.signInAnonymously()
@@ -55,9 +72,12 @@ final class AuthSession: ObservableObject {
                 }
             }
             errorMessage = nil
+            bootstrapStatus = .ready
         } catch {
             errorMessage = error.localizedDescription
+            bootstrapStatus = .failed(error.localizedDescription)
         }
+        // Maintain existing semantics where `ready` means the bootstrap attempt has finished.
         ready = true
     }
 

@@ -96,6 +96,10 @@ struct MyPageView: View {
                 showNicknameSheet = false
             }
         }
+        .task { await bookmarks.load(userId: session.userId) }
+        .onChange(of: session.userId) { _, newValue in
+            Task { await bookmarks.load(userId: newValue) }
+        }
     }
 
     private var tasteProfileText: String {
