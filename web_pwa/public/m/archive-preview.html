@@ -75,9 +75,9 @@
 
   /* ===== Bookshelf as a wooden frame ===== */
   .bookshelf {
-    --frame: #4A2A18;
-    --frame-light: #6E4A2E;
-    --back: #2E1D10;
+    --frame: #5C3D28;
+    --frame-light: #80583A;
+    --back: #2E1C10;
     position: relative;
     padding: 8px 0 0;          /* top cap visible */
     border-radius: 4px;
@@ -87,7 +87,7 @@
     /* back wall — dark recessed */
     background:
       linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.45) 30%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.6)),
-      linear-gradient(180deg, var(--back) 0%, #1B0E06 100%);
+      linear-gradient(180deg, var(--back) 0%, color-mix(in srgb, var(--back) 60%, #000) 100%);
     box-shadow:
       /* outer shadow under the whole bookshelf */
       0 6px 14px rgba(0,0,0,0.35),
@@ -134,19 +134,19 @@
     pointer-events: none;
     background:
       repeating-linear-gradient(90deg, rgba(0,0,0,0.10) 0 8px, transparent 8px 22px),
-      linear-gradient(180deg, var(--frame-light) 0%, var(--frame) 50%, #2E180B 100%);
+      linear-gradient(180deg, var(--frame-light) 0%, var(--frame) 50%, color-mix(in srgb, var(--frame) 60%, #000) 100%);
     border-top: 0.5px solid rgba(255,235,190,0.18);
   }
 
   /* Genre-specific frame colors */
-  .bookshelf.g-movie   { --frame:#4A2A18; --frame-light:#6E4A2E; --back:#2E1D10; }
-  .bookshelf.g-drama   { --frame:#6B4A2A; --frame-light:#947040; --back:#3F2A14; }
-  .bookshelf.g-musical { --frame:#5A2818; --frame-light:#7E3A28; --back:#321008; }
-  .bookshelf.g-opera   { --frame:#26180E; --frame-light:#3F2A1A; --back:#140A05; }
-  .bookshelf.g-play    { --frame:#3F2818; --frame-light:#5C3A24; --back:#241408; }
-  .bookshelf.g-novel   { --frame:#4A4036; --frame-light:#6B5E50; --back:#2C2620; }
-  .bookshelf.g-poem    { --frame:#27393B; --frame-light:#3E585A; --back:#142021; }
-  .bookshelf.g-essay   { --frame:#3A4030; --frame-light:#58604A; --back:#20241A; }
+  .bookshelf.g-movie   { --frame:#3D2858; --frame-light:#5A4076; --back:#1E122E; }
+  .bookshelf.g-drama   { --frame:#6E4615; --frame-light:#94642A; --back:#321F08; }
+  .bookshelf.g-musical { --frame:#66284A; --frame-light:#8C4068; --back:#2E1422; }
+  .bookshelf.g-opera   { --frame:#6E2A26; --frame-light:#94403A; --back:#381310; }
+  .bookshelf.g-play    { --frame:#2F3D4A; --frame-light:#4D5E6E; --back:#171E26; }
+  .bookshelf.g-novel   { --frame:#5C3D28; --frame-light:#80583A; --back:#2E1C10; }
+  .bookshelf.g-poem    { --frame:#232E5A; --frame-light:#3D4A78; --back:#11173D; }
+  .bookshelf.g-essay   { --frame:#3E585A; --frame-light:#5A7C7E; --back:#1F2E2F; }
 
   /* ===== Spine — book on shelf ===== */
   .spine {
@@ -254,7 +254,7 @@
     width: 100%; max-width: 480px; max-height: 85vh;
     overflow-y: auto;
     padding: 36px 28px 28px 40px;
-    border-left: 8px solid #5A2A24;
+    border-left: 8px solid var(--cta);
     border-right: 0.5px solid var(--latte);
     box-shadow:
       -10px 0 18px rgba(0,0,0,0.25),
