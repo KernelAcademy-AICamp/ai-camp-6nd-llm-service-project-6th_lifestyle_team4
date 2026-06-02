@@ -8,7 +8,7 @@ Curtaincall is an iOS app: a curated, card-based reader for movies, plays, liter
 ## Architecture (respect this shape)
 - **Screens (3):** Home (scrollable curated card feed), CardDetail (full-screen card), MyPage (includes an Archive tab for saved cards).
 - **Widget:** a WidgetKit extension showing a daily card. Separate target from the app.
-- **Data layer:** Supabase. `SupabaseClient.fetchCards()` is the entire runtime data path. Cards are pre-curated by the team and stored in the Supabase `cards` table before display. Project URL: `https://hixymiidpxnnovtmsvfp.supabase.co`.
+- **Data layer:** Supabase only. Cards come from the `cards` table via `SupabaseClient` — `fetchCards()` for the feed and `fetchCard(id:)` for single-card lookups (deep links / widget). Multiple fetch *functions* are fine; the rules are: both must hit the same `cards` table and apply the **same curation/publish filter**, and no other data source, divergent cache, or any runtime model/RAG path may be introduced. Cards are pre-curated by the team and stored before display. Project URL: `https://hixymiidpxnnovtmsvfp.supabase.co`.
 - **Auth:** Supabase Auth. Anonymous bootstrap on launch; ID/password upgrade for a real account. Comments/likes require a non-anonymous account. `AuthSession` is an `@MainActor ObservableObject`; `bootstrap()` has a re-entrancy guard and a `BootstrapStatus` enum (`idle/bootstrapping/ready/failed`). Preserve its existing `ready` / `errorMessage` semantics when refactoring.
 - **Stack:** SwiftUI + Combine (`@Published`, `ObservableObject`).
 
