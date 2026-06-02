@@ -317,11 +317,17 @@ async function decideCandidate(req, res, body, adminUser) {
     const { data: rpcData, error: rpcErr } = await supabaseAdmin
       .rpc('promote_candidate', { p_candidate_id: id });
     if (rpcErr) {
-      // promote 실패시 status 를 needs_edit 으로 되돌려서 큐에 다시 들어가게.
+      // promote 실패시 status 를 pending 으로 되돌려 큐에 다시 보이게.
+      // (이전엔 needs_edit 으로 변경했는데 큐 필터는 pending 만 표시해서 카드가 사라진 것처럼 보임)
       console.error('[candidates] promote failed:', rpcErr);
       await supabaseAdmin
         .from('card_candidates')
-        .update({ status: 'needs_edit', notes: `promote 실패: ${rpcErr.message || rpcErr}` })
+        .update({
+          status: 'pending',
+          notes: `promote 실패: ${rpcErr.message || rpcErr}`,
+          reviewer_id: null,
+          reviewed_at: null,
+        })
         .eq('candidate_id', id);
       throw new HttpError(`promote failed: ${rpcErr.message || rpcErr}`, 500);
     }
