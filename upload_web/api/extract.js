@@ -239,6 +239,9 @@ export default async function handler(req, res) {
       if (__validation.dropped_short) {
         emit({ t: 'log', m: `검증: 대본 발췌 ${__validation.min_chars}자 미달 ${__validation.dropped_short}장 제거됨 (복구 실패)` });
       }
+      if (__validation.dropped_incomplete) {
+        emit({ t: 'log', m: `검증: 불완전한 문장 (잘린 단어/문장) ${__validation.dropped_incomplete}장 제거됨` });
+      }
       if (__validation.safety_fallback) {
         emit({ t: 'log', m: `⚠ 길이 미달 카드 90% 이상 — LLM 이 짧게만 추출. 보존하니 검토에서 확인하세요` });
       }

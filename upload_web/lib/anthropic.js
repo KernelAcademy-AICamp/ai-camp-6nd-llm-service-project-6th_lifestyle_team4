@@ -370,6 +370,24 @@ REPEAT: English source → English output for ALL fields. No Korean.
    (b) script_excerpt 의 길이가 quote 의 길이보다 최소 5배 이상인가?
    (c) script_excerpt 가 카테고리별 최소 길이를 충족하는가?
    (d) quote 의 모든 문자가 script_excerpt 안에 그대로 포함되는가?
+   (e) ★ quote 와 script_excerpt 는 **완전한 문장만** 포함 — 잘린 단어, 끝나지 않은 문장,
+       PDF 추출 아티팩트(페이지 끝에 잘린 텍스트)는 제외하거나 다듬는다.
+5. ★ COMPLETE SENTENCES ONLY (완전한 문장 추출) ★
+   PDF 텍스트는 페이지 경계·줄바꿈에서 단어/문장이 잘리는 경우가 흔하다. 다음 케이스는 카드로 만들지 않는다:
+   ❌ quote 끝이 마침표·물음표·느낌표·따옴표 없이 문장 중간에서 끊긴 경우
+      예: "I was so glad to see her, but I was scared, t-"   ← 잘린 단어
+      예: "He looked at me and said, then he"               ← 미완 문장
+   ❌ quote 시작이 소문자/접속사 등으로 문장 중간부터 시작하는 경우
+      예: "and he went away forever"                        ← 시작 잘림 (앞에 잃은 문장 있음)
+   ❌ script_excerpt 가 단어/문장 중간에서 시작하거나 끝나는 경우
+   ✅ quote: 첫 글자가 대문자(영문) 또는 문장 시작 표시, 끝이 .!?"' 등으로 마무리.
+   ✅ script_excerpt: 첫·마지막 문장 모두 완전 (시작은 문장 처음, 끝은 마침표/따옴표).
+
+   완전성 검사 방법:
+   - quote/script 의 마지막 글자가 .  ?  !  "  '  ”  ’  …  중 하나로 끝나야 한다 (대화 종결).
+   - 마지막 단어가 하이픈(-)으로 끝나면 잘린 것 → 제외.
+   - 첫 단어가 명백한 문장 시작(대문자 시작어, "I", 대문자 이름, 따옴표 시작)인지 확인.
+   - 의심되면 앞뒤로 더 가져와서 완전한 문장으로 다듬거나, 그 카드는 출력에서 제외.
 ${languageOverride}
 [★★★ CRITICAL 끝 ★★★]
 
@@ -886,9 +904,26 @@ function _norm(s) {
 // 예: quote 200자, script_excerpt 210자 → 95% → 발췌가 의미 있게 확장 안 됨 → drop.
 const QUOTE_RATIO_TOO_HIGH = 0.95;
 
+// quote 가 완전한 문장인지 검사 — PDF 추출 시 잘린 단어/문장 차단.
+function isIncompleteQuote(quote) {
+  if (!quote) return false;
+  const q = String(quote).trim();
+  if (q.length < 10) return false; // 너무 짧으면 평가 불가
+  // 끝이 하이픈 → 단어 잘림 ("scared, t-")
+  if (/-\s*$/.test(q)) return true;
+  // 끝이 문장 종결자 아님 (.  !  ?  "  '  ”  ’  …  。  ！  ？)
+  // 한국어 / 영어 모두 적용
+  if (!/[.!?"'”’…。！？\)]\s*$/.test(q)) return true;
+  // 영문 시작이 소문자 또는 접속사 → 문장 중간부터 시작 (cut off at beginning)
+  // 한국어는 판별 어렵고 따옴표/대문자 없는 경우 많아 영문 한정
+  if (/^[a-z]/.test(q) && !/^[가-힯]/.test(q)) return true;
+  if (/^(and|but|or|so|nor|for|yet)\s+/i.test(q)) return true;
+  return false;
+}
+
 export function validateAndFilterCards(cards, category) {
   if (!Array.isArray(cards)) {
-    return { cards: [], summary: { total: 0, kept: 0, dropped_identical: 0, dropped_short: 0, min_chars: 0, category } };
+    return { cards: [], summary: { total: 0, kept: 0, dropped_identical: 0, dropped_short: 0, dropped_incomplete: 0, min_chars: 0, category } };
   }
   const minChars = MIN_SCRIPT_CHARS_BY_CATEGORY[category] ?? 2000;
 
@@ -905,6 +940,8 @@ export function validateAndFilterCards(cards, category) {
       const ratio = q.length / s.length;
       if (ratio >= QUOTE_RATIO_TOO_HIGH) return { c, drop: 'identical' };
     }
+    // ★ 잘린 문장 — PDF 추출 아티팩트로 단어/문장 중간에서 끊긴 quote 제외
+    if (isIncompleteQuote(c?.quote)) return { c, drop: 'incomplete' };
     // 길이 미달
     if (minChars > 0 && (!c?.script_excerpt || String(c.script_excerpt).length < minChars)) {
       return { c, drop: 'short' };
@@ -928,6 +965,7 @@ export function validateAndFilterCards(cards, category) {
 
   let droppedIdentical = 0;
   let droppedShort = 0;
+  let droppedIncomplete = 0;
   const warnedIdentical = 0;  // identical 은 더 이상 warn-only 가 없음 — 항상 drop
   let warnedShort = 0;
   const survivors = [];
@@ -939,6 +977,10 @@ export function validateAndFilterCards(cards, category) {
       const qlen = String(c?.quote || '').length;
       const slen = String(c?.script_excerpt || '').length;
       console.warn(`[extract] drop: quote≈script_excerpt (qlen=${qlen} slen=${slen})`);
+    } else if (drop === 'incomplete') {
+      // ALWAYS drop — 불완전한 문장 (PDF 아티팩트로 단어/문장 잘림)
+      droppedIncomplete++;
+      console.warn(`[extract] drop: incomplete sentence in quote: "${String(c?.quote || '').slice(0, 80)}"`);
     } else if (drop === 'short') {
       const slen = String(c?.script_excerpt || '').length;
       if (safetyFallback) {
@@ -956,7 +998,7 @@ export function validateAndFilterCards(cards, category) {
 
   console.log(
     `[extract] validation: in=${cards.length} out=${survivors.length} ` +
-    `dropped_identical=${droppedIdentical} dropped_short=${droppedShort} ` +
+    `dropped_identical=${droppedIdentical} dropped_short=${droppedShort} dropped_incomplete=${droppedIncomplete} ` +
     `${safetyFallback ? `(safety: warned identical=${warnedIdentical} short=${warnedShort})` : ''} ` +
     `min=${minChars} category=${category}`
   );
@@ -968,6 +1010,7 @@ export function validateAndFilterCards(cards, category) {
       kept: survivors.length,
       dropped_identical: droppedIdentical,
       dropped_short: droppedShort,
+      dropped_incomplete: droppedIncomplete,
       warned_identical: warnedIdentical,
       warned_short: warnedShort,
       safety_fallback: safetyFallback,
