@@ -226,7 +226,7 @@ function paintDetail(c) {
   // 결정 상태가 이미 결정된 항목이면 (큐에서 status 필터 바꿔서 본 경우)
   // 편집 + 결정 버튼은 보여주되, 이미 promoted 된 항목은 비활성화 표시.
   const promoted = !!c.promoted_card_id;
-  ['decide-approve', 'decide-reject', 'decide-needs-edit'].forEach((id) => {
+  ['decide-approve', 'decide-delete', 'action-save'].forEach((id) => {
     const btn = document.getElementById(id);
     if (btn) btn.disabled = promoted;
     if (btn && promoted) btn.style.opacity = '0.5';
@@ -465,11 +465,77 @@ function wireFillEnBulk() {
   });
 }
 
-async function onDecide(decision) {
+// 편집만 저장 — 결정(승인/삭제) 없이 현재 폼의 값을 candidate 에 UPDATE.
+// status='pending' 유지. 조회의 카드 편집·저장과 동일한 패턴.
+async function onSave() {
   if (!state.current) return;
   const edits = collectEdits();
   const workEdits = collectWorkEdits();
   const notes = $('#edit-notes').value;
+  const btn = $('#action-save');
+  btn.disabled = true;
+  const origText = btn.textContent;
+  btn.textContent = '⋯ 저장 중';
+  try {
+    await apiFetch('/api/candidates', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'save',
+        candidateId: state.current.candidate_id,
+        edits, workEdits, notes,
+      }),
+    });
+    // 메모리상 current 도 갱신 (다음 편집 시작점 일관성)
+    Object.assign(state.current, edits);
+    if (state.current.works) Object.assign(state.current.works, workEdits);
+    if (notes != null) state.current.notes = notes;
+    toast('저장 완료 (검토 대기 상태 유지)', 'ok');
+  } catch (err) {
+    console.error('[review] save failed:', err);
+    toast(`저장 실패: ${err.message || err}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+// 카드 후보 완전 삭제 — '거절' 의 대체. 확인 후 영구 제거.
+async function onDelete() {
+  if (!state.current) return;
+  if (!confirm('이 카드 후보를 영구 삭제할까요? 복구할 수 없습니다.')) return;
+  const btn = $('#decide-delete');
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/candidates', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'delete',
+        candidateId: state.current.candidate_id,
+      }),
+    });
+    toast('삭제됨', 'ok');
+    showQueue();
+    await loadList();
+  } catch (err) {
+    console.error('[review] delete failed:', err);
+    toast(`삭제 실패: ${err.message || err}`, 'err');
+    btn.disabled = false;
+  }
+}
+
+// 승인 — 폼 편집까지 저장하고 cards 로 promote.
+// (거절/수정필요 는 폐기. 거절은 'delete' 액션으로 분리.)
+async function onDecide(decision) {
+  if (!state.current) return;
+  if (decision !== 'approved') {
+    console.warn('[review] onDecide called with non-approved decision:', decision);
+    return;
+  }
+  const edits = collectEdits();
+  const workEdits = collectWorkEdits();
+  const notes = $('#edit-notes').value;
+  const btn = $('#decide-approve');
+  btn.disabled = true;
   try {
     const j = await apiFetch('/api/candidates', {
       method: 'POST',
@@ -483,14 +549,15 @@ async function onDecide(decision) {
       }),
     });
     const promotedMsg = j.promoted_card_id
-      ? ` → cards #${j.promoted_card_id} 로 승격`
+      ? ` → 조회의 cards #${j.promoted_card_id} 로 이동`
       : '';
-    toast(`결정 저장됨 (${decision})${promotedMsg}`);
+    toast(`승인됨${promotedMsg}`);
     showQueue();
     await loadList();
   } catch (err) {
-    console.error('[review] decide failed', err);
-    toast(`결정 실패: ${err.message}`, 'err');
+    console.error('[review] approve failed', err);
+    toast(`승인 실패: ${err.message}`, 'err');
+    btn.disabled = false;
   }
 }
 
@@ -561,8 +628,8 @@ function wireKeywordEditor() {
   $('#refresh-btn').addEventListener('click', () => loadList());
   $('#back-to-queue').addEventListener('click', onBack);
   $('#decide-approve').addEventListener('click', () => onDecide('approved'));
-  $('#decide-reject').addEventListener('click', () => onDecide('rejected'));
-  $('#decide-needs-edit').addEventListener('click', () => onDecide('needs_edit'));
+  $('#decide-delete').addEventListener('click', onDelete);
+  $('#action-save').addEventListener('click', onSave);
   wireKeywordEditor();
   wireTranslateBackButtons();
   wireFillEnBulk();

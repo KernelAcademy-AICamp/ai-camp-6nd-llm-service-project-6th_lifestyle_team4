@@ -165,14 +165,12 @@
       <div class="flex justify-between items-end mb-6">
         <div>
           <h1 class="text-2xl font-bold mb-1">검토 대기 카드</h1>
-          <p class="text-sm text-on-surface-variant">승인하면 PWA / iOS 앱에 노출됩니다. 거절 / 수정 필요로 표시하면 노출되지 않습니다.</p>
+          <p class="text-sm text-on-surface-variant">승인하면 조회 (cards) 에 노출되고 PWA / iOS 앱에서 사용됩니다. 삭제하면 영구 제거됩니다.</p>
         </div>
         <div class="flex gap-2 items-center">
-          <select id="status-filter" class="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-white">
+          <!-- 검토 큐는 검토 대기 (pending) 만 표시. 승인된 카드는 조회, 삭제된 카드는 완전 제거. -->
+          <select id="status-filter" hidden>
             <option value="pending" selected>검토 대기 (pending)</option>
-            <option value="approved">승인됨 (approved)</option>
-            <option value="rejected">거절됨 (rejected)</option>
-            <option value="needs_edit">수정 필요 (needs_edit)</option>
           </select>
           <button id="refresh-btn" class="px-3 py-2 border border-outline-variant rounded-lg text-sm hover:bg-surface-container-low flex items-center gap-1">
             <span class="material-symbols-outlined" style="font-size:18px;">refresh</span>
@@ -359,9 +357,9 @@
         </div>
 
         <div class="mt-6 pt-5 border-t border-outline-variant flex flex-wrap gap-2 justify-end">
-          <button id="decide-needs-edit" class="decide-btn btn-needs">수정 필요</button>
-          <button id="decide-reject" class="decide-btn btn-reject">거절</button>
-          <button id="decide-approve" class="decide-btn btn-approve">승인 → cards 로</button>
+          <button id="decide-delete" class="decide-btn btn-reject">🗑️ 삭제</button>
+          <button id="action-save" class="decide-btn btn-save">💾 저장</button>
+          <button id="decide-approve" class="decide-btn btn-approve">✓ 승인 → 조회로</button>
         </div>
       </div>
     </section>

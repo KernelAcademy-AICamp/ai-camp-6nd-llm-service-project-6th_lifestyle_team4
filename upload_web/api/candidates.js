@@ -286,6 +286,89 @@ async function decideCandidate(req, res, body, adminUser) {
   });
 }
 
+// 편집만 저장 — status, reviewer_id 그대로. 조회의 카드 편집·저장 패턴과 동일.
+// admin 가 중간 저장 후 나중에 승인/삭제 결정 가능.
+async function saveEdits(req, res, body, adminUser) {
+  const id = Number.parseInt(body.candidateId, 10);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new HttpError('candidateId required', 400);
+  }
+  const edits = sanitizeEdits(body.edits);
+  const workEdits = sanitizeWorkEdits(body.workEdits);
+  const notes = body.notes != null ? String(body.notes).slice(0, 2000) : null;
+
+  const { data: row, error: getErr } = await supabaseAdmin
+    .from('card_candidates')
+    .select('candidate_id, work_id, claimed_by, claimed_at, status, promoted_card_id')
+    .eq('candidate_id', id)
+    .maybeSingle();
+  if (getErr) throw getErr;
+  if (!row) throw new HttpError('candidate not found', 404);
+  if (row.promoted_card_id) throw new HttpError('candidate already promoted', 409);
+
+  // claim 검증 — 본인 락이거나 락 없는 경우만 (decideCandidate 와 동일)
+  const cutoffMs = Date.now() - CLAIM_TTL_MIN * 60 * 1000;
+  if (row.claimed_by && row.claimed_by !== adminUser.id
+      && row.claimed_at && Date.parse(row.claimed_at) >= cutoffMs) {
+    throw new HttpError('candidate is currently claimed by another reviewer', 409);
+  }
+
+  const patch = { ...edits };
+  if (notes != null) patch.notes = notes;
+  // status 는 건드리지 않음 (pending 유지). claim 도 유지.
+
+  const { error: updErr } = await supabaseAdmin
+    .from('card_candidates')
+    .update(patch)
+    .eq('candidate_id', id);
+  if (updErr) throw updErr;
+
+  // 작품 메타 — 변경분 있으면 works 도 UPDATE (같은 작품 다른 카드에도 즉시 반영)
+  if (row.work_id && Object.keys(workEdits).length > 0) {
+    const { error: wErr } = await supabaseAdmin
+      .from('works')
+      .update(workEdits)
+      .eq('work_id', row.work_id);
+    if (wErr) console.warn('[candidates] works update failed:', wErr.message || wErr);
+  }
+
+  return res.status(200).json({ ok: true, candidate_id: id, saved: true });
+}
+
+// 카드 후보 완전 삭제 — admin 가 검토 큐에서 "삭제" 누름.
+// 이전 'rejected' 상태로 보존하던 패턴 폐기 → 단순화.
+async function deleteCandidate(req, res, body, adminUser) {
+  const id = Number.parseInt(body.candidateId, 10);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new HttpError('candidateId required', 400);
+  }
+
+  const { data: row, error: getErr } = await supabaseAdmin
+    .from('card_candidates')
+    .select('candidate_id, claimed_by, claimed_at, status, promoted_card_id')
+    .eq('candidate_id', id)
+    .maybeSingle();
+  if (getErr) throw getErr;
+  if (!row) throw new HttpError('candidate not found', 404);
+  if (row.promoted_card_id) {
+    throw new HttpError('이미 승인되어 cards 로 옮겨간 후보는 삭제할 수 없습니다 (조회에서 직접 삭제하세요)', 409);
+  }
+  // claim 검증
+  const cutoffMs = Date.now() - CLAIM_TTL_MIN * 60 * 1000;
+  if (row.claimed_by && row.claimed_by !== adminUser.id
+      && row.claimed_at && Date.parse(row.claimed_at) >= cutoffMs) {
+    throw new HttpError('candidate is currently claimed by another reviewer', 409);
+  }
+
+  const { error: delErr } = await supabaseAdmin
+    .from('card_candidates')
+    .delete()
+    .eq('candidate_id', id);
+  if (delErr) throw delErr;
+
+  return res.status(200).json({ ok: true, candidate_id: id, deleted: true });
+}
+
 // 카드 한 장의 빈 *_original 만 골라 KO→EN 번역해 채운다.
 // promote_candidate 직후 호출 — admin 이 별도로 백필 버튼 안 눌러도 됨.
 // 이미 채워진 필드는 건너뜀 (영문 PDF 추출본의 quote_original / script_excerpt_original
@@ -373,8 +456,12 @@ export default async function handler(req, res) {
     if (action === 'claim')   return await claimCandidate(req, res, body, adminUser);
     if (action === 'release') return await releaseCandidate(req, res, body, adminUser);
     if (action === 'decide')  return await decideCandidate(req, res, body, adminUser);
+    // 신규 — 편집만 저장 (status 그대로 pending). 조회 페이지의 "수정 후 저장" 과 동일 패턴.
+    if (action === 'save')    return await saveEdits(req, res, body, adminUser);
+    // 신규 — 거절 대신 완전 삭제 (admin 가 "삭제" 버튼 누름).
+    if (action === 'delete')  return await deleteCandidate(req, res, body, adminUser);
 
-    throw new HttpError('unknown action (expected claim | release | decide)', 400);
+    throw new HttpError('unknown action (expected claim | release | decide | save | delete)', 400);
   } catch (err) {
     if (err instanceof AuthError) {
       return res.status(err.status || 401).json({ error: err.message });
