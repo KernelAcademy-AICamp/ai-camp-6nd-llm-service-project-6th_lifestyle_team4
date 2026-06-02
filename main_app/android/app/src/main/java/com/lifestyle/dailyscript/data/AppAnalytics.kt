@@ -9,6 +9,7 @@ import com.amplitude.core.events.Identify
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.microsoft.clarity.Clarity
 import com.microsoft.clarity.ClarityConfig
+import com.microsoft.clarity.models.LogLevel
 
 object AppAnalytics {
     private const val TAG = "AppAnalytics"
@@ -35,7 +36,13 @@ object AppAnalytics {
 
         if (clarityProjectId.isNotBlank() && !clarityEnabled) {
             clarityEnabled = runCatching {
-                Clarity.initialize(appContext, ClarityConfig(projectId = clarityProjectId))
+                Clarity.initialize(
+                    appContext,
+                    ClarityConfig(
+                        projectId = clarityProjectId,
+                        logLevel = LogLevel.None,
+                    )
+                )
             }.onFailure {
                 Log.w(TAG, "Clarity init failed", it)
             }.getOrDefault(false)

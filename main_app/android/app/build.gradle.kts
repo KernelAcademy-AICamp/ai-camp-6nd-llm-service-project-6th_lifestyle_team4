@@ -18,7 +18,7 @@ val amplitudeApiKey: String = localProps.getProperty("AMPLITUDE_API_KEY")
     ?: "016c6218aa17a49377b3ac38e6958070"
 val clarityProjectId: String = localProps.getProperty("CLARITY_PROJECT_ID")
     ?: System.getenv("CLARITY_PROJECT_ID")
-    ?: "wxyaqwn09q"
+    ?: "x0ojzn9obs"
 
 fun buildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
