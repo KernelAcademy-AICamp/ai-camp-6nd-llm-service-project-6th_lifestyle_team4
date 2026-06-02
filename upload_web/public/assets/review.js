@@ -193,6 +193,24 @@ function paintDetail(c) {
   renderKeywords(Array.isArray(c.keywords) ? c.keywords : []);
   $('#edit-notes').value = c.notes || '';
 
+  // 이중 언어 — 영문 원본 (마이그레이션 025 이후 card_candidates 에 직접 컬럼 존재)
+  $('#edit-quote-original').value          = c.quote_original          || '';
+  $('#edit-script-excerpt-original').value  = c.script_excerpt_original || '';
+  $('#edit-excerpt-description-original').value = c.excerpt_description_original || '';
+  $('#edit-significance-original').value   = c.significance_original   || '';
+  $('#edit-keywords-original').value = Array.isArray(c.keywords_original)
+    ? c.keywords_original.join(', ')
+    : '';
+
+  // 작품 메타 (works) — 현재 candidate 의 works join 데이터에서
+  const w = c.works || {};
+  $('#edit-work-title').value             = w.title || '';
+  $('#edit-work-title-original').value    = w.title_original || '';
+  $('#edit-work-subtitle').value          = w.subtitle || '';
+  $('#edit-work-subtitle-original').value = w.subtitle_original || '';
+  $('#edit-work-author').value            = w.author || '';
+  $('#edit-work-author-original').value   = w.author_original || '';
+
   $('#display-temperature').textContent = c.temperature != null ? `${c.temperature} / 5` : '—';
   $('#display-intensity').textContent = c.intensity != null ? `${c.intensity} / 5` : '—';
 
@@ -304,18 +322,153 @@ async function onBack() {
 }
 
 function collectEdits() {
+  // 키워드 영문 — 쉼표 구분 string → 배열
+  const kwOrigArr = String($('#edit-keywords-original').value || '')
+    .split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
   return {
     quote: $('#edit-quote').value,
     script_excerpt: $('#edit-script-excerpt').value,
     excerpt_description: $('#edit-excerpt-description').value,
     significance: $('#edit-significance').value,
     keywords: currentKeywords(),
+    // 이중 언어 — 영문 원본 (mig 025 후 card_candidates 에 컬럼 존재)
+    quote_original:               $('#edit-quote-original').value.trim()                || null,
+    script_excerpt_original:      $('#edit-script-excerpt-original').value.trim()       || null,
+    excerpt_description_original: $('#edit-excerpt-description-original').value.trim()  || null,
+    significance_original:        $('#edit-significance-original').value.trim()         || null,
+    keywords_original:            kwOrigArr.length ? kwOrigArr : null,
   };
+}
+
+function collectWorkEdits() {
+  // 작품(works) 메타 편집 — candidate 본문과 별도로 보냄 (서버가 works UPDATE)
+  return {
+    title:             $('#edit-work-title').value.trim()             || null,
+    title_original:    $('#edit-work-title-original').value.trim()    || null,
+    subtitle:          $('#edit-work-subtitle').value.trim()          || null,
+    subtitle_original: $('#edit-work-subtitle-original').value.trim() || null,
+    author:            $('#edit-work-author').value.trim()            || null,
+    author_original:   $('#edit-work-author-original').value.trim()   || null,
+  };
+}
+
+// ↻ KO 버튼 — 각 영문 칸 옆에. EN → KO 재번역해서 한국어 짝꿍에 채워줌.
+function wireTranslateBackButtons() {
+  document.querySelectorAll('button[data-trans-back]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const enSel = btn.dataset.transBack;
+      const field = btn.dataset.transField;
+      const enEl = document.querySelector(enSel);
+      if (!enEl) return;
+      const enText = (enEl.value || '').trim();
+      if (!enText) { toast('영문 칸이 비어 있어요', 'err'); return; }
+      // 짝꿍 KO 칸 — `-original` 빼면 됨
+      const koSel = enSel.replace(/-original$/, '');
+      const koEl = document.querySelector(koSel);
+      if (!koEl) return;
+
+      const prev = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⋯';
+      try {
+        const j = await apiFetch('/api/translate-field', {
+          method: 'POST',
+          body: JSON.stringify({
+            text: enText, field, direction: 'en2ko',
+            work: collectWorkEditsForCtx(),
+          }),
+        });
+        if (j?.translated) {
+          koEl.value = String(j.translated).trim();
+          toast('재번역 완료', 'ok');
+        }
+      } catch (err) {
+        console.warn('[review] translate-back failed:', err);
+        toast(`재번역 실패: ${err.message || err}`, 'err');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }
+    });
+  });
+}
+
+function collectWorkEditsForCtx() {
+  const we = collectWorkEdits();
+  return { title: we.title, subtitle: we.subtitle, author: we.author };
+}
+
+// 🌐 영문 일괄 채우기 — 비어 있는 영문 필드만 KO→EN 자동 번역해 채움
+function wireFillEnBulk() {
+  const btn = document.getElementById('fill-en-bulk-btn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = '⋯ 채우는 중';
+    try {
+      const work = collectWorkEditsForCtx();
+      // 매핑: [한국어 input, 영문 input, field 이름, 다중값 여부]
+      const pairs = [
+        [$('#edit-work-title'),            $('#edit-work-title-original'),         'title',              false],
+        [$('#edit-work-subtitle'),         $('#edit-work-subtitle-original'),      'subtitle',           false],
+        [$('#edit-work-author'),           $('#edit-work-author-original'),        'author',             false],
+        [$('#edit-quote'),                 $('#edit-quote-original'),              'quote',              false],
+        [$('#edit-script-excerpt'),        $('#edit-script-excerpt-original'),     'script_excerpt',     false],
+        [$('#edit-excerpt-description'),   $('#edit-excerpt-description-original'),'excerpt_description',false],
+        [$('#edit-significance'),          $('#edit-significance-original'),       'significance',       false],
+      ];
+      // 키워드는 별도 (배열 ↔ 쉼표 string)
+      const koKws = currentKeywords();
+      const enKwInput = $('#edit-keywords-original');
+
+      let filled = 0;
+      for (const [koEl, enEl, field] of pairs) {
+        if (!koEl || !enEl) continue;
+        const koText = (koEl.value || '').trim();
+        const enText = (enEl.value || '').trim();
+        if (!koText || enText) continue;  // KO 없거나 EN 이미 있으면 스킵
+        try {
+          const j = await apiFetch('/api/translate-field', {
+            method: 'POST',
+            body: JSON.stringify({ text: koText, field, direction: 'ko2en', work }),
+          });
+          if (j?.translated) {
+            enEl.value = String(j.translated).trim();
+            filled++;
+          }
+        } catch (e) {
+          console.warn('[review] fill-en-bulk', field, 'failed:', e.message);
+        }
+      }
+      // 키워드
+      if (koKws.length && enKwInput && !enKwInput.value.trim()) {
+        try {
+          const j = await apiFetch('/api/translate-field', {
+            method: 'POST',
+            body: JSON.stringify({ text: koKws.join(', '), field: 'keywords', direction: 'ko2en', work }),
+          });
+          if (j?.translated) {
+            enKwInput.value = String(j.translated).trim();
+            filled++;
+          }
+        } catch (e) { console.warn('[review] fill-en-bulk keywords failed:', e.message); }
+      }
+      toast(`영문 채우기 완료 — ${filled}개 필드`, filled ? 'ok' : 'err');
+    } catch (err) {
+      console.error('[review] fill-en-bulk error:', err);
+      toast(`실패: ${err.message || err}`, 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  });
 }
 
 async function onDecide(decision) {
   if (!state.current) return;
   const edits = collectEdits();
+  const workEdits = collectWorkEdits();
   const notes = $('#edit-notes').value;
   try {
     const j = await apiFetch('/api/candidates', {
@@ -325,6 +478,7 @@ async function onDecide(decision) {
         candidateId: state.current.candidate_id,
         decision,
         edits,
+        workEdits,
         notes,
       }),
     });
@@ -410,6 +564,8 @@ function wireKeywordEditor() {
   $('#decide-reject').addEventListener('click', () => onDecide('rejected'));
   $('#decide-needs-edit').addEventListener('click', () => onDecide('needs_edit'));
   wireKeywordEditor();
+  wireTranslateBackButtons();
+  wireFillEnBulk();
 
   // 페이지를 떠나면 claim 이 자동 해제되지는 않는다 — TTL (10분) 이 지나면 다른 관리자가
   // 잡을 수 있게 자동 만료된다. 명시적으로 해제하려면 "목록으로" 버튼을 누른다.

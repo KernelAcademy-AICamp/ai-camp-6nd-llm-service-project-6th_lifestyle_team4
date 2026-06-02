@@ -23,6 +23,14 @@ const VALID_DECISIONS = new Set(['approved', 'rejected', 'needs_edit']);
 const EDITABLE_FIELDS = new Set([
   'quote', 'script_excerpt', 'excerpt_description',
   'keywords', 'significance',
+  // 이중 언어 — 영문 원본 (마이그레이션 025 후 card_candidates 에 직접 컬럼 존재)
+  'quote_original', 'script_excerpt_original',
+  'excerpt_description_original', 'significance_original', 'keywords_original',
+]);
+// 검토에서 편집 가능한 works(작품 메타) 필드 — 별도로 workEdits 로 받는다
+const EDITABLE_WORK_FIELDS = new Set([
+  'title', 'subtitle', 'author',
+  'title_original', 'subtitle_original', 'author_original',
 ]);
 // temperature, intensity 는 LLM 결정값 — 편집 UI 에서 표시만 하고 변경 불가.
 
@@ -42,7 +50,10 @@ async function listCandidates(req, res) {
       claimed_by, claimed_at, reviewer_id, reviewed_at, notes,
       extracted_by, extracted_at, promoted_card_id, created_at, updated_at,
       original_payload,
-      works ( title, subtitle, format, author, release_year )
+      quote_original, script_excerpt_original,
+      excerpt_description_original, significance_original, keywords_original,
+      works ( title, subtitle, format, author, release_year,
+              title_original, subtitle_original, author_original )
     `)
     .eq('status', status)
     .order('extracted_at', { ascending: status === 'pending' })
@@ -147,17 +158,36 @@ function sanitizeEdits(edits) {
   const out = {};
   for (const [k, v] of Object.entries(edits)) {
     if (!EDITABLE_FIELDS.has(k)) continue;
-    if (k === 'keywords') {
-      if (!Array.isArray(v)) continue;
-      out.keywords = [...new Set(v.map((s) => String(s).trim()).filter(Boolean))].slice(0, 10);
+    if (k === 'keywords' || k === 'keywords_original') {
+      if (!Array.isArray(v)) {
+        // null 명시 → DB null (영문 키워드는 비울 수 있어야 함)
+        if (k === 'keywords_original' && v === null) out.keywords_original = null;
+        continue;
+      }
+      const dedup = [...new Set(v.map((s) => String(s).trim()).filter(Boolean))].slice(0, 10);
+      out[k] = dedup;
     } else {
       if (v == null) { out[k] = null; continue; }
       const s = String(v);
-      if (k === 'quote') out.quote = s.slice(0, 2000);
-      else if (k === 'script_excerpt') out.script_excerpt = s.slice(0, 10000);
-      else if (k === 'excerpt_description') out.excerpt_description = s.slice(0, 2000);
-      else if (k === 'significance') out.significance = s.slice(0, 3000);
+      if (k === 'quote' || k === 'quote_original') out[k] = s.slice(0, 2000);
+      else if (k === 'script_excerpt' || k === 'script_excerpt_original') out[k] = s.slice(0, 10000);
+      else if (k === 'excerpt_description' || k === 'excerpt_description_original') out[k] = s.slice(0, 2000);
+      else if (k === 'significance' || k === 'significance_original') out[k] = s.slice(0, 3000);
     }
+  }
+  return out;
+}
+
+function sanitizeWorkEdits(workEdits) {
+  if (!workEdits || typeof workEdits !== 'object' || Array.isArray(workEdits)) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(workEdits)) {
+    if (!EDITABLE_WORK_FIELDS.has(k)) continue;
+    if (v == null) { out[k] = null; continue; }
+    const s = String(v).trim();
+    if (k === 'title' || k === 'title_original')       out[k] = s.slice(0, 300);
+    else if (k === 'subtitle' || k === 'subtitle_original') out[k] = s.slice(0, 300) || null;
+    else if (k === 'author' || k === 'author_original') out[k] = s.slice(0, 200) || null;
   }
   return out;
 }
@@ -172,13 +202,14 @@ async function decideCandidate(req, res, body, adminUser) {
     throw new HttpError(`decision must be one of ${[...VALID_DECISIONS].join(',')}`, 400);
   }
   const edits = sanitizeEdits(body.edits);
+  const workEdits = sanitizeWorkEdits(body.workEdits);
   const notes = body.notes != null ? String(body.notes).slice(0, 2000) : null;
 
   // 잠금 검증: 다른 사람이 점유 중인 행은 결정할 수 없다.
   const cutoffMs = Date.now() - CLAIM_TTL_MIN * 60 * 1000;
   const { data: row, error: getErr } = await supabaseAdmin
     .from('card_candidates')
-    .select('candidate_id, claimed_by, claimed_at, status, promoted_card_id')
+    .select('candidate_id, work_id, claimed_by, claimed_at, status, promoted_card_id')
     .eq('candidate_id', id)
     .maybeSingle();
   if (getErr) throw getErr;
@@ -206,6 +237,18 @@ async function decideCandidate(req, res, body, adminUser) {
     .update(patch)
     .eq('candidate_id', id);
   if (updErr) throw updErr;
+
+  // 작품 메타(works) 편집 — 같은 work_id 의 다른 카드에도 즉시 영향. 별도 UPDATE.
+  if (row.work_id && Object.keys(workEdits).length > 0) {
+    const { error: wErr } = await supabaseAdmin
+      .from('works')
+      .update(workEdits)
+      .eq('work_id', row.work_id);
+    if (wErr) {
+      console.warn('[candidates] works update failed:', wErr.message || wErr);
+      // candidate 결정 자체는 이미 성공 — 작품 메타 실패는 경고만.
+    }
+  }
 
   let promotedCardId = null;
   let autoFillSummary = null;

@@ -176,18 +176,18 @@
         <span class="text-xs text-on-surface-variant">(웹에서 명대사를 끌어와 카드 우선순위에 반영)</span>
       </div>
 
-      <!-- Gutenberg 카테고리 피커 — 작품명 아래. 2단계 드롭다운 (상위 → 하위) + 작품 목록 -->
-      <div class="bg-amber-50/30 border border-dashed border-amber-400 rounded-xl p-4 flex flex-col gap-3">
+      <!-- Gutenberg 카테고리 피커 — 작품명 아래. 다른 박스와 같은 색상 (surface-container-lowest + outline-variant) -->
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-3">
         <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-amber-700" style="font-size:18px;">category</span>
-          <span class="text-sm font-bold text-amber-700">Gutenberg 카테고리에서 작품 찾기</span>
-          <span class="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">신규</span>
+          <span class="material-symbols-outlined text-primary" style="font-size:18px;">category</span>
+          <span class="text-sm font-semibold">Gutenberg 카테고리에서 작품 찾기</span>
+          <span class="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full font-semibold">신규</span>
         </div>
 
         <!-- 1단계: 상위 카테고리 -->
         <div class="flex items-center gap-3 flex-wrap">
           <span class="text-xs font-semibold text-on-surface-variant whitespace-nowrap">① 상위 카테고리:</span>
-          <select id="gb-section-select" class="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-amber-500 transition-colors">
+          <select id="gb-section-select" class="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary transition-colors">
             <option value="">— 상위 카테고리 선택 —</option>
           </select>
         </div>
@@ -195,7 +195,7 @@
         <!-- 2단계: 하위 카테고리 (상위 선택 후 노출) -->
         <div id="gb-subcat-row" class="hidden flex items-center gap-3 flex-wrap" style="display:none;">
           <span class="text-xs font-semibold text-on-surface-variant whitespace-nowrap">② 하위 카테고리:</span>
-          <select id="gb-subcat-select" class="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-amber-500 transition-colors">
+          <select id="gb-subcat-select" class="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary transition-colors">
             <option value="">— 하위 카테고리 선택 —</option>
           </select>
           <span id="gb-subcat-meta" class="text-xs text-on-surface-variant"></span>
@@ -205,13 +205,13 @@
         <div id="gb-cat-works-panel" class="hidden" style="display:none;">
           <div class="flex items-center justify-between mb-2">
             <div class="text-xs text-on-surface-variant">
-              <span id="gb-cat-works-label" class="font-semibold text-amber-700"></span>
+              <span id="gb-cat-works-label" class="font-semibold text-primary"></span>
               · <span id="gb-cat-works-count" class="font-semibold">0</span>개 작품
             </div>
             <div class="text-[11px] text-on-surface-variant">행 클릭 → 작품명에 자동 입력</div>
           </div>
-          <div id="gb-cat-works-list" class="max-h-64 overflow-y-auto border border-amber-200 rounded-lg bg-white divide-y divide-gray-100"></div>
-          <p id="gb-cat-picked-hint" class="hidden text-[11px] text-amber-700 mt-2"></p>
+          <div id="gb-cat-works-list" class="max-h-64 overflow-y-auto border border-outline-variant rounded-lg bg-white divide-y divide-gray-100"></div>
+          <p id="gb-cat-picked-hint" class="hidden text-[11px] text-primary mt-2"></p>
         </div>
       </div>
 
@@ -343,9 +343,10 @@
     <span id="save-bar-text">선택된 카드 <span id="save-bar-count" class="font-bold text-primary">0</span>장</span>
   </div>
   <button id="save-btn"
-          class="bg-primary text-on-primary px-6 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">
-    <span class="material-symbols-outlined text-sm">cloud_upload</span>
-    선택된 카드 Supabase에 저장하기
+          class="bg-primary text-on-primary px-6 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+          title="선택된 카드를 검토 큐(card_candidates) 에 pending 상태로 저장합니다. 검토 페이지에서 승인해야 조회에 노출됩니다.">
+    <span class="material-symbols-outlined text-sm">rule</span>
+    선택된 카드 검토 큐에 추가
   </button>
 </div>
 

@@ -1706,9 +1706,9 @@ function gbCatIdOf(name) {
   function setPickedHighlight(el, on) {
     if (!el) return;
     if (on) {
-      el.classList.add('border-amber-500', 'bg-amber-50', 'font-semibold', 'text-amber-900');
+      el.classList.add('border-primary', 'bg-primary/5', 'font-semibold', 'text-on-primary-container');
     } else {
-      el.classList.remove('border-amber-500', 'bg-amber-50', 'font-semibold', 'text-amber-900');
+      el.classList.remove('border-primary', 'bg-primary/5', 'font-semibold', 'text-on-primary-container');
     }
   }
 
@@ -1802,7 +1802,7 @@ function gbCatIdOf(name) {
     works.forEach((w) => {
       const row = document.createElement('button');
       row.type = 'button';
-      row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-amber-50 transition-colors';
+      row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-primary/5 transition-colors';
       row.innerHTML = `
         <div class="flex items-baseline justify-between gap-3">
           <span class="font-semibold text-on-surface truncate">${escapeForToast(w.title || '')}</span>
@@ -1816,15 +1816,15 @@ function gbCatIdOf(name) {
         if (titleInput) titleInput.value = w.title || '';
         if (bookIdInput) bookIdInput.value = w.bookId ? String(w.bookId) : '';
         // 시각 강조
-        worksList.querySelectorAll('button').forEach((b) => b.classList.remove('bg-amber-200'));
-        row.classList.add('bg-amber-200');
+        worksList.querySelectorAll('button').forEach((b) => b.classList.remove('bg-primary/20'));
+        row.classList.add('bg-primary/20');
         pickedHint.textContent = `✓ 선택됨: ${w.title}${w.bookId ? ' · Gutenberg #' + w.bookId + ' · 검색 없이 바로 가져오기' : ''}`;
         pickedHint.classList.remove('hidden');
         // 하단 Gutenberg 검색 버튼 깜빡 강조
         const gbBtn = document.getElementById('gb-search-btn');
         if (gbBtn) {
-          gbBtn.classList.add('ring-2', 'ring-amber-400');
-          setTimeout(() => gbBtn.classList.remove('ring-2', 'ring-amber-400'), 1200);
+          gbBtn.classList.add('ring-2', 'ring-primary');
+          setTimeout(() => gbBtn.classList.remove('ring-2', 'ring-primary'), 1200);
           gbBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
