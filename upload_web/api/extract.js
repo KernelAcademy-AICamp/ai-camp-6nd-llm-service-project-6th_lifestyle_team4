@@ -229,14 +229,20 @@ export default async function handler(req, res) {
     const cardCount = Array.isArray(extractPayload.cards) ? extractPayload.cards.length : 0;
     emit({ t: 'log', m: `카드 ${cardCount}장 추출됨` });
     if (__validation) {
+      if (__validation.rescued) {
+        emit({ t: 'log', m: `자동 복구: 짧거나 중복된 대본 발췌 ${__validation.rescued}장을 원본에서 재발췌함` });
+      }
+      if (__validation.unrescuable) {
+        emit({ t: 'log', m: `복구 불가: ${__validation.unrescuable}장은 명대사가 원본에 없음 (LLM 환각 가능성)` });
+      }
       if (__validation.dropped_identical) {
-        emit({ t: 'log', m: `검증: 명대사=대본 발췌 중복 ${__validation.dropped_identical}장 제거됨 (프롬프트 위반)` });
+        emit({ t: 'log', m: `검증: 명대사=대본 발췌 중복 ${__validation.dropped_identical}장 제거됨 (복구 실패)` });
       }
       if (__validation.dropped_short) {
-        emit({ t: 'log', m: `검증: 대본 발췌 ${__validation.min_chars}자 미달 ${__validation.dropped_short}장 제거됨 (프롬프트 위반)` });
+        emit({ t: 'log', m: `검증: 대본 발췌 ${__validation.min_chars}자 미달 ${__validation.dropped_short}장 제거됨 (복구 실패)` });
       }
       if (__validation.safety_fallback) {
-        emit({ t: 'log', m: `⚠ 70% 이상 위반 — LLM 이 프롬프트 완전 무시. 카드 보존, 검토에서 확인하세요` });
+        emit({ t: 'log', m: `⚠ 길이 미달 카드 90% 이상 — LLM 이 짧게만 추출. 보존하니 검토에서 확인하세요` });
       }
     }
 

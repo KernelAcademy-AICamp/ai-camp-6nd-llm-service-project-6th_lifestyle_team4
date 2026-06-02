@@ -498,14 +498,83 @@ ${JSON.stringify(input, null, 2)}`;
   };
 }
 
+// LLM 이 script_excerpt 를 quote 와 동일하게 / 너무 짧게 만든 카드 자동 복구.
+// 원본 텍스트(fullScript) 에서 quote 위치를 찾아 주변 ~2400자를 발췌해 교체.
+// quote 가 원본에 없으면(LLM 환각/패러프레이즈) 복구 포기 — 다음 단계 validation 이 drop.
+// poem/prose 는 minChars=0 이므로 복구 대상에서 자동 제외.
+function rescueIdenticalAndShort(cards, fullScript, category) {
+  if (!Array.isArray(cards) || !fullScript) return { cards, rescued: 0, unrescuable: 0 };
+  const minChars = MIN_SCRIPT_CHARS_BY_CATEGORY[category] ?? 2000;
+  if (minChars <= 0) return { cards, rescued: 0, unrescuable: 0 };
+
+  let rescuedCount = 0;
+  let unrescuable = 0;
+  const target = Math.floor(minChars * 1.2); // 2000 → 2400자 목표
+
+  const out = cards.map((card) => {
+    if (!card?.quote || !card?.script_excerpt) return card;
+    const q = _norm(card.quote);
+    const s = _norm(card.script_excerpt);
+    const isIdentical = q && s && (q === s || q.length / s.length >= QUOTE_RATIO_TOO_HIGH);
+    const isShort = String(card.script_excerpt).length < minChars;
+    if (!isIdentical && !isShort) return card;
+
+    const quoteStr = String(card.quote).trim();
+    if (!quoteStr) return card;
+    const idx = fullScript.indexOf(quoteStr);
+    if (idx === -1) {
+      unrescuable++;
+      return card; // 원본에 없음 — LLM 환각 가능성, validation 으로 넘김
+    }
+
+    const needBefore = Math.floor((target - quoteStr.length) / 2);
+    const needAfter = Math.max(0, target - quoteStr.length - needBefore);
+    let start = Math.max(0, idx - needBefore);
+    let end = Math.min(fullScript.length, idx + quoteStr.length + needAfter);
+
+    // 단락 경계 정렬 (가능하면)
+    const headSlice = fullScript.slice(start, idx);
+    const lastDoubleNL = headSlice.lastIndexOf('\n\n');
+    if (lastDoubleNL !== -1 && (headSlice.length - lastDoubleNL - 2) > 200) {
+      start = start + lastDoubleNL + 2;
+    }
+    const tailStart = idx + quoteStr.length;
+    const tailSlice = fullScript.slice(tailStart, end);
+    const firstDoubleNL = tailSlice.indexOf('\n\n');
+    if (firstDoubleNL !== -1 && firstDoubleNL > Math.floor(minChars * 0.4)) {
+      end = tailStart + firstDoubleNL;
+    }
+
+    const rescued = fullScript.slice(start, end);
+    if (rescued.length < quoteStr.length * 2) return card; // 충분히 확장 못함 — 그대로 두고 validation 결정
+
+    rescuedCount++;
+    return { ...card, script_excerpt: rescued, __rescued: true };
+  });
+
+  if (rescuedCount > 0 || unrescuable > 0) {
+    console.log(
+      `[extract] rescue: rescued=${rescuedCount} unrescuable(quote-not-in-source)=${unrescuable} ` +
+      `target=${target} category=${category}`
+    );
+  }
+  return { cards: out, rescued: rescuedCount, unrescuable };
+}
+
 export async function runExtract(scriptText, category = 'screen', seedBlock = '', model = null, { signal = null, onProgress = null } = {}) {
   const chunks = splitScriptIntoChunks(scriptText);
   if (chunks.length === 1) {
     onProgress?.({ t: 'stage', m: '본문 분석 중 (단일 청크)' });
     const single = await runExtractSingle(scriptText, category, seedBlock, model, null, { signal, onProgress });
-    // 단일 청크 경로도 동일하게 검증 — quote==script_excerpt 제거 + 길이 미달 경고
-    const validated = validateAndFilterCards(single?.cards || [], category);
-    return { ...single, cards: validated.cards, __validation: validated.summary };
+    // 자동 복구 — LLM 이 quote≈script 또는 짧게 만든 카드를 원본에서 발췌해 확장.
+    const rescued = rescueIdenticalAndShort(single?.cards || [], scriptText, category);
+    // 그래도 못 살린 카드(원본에 quote 없음 = LLM 환각) 는 여기서 drop.
+    const validated = validateAndFilterCards(rescued.cards, category);
+    return {
+      ...single,
+      cards: validated.cards,
+      __validation: { ...validated.summary, rescued: rescued.rescued, unrescuable: rescued.unrescuable },
+    };
   }
 
   // 자동 결정된 실제 청크 사이즈 — 영문 PDF 는 더 큼.
@@ -581,8 +650,11 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
     console.warn('[anthropic] chunk finalization failed, returning deterministic merge:', err?.message || err);
   }
 
-  // 카드 후처리 — 잘못된 카드(quote==script_excerpt) 제거 + 길이 미달 경고 로그.
-  const validated = validateAndFilterCards(finalResult?.cards || [], category);
+  // 카드 후처리 — 자동 복구 후 검증.
+  //  1) rescue: LLM 이 quote≈script 또는 짧게 만든 카드는 원본에서 발췌해 script_excerpt 확장
+  //  2) validate: 그래도 못 살린 카드(원본에 없음, 또는 복구 실패) 는 drop
+  const rescued = rescueIdenticalAndShort(finalResult?.cards || [], scriptText, category);
+  const validated = validateAndFilterCards(rescued.cards, category);
   return {
     ...finalResult,
     cards: validated.cards,
@@ -593,7 +665,7 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
       overlap_chars: EXTRACT_CHUNK_OVERLAP_CHARS,
       finalize_failed: finalizeFailed || undefined,
     },
-    __validation: validated.summary,
+    __validation: { ...validated.summary, rescued: rescued.rescued, unrescuable: rescued.unrescuable },
   };
 }
 
