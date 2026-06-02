@@ -659,32 +659,33 @@ export function validateAndFilterCards(cards, category) {
     return { c, drop: null };
   });
 
-  const toDropCount = verdicts.filter((v) => v.drop).length;
-  const dropRate = cards.length ? (toDropCount / cards.length) : 0;
-  const safetyFallback = dropRate >= DROP_RATE_SAFETY;
+  // safety fallback — 'short' (길이 미달) 만 적용. drop rate 90% 이상이면
+  // LLM 이 광범위하게 짧은 발췌를 만들었다고 보고 warn 만 (어드민이 편집 가능).
+  // 'identical' (quote == script_excerpt) 는 safety fallback 면제 — 변명 여지 없는 명백한 위반,
+  // 항상 drop. 사용자 강력 요구사항: "명대사랑 본문 스크립트가 똑같이 나오는 건 절대 안 된다".
+  const shortDropCount = verdicts.filter((v) => v.drop === 'short').length;
+  const shortDropRate = cards.length ? (shortDropCount / cards.length) : 0;
+  const safetyFallback = shortDropRate >= DROP_RATE_SAFETY;
   if (safetyFallback) {
     console.warn(
-      `[extract] SAFETY: drop rate ${(dropRate * 100).toFixed(0)}% (>=${(DROP_RATE_SAFETY * 100).toFixed(0)}%) — ` +
-      `LLM appears to have violated prompt broadly. Falling back to warn-only so admin can review.`
+      `[extract] SAFETY (short only): drop rate ${(shortDropRate * 100).toFixed(0)}% (>=${(DROP_RATE_SAFETY * 100).toFixed(0)}%) — ` +
+      `LLM produced widely-short script_excerpts. Keeping with warn so admin can edit. (identical still always dropped)`
     );
   }
 
   let droppedIdentical = 0;
   let droppedShort = 0;
-  let warnedIdentical = 0;
+  const warnedIdentical = 0;  // identical 은 더 이상 warn-only 가 없음 — 항상 drop
   let warnedShort = 0;
   const survivors = [];
 
   for (const { c, drop } of verdicts) {
     if (drop === 'identical') {
-      if (safetyFallback) {
-        warnedIdentical++;
-        console.warn(`[extract] (warn) card has quote == script_excerpt (len=${String(c?.quote||'').length})`);
-        survivors.push(c);
-      } else {
-        droppedIdentical++;
-        console.warn(`[extract] drop: quote == script_excerpt (len=${String(c?.quote||'').length})`);
-      }
+      // ALWAYS drop — safety fallback 무시.
+      droppedIdentical++;
+      const qlen = String(c?.quote || '').length;
+      const slen = String(c?.script_excerpt || '').length;
+      console.warn(`[extract] drop: quote≈script_excerpt (qlen=${qlen} slen=${slen})`);
     } else if (drop === 'short') {
       const slen = String(c?.script_excerpt || '').length;
       if (safetyFallback) {
