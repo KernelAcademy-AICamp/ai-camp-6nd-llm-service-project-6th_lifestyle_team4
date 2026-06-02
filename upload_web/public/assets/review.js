@@ -467,6 +467,8 @@ async function onQueueFillEn() {
 }
 
 // 후보 카드 한 장의 비어 있는 영문 필드를 모두 채우고 'save' 액션으로 commit.
+// ★ 최적화: 비어 있는 필드를 모아 /api/translate-fields 1회 호출.
+//   이전엔 필드당 별도 호출(최대 8회) → 0~1회.
 async function fillEnForCandidate(it, workMetaDone) {
   const w = it.works || {};
   const workCtx = {
@@ -474,68 +476,60 @@ async function fillEnForCandidate(it, workMetaDone) {
     author: w.author || '', format: w.format || '',
   };
 
-  // 단일 필드 호출 (안전 격리)
-  async function callTrans(text, field) {
-    if (!text || !String(text).trim()) return null;
-    try {
-      const j = await apiFetch('/api/translate-field', {
-        method: 'POST',
-        body: JSON.stringify({ text, field, direction: 'ko2en', work: workCtx }),
-      });
-      return j?.translated ? String(j.translated).trim() : null;
-    } catch (e) {
-      console.warn(`[review] translate ${field} failed for #${it.candidate_id}:`, e?.message);
-      return null;
-    }
-  }
-
-  // 1) 카드 본문 (candidate)
-  const edits = {};
-  if (!it.quote_original && it.quote) {
-    const v = await callTrans(it.quote, 'quote');
-    if (v) { edits.quote_original = v; it.quote_original = v; }
-  }
-  if (!it.script_excerpt_original && it.script_excerpt) {
-    const v = await callTrans(it.script_excerpt, 'script_excerpt');
-    if (v) { edits.script_excerpt_original = v; it.script_excerpt_original = v; }
-  }
-  if (!it.excerpt_description_original && it.excerpt_description) {
-    const v = await callTrans(it.excerpt_description, 'excerpt_description');
-    if (v) { edits.excerpt_description_original = v; it.excerpt_description_original = v; }
-  }
-  if (!it.significance_original && it.significance) {
-    const v = await callTrans(it.significance, 'significance');
-    if (v) { edits.significance_original = v; it.significance_original = v; }
-  }
+  // 비어 있는 필드만 모으기. name 은 결과 객체의 키.
+  const todo = [];
+  // 1) 카드 본문
+  if (!it.quote_original && it.quote) todo.push({ name: 'card.quote', text: it.quote, kind: 'quote' });
+  if (!it.script_excerpt_original && it.script_excerpt) todo.push({ name: 'card.script_excerpt', text: it.script_excerpt, kind: 'script_excerpt' });
+  if (!it.excerpt_description_original && it.excerpt_description) todo.push({ name: 'card.excerpt_description', text: it.excerpt_description, kind: 'excerpt_description' });
+  if (!it.significance_original && it.significance) todo.push({ name: 'card.significance', text: it.significance, kind: 'significance' });
   if ((!Array.isArray(it.keywords_original) || !it.keywords_original.length)
       && Array.isArray(it.keywords) && it.keywords.length) {
-    const v = await callTrans(it.keywords.join(', '), 'keywords');
-    if (v) {
-      const arr = v.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
-      if (arr.length) { edits.keywords_original = arr; it.keywords_original = arr; }
-    }
+    todo.push({ name: 'card.keywords', text: it.keywords.join(', '), kind: 'keywords' });
   }
-
-  // 2) 작품 메타 — 같은 work_id 는 한 번만 (다른 카드도 즉시 반영됨)
-  const workEdits = {};
+  // 2) 작품 메타 — 같은 work_id 는 한 번만
   const wid = it.work_id;
-  if (wid && !workMetaDone.get(wid)) {
-    if (!w.title_original && w.title) {
-      const v = await callTrans(w.title, 'title');
-      if (v) { workEdits.title_original = v; w.title_original = v; }
-    }
-    if (!w.subtitle_original && w.subtitle) {
-      const v = await callTrans(w.subtitle, 'subtitle');
-      if (v) { workEdits.subtitle_original = v; w.subtitle_original = v; }
-    }
-    if (!w.author_original && w.author) {
-      const v = await callTrans(w.author, 'author');
-      if (v) { workEdits.author_original = v; w.author_original = v; }
-    }
+  const includeWorkMeta = wid && !workMetaDone.get(wid);
+  if (includeWorkMeta) {
+    if (!w.title_original && w.title)       todo.push({ name: 'work.title',    text: w.title,    kind: 'title' });
+    if (!w.subtitle_original && w.subtitle) todo.push({ name: 'work.subtitle', text: w.subtitle, kind: 'title' });
+    if (!w.author_original && w.author)     todo.push({ name: 'work.author',   text: w.author,   kind: 'author' });
     workMetaDone.set(wid, true);
   }
 
-  // 3) 변경 없으면 save 호출 안 함
+  if (todo.length === 0) return;
+
+  // 단일 호출 — 비어있는 모든 필드를 일괄 번역.
+  let translations = {};
+  try {
+    const j = await apiFetch('/api/translate-fields', {
+      method: 'POST',
+      body: JSON.stringify({ fields: todo, direction: 'ko2en', work: workCtx }),
+    });
+    translations = (j && j.translations) || {};
+  } catch (e) {
+    console.warn(`[review] batch translate-fields failed for #${it.candidate_id}:`, e?.message || e);
+    return;
+  }
+
+  // 결과를 카드 / 작품 edits 로 분류 + 로컬 객체에도 즉시 반영
+  const edits = {};
+  const workEdits = {};
+  for (const [name, value] of Object.entries(translations)) {
+    if (!value) continue;
+    if (name === 'card.quote')              { edits.quote_original              = value; it.quote_original              = value; }
+    if (name === 'card.script_excerpt')     { edits.script_excerpt_original     = value; it.script_excerpt_original     = value; }
+    if (name === 'card.excerpt_description') { edits.excerpt_description_original = value; it.excerpt_description_original = value; }
+    if (name === 'card.significance')       { edits.significance_original       = value; it.significance_original       = value; }
+    if (name === 'card.keywords') {
+      const arr = String(value).split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
+      if (arr.length) { edits.keywords_original = arr; it.keywords_original = arr; }
+    }
+    if (name === 'work.title')    { workEdits.title_original    = value; w.title_original    = value; }
+    if (name === 'work.subtitle') { workEdits.subtitle_original = value; w.subtitle_original = value; }
+    if (name === 'work.author')   { workEdits.author_original   = value; w.author_original   = value; }
+  }
+
   if (Object.keys(edits).length === 0 && Object.keys(workEdits).length === 0) return;
 
   await apiFetch('/api/candidates', {

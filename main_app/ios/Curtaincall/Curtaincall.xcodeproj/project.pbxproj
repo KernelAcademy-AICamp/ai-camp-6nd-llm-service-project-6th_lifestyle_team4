@@ -10,6 +10,7 @@
 		6785D0062FC045C10051F9FD /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6785D0052FC045C10051F9FD /* WidgetKit.framework */; };
 		6785D0082FC045C10051F9FD /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6785D0072FC045C10051F9FD /* SwiftUI.framework */; };
 		6785D0132FC045C20051F9FD /* CurtaincallWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6785D0032FC045C10051F9FD /* CurtaincallWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA00000000000000000000F3 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = AA00000000000000000000F2 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,6 +84,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA00000000000000000000F3 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -161,6 +163,7 @@
 			);
 			name = Curtaincall;
 			packageProductDependencies = (
+				AA00000000000000000000F2 /* Supabase */,
 			);
 			productName = Curtaincall;
 			productReference = 67A5B3C32FBEED270002A50C /* Curtaincall.app */;
@@ -193,6 +196,9 @@
 			);
 			mainGroup = 67A5B3BA2FBEED270002A50C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA00000000000000000000F1 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 67A5B3C42FBEED270002A50C /* Products */;
 			projectDirPath = "";
@@ -521,6 +527,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA00000000000000000000F1 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA00000000000000000000F2 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA00000000000000000000F1 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 67A5B3BB2FBEED270002A50C /* Project object */;
 }

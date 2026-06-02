@@ -10,7 +10,7 @@
 
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase-admin.js';
-import { runTranslateField, validateAndFilterCards } from '../lib/anthropic.js';
+import { runTranslateField, runTranslateFields, validateAndFilterCards } from '../lib/anthropic.js';
 import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
 // works.format → 추출 프롬프트 카테고리 (save.js 와 동일 매핑)
@@ -410,6 +410,9 @@ async function deleteCandidate(req, res, body, adminUser) {
 // promote_candidate 직후 호출 — admin 이 별도로 백필 버튼 안 눌러도 됨.
 // 이미 채워진 필드는 건너뜀 (영문 PDF 추출본의 quote_original / script_excerpt_original
 // 은 save 시 이미 들어가 있고, 작가는 runKoreanizeAuthor 가드로 author_original 채워짐).
+//
+// ★ 최적화: 비어 있는 필드를 모아 한 번의 LLM 호출(runTranslateFields)로 일괄 번역.
+//   이전엔 필드당 별도 호출(최대 8회) → 이제 0~1회.
 async function autoFillEnglishForCard(cardId) {
   const { data: card, error } = await supabaseAdmin
     .from('cards')
@@ -430,39 +433,64 @@ async function autoFillEnglishForCard(cardId) {
     author: w.author || '', format: w.format || '',
   };
 
-  // 한 필드 안전 번역 — 실패해도 다음 필드는 그대로 진행.
-  async function safeTranslate(text, field) {
-    try {
-      if (!text || !String(text).trim()) return null;
-      return await runTranslateField({ text, field, work: workCtx, direction: 'ko2en' });
-    } catch (e) {
-      console.warn(`[candidates] auto-fill ${field} failed:`, e?.message || e);
-      return null;
+  // 비어 있는 필드만 모으기 — 이미 채워진 건 건너뛴다 (LLM 호출 절약).
+  // name 은 결과 객체의 키로 쓰임. 'work.*' 접두로 작품/카드 출처를 구분.
+  const todo = [];
+  if (!w.title_original    && w.title)    todo.push({ name: 'work.title',    text: w.title,    kind: 'title' });
+  if (!w.subtitle_original && w.subtitle) todo.push({ name: 'work.subtitle', text: w.subtitle, kind: 'title' });
+  if (!w.author_original   && w.author)   todo.push({ name: 'work.author',   text: w.author,   kind: 'author' });
+  if (!card.quote_original          && card.quote)          todo.push({ name: 'card.quote',          text: card.quote,          kind: 'quote' });
+  if (!card.script_excerpt_original && card.script_excerpt) todo.push({ name: 'card.script_excerpt', text: card.script_excerpt, kind: 'script_excerpt' });
+  if (!card.excerpt_description_original && card.excerpt_description) todo.push({ name: 'card.excerpt_description', text: card.excerpt_description, kind: 'excerpt_description' });
+  if (!card.significance_original   && card.significance)   todo.push({ name: 'card.significance',   text: card.significance,   kind: 'significance' });
+  if ((!Array.isArray(card.keywords_original) || !card.keywords_original.length)
+      && Array.isArray(card.keywords) && card.keywords.length) {
+    todo.push({ name: 'card.keywords', text: card.keywords.join(', '), kind: 'keywords' });
+  }
+
+  if (todo.length === 0) {
+    return { ok: true, work_filled: [], card_filled: [], skipped: 'nothing-to-fill' };
+  }
+
+  // 한 LLM 호출로 모든 비어 있는 필드 번역 (KO → EN).
+  // 실패하면 폴백으로 필드별 개별 호출 (전부 실패 시에도 일부는 살릴 수 있게).
+  let translations = {};
+  try {
+    translations = await runTranslateFields({ fields: todo, direction: 'ko2en', work: workCtx });
+  } catch (e) {
+    console.warn(`[candidates] batch auto-fill failed, falling back per-field:`, e?.message || e);
+    // 폴백 — 각 필드 개별 호출. 한두 개라도 살리는 게 목표.
+    for (const f of todo) {
+      try {
+        const v = await runTranslateField({ text: String(f.text), field: f.kind, work: workCtx, direction: 'ko2en' });
+        if (v) translations[f.name] = v;
+      } catch (e2) {
+        console.warn(`[candidates] per-field fallback ${f.name} failed:`, e2?.message || e2);
+      }
     }
   }
 
-  // 1) 작품 메타 — 비어 있는 칸만
+  // 결과를 work/card 업데이트 객체로 분류.
   const workUpdate = {};
-  if (!w.title_original    && w.title)    { const v = await safeTranslate(w.title,    'title');    if (v) workUpdate.title_original    = v; }
-  if (!w.subtitle_original && w.subtitle) { const v = await safeTranslate(w.subtitle, 'subtitle'); if (v) workUpdate.subtitle_original = v; }
-  if (!w.author_original   && w.author)   { const v = await safeTranslate(w.author,   'author');   if (v) workUpdate.author_original   = v; }
+  const cardUpdate = {};
+  for (const [name, value] of Object.entries(translations)) {
+    if (!value) continue;
+    if (name === 'work.title')    workUpdate.title_original    = value;
+    if (name === 'work.subtitle') workUpdate.subtitle_original = value;
+    if (name === 'work.author')   workUpdate.author_original   = value;
+    if (name === 'card.quote')              cardUpdate.quote_original              = value;
+    if (name === 'card.script_excerpt')     cardUpdate.script_excerpt_original     = value;
+    if (name === 'card.excerpt_description') cardUpdate.excerpt_description_original = value;
+    if (name === 'card.significance')       cardUpdate.significance_original       = value;
+    if (name === 'card.keywords') {
+      const arr = String(value).split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
+      if (arr.length) cardUpdate.keywords_original = arr;
+    }
+  }
+
   if (Object.keys(workUpdate).length > 0) {
     const { error: werr } = await supabaseAdmin.from('works').update(workUpdate).eq('work_id', w.work_id);
     if (werr) console.warn('[candidates] works update failed:', werr.message);
-  }
-
-  // 2) 카드 본문 — 비어 있는 칸만 (quote/script_excerpt 는 보통 save 가 이미 채움)
-  const cardUpdate = {};
-  if (!card.quote_original          && card.quote)          { const v = await safeTranslate(card.quote,          'quote');          if (v) cardUpdate.quote_original          = v; }
-  if (!card.script_excerpt_original && card.script_excerpt) { const v = await safeTranslate(card.script_excerpt, 'script_excerpt'); if (v) cardUpdate.script_excerpt_original = v; }
-  if (!card.excerpt_description_original && card.excerpt_description) { const v = await safeTranslate(card.excerpt_description, 'excerpt_description'); if (v) cardUpdate.excerpt_description_original = v; }
-  if (!card.significance_original   && card.significance)   { const v = await safeTranslate(card.significance,   'significance');   if (v) cardUpdate.significance_original   = v; }
-  if ((!Array.isArray(card.keywords_original) || !card.keywords_original.length) && Array.isArray(card.keywords) && card.keywords.length) {
-    const v = await safeTranslate(card.keywords.join(', '), 'keywords');
-    if (v) {
-      const arr = v.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
-      if (arr.length) cardUpdate.keywords_original = arr;
-    }
   }
   if (Object.keys(cardUpdate).length > 0) {
     const { error: cerr } = await supabaseAdmin.from('cards').update(cardUpdate).eq('card_id', cardId);
@@ -473,6 +501,7 @@ async function autoFillEnglishForCard(cardId) {
     ok: true,
     work_filled: Object.keys(workUpdate),
     card_filled: Object.keys(cardUpdate),
+    llm_calls: 1, // batch 1회 (폴백 안 가면)
   };
 }
 
