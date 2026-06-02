@@ -1504,7 +1504,7 @@ async function onTranslateAll() {
 
 // 모든 카드의 description / significance / keywords 를 KO→EN 일괄 번역.
 // 카드 N장이 많을 때 한 번의 LLM 호출은 응답 토큰이 넘쳐 잘리거나 timeout 위험 →
-// 10장씩 청크로 나눠 동시 3개씩 호출. 청크별 실패는 격리(다른 청크엔 영향 X).
+// 5장씩 청크로 나눠 동시 2개씩 호출. 청크별 실패시 절반 크기로 1회 재시도 후 격리.
 async function fillCommentaryEn(token) {
   const all = state.cards.map((c, i) => ({
     id: i,
@@ -1514,56 +1514,97 @@ async function fillCommentaryEn(token) {
   })).filter((p) => p.description || p.significance || (p.keywords && p.keywords.length));
   if (!all.length) return;
 
-  const CHUNK = 10;
+  const CHUNK = 5;
   const chunks = [];
   for (let i = 0; i < all.length; i += CHUNK) chunks.push(all.slice(i, i + CHUNK));
 
-  // 청크별 호출. 동시성 3 — Anthropic 레이트 보호.
-  const CONCURRENCY = 3;
+  // 청크별 호출. 동시성 2 — Anthropic 레이트 보호 + 안정성 우선.
+  const CONCURRENCY = 2;
   let cursor = 0;
   const errors = [];
+  const totalChunks = chunks.length;
+  let doneCount = 0;
+
+  // 단일 청크 처리 — 실패시 caller 가 잡아서 재시도 결정.
+  async function callOnce(chunkCards) {
+    const res = await fetch('/api/translate-commentary-batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ cards: chunkCards, work: state.work || null }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const e = new Error(body?.error || `HTTP ${res.status}`);
+      e.status = res.status;
+      throw e;
+    }
+    return Array.isArray(body?.results) ? body.results : [];
+  }
+
+  function applyResults(results) {
+    results.forEach((r) => {
+      const i = Number(r?.id);
+      if (Number.isNaN(i) || !state.cards[i]) return;
+      state.cards[i].translated_commentary = {
+        excerpt_description_original: r.description_en || null,
+        significance_original:        r.significance_en || null,
+        keywords_original: Array.isArray(r.keywords_en) ? r.keywords_en : null,
+      };
+    });
+  }
 
   async function worker() {
     while (cursor < chunks.length) {
       const idx = cursor++;
       const chunk = chunks[idx];
-      // 진행률 표시
       translateAllBtn.innerHTML =
         `<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>` +
-        `<span>해설 영문화 중⋯ (청크 ${idx + 1}/${chunks.length})</span>`;
+        `<span>해설 영문화 중⋯ (${doneCount}/${totalChunks} 완료)</span>`;
       try {
-        const res = await fetch('/api/translate-commentary-batch', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ cards: chunk, work: state.work || null }),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
-        const results = Array.isArray(body?.results) ? body.results : [];
-        results.forEach((r) => {
-          const i = Number(r?.id);
-          if (Number.isNaN(i) || !state.cards[i]) return;
-          state.cards[i].translated_commentary = {
-            excerpt_description_original: r.description_en || null,
-            significance_original:        r.significance_en || null,
-            keywords_original: Array.isArray(r.keywords_en) ? r.keywords_en : null,
-          };
-        });
+        const results = await callOnce(chunk);
+        applyResults(results);
+        doneCount++;
       } catch (e) {
-        console.warn(`[translate-all] commentary chunk ${idx + 1}/${chunks.length} failed:`, e?.message || e);
-        errors.push({ chunk: idx + 1, error: e?.message || String(e) });
+        const transientStatuses = new Set([429, 502, 503, 504]);
+        const isTransient = transientStatuses.has(e.status) || /JSON|timeout|aborted/i.test(e.message || '');
+        // 1회 재시도 — 청크를 반으로 쪼개서 다시 시도 (응답 잘림·rate-limit 대응)
+        if (isTransient && chunk.length > 1) {
+          console.warn(`[translate-all] chunk ${idx + 1}/${totalChunks} failed (${e.message}) — 절반 크기로 재시도`);
+          const half = Math.ceil(chunk.length / 2);
+          const a = chunk.slice(0, half);
+          const b = chunk.slice(half);
+          try {
+            const [ra, rb] = await Promise.allSettled([callOnce(a), callOnce(b)]);
+            let partialOk = false;
+            if (ra.status === 'fulfilled') { applyResults(ra.value); partialOk = true; }
+            if (rb.status === 'fulfilled') { applyResults(rb.value); partialOk = true; }
+            const fails = [];
+            if (ra.status === 'rejected') fails.push(ra.reason?.message || 'half-A 실패');
+            if (rb.status === 'rejected') fails.push(rb.reason?.message || 'half-B 실패');
+            if (fails.length) errors.push({ chunk: idx + 1, error: `재시도 후 부분 실패: ${fails.join(' / ')}`, partialOk });
+            else doneCount++;
+          } catch (e2) {
+            errors.push({ chunk: idx + 1, error: `재시도 실패: ${e2?.message || e2}` });
+          }
+        } else {
+          console.warn(`[translate-all] commentary chunk ${idx + 1}/${totalChunks} failed:`, e?.message || e);
+          errors.push({ chunk: idx + 1, error: e?.message || String(e) });
+        }
       }
     }
   }
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker));
 
   if (errors.length) {
-    const detail = errors.map((e) => `#${e.chunk}: ${e.error}`).join(' | ');
-    const err = new Error(`${errors.length}/${chunks.length} 청크 실패 — ${detail}`);
-    err.partial = errors.length < chunks.length;
+    // 사용자에게는 첫 에러 메시지 1개만 — 너무 길어지지 않게.
+    const firstMsg = errors[0]?.error || '알 수 없는 오류';
+    const detail = `${errors.length}/${totalChunks} 청크 실패 — 예: ${firstMsg}`;
+    const err = new Error(detail);
+    err.partial = errors.length < totalChunks;
+    err.errors = errors;
     throw err;
   }
 }

@@ -61,6 +61,7 @@ async function callClaude(
     prefill = null,
     signal = null,        // V2 streaming: 클라이언트 연결이 끊기면 abort
     onProgress = null,    // V2 streaming: 진행 이벤트 emit (서버 → 클라이언트)
+    rawText = false,      // true → JSON 파싱 건너뛰고 LLM 응답 문자열 그대로 반환 (단일 필드 번역용)
   } = {}
 ) {
   // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper는 1회 추가 시도까지만 (총 ≤2회).
@@ -104,6 +105,8 @@ async function callClaude(
       const combined =
         prefill && !text.trimStart().startsWith('{') ? prefill + text : text;
       onProgress?.({ t: 'llm_done', model: useModel, attempt: attempt + 1 });
+      // rawText 옵션: 단일 필드 번역처럼 JSON 래핑이 오히려 위험한 케이스. 응답 문자열 그대로 반환.
+      if (rawText) return combined;
       return parseJson(combined);
     } catch (err) {
       // AbortError 는 재시도하지 않고 그대로 throw
@@ -157,11 +160,13 @@ function removeTrailingCommas(json) {
   return json.replace(/,(\s*[}\]])/g, '$1');
 }
 
-// cards 배열이 중간에 잘렸을 때 마지막 완성 카드까지만 살려서 복구.
-function repairTruncatedCards(s) {
-  const cardsIdx = s.indexOf('"cards"');
-  if (cardsIdx === -1) return null;
-  const arrStart = s.indexOf('[', cardsIdx);
+// 배열이 중간에 잘렸을 때 마지막 완성 요소까지만 살려서 복구.
+// extract 응답("cards"), translate-commentary 응답("results"), 기타 어떤 배열 키든 처리.
+function repairTruncatedArray(s, arrayKey) {
+  const keyPattern = `"${arrayKey}"`;
+  const keyIdx = s.indexOf(keyPattern);
+  if (keyIdx === -1) return null;
+  const arrStart = s.indexOf('[', keyIdx);
   if (arrStart === -1) return null;
 
   let depth = 0;
@@ -183,6 +188,11 @@ function repairTruncatedCards(s) {
   }
   if (lastEnd === -1) return null;
   return s.slice(0, lastEnd + 1) + ']}';
+}
+
+// 하위 호환 — 기존 호출자는 cards 키 사용 가정.
+function repairTruncatedCards(s) {
+  return repairTruncatedArray(s, 'cards');
 }
 
 function tryParse(s, label) {
@@ -221,13 +231,17 @@ function parseJson(text) {
   out = tryParse(fixed2, '트레일링 콤마 제거 후');
   if (out) return out;
 
-  // 6) cards 배열을 마지막 완성 카드까지 잘라 복구 시도
+  // 6) cards / results 배열을 마지막 완성 요소까지 잘라 복구 시도
+  //    extract 응답은 "cards", translate-commentary 응답은 "results" 키 사용.
   const truncRepaired =
-    repairTruncatedCards(fixed2) ||
-    repairTruncatedCards(fixed1) ||
-    repairTruncatedCards(s);
+    repairTruncatedArray(fixed2, 'cards') ||
+    repairTruncatedArray(fixed1, 'cards') ||
+    repairTruncatedArray(s, 'cards') ||
+    repairTruncatedArray(fixed2, 'results') ||
+    repairTruncatedArray(fixed1, 'results') ||
+    repairTruncatedArray(s, 'results');
   if (truncRepaired) {
-    out = tryParse(escapeRawCtrlInStrings(truncRepaired), 'cards 잘림 복구');
+    out = tryParse(escapeRawCtrlInStrings(truncRepaired), '배열 잘림 복구');
     if (out) {
       out.__recovered = true;
       return out;
@@ -1014,18 +1028,20 @@ export async function runTranslateField({ text, field, work, direction = 'en2ko'
     keywords: 'A comma-separated list of short tags. Keep EXACTLY the same number and order as input. Translate each tag as a single English word or short phrase. No quotes, no Oxford commas. Example: "사랑, 배신, 신앙" → "love, betrayal, faith".',
   };
 
+  // JSON 래핑 제거 — 번역 결과에 따옴표·줄바꿈이 있으면 LLM 이 JSON escape 를 잘못해
+  // parseJson 전부 실패하는 경우가 흔해서, plain text 출력으로 전환. 시스템 프롬프트에서
+  // "오직 번역문만, 따옴표 / 마크다운 / 라벨 / 설명 금지" 를 강하게 지정.
   let prompt, system;
   if (direction === 'ko2en') {
-    system = 'You are a precise Korean→English literary translator. Translate faithfully and literally. Match the source length closely — never expand. Preserve the original meaning, sentence structure, and all details. Do NOT paraphrase, summarize, or add new information. Output a single JSON object only. No prose, no markdown.';
-    // 원본 문장 수를 셈 — LLM 에게 "정확히 이만큼" 으로 명시.
+    system = 'You are a precise Korean→English literary translator. Output ONLY the English translation as plain text — no JSON, no markdown, no code fences, no labels (no "Translation:"), no surrounding quotation marks. Translate faithfully and literally; match source length; never expand or paraphrase; preserve sentence count and every detail.';
     const srcSentenceCount = (src.match(/[.!?。！？\n]+/g) || []).length || 1;
     const srcCharCount = src.length;
-    prompt = `Translate the following Korean text into English. Be faithful, literal, and CONCISE.
+    prompt = `Translate the following Korean text into English.
 
 [Translation rules — hard requirements]
 1. Translate the Korean directly. Do NOT paraphrase or reinterpret.
 2. Output must have the SAME number of sentences as the original (≈ ${srcSentenceCount} sentence(s)).
-3. Output length should be similar to the source (the Korean source is ${srcCharCount} chars). English is usually slightly longer per word — but do not exceed ~1.8x.
+3. Output length should be similar to the source (the Korean source is ${srcCharCount} chars). Do not exceed ~1.8x.
 4. Preserve every detail, name, and claim in the Korean — no omissions.
 5. Do NOT add new information, context, examples, or explanations not in the source.
 6. Match the original tone (narrative, commentary, etc.).
@@ -1040,11 +1056,10 @@ ${FIELD_GUIDE_EN[field] || 'Natural English, faithful to the source.'}
 [Korean source]
 ${src}
 
-Output: a single JSON line, no other keys or explanation.
-{"text":"English translation matching the source length and detail"}`;
+Output: ONLY the English translation as plain text. No JSON, no markdown, no labels, no surrounding quotes.`;
   } else {
-    system = TRANSLATE_SYSTEM;
-    prompt = `너는 한국어 정전 감각을 가진 번역가다. 다음 영문을 한국어로 옮긴다.
+    system = '너는 한국어 정전 감각을 가진 번역가다. 응답은 오직 번역된 한국어 본문만 — JSON, 마크다운, 코드펜스, "번역:" 같은 라벨, 전체를 감싸는 따옴표, 설명 모두 금지. 원문 길이와 디테일을 보존하고 자연스러운 한국어로 옮긴다.';
+    prompt = `다음 영문을 한국어로 옮긴다.
 
 [작품 컨텍스트]
 ${ctx || '(없음)'}
@@ -1055,18 +1070,31 @@ ${FIELD_GUIDE_KO[field] || '자연스러운 한국어로.'}
 [영문 원본]
 ${src}
 
-응답: JSON 한 줄, 다른 키·설명 금지.
-{"text":"한국어 번역"}`;
+응답: 한국어 번역문만 plain text 로. JSON·마크다운·라벨·감싸는 따옴표 금지.`;
   }
 
-  // 신형 모델은 temperature 와 top_p 동시 지정 시 400 에러. temperature 만 사용.
+  // rawText: true → callClaude 가 JSON 파싱 안 하고 LLM 응답 문자열 그대로 반환.
+  // prefill 없음 (JSON 안 만들 거니까). Haiku 명시 — 빠르고 안정적.
   const result = await callClaude(prompt, {
     maxTokens: field === 'script_excerpt' ? 8000 : 1024,
     system,
     temperature: 0.3,
-    prefill: '{"text":"',
+    rawText: true,
+    model: 'haiku',
   });
-  const out = String(result?.text ?? '').trim();
+  let out = String(result || '').trim();
+  // LLM 이 가끔 따라오는 흔한 잡음 제거
+  out = out
+    .replace(/^```(?:json|text|markdown)?\s*/i, '')
+    .replace(/```\s*$/, '')
+    .replace(/^번역[:：]\s*/, '')
+    .replace(/^Translation[:：]\s*/i, '')
+    .trim();
+  // LLM 이 끝까지 JSON 으로 우긴 경우 — 안에 있는 텍스트만 추출 시도
+  if (out.startsWith('{"text":"') && out.endsWith('"}')) {
+    const inner = out.slice(9, -2);
+    out = inner.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+  }
   if (!out) throw new Error('Translation response missing text');
   return out;
 }
@@ -1127,11 +1155,14 @@ Example:
   // 안전 마진으로 cards 수 × 1500 토큰 또는 최소 6000 토큰 보장.
   const maxTokens = Math.max(6000, Math.min(16000, payload.length * 1500));
 
+  // KO→EN 번역은 단순 작업 — Haiku 명시 (빠르고 안정적, 비용 절약).
+  // 환경변수로 다른 모델 강제됐을 가능성 차단.
   const result = await callClaude(prompt, {
     maxTokens,
     system,
     temperature: 0.3,
     prefill: '{"results":[',
+    model: 'haiku',
   });
 
   const arr = Array.isArray(result?.results) ? result.results : [];
