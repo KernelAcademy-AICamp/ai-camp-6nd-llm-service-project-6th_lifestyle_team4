@@ -1500,23 +1500,50 @@ async function onTranslateAll() {
       results.forEach((r) => {
         const idx = Number(r?.id);
         if (Number.isNaN(idx) || !state.cards[idx]) return;
-        // EN→KO 번역 결과 (quote / script_excerpt) — translated 객체에 부착
-        if (r.quote_translated || r.script_excerpt_translated) {
-          state.cards[idx].translated = {
-            quote_translated: r.quote_translated || null,
-            script_excerpt_translated: r.script_excerpt_translated || null,
-            confidence: 'high',
-            note: '',
-          };
-          state.cards[idx].showingTranslation = true;
-        }
-        // KO→EN 번역 결과 (description / significance / keywords) — translated_commentary
-        if (r.excerpt_description_en || r.significance_en || (Array.isArray(r.keywords_en) && r.keywords_en.length)) {
-          state.cards[idx].translated_commentary = {
-            excerpt_description_original: r.excerpt_description_en || null,
-            significance_original:        r.significance_en || null,
-            keywords_original: Array.isArray(r.keywords_en) ? r.keywords_en : null,
-          };
+        const card = state.cards[idx];
+        const ko = r.ko || {};
+        const en = r.en || {};
+        const sourceIsEN = r.source_lang === 'en';
+
+        if (sourceIsEN) {
+          // ── EN 원문 케이스 ──────────────────────────────────────
+          // 1) translated — quote/script 의 KO 버전 (UI 토글로 표시)
+          if (ko.quote || ko.script_excerpt) {
+            card.translated = {
+              quote_translated: ko.quote || null,
+              script_excerpt_translated: ko.script_excerpt || null,
+              confidence: 'high',
+              note: '',
+            };
+            card.showingTranslation = true;
+          }
+          // 2) translated_commentary — EN *_original (save.js 가 _original 컬럼에 저장)
+          if (en.excerpt_description || en.significance || (Array.isArray(en.keywords) && en.keywords.length)) {
+            card.translated_commentary = {
+              excerpt_description_original: en.excerpt_description || null,
+              significance_original:        en.significance || null,
+              keywords_original: Array.isArray(en.keywords) ? en.keywords : null,
+            };
+          }
+          // 3) primary 필드(desc/sig/kw)를 KO 로 교체 — 추출 시 EN 으로 들어왔으니 한국어 새로 필요.
+          //    save.js 가 card.excerpt_description / significance / keywords 를 primary 로 INSERT.
+          if (ko.excerpt_description) card.excerpt_description = ko.excerpt_description;
+          if (ko.significance)        card.significance        = ko.significance;
+          if (Array.isArray(ko.keywords) && ko.keywords.length) card.keywords = ko.keywords;
+        } else {
+          // ── KO 원문 케이스 ──────────────────────────────────────
+          // primary 필드는 이미 한국어 (그대로 둠). *_original 영문만 채움.
+          // showingTranslation 설정 X — UI 가 KO 를 그대로 보여줌. save.js 가
+          // useTranslation=false 분기로 card.quote_original / script_excerpt_original 사용.
+          if (en.quote)          card.quote_original = en.quote;
+          if (en.script_excerpt) card.script_excerpt_original = en.script_excerpt;
+          if (en.excerpt_description || en.significance || (Array.isArray(en.keywords) && en.keywords.length)) {
+            card.translated_commentary = {
+              excerpt_description_original: en.excerpt_description || null,
+              significance_original:        en.significance || null,
+              keywords_original: Array.isArray(en.keywords) ? en.keywords : null,
+            };
+          }
         }
         done++;
       });
@@ -1575,9 +1602,28 @@ translateAllBtn?.addEventListener('click', onTranslateAll);
 // ---------------------------------------------------------------------------
 // Save
 // ---------------------------------------------------------------------------
+// 저장 가능 여부 — A1 흐름에서는 EN 원문 카드가 번역 안 되어 있으면 primary 가 EN 으로
+// 저장되어 라이브러리에서 영문이 한국어 자리에 표시됨. 이를 방지하기 위해 저장 전 검사.
+function hasKoreanChars(s) {
+  return /[가-힯]/.test(String(s || ''));
+}
+function needsTranslation(card) {
+  // quote 에 한국어가 전혀 없으면 EN 원문 → 번역 필수.
+  // card.translated 가 있으면 (translate-all 클릭됨) → OK.
+  if (card.translated && card.showingTranslation) return false;
+  return !hasKoreanChars(card.quote);
+}
+
 saveBtn.addEventListener('click', async () => {
   const selected = state.cards.filter((c) => c.selected);
   if (!selected.length) return;
+
+  // 안전망 — EN 원문 카드 중 번역 안 된 것이 있으면 차단.
+  const untranslated = selected.filter(needsTranslation);
+  if (untranslated.length > 0) {
+    toast(`영문 원문 카드 ${untranslated.length}장에 번역이 필요합니다. "전체 번역" 을 먼저 눌러주세요.`, 'error');
+    return;
+  }
 
   saveBtn.disabled = true;
   const orig = saveBtn.innerHTML;
@@ -1596,7 +1642,10 @@ saveBtn.addEventListener('click', async () => {
       significance: c.significance || null,
       translated: c.translated || null,
       showingTranslation: !!c.showingTranslation,
-      // ★ 번역 단계에서 KO→EN 배치로 채운 해설 영문 — save.js 가 *_original 컬럼에 INSERT
+      // KO 원문 케이스 — onTranslateAll 이 채운 영문 _original (save.js useTranslation=false 분기에서 사용)
+      quote_original: c.quote_original || null,
+      script_excerpt_original: c.script_excerpt_original || null,
+      // 번역 단계에서 채운 해설 영문 — save.js 가 *_original 컬럼에 INSERT
       translated_commentary: c.translated_commentary || null,
     }));
 

@@ -292,6 +292,20 @@ function buildCriticalRulesPreamble(category) {
    (b) script_excerpt 의 길이가 quote 의 길이보다 최소 5배 이상인가?
    (c) script_excerpt 가 카테고리별 최소 길이를 충족하는가?
    (d) quote 의 모든 문자가 script_excerpt 안에 그대로 포함되는가?
+
+★ COMMENTARY LANGUAGE (해설 필드 작성 언어) ★
+다음 필드는 quote/script_excerpt 와 **동일한 언어**로 작성한다:
+  · excerpt_description
+  · significance
+  · keywords (각 키워드 단어를 source 언어로)
+  · title, subtitle, author 도 가능한 source 언어 그대로 (작가명만 한국어 통용 표기 변환 허용)
+
+언어 판정 기준 — quote/script_excerpt 의 주요 언어:
+  · 한국어 원문 → 위 필드 모두 **한국어**로 (하단 본문의 한국어 스타일 가이드 따름)
+  · 영어 원문 → 위 필드 모두 **영어**로 (간결하고 문학적인 영어, 하단의 "한국어로" 지시 무시)
+  · 그 외 언어(불어/독어/일본어 등) → source 언어로 그대로
+
+이유: 사용자가 양 언어 모두를 보려 한다. 추출 시 source 언어로 작성하면 추후 단방향 번역 한 번으로 양 언어 확보 가능.
 [★★★ CRITICAL 끝 ★★★]
 
 `;
@@ -1408,23 +1422,29 @@ ${requiredNames}
   return out;
 }
 
-// "전체 번역" 최적 경로 — 카드 N장의 5필드를 한 LLM 호출로 양방향 일괄 처리.
-//   EN→KO: quote, script_excerpt           (원본은 영문, 한국어로)
-//   KO→EN: description, significance, keywords  (LLM 생성 한국어 해설, 영문으로)
+// "전체 번역" 최적 경로 — 카드 N장의 5필드를 한 LLM 호출로 source→target 단방향 번역.
+// A1 (source-language commentary) 이후: 추출 시 모든 필드가 source 언어로 들어있음.
+//   영문 원문 → 모든 필드 EN→KO
+//   한국어 원문 → 모든 필드 KO→EN
 //
-// 이전 흐름: runTranslate × N (per card) + runTranslateCommentaryBatch × (N/5) ≈ N + N/5 회.
-// 새 흐름:   이 함수 × (N/CHUNK_SIZE) 회.  (5장씩 묶으면 N/5)
-//
-// 입력 cards: [{ id, quote, script_excerpt, excerpt_description, significance, keywords }]
-//   - quote/script_excerpt: 영문 원본 (없거나 이미 한국어면 건너뜀)
-//   - excerpt_description/significance/keywords: 한국어 (없거나 영문이면 건너뜀)
-// 응답: [{ id,
-//   quote_translated, script_excerpt_translated,
-//   excerpt_description_en, significance_en, keywords_en: string[]
-// }]
+// 응답: [{ id, source_lang, ko: {quote, script_excerpt, desc, sig, kw}, en: {...} }]
+//   ko / en 각각 5필드. source 언어 값은 입력 echo, 반대 언어 값은 LLM 번역 결과.
+
+// quote/script 의 한·영 비율로 source 언어 판정.
+function detectCardSourceLang(card) {
+  const sample = `${card?.quote || ''} ${card?.script_excerpt || ''}`;
+  const koreanChars = (sample.match(/[가-힯]/g) || []).length;
+  const latinChars  = (sample.match(/[a-zA-Z]/g) || []).length;
+  return koreanChars > latinChars ? 'ko' : 'en';
+}
+
 export async function runTranslateCardBatch({ cards, work }) {
   const items = Array.isArray(cards) ? cards : [];
   if (!items.length) return [];
+
+  // 첫 카드의 quote/script 에서 source 언어 판정. batch 는 한 작품 단위라 일관.
+  const sourceLang = detectCardSourceLang(items[0]);
+  const targetLang = sourceLang === 'ko' ? 'en' : 'ko';
 
   const w = work && typeof work === 'object' ? work : {};
   const ctx = [
@@ -1434,50 +1454,53 @@ export async function runTranslateCardBatch({ cards, work }) {
     w.format   ? `Format: ${w.format}`      : null,
   ].filter(Boolean).join('\n');
 
-  // 입력 카드 블록 — 마커로 카드와 필드 명확히 구분. 본문은 escape 없는 plain text.
-  // 빈/이미 번역된 필드는 빼서 토큰 절약.
+  // 입력 카드 블록 — source 언어 그대로 SRC_ 접두 5필드. 빈 필드는 빼서 토큰 절약.
   const cardBlocks = items.map((c, i) => {
     const id = c.id ?? i;
     const parts = [`<<<CARD id=${id}>>>`];
-    if (c.quote && String(c.quote).trim())                   parts.push(`<<<EN_QUOTE>>>\n${String(c.quote).trim()}\n<<<END_EN_QUOTE>>>`);
-    if (c.script_excerpt && String(c.script_excerpt).trim()) parts.push(`<<<EN_SCRIPT>>>\n${String(c.script_excerpt).trim()}\n<<<END_EN_SCRIPT>>>`);
-    if (c.excerpt_description && String(c.excerpt_description).trim()) parts.push(`<<<KO_DESC>>>\n${String(c.excerpt_description).trim()}\n<<<END_KO_DESC>>>`);
-    if (c.significance && String(c.significance).trim())     parts.push(`<<<KO_SIG>>>\n${String(c.significance).trim()}\n<<<END_KO_SIG>>>`);
-    if (Array.isArray(c.keywords) && c.keywords.length)      parts.push(`<<<KO_KW>>>\n${c.keywords.map((k) => String(k).trim()).filter(Boolean).join(', ')}\n<<<END_KO_KW>>>`);
+    if (c.quote && String(c.quote).trim())                   parts.push(`<<<SRC_QUOTE>>>\n${String(c.quote).trim()}\n<<<END_SRC_QUOTE>>>`);
+    if (c.script_excerpt && String(c.script_excerpt).trim()) parts.push(`<<<SRC_SCRIPT>>>\n${String(c.script_excerpt).trim()}\n<<<END_SRC_SCRIPT>>>`);
+    if (c.excerpt_description && String(c.excerpt_description).trim()) parts.push(`<<<SRC_DESC>>>\n${String(c.excerpt_description).trim()}\n<<<END_SRC_DESC>>>`);
+    if (c.significance && String(c.significance).trim())     parts.push(`<<<SRC_SIG>>>\n${String(c.significance).trim()}\n<<<END_SRC_SIG>>>`);
+    if (Array.isArray(c.keywords) && c.keywords.length)      parts.push(`<<<SRC_KW>>>\n${c.keywords.map((k) => String(k).trim()).filter(Boolean).join(', ')}\n<<<END_SRC_KW>>>`);
     parts.push('<<<END_CARD>>>');
     return parts.join('\n');
   }).join('\n\n');
 
-  const system =
-    'You are a precise bilingual literary translator (English ↔ Korean). For each input card, translate ONLY the fields present. EN_QUOTE/EN_SCRIPT → Korean (natural, speakable). KO_DESC/KO_SIG/KO_KW → English (literal, same sentence count). Output ONLY the marker-delimited format specified — no JSON, no markdown, no extra prose.';
+  const isToKorean = targetLang === 'ko';
+  const system = isToKorean
+    ? '너는 한국어 정전 감각을 가진 번역가다. 입력의 모든 필드(quote/script/description/significance/keywords)를 자연스러운 한국어로 옮긴다. 응답은 지정된 마커 형식만 — JSON·마크다운·설명 금지.'
+    : 'You are a precise Korean→English literary translator. Translate every input field (quote/script/description/significance/keywords) into faithful, literal English. Output ONLY the marker-delimited format specified. No JSON, no markdown, no extra prose.';
 
-  // 입력 카드별로 어떤 OUT 섹션이 필요한지 명시 — LLM 이 빠뜨릴 가능성 차단.
+  // 카드별 필수 OUT 섹션 — LLM 누락 차단
   const cardRequirements = items.map((c, i) => {
     const id = c.id ?? i;
     const need = [];
-    if (c.quote && String(c.quote).trim())                   need.push('KO_QUOTE');
-    if (c.script_excerpt && String(c.script_excerpt).trim()) need.push('KO_SCRIPT');
-    if (c.excerpt_description && String(c.excerpt_description).trim()) need.push('EN_DESC');
-    if (c.significance && String(c.significance).trim())     need.push('EN_SIG');
-    if (Array.isArray(c.keywords) && c.keywords.length)      need.push('EN_KW');
+    if (c.quote && String(c.quote).trim())                   need.push('TGT_QUOTE');
+    if (c.script_excerpt && String(c.script_excerpt).trim()) need.push('TGT_SCRIPT');
+    if (c.excerpt_description && String(c.excerpt_description).trim()) need.push('TGT_DESC');
+    if (c.significance && String(c.significance).trim())     need.push('TGT_SIG');
+    if (Array.isArray(c.keywords) && c.keywords.length)      need.push('TGT_KW');
     return `· id=${id} requires: ${need.join(', ')}`;
   }).join('\n');
 
-  const prompt = `Translate ${items.length} card(s) in both directions.
+  const translationGuide = isToKorean ? `
+[번역 규칙 — 한국어 출력]
+· quote/script_excerpt: 무대 위 배우가 한 호흡에 말할 수 있는 자연스러운 한국어. 번역체 ("당신", "그/그녀", "~인 것이다") 금지. 인물 관계에 맞는 위계 어투. script 는 인물명·지문·줄바꿈 형식 그대로.
+· excerpt_description: 한 단락 산문, 80~250자.
+· significance: 80~200자, 작품 의의 한 문장 응축.
+· keywords: 쉼표 구분, 입력과 동일 개수·순서. 각 키워드 2~6자 한국어 명사/명사구. 따옴표·옥스퍼드 쉼표 금지.` : `
+[Translation rules — English output]
+· quote/script_excerpt: literal English. Preserve speaker labels and stage direction linebreaks. Match tone (modern/period drama).
+· excerpt_description: literal English narrative, 1 paragraph, ~80-300 chars.
+· significance: literal English commentary, ~80-250 chars, single distilled claim.
+· keywords: comma-separated, SAME count and order as input. Each tag a short English word or phrase. No quotes, no Oxford commas.`;
+
+  const prompt = `Translate ${items.length} card(s) ${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()} (all fields, single direction).
 
 [Work context — for terminology consistency]
 ${ctx || '(none)'}
-
-[Translation rules]
-EN → KO (quote, script_excerpt):
-· 자연스러운 한국어. 무대 위 배우가 한 호흡에 말할 수 있게.
-· 번역체 ("당신", "그/그녀", "~인 것이다") 금지.
-· 인물 관계에 맞는 위계 어투(반말/존댓말/하오체).
-· script: 인물명·지문·줄바꿈 형식 그대로.
-
-KO → EN (description, significance, keywords):
-· Literal English. Same sentence count. Preserve every claim and detail.
-· keywords: comma-separated short tags, SAME count and order, no quotes, no Oxford commas.
+${translationGuide}
 
 [Input cards — markers delimit cards and fields; content is plain text, no escaping]
 ${cardBlocks}
@@ -1486,37 +1509,36 @@ ${cardBlocks}
 ${cardRequirements}
 
 [Output format — STRICT]
-For each input card, emit ONE <<<RESULT id=N>>> ... <<<END_RESULT>>> block. Inside, emit EACH required OUT section listed above. Field markers and content format:
+For each input card, emit ONE <<<RESULT id=N>>> ... <<<END_RESULT>>> block. Inside, emit EACH required TGT_ section listed above:
 
 <<<RESULT id=1>>>
-<<<KO_QUOTE>>>
-{Korean translation of EN_QUOTE}
-<<<END_KO_QUOTE>>>
-<<<KO_SCRIPT>>>
-{Korean translation of EN_SCRIPT — preserve original line breaks}
-<<<END_KO_SCRIPT>>>
-<<<EN_DESC>>>
-{English translation of KO_DESC}
-<<<END_EN_DESC>>>
-<<<EN_SIG>>>
-{English translation of KO_SIG}
-<<<END_EN_SIG>>>
-<<<EN_KW>>>
-{English keywords, comma-separated, same count and order as input}
-<<<END_EN_KW>>>
+<<<TGT_QUOTE>>>
+{${targetLang.toUpperCase()} translation of SRC_QUOTE}
+<<<END_TGT_QUOTE>>>
+<<<TGT_SCRIPT>>>
+{${targetLang.toUpperCase()} translation of SRC_SCRIPT — preserve original line breaks}
+<<<END_TGT_SCRIPT>>>
+<<<TGT_DESC>>>
+{${targetLang.toUpperCase()} translation of SRC_DESC}
+<<<END_TGT_DESC>>>
+<<<TGT_SIG>>>
+{${targetLang.toUpperCase()} translation of SRC_SIG}
+<<<END_TGT_SIG>>>
+<<<TGT_KW>>>
+{${targetLang.toUpperCase()} keywords, comma-separated, same count and order as input}
+<<<END_TGT_KW>>>
 <<<END_RESULT>>>
 
-★ COMPLETENESS REQUIREMENTS (do not skip):
+★ COMPLETENESS REQUIREMENTS:
 1. Emit EXACTLY ${items.length} <<<RESULT>>> block(s), one per input card, in the SAME ORDER as input.
 2. Use the EXACT input id from the corresponding <<<CARD id=N>>>.
-3. Within each RESULT, emit EVERY required OUT section listed above for that card.
+3. Within each RESULT, emit EVERY required TGT_ section listed above for that card.
 4. Marker content is plain text — do NOT escape quotes, newlines, brackets, or any character.
-5. No text outside RESULT blocks. No greetings, no JSON wrapper, no markdown.
-6. Translate every field FULLY — do not abbreviate, do not summarize, do not write "..." or placeholders.`;
+5. No text outside RESULT blocks. No greetings, no JSON, no markdown.
+6. Translate every field FULLY — do not abbreviate or summarize.`;
 
-  // 토큰 예산 — 카드당 입력 ~3000자(EN script가 큼) + 출력 1.3배(KO 비슷) + 마커 ~200.
-  // 카드당 평균 5000 토큰. 최대 16000.
-  const maxTokens = Math.min(16000, Math.max(3000, items.length * 5000));
+  // 토큰 예산 — 단방향이라 양방향 대비 절감. 카드당 평균 4000 토큰. 최대 16000.
+  const maxTokens = Math.min(16000, Math.max(2500, items.length * 4000));
 
   const startedAt = Date.now();
   const text = await callClaude(prompt, {
@@ -1557,39 +1579,52 @@ For each input card, emit ONE <<<RESULT id=N>>> ... <<<END_RESULT>>> block. Insi
       return inside.slice(valueStart, e).trim() || null;
     }
 
-    const koQuote = section('<<<KO_QUOTE>>>', '<<<END_KO_QUOTE>>>');
-    const koScript = section('<<<KO_SCRIPT>>>', '<<<END_KO_SCRIPT>>>');
-    const enDesc  = section('<<<EN_DESC>>>', '<<<END_EN_DESC>>>');
-    const enSig   = section('<<<EN_SIG>>>', '<<<END_EN_SIG>>>');
-    const enKwRaw = section('<<<EN_KW>>>', '<<<END_EN_KW>>>');
-    const enKw = enKwRaw ? enKwRaw.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean) : null;
+    const tgtQuote  = section('<<<TGT_QUOTE>>>',  '<<<END_TGT_QUOTE>>>');
+    const tgtScript = section('<<<TGT_SCRIPT>>>', '<<<END_TGT_SCRIPT>>>');
+    const tgtDesc   = section('<<<TGT_DESC>>>',   '<<<END_TGT_DESC>>>');
+    const tgtSig    = section('<<<TGT_SIG>>>',    '<<<END_TGT_SIG>>>');
+    const tgtKwRaw  = section('<<<TGT_KW>>>',     '<<<END_TGT_KW>>>');
+    const tgtKw = tgtKwRaw ? tgtKwRaw.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean) : null;
 
     byId.set(id, {
-      quote_translated: koQuote,
-      script_excerpt_translated: koScript,
-      excerpt_description_en: enDesc,
-      significance_en: enSig,
-      keywords_en: enKw && enKw.length ? enKw : null,
+      quote: tgtQuote,
+      script_excerpt: tgtScript,
+      excerpt_description: tgtDesc,
+      significance: tgtSig,
+      keywords: tgtKw && tgtKw.length ? tgtKw : null,
     });
   }
 
-  // 입력 순서대로 정렬해서 반환. 누락된 카드는 빈 객체.
+  // 입력 순서대로 정렬해서 반환. { id, source_lang, ko: {...}, en: {...} } 형태.
+  // 입력(source) 은 echo, 출력(target) 은 LLM 번역 결과.
   const out = items.map((c, i) => {
     const r = byId.get(normalizeId(c.id ?? i)) || {};
+    const sourceFields = {
+      quote: c.quote || null,
+      script_excerpt: c.script_excerpt || null,
+      excerpt_description: c.excerpt_description || null,
+      significance: c.significance || null,
+      keywords: Array.isArray(c.keywords) && c.keywords.length ? c.keywords : null,
+    };
+    const targetFields = {
+      quote: r.quote || null,
+      script_excerpt: r.script_excerpt || null,
+      excerpt_description: r.excerpt_description || null,
+      significance: r.significance || null,
+      keywords: Array.isArray(r.keywords) ? r.keywords : null,
+    };
     return {
       id: c.id ?? i,
-      quote_translated: r.quote_translated || null,
-      script_excerpt_translated: r.script_excerpt_translated || null,
-      excerpt_description_en: r.excerpt_description_en || null,
-      significance_en: r.significance_en || null,
-      keywords_en: Array.isArray(r.keywords_en) ? r.keywords_en : null,
+      source_lang: sourceLang,
+      ko: sourceLang === 'ko' ? sourceFields : targetFields,
+      en: sourceLang === 'en' ? sourceFields : targetFields,
     };
   });
 
-  // 진단 로그 — Vercel 함수 로그에서 batch 품질 모니터링용. 응답엔 안 들어감.
+  // 진단 로그 — Vercel 함수 로그에서 batch 품질 모니터링용.
   console.log(
     `[translate-card-batch] input=${items.length} blocks=${blocksFound} ` +
-    `maxTokens=${maxTokens} llmMs=${llmMs}`
+    `${sourceLang}→${targetLang} maxTokens=${maxTokens} llmMs=${llmMs}`
   );
   return out;
 }
