@@ -71,6 +71,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
+import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.theme.CardWarm
@@ -90,6 +91,7 @@ import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import kotlinx.coroutines.delay
 
 // --- British-bookstore bookshelf palette (local, decorative) ---
 private val Gilt = Color(0xFFC9A24B)        // antique gold — rules, marker
@@ -190,6 +192,16 @@ fun ArchiveScreen(
     var search by remember { mutableStateOf("") }
     var genre by remember { mutableStateOf<String?>(null) } // null = 전체
 
+    LaunchedEffect(search) {
+        val q = search.trim()
+        if (q.isNotBlank()) {
+            delay(600)
+            if (search.trim() == q) {
+                AppAnalytics.track("archive_searched", mapOf("query" to q))
+            }
+        }
+    }
+
     val allBooks = remember(state.bookmarks) { buildBooks(state.bookmarks) }
     val filtered = allBooks.filter { b ->
         val fmt = b.format?.lowercase() ?: ""
@@ -242,7 +254,14 @@ fun ArchiveScreen(
         Box(modifier = Modifier.height(12.dp))
 
         if (allBooks.isNotEmpty()) {
-            GenreChips(allBooks = allBooks, selected = genre, onSelect = { genre = it })
+            GenreChips(
+                allBooks = allBooks,
+                selected = genre,
+                onSelect = {
+                    genre = it
+                    AppAnalytics.track("archive_genre_filtered", mapOf("genre" to (it ?: "all")))
+                },
+            )
             Box(modifier = Modifier.height(10.dp))
             ArchiveSearchField(
                 value = search,
@@ -345,7 +364,10 @@ private fun Bookcase(
                         GenreBookshelf(
                             colors = frameColorsFor(section.genre),
                             books = section.books,
-                            onOpen = { openWorkId = it },
+                            onOpen = {
+                                openWorkId = it
+                                AppAnalytics.track("archive_book_opened", mapOf("work_id" to it))
+                            },
                         )
                     }
                 }

@@ -2,6 +2,7 @@ package com.lifestyle.dailyscript.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.repo.AuthRepository
 import com.lifestyle.dailyscript.data.repo.UserSession
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,7 @@ class AppSessionViewModel : ViewModel() {
                 _state.value = SessionState.Error(signOutResult.exceptionOrNull().messageOr("Sign-out failed"))
                 return@launch
             }
+            AppAnalytics.resetUser()
             bootstrapIntoState()
         }
     }
@@ -52,6 +54,10 @@ class AppSessionViewModel : ViewModel() {
                 authRepo.signInWithId(id, password, signUp, current?.userId, current?.nickname)
             }.onSuccess {
                 bootstrapIntoState()
+                AppAnalytics.track(
+                    if (signUp) "sign_up" else "login",
+                    mapOf("method" to "id_password"),
+                )
                 _authMessage.value = if (signUp) "가입 완료" else "로그인 됐어요"
             }.onFailure {
                 _authMessage.value = friendlyAuthError(it.message.orEmpty())
@@ -90,6 +96,13 @@ class AppSessionViewModel : ViewModel() {
                             ageGroup = ageGroup ?: session.ageGroup,
                         )
                     )
+                    AppAnalytics.setUserProperties(
+                        mapOf(
+                            "gender" to (gender ?: session.gender),
+                            "age_group" to (ageGroup ?: session.ageGroup),
+                        )
+                    )
+                    AppAnalytics.track("profile_updated")
                     _authMessage.value = "프로필이 저장됐어요"
                 }
                 .onFailure { _authMessage.value = "저장 실패: ${it.message ?: ""}" }

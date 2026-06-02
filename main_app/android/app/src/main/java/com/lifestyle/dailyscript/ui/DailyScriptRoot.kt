@@ -28,6 +28,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.repo.UserSession
 import com.lifestyle.dailyscript.ui.archive.ArchiveScreen
 import com.lifestyle.dailyscript.ui.components.BottomNavBar
@@ -95,6 +96,16 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
 
     // Interactive spotlight onboarding tour (앱 사용법 / 첫 실행). Starts only once HOME is shown.
     val coach = remember { CoachController() }
+    LaunchedEffect(session.userId, session.isAnonymous, session.gender, session.ageGroup) {
+        AppAnalytics.identify(session.userId, session.isAnonymous, session.gender, session.ageGroup)
+    }
+    LaunchedEffect(currentRoute) {
+        val screen = when {
+            currentRoute == Routes.DETAIL || currentRoute?.startsWith("detail/") == true -> "detail"
+            else -> currentRoute
+        }
+        screen?.let(AppAnalytics::setScreen)
+    }
     LaunchedEffect(session.isAnonymous) {
         coach.configure(memberActionsEnabled = !session.isAnonymous)
     }
@@ -131,9 +142,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         if (showTopBar) {
             when (currentRoute) {
                 Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(onMyPageClick = {
+                    AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.SETTINGS))
                     navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
                 })
                 Routes.SETTINGS -> SettingsTopBar(onFeedback = {
+                    AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.FEEDBACK))
                     navController.navigate(Routes.FEEDBACK)
                 })
                 else -> Unit
@@ -173,17 +186,30 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onSignIn = { id, pw, signUp -> sessionVm.signIn(id, pw, signUp) },
                         onSignOut = sessionVm::signOutAndReauth,
                         onUpdateProfile = sessionVm::updateProfile,
-                        onOpenMyComments = { navController.navigate(Routes.MY_COMMENTS) },
-                        onOpenMyFeed = { navController.navigate(Routes.MY_FEED) },
+                        onOpenMyComments = {
+                            AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.MY_COMMENTS))
+                            navController.navigate(Routes.MY_COMMENTS)
+                        },
+                        onOpenMyFeed = {
+                            AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.MY_FEED))
+                            navController.navigate(Routes.MY_FEED)
+                        },
                         onOpenGuide = {
+                            AppAnalytics.track("onboarding_requested")
                             coach.requestStart()
                             navController.navigate(Routes.HOME) {
                                 popUpTo(Routes.HOME) { inclusive = false }
                                 launchSingleTop = true
                             }
                         },
-                        onOpenTerms = { navController.navigate(Routes.TERMS) },
-                        onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
+                        onOpenTerms = {
+                            AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.TERMS))
+                            navController.navigate(Routes.TERMS)
+                        },
+                        onOpenPrivacy = {
+                            AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.PRIVACY))
+                            navController.navigate(Routes.PRIVACY)
+                        },
                         onConsumeMessage = sessionVm::consumeAuthMessage,
                     )
                 }
@@ -235,6 +261,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 noticeBadge = noticeBadge,
                 onSelect = { route ->
                     if (currentRoute != route) {
+                        AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to route))
                         navController.navigate(route) {
                             popUpTo(Routes.HOME) { inclusive = false }
                             launchSingleTop = true

@@ -2,6 +2,7 @@ package com.lifestyle.dailyscript.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.Recommend
 import com.lifestyle.dailyscript.data.model.CardDto
@@ -83,7 +84,14 @@ class HomeViewModel : ViewModel() {
             val tasteEnabled = AppPreferences.tasteEnabled.first()
             val recentIds = AppPreferences.recentlyShown.first()
             val pick = Recommend.pickRandom(allCards, tasteEnabled, bookmarkCards, recentIds)
-            if (pick != null) AppPreferences.rememberShown(pick.cardId)
+            if (pick != null) {
+                AppPreferences.rememberShown(pick.cardId)
+                AppAnalytics.trackCard(
+                    "today_refreshed",
+                    pick,
+                    mapOf("is_anonymous" to isAnonymous),
+                )
+            }
             val newRecentIds = AppPreferences.recentlyShown.first()
             val recent = buildRecent(newRecentIds)
             _state.value = _state.value.copy(
@@ -105,6 +113,11 @@ class HomeViewModel : ViewModel() {
                 .onSuccess { now ->
                     val refreshed = runCatching { bookmarkRepo.list(userId) }.getOrNull()
                     if (refreshed != null) bookmarkCards = refreshed.mapNotNull { it.cards }
+                    AppAnalytics.trackCard(
+                        if (now) "bookmark_added" else "bookmark_removed",
+                        card,
+                        mapOf("source" to "home_today"),
+                    )
                     _state.value = _state.value.copy(
                         todayBookmarked = now,
                         bookmarkActionInFlight = false,

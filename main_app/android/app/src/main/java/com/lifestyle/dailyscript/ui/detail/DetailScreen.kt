@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
+import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.DetailTopBar
@@ -101,6 +102,9 @@ fun DetailScreen(
     val state by vm.state.collectAsState()
 
     LaunchedEffect(cardId, userId) { vm.load(cardId, userId) }
+    LaunchedEffect(state.card?.cardId) {
+        state.card?.let { AppAnalytics.trackCard("script_opened", it) }
+    }
 
     // Coachmark tour anchors — scroll the targeted info block into view during the 전문 steps.
     val coach = LocalCoachController.current

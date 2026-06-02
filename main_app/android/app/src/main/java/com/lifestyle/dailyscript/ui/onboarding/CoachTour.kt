@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -133,7 +134,12 @@ class CoachController {
         if (index > steps.lastIndex) index = steps.lastIndex.coerceAtLeast(0)
     }
     fun requestStart() { pending = true }
-    fun start() { pending = false; index = 0; active = true }
+    fun start() {
+        pending = false
+        index = 0
+        active = true
+        AppAnalytics.track("onboarding_start")
+    }
     fun next() { if (index < steps.lastIndex) index++ else end() }
     fun end() { active = false; index = 0; pending = false; onEnd?.invoke() }
     fun setActionHandler(action: String, handler: (() -> Unit)?) {

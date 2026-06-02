@@ -2,6 +2,7 @@ package com.lifestyle.dailyscript.ui.feedback
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.FeedbackApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +33,14 @@ class FeedbackViewModel : ViewModel() {
             runCatching {
                 FeedbackApi.submit(rating, gender, age, liked.trim(), improve.trim(), message.trim(), email.trim())
             }.onSuccess {
+                AppAnalytics.track(
+                    "feedback_submitted",
+                    mapOf(
+                        "rating" to rating,
+                        "gender" to gender,
+                        "age_group" to age,
+                    ),
+                )
                 _state.value = _state.value.copy(submitting = false, done = true)
             }.onFailure {
                 _state.value = _state.value.copy(

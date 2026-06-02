@@ -2,6 +2,7 @@ package com.lifestyle.dailyscript.ui.feed
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.FeedPost
@@ -48,6 +49,9 @@ class FeedViewModel : ViewModel() {
     }
 
     fun setCategory(cat: String) {
+        if (cat != _state.value.category) {
+            AppAnalytics.track("feed_category_changed", mapOf("category" to cat))
+        }
         _state.value = _state.value.copy(category = cat)
         viewModelScope.launch { AppPreferences.setFeedCategory(cat) }
     }
@@ -66,6 +70,10 @@ class FeedViewModel : ViewModel() {
                 .onSuccess {
                     val posts = runCatching { feedRepo.loadPosts() }.getOrDefault(_state.value.posts)
                     AppPreferences.setFeedCategory(FEED_TODAY)
+                    AppAnalytics.track(
+                        "feed_post_submitted",
+                        mapOf("card_id" to cardId),
+                    )
                     _state.value = _state.value.copy(
                         submitting = false,
                         composeCard = null,

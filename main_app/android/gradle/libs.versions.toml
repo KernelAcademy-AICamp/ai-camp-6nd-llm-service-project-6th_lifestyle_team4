@@ -13,6 +13,8 @@ supabase = "3.0.3"
 ktor = "3.0.3"
 glance = "1.1.1"
 workManager = "2.10.0"
+amplitude = "1.28.2"
+clarity = "3.8.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -42,6 +44,9 @@ ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version
 androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
+
+amplitude-analytics-android = { group = "com.amplitude", name = "analytics-android", version.ref = "amplitude" }
+microsoft-clarity-compose = { group = "com.microsoft.clarity", name = "clarity-compose", version.ref = "clarity" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

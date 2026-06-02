@@ -13,6 +13,15 @@ val localProps = Properties().apply {
 }
 val supabaseUrl: String = localProps.getProperty("SUPABASE_URL", "")
 val supabaseAnonKey: String = localProps.getProperty("SUPABASE_ANON_KEY", "")
+val amplitudeApiKey: String = localProps.getProperty("AMPLITUDE_API_KEY")
+    ?: System.getenv("AMPLITUDE_API_KEY")
+    ?: "016c6218aa17a49377b3ac38e6958070"
+val clarityProjectId: String = localProps.getProperty("CLARITY_PROJECT_ID")
+    ?: System.getenv("CLARITY_PROJECT_ID")
+    ?: "wxyaqwn09q"
+
+fun buildConfigString(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
     namespace = "com.lifestyle.dailyscript"
@@ -28,8 +37,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
-        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+        buildConfigField("String", "SUPABASE_URL", buildConfigString(supabaseUrl))
+        buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(supabaseAnonKey))
+        buildConfigField("String", "AMPLITUDE_API_KEY", buildConfigString(amplitudeApiKey))
+        buildConfigField("String", "CLARITY_PROJECT_ID", buildConfigString(clarityProjectId))
     }
 
     buildTypes {
@@ -91,4 +102,7 @@ dependencies {
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
     implementation(libs.androidx.work.runtime.ktx)
+
+    implementation(libs.amplitude.analytics.android)
+    implementation(libs.microsoft.clarity.compose)
 }

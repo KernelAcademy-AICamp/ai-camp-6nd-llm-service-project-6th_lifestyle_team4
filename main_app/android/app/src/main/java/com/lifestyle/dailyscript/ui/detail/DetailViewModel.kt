@@ -2,6 +2,7 @@ package com.lifestyle.dailyscript.ui.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.Comment
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
@@ -60,6 +61,11 @@ class DetailViewModel : ViewModel() {
             runCatching { bookmarkRepo.toggle(userId, card.cardId) }
                 .onSuccess { now ->
                     val delta = if (now) 1 else -1
+                    AppAnalytics.trackCard(
+                        if (now) "bookmark_added" else "bookmark_removed",
+                        card,
+                        mapOf("source" to "detail"),
+                    )
                     _state.value = _state.value.copy(
                         bookmarked = now,
                         bookmarkCount = (_state.value.bookmarkCount + delta).coerceAtLeast(0),
@@ -107,6 +113,14 @@ class DetailViewModel : ViewModel() {
                 commentRepo.addComment(currentCardId, userId, body, nickname.ifBlank { null }, parentId)
             }.onSuccess { added ->
                 val exists = _state.value.comments.any { it.commentId == added.commentId }
+                AppAnalytics.track(
+                    "comment_submitted",
+                    mapOf(
+                        "card_id" to currentCardId,
+                        "comment_id" to added.commentId,
+                        "is_reply" to (parentId != null),
+                    ),
+                )
                 _state.value = _state.value.copy(
                     comments = if (exists) _state.value.comments else _state.value.comments + added,
                     commentSubmitting = false,
@@ -152,6 +166,13 @@ class DetailViewModel : ViewModel() {
         viewModelScope.launch {
             runCatching { feedRepo.addHighlight(cardId, userId, text, note, nickname.ifBlank { null }) }
                 .onSuccess {
+                    _state.value.card?.let {
+                        AppAnalytics.trackCard(
+                            "highlight_saved",
+                            it,
+                            mapOf("has_note" to note.isNotBlank()),
+                        )
+                    }
                     _state.value = _state.value.copy(highlightSaving = false, highlightMessage = "하이라이트를 피드에 저장했어요.")
                     onSaved?.invoke()
                 }
