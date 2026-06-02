@@ -16,12 +16,12 @@ import com.lifestyle.dailyscript.R
 
 // LongBlack typography — bundled to match the PWA (web_pwa) exactly:
 //  Headlines/quotes (명조) → Nanum Myeongjo
-//  Wordmark "Daily Script." → IM Fell DW Pica
+//  Wordmark "Daily Script." → Bodoni Moda (웹 헤더 Bodoni 72 대응)
 //  Body / UI / labels      → Noto Sans KR (variable; 400/500/700)
 //  Screenplay (Detail body) → JetBrains Mono (variable; 400/500)
 val EditorialSerif: FontFamily = FontFamily(Font(R.font.nanum_myeongjo))
 
-val WordmarkSerif: FontFamily = FontFamily(Font(R.font.im_fell_dw_pica))
+val WordmarkSerif: FontFamily = FontFamily(Font(R.font.bodoni_moda))
 
 val EditorialSans: FontFamily = FontFamily(
     Font(R.font.noto_sans_kr, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),

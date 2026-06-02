@@ -24,6 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.lifestyle.dailyscript.R
@@ -59,14 +62,30 @@ private fun TopBarContainer(content: @Composable RowScope.() -> Unit) {
     )
 }
 
+/** 헤더 워드마크 — "Daily Script ." (Bodoni Moda, D·S 살짝 크게, 마침표 포인트색). */
+@Composable
+fun BrandWordmark() {
+    val brand = buildAnnotatedString {
+        withStyle(SpanStyle(fontSize = 1.08.em)) { append("D") }
+        append("aily ")
+        withStyle(SpanStyle(fontSize = 1.08.em)) { append("S") }
+        append("cript ")
+        withStyle(SpanStyle(color = Cta)) { append(".") }
+    }
+    Text(
+        text = brand,
+        style = MaterialTheme.typography.headlineMedium.copy(
+            fontFamily = WordmarkSerif,
+            letterSpacing = 0.02.em,
+        ),
+        color = Espresso,
+    )
+}
+
 @Composable
 fun HomeTopBar(onMyPageClick: () -> Unit) {
     TopBarContainer {
-        Text(
-            text = stringResource(R.string.app_brand),
-            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = WordmarkSerif),
-            color = Espresso,
-        )
+        BrandWordmark()
         Text(
             text = stringResource(R.string.my_page),
             style = MaterialTheme.typography.labelSmall,
@@ -141,11 +160,7 @@ fun DetailTopBar(
 @Composable
 fun SettingsTopBar(onFeedback: () -> Unit) {
     TopBarContainer {
-        Text(
-            text = stringResource(R.string.app_brand),
-            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = WordmarkSerif),
-            color = Espresso,
-        )
+        BrandWordmark()
         // 의견 남기기 — filled espresso chip, matching the PWA settings top bar.
         Box(
             modifier = Modifier

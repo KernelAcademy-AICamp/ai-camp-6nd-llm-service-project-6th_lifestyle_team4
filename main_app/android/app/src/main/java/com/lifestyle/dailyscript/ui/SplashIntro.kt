@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,11 +27,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lifestyle.dailyscript.R
 
 /**
  * 로고 인트로 스플래시 — 웹(PWA) 스플래시와 동일 컨셉.
@@ -114,23 +117,26 @@ fun SplashIntro(onFinished: () -> Unit) {
     }
 }
 
+private val BodoniModa = FontFamily(Font(R.font.bodoni_moda))
+
 private val wordStyle = TextStyle(
-    fontFamily = FontFamily.Serif,
+    fontFamily = BodoniModa,
     fontWeight = FontWeight.Normal,
-    fontSize = 46.sp,
+    fontSize = 50.sp,
     color = Cream,
 )
 
 @Composable
 private fun WordLine(pre: String, post: String, withDot: Boolean) {
+    // in-text 책등: 웹 비율(높이 ≈ 0.64em, 폭 ≈ 0.11em)에 맞춤 + 베이스라인으로 올림
     Row(verticalAlignment = Alignment.Bottom) {
         Text(text = pre, style = wordStyle)
         Spacer(Modifier.width(2.dp))
-        Spine(width = 9.dp, height = 40.dp)
+        Spine(width = 6.dp, height = 32.dp, modifier = Modifier.offset(y = (-10).dp))
         Spacer(Modifier.width(2.dp))
         Text(text = post, style = wordStyle)
         if (withDot) {
-            Spacer(Modifier.width(3.dp))
+            Spacer(Modifier.width(2.dp))
             Text(text = ".", style = wordStyle.copy(color = Accent))
         }
     }
@@ -138,9 +144,9 @@ private fun WordLine(pre: String, post: String, withDot: Boolean) {
 
 /** 책등 — 주황 둥근 막대 + 크림 라벨 라인 2줄(두께 다름). */
 @Composable
-private fun Spine(width: Dp, height: Dp) {
+private fun Spine(width: Dp, height: Dp, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .width(width)
             .height(height)
             .clip(RoundedCornerShape(percent = 14))
