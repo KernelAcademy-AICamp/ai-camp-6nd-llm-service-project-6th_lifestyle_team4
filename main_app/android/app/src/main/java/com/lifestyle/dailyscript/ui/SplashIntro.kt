@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -126,18 +128,30 @@ private val wordStyle = TextStyle(
     color = Cream,
 )
 
+/** 책등(Box) 바닥을 텍스트 베이스라인에 맞추기 위해 baseline = 높이(=바닥)로 지정. */
+private fun Modifier.baselineAtBottom(): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    layout(
+        placeable.width,
+        placeable.height,
+        alignmentLines = mapOf(FirstBaseline to placeable.height, LastBaseline to placeable.height),
+    ) {
+        placeable.place(0, 0)
+    }
+}
+
 @Composable
 private fun WordLine(pre: String, post: String, withDot: Boolean) {
-    // in-text 책등: 웹 비율(높이 ≈ 0.64em, 폭 ≈ 0.11em)에 맞춤 + 베이스라인으로 올림
+    // in-text 책등: 웹과 동일(높이 ≈ 0.64em). 책등 바닥을 텍스트 baseline에 정렬.
     Row(verticalAlignment = Alignment.Bottom) {
-        Text(text = pre, style = wordStyle)
+        Text(text = pre, style = wordStyle, modifier = Modifier.alignByBaseline())
         Spacer(Modifier.width(2.dp))
-        Spine(width = 6.dp, height = 32.dp, modifier = Modifier.offset(y = (-10).dp))
+        Spine(width = 6.dp, height = 32.dp, modifier = Modifier.alignByBaseline().baselineAtBottom())
         Spacer(Modifier.width(2.dp))
-        Text(text = post, style = wordStyle)
+        Text(text = post, style = wordStyle, modifier = Modifier.alignByBaseline())
         if (withDot) {
             Spacer(Modifier.width(2.dp))
-            Text(text = ".", style = wordStyle.copy(color = Accent))
+            Text(text = ".", style = wordStyle.copy(color = Accent), modifier = Modifier.alignByBaseline())
         }
     }
 }
