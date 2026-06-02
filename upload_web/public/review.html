@@ -58,6 +58,42 @@
   .keyword-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: #ede9fe; color: #5b21b6; font-size: 12px; font-weight: 600; margin-right: 6px; margin-bottom: 6px; }
   .keyword-tag button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0; font-size: 14px; line-height: 1; }
 
+  /* 카드 상세 팝업 — 조회 페이지의 pullout-modal 패턴 차용 */
+  .review-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 90; display: none; align-items: center; justify-content: center; padding: 24px;
+  }
+  .review-modal.open { display: flex; }
+  .review-modal-card {
+    background: #fff; border-radius: 12px;
+    max-width: 1400px; width: 96vw;
+    max-height: calc(100vh - 48px);
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+    animation: review-modal-slide 0.25s ease;
+  }
+  .review-modal-body {
+    overflow-y: auto; flex: 1 1 auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px;
+  }
+  .review-modal-body::-webkit-scrollbar { width: 8px; }
+  .review-modal-body::-webkit-scrollbar-thumb { background: #c7c4d8; border-radius: 4px; }
+  @keyframes review-modal-slide {
+    0% { transform: translateY(20px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  .review-modal-close {
+    position: absolute; top: 12px; right: 12px;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid #e5e7eb; border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    z-index: 1;
+  }
+  .review-modal-close:hover { background: #f3f4f6; }
+
   /* 이중 언어 편집 — 좌(KO) / 우(EN) 2열 */
   .bilingual-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 900px) { .bilingual-row { grid-template-columns: 1fr; } }
@@ -188,16 +224,16 @@
       <div id="queue-list" class="flex flex-col gap-2"></div>
     </section>
 
-    <!-- ===== Detail / edit view ===== -->
-    <section id="view-detail" class="hidden">
-      <button id="back-to-queue" class="decide-btn btn-back mb-4 flex items-center gap-1">
-        <span class="material-symbols-outlined" style="font-size:18px;">arrow_back</span>
-        목록으로
-      </button>
+    <!-- ===== Detail / edit popup — 조회 페이지처럼 모달 ===== -->
+    <div id="view-detail" class="review-modal">
+      <div class="review-modal-card relative">
+        <button id="back-to-queue" class="review-modal-close" title="닫기 (목록으로)">
+          <span class="material-symbols-outlined" style="font-size:20px;">close</span>
+        </button>
+        <div class="review-modal-body">
+          <div id="detail-claim-banner" class="hidden mb-4 p-3 rounded-lg border border-violet-300 bg-violet-50 text-sm text-violet-900"></div>
 
-      <div id="detail-claim-banner" class="hidden mb-4 p-3 rounded-lg border border-violet-300 bg-violet-50 text-sm text-violet-900"></div>
-
-      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+          <div>
         <div class="flex justify-between items-start mb-4">
           <div>
             <p id="detail-work" class="text-sm text-on-surface-variant mb-1"></p>
@@ -365,8 +401,10 @@
           <button id="action-save" class="decide-btn btn-save">💾 저장</button>
           <button id="decide-approve" class="decide-btn btn-approve">✓ 승인 → 조회로</button>
         </div>
+          </div>
+        </div>
       </div>
-    </section>
+    </div>
 
   </div>
 </main>

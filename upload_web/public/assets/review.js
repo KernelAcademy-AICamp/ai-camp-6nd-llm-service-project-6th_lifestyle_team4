@@ -237,16 +237,22 @@ function paintDetail(c) {
   }
 }
 
+// 모달 닫기 — 큐는 항상 보이고 detail 모달만 토글.
 function showQueue() {
-  $('#view-detail').classList.add('hidden');
-  $('#view-queue').classList.remove('hidden');
+  const modal = $('#view-detail');
+  modal.classList.remove('open');
+  document.body.style.overflow = '';
   state.current = null;
 }
 
+// 모달 열기
 function showDetail() {
-  $('#view-queue').classList.add('hidden');
-  $('#view-detail').classList.remove('hidden');
-  window.scrollTo({ top: 0, behavior: 'instant' });
+  const modal = $('#view-detail');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  // 모달 내부 본문 스크롤은 위로
+  const body = modal.querySelector('.review-modal-body');
+  if (body) body.scrollTop = 0;
 }
 
 // ---------- actions ----------
@@ -773,6 +779,14 @@ function wireKeywordEditor() {
   $('#refresh-btn').addEventListener('click', () => loadList());
   $('#queue-fill-en-btn')?.addEventListener('click', onQueueFillEn);
   $('#back-to-queue').addEventListener('click', onBack);
+  // 모달 백드롭 클릭으로 닫기
+  $('#view-detail').addEventListener('click', (e) => {
+    if (e.target.id === 'view-detail') onBack();
+  });
+  // ESC 키로 닫기
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('#view-detail').classList.contains('open')) onBack();
+  });
   $('#decide-approve').addEventListener('click', () => onDecide('approved'));
   $('#decide-delete').addEventListener('click', onDelete);
   $('#action-save').addEventListener('click', onSave);
