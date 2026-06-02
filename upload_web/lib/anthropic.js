@@ -249,6 +249,31 @@ const EXTRACT_CHUNK_OVERLAP_CHARS = 3000;
 const EXTRACT_FINAL_INPUT_CARDS = 80;
 const EXTRACT_FINAL_OUTPUT_CARDS = 40;
 
+// 카테고리별 절대 어겨선 안 되는 규칙 — 프롬프트 본문 앞에 prepend.
+// LLM 이 본문 규칙을 가끔 무시하는 케이스 대비, 최상단에 다시 한 번 강조.
+// 서버 후처리 검증(validateAndFilterCards)이 같은 규칙으로 위반 카드를 drop.
+function buildCriticalRulesPreamble(category) {
+  const lengthRule = ({
+    screen: '· script_excerpt 는 **무조건 2000자 이상**. 미달이면 앞뒤 turn을 더 가져와 반드시 채울 것. 미달 카드는 서버에서 삭제됨.',
+    opera:  '· script_excerpt 는 **무조건 2000자 이상**. 미달이면 앞뒤 노래 단락을 더 포함할 것. 미달 카드는 서버에서 삭제됨.',
+    play:   '· script_excerpt 는 **무조건 2000자 이상**. 미달이면 앞뒤 turn / 지문을 더 가져와 채울 것. 미달 카드는 서버에서 삭제됨.',
+    novel:  '· script_excerpt 는 **무조건 2000자 이상**. 미달이면 앞뒤 단락을 더 가져와 채울 것. 미달 카드는 서버에서 삭제됨.',
+    essay:  '· script_excerpt 는 **무조건 2000자 이상**. 미달이면 앞뒤 단락을 더 가져와 채울 것. 미달 카드는 서버에서 삭제됨.',
+    // poem / prose 는 짧음 예외 — 강조 안 함
+    poem:   '· script_excerpt 는 행·연 구조 그대로 (짧을수록 좋음. 다른 시·단락을 끌어와 채우지 말 것).',
+    prose:  '· script_excerpt 는 가능한 2000자 이상이지만, 글 한 편이 짧으면 전체 그대로 (짧은 산문 예외).',
+  })[category] || '· script_excerpt 는 **무조건 2000자 이상** (poem/prose 제외).';
+
+  return `[★ CRITICAL — 아래 규칙은 절대 위반 금지 ★]
+1. quote ≠ script_excerpt — 같으면 카드 자체가 무효. quote 는 script_excerpt 안에 포함되어야 하지만, script_excerpt 는 quote 의 **앞뒤 맥락(다른 turn / 단락)** 을 반드시 더 포함해야 한다.
+2. ${lengthRule}
+3. quote 는 작품 원문 그대로 (한 글자도 바꾸지 않음, 200자 이내).
+4. 출력 직전 self-check: 각 카드별로 (a) quote ≠ script_excerpt, (b) 길이 규칙 충족, (c) quote ⊂ script_excerpt 모두 통과하는지 한 번 더 확인. 위반된 카드는 출력에서 빼거나 수정한다.
+[★ CRITICAL 끝 ★]
+
+`;
+}
+
 function buildExtractPrompt(scriptText, category, seedBlock = '', chunkInfo = null) {
   const tpl = EXTRACT_PROMPTS[category] || EXTRACT_PROMPTS.screen;
   const chunkNote = chunkInfo
@@ -260,10 +285,11 @@ function buildExtractPrompt(scriptText, category, seedBlock = '', chunkInfo = nu
         'Extract strong candidates from this visible section. A later merge pass will deduplicate and select across the whole work.',
       ].join('\n')
     : '';
-  const prompt = tpl
+  const critical = buildCriticalRulesPreamble(category);
+  const body = tpl
     .replace('{{QUOTE_SEED_BLOCK}}', `${seedBlock || ''}${chunkNote}`)
     .replace('{{SCRIPT_TEXT}}', scriptText);
-  return prompt;
+  return critical + body;
 }
 
 function findRegexCandidates(text, from, to, regex, baseScore, useEnd = false) {
@@ -577,7 +603,9 @@ const MIN_SCRIPT_CHARS_BY_CATEGORY = {
   essay: 0,
   screen: 2000, novel: 2000, play: 2000, opera: 2000,
 };
-const DROP_RATE_SAFETY = 0.7;
+// 안전망 임계치 — 거의 모든 카드(90% 이상)가 위반인 극단적 케이스에만 발동.
+// 그 미만은 strict drop. 프롬프트 무시 자체를 허용하지 않음.
+const DROP_RATE_SAFETY = 0.9;
 
 function _norm(s) { return String(s ?? '').trim().replace(/\s+/g, ' '); }
 
