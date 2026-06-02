@@ -6,6 +6,7 @@ nonisolated enum WorkFormat: String, Decodable, Sendable {
     case play
     case musical
     case opera
+    case unknown
 
     var displayName: String {
         switch self {
@@ -14,7 +15,15 @@ nonisolated enum WorkFormat: String, Decodable, Sendable {
         case .play: return "연극"
         case .musical: return "뮤지컬"
         case .opera: return "오페라"
+        case .unknown: return ""
         }
+    }
+
+    /// Lenient decode: an unrecognized format string maps to `.unknown` instead
+    /// of throwing, so one odd row never fails the whole `[Card]` fetch.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = WorkFormat(rawValue: raw.lowercased()) ?? .unknown
     }
 }
 
