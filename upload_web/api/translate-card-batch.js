@@ -33,8 +33,9 @@ export default async function handler(req, res) {
     }
     const work = body?.work && typeof body.work === 'object' ? body.work : null;
 
-    const results = await runTranslateCardBatch({ cards, work });
-    return res.status(200).json({ results });
+    // runTranslateCardBatch 이제 { results, work } 객체 반환 (work 메타 번역 포함).
+    const out = await runTranslateCardBatch({ cards, work });
+    return res.status(200).json(out);
   } catch (err) {
     if (err instanceof AuthError) {
       return res.status(err.status || 401).json({ error: err.message });

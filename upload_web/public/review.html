@@ -219,6 +219,27 @@
         </div>
       </div>
 
+      <!-- 일괄 액션바 — 선택된 카드 개수 + 전체선택 + 일괄 승인/삭제. 한 장이라도 있으면 보임. -->
+      <div id="bulk-action-bar" class="hidden mb-4 p-3 bg-surface-container-low border border-outline-variant rounded-lg flex flex-wrap gap-3 items-center justify-between">
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input id="select-all-checkbox" type="checkbox" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer" />
+            <span id="select-all-label" class="text-sm font-medium">전체선택</span>
+          </label>
+          <span id="selected-count" class="text-sm text-on-surface-variant">0장 선택됨</span>
+        </div>
+        <div class="flex gap-2">
+          <button id="bulk-delete-btn" disabled class="px-4 py-2 border-2 border-error text-error rounded-lg text-sm font-semibold hover:bg-error hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-error flex items-center gap-1">
+            <span class="material-symbols-outlined" style="font-size:18px;">delete</span>
+            선택 삭제
+          </button>
+          <button id="bulk-approve-btn" disabled class="px-4 py-2 bg-primary text-white border-2 border-primary rounded-lg text-sm font-semibold hover:bg-primary-container transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+            <span class="material-symbols-outlined" style="font-size:18px;">check</span>
+            선택 승인
+          </button>
+        </div>
+      </div>
+
       <div id="queue-loading" class="text-center py-12 text-on-surface-variant">로드 중…</div>
       <div id="queue-empty" class="hidden text-center py-12 text-on-surface-variant">표시할 카드가 없습니다.</div>
       <div id="queue-list" class="flex flex-col gap-2"></div>

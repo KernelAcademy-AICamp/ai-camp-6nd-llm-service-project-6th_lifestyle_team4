@@ -25,7 +25,7 @@ struct ArchiveView: View {
                         ForEach(bookmarks.bookmarks) { row in
                             if let card = row.card {
                                 NavigationLink(value: card) {
-                                    ArchiveRow(card: card, daysAgo: 1)
+                                    ArchiveRow(card: card, date: row.createdDate)
                                 }
                                 .buttonStyle(.plain)
                             }

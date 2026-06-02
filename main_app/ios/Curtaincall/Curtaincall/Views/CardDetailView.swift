@@ -111,19 +111,18 @@ struct CardDetailView: View {
     private var scriptText: Text {
         let names = Set(card.work.characters.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
         let lines = card.scriptExcerpt.components(separatedBy: "\n")
-        var result = Text("")
+        var result = AttributedString()
         for (i, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let namePart = trimmed.components(separatedBy: "(").first?.trimmingCharacters(in: .whitespaces) ?? trimmed
             let isSpeaker = !trimmed.isEmpty && (names.contains(trimmed) || names.contains(namePart))
-            var segment = Text(line)
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(.espresso)
-            if isSpeaker { segment = segment.fontWeight(.bold) }
-            result = result + segment
-            if i < lines.count - 1 { result = result + Text("\n") }
+            var segment = AttributedString(line)
+            segment.font = .system(size: 14, design: .monospaced).weight(isSpeaker ? .bold : .regular)
+            segment.foregroundColor = .espresso
+            result += segment
+            if i < lines.count - 1 { result += AttributedString("\n") }
         }
-        return result
+        return Text(result)
     }
 
     private var detailTopBar: some View {
@@ -164,7 +163,7 @@ struct CardDetailView: View {
     private var metadataChipsRow: some View {
         HStack(spacing: 12) {
             let items: [String] = [
-                card.work.format.rawValue.uppercased(),
+                card.work.format.displayName,
                 card.work.author?.uppercased() ?? "",
                 card.work.releaseYear.map(String.init) ?? "",
             ].filter { !$0.isEmpty }

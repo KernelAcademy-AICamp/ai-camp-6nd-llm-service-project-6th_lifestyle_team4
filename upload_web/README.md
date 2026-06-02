@@ -18,11 +18,18 @@ public/         정적 자산 (Vercel이 자동 서빙)
   index.html    로그인
   dashboard.html 대시보드
   assets/       브라우저용 JS
-api/            Vercel 서버리스 함수
-  extract.js    PDF → LLM
-  translate.js  카드 한 장 → 한국어 번역
-  save.js       선택된 카드 → Supabase
-  config.js     브라우저에 supabaseUrl/anonKey 노출
+api/            Vercel 서버리스 함수 (Hobby 한도 12개)
+  extract.js                  PDF → LLM 카드 추출
+  translate-card-batch.js     카드 N장 × 5필드 양방향 일괄 번역
+  translate-field.js          단일 필드 번역 (검토 큐 ↻ 버튼)
+  translate-fields.js         후보 카드의 비어 있는 영문 필드 일괄 채우기
+  save.js                     선택된 카드 → Supabase (검토 큐로)
+  candidates.js               검토 큐 조회/잠금/결정/일괄 액션
+  fetch-source.js             Gutenberg / Wikisource 본문 가져오기
+  gutenberg-list.js           Gutenberg 카테고리 검색
+  backfill-characters.js      등장인물 백필
+  classify-keywords.js        키워드 분류
+  config.js                   브라우저에 supabaseUrl/anonKey 노출
 lib/            서버 전용 모듈
   prompts.js    ★ 프롬프트 단일 편집 지점 ★
   anthropic.js  Claude 호출 래퍼

@@ -13,6 +13,24 @@ import { supabaseAdmin } from '../lib/supabase-admin.js';
 import { runTranslateField, runTranslateFields, validateAndFilterCards } from '../lib/anthropic.js';
 import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
+// 카드 + 작품 메타가 한·영 모두 채워졌는지 확인 (autoFillEnglishForCard 호출 스킵 판단용).
+// "한국어 본문이 있는데 영문 원본이 비어있다" 가 한 개라도 있으면 false.
+// 한국어 본문 자체가 없으면 영문도 채울 의무가 없으므로 통과.
+function isEnglishFullyFilled(card, work) {
+  // 카드 본문
+  if (card.quote                    && !card.quote_original)                    return false;
+  if (card.script_excerpt           && !card.script_excerpt_original)           return false;
+  if (card.excerpt_description      && !card.excerpt_description_original)      return false;
+  if (card.significance             && !card.significance_original)             return false;
+  if (Array.isArray(card.keywords) && card.keywords.length
+      && (!Array.isArray(card.keywords_original) || !card.keywords_original.length)) return false;
+  // 작품 메타
+  if (work?.title    && !work.title_original)    return false;
+  if (work?.subtitle && !work.subtitle_original) return false;
+  if (work?.author   && !work.author_original)   return false;
+  return true;
+}
+
 // works.format → 추출 프롬프트 카테고리 (save.js 와 동일 매핑)
 function formatToCategory(format) {
   switch (format) {
@@ -221,12 +239,18 @@ async function decideCandidate(req, res, body, adminUser) {
   const workEdits = sanitizeWorkEdits(body.workEdits);
   const notes = body.notes != null ? String(body.notes).slice(0, 2000) : null;
 
-  // 잠금 검증: 다른 사람이 점유 중인 행은 결정할 수 없다.
-  // 승인 검증을 위해 quote / script_excerpt / works.format 도 함께 가져온다.
+  // 잠금 검증 + 승인 검증 + 영문 완료 사전 체크용으로 모든 본문/원본/메타 필드 함께 조회.
+  // autoFillEnglishForCard 호출 여부를 미리 결정 → 이미 다 채워졌으면 LLM 호출 X, 즉시 응답.
   const cutoffMs = Date.now() - CLAIM_TTL_MIN * 60 * 1000;
   const { data: row, error: getErr } = await supabaseAdmin
     .from('card_candidates')
-    .select('candidate_id, work_id, claimed_by, claimed_at, status, promoted_card_id, quote, script_excerpt, works:work_id(format)')
+    .select(`
+      candidate_id, work_id, claimed_by, claimed_at, status, promoted_card_id,
+      quote, script_excerpt, excerpt_description, significance, keywords,
+      quote_original, script_excerpt_original, excerpt_description_original,
+      significance_original, keywords_original,
+      works:work_id(format, title, title_original, subtitle, subtitle_original, author, author_original)
+    `)
     .eq('candidate_id', id)
     .maybeSingle();
   if (getErr) throw getErr;
@@ -293,23 +317,59 @@ async function decideCandidate(req, res, body, adminUser) {
     const { data: rpcData, error: rpcErr } = await supabaseAdmin
       .rpc('promote_candidate', { p_candidate_id: id });
     if (rpcErr) {
-      // promote 실패시 status 를 needs_edit 으로 되돌려서 큐에 다시 들어가게.
+      // promote 실패시 status 를 pending 으로 되돌려 큐에 다시 보이게.
+      // (이전엔 needs_edit 으로 변경했는데 큐 필터는 pending 만 표시해서 카드가 사라진 것처럼 보임)
       console.error('[candidates] promote failed:', rpcErr);
       await supabaseAdmin
         .from('card_candidates')
-        .update({ status: 'needs_edit', notes: `promote 실패: ${rpcErr.message || rpcErr}` })
+        .update({
+          status: 'pending',
+          notes: `promote 실패: ${rpcErr.message || rpcErr}`,
+          reviewer_id: null,
+          reviewed_at: null,
+        })
         .eq('candidate_id', id);
       throw new HttpError(`promote failed: ${rpcErr.message || rpcErr}`, 500);
     }
     promotedCardId = rpcData;
 
     // 자동 영문 채우기 — 새로 promote 된 카드의 빈 *_original 만 KO→EN 번역해서 채움.
-    // 실패해도 승인 자체는 성공이므로 throw 하지 않고 로그만 남김.
+    // ★ 사전 체크: 후보 단계에서 이미 모든 *_original 이 채워져 있으면 즉시 스킵 (DB 추가 조회·LLM 호출 모두 안 함).
+    //   편집(edits / workEdits) 이 _original 을 덮어쓸 수 있으니 final 값으로 검사.
+    //   v88 이후 흐름에서는 추출+전체 번역 시점에 이미 다 채워져 있어 99% 이 분기 탄다.
     if (promotedCardId) {
-      try {
-        autoFillSummary = await autoFillEnglishForCard(promotedCardId);
-      } catch (e) {
-        console.warn(`[candidates] auto-fill EN failed card_id=${promotedCardId}:`, e?.message || e);
+      const w = row.works || {};
+      const finalCard = {
+        quote:                            edits.quote                            ?? row.quote,
+        script_excerpt:                   edits.script_excerpt                   ?? row.script_excerpt,
+        excerpt_description:              edits.excerpt_description              ?? row.excerpt_description,
+        significance:                     edits.significance                     ?? row.significance,
+        keywords:                         edits.keywords                         ?? row.keywords,
+        quote_original:                   edits.quote_original                   ?? row.quote_original,
+        script_excerpt_original:          edits.script_excerpt_original          ?? row.script_excerpt_original,
+        excerpt_description_original:     edits.excerpt_description_original     ?? row.excerpt_description_original,
+        significance_original:            edits.significance_original            ?? row.significance_original,
+        keywords_original:                edits.keywords_original                ?? row.keywords_original,
+      };
+      const finalWork = {
+        title:             workEdits.title             ?? w.title,
+        title_original:    workEdits.title_original    ?? w.title_original,
+        subtitle:          workEdits.subtitle          ?? w.subtitle,
+        subtitle_original: workEdits.subtitle_original ?? w.subtitle_original,
+        author:            workEdits.author            ?? w.author,
+        author_original:   workEdits.author_original   ?? w.author_original,
+      };
+      const allFilled = isEnglishFullyFilled(finalCard, finalWork);
+      if (allFilled) {
+        autoFillSummary = { ok: true, skipped: 'already-bilingual', work_filled: [], card_filled: [] };
+        console.log(`[candidates] approve card_id=${promotedCardId} — 영문 이미 완성, autoFill 스킵`);
+      } else {
+        // 실패해도 승인 자체는 성공이므로 throw 하지 않고 로그만 남김.
+        try {
+          autoFillSummary = await autoFillEnglishForCard(promotedCardId);
+        } catch (e) {
+          console.warn(`[candidates] auto-fill EN failed card_id=${promotedCardId}:`, e?.message || e);
+        }
       }
     }
   }

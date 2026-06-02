@@ -2,7 +2,9 @@ import SwiftUI
 
 struct ArchiveRow: View {
     let card: Card
-    let daysAgo: Int
+    /// When this card was collected/shown, if known. When nil only the format
+    /// is shown — we never fabricate a date.
+    var date: Date? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,18 +36,18 @@ struct ArchiveRow: View {
     }
 
     private var metaLine: String {
-        let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now) ?? .now
+        let format = card.work.format.displayName
+        guard let date else { return format }
         let comps = Calendar.current.dateComponents([.month, .day], from: date)
         let datePart = "\(comps.month ?? 0). \(comps.day ?? 0)"
-        let format = card.work.format.rawValue
-        return "\(datePart)  —  \(format)"
+        return format.isEmpty ? datePart : "\(datePart)  —  \(format)"
     }
 }
 
 #Preview {
     VStack(spacing: 0) {
-        ArchiveRow(card: .sample, daysAgo: 1)
-        ArchiveRow(card: .sample, daysAgo: 2)
+        ArchiveRow(card: .sample, date: .now)
+        ArchiveRow(card: .sample)
     }
     .padding(.horizontal, 20)
     .background(Color.paper)
