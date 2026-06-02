@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="192x192" href="/m/icons/icon-book-192.png" />
 <link rel="apple-touch-icon" sizes="512x512" href="/m/icons/icon-book-512.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="/m/icons/icon-book-192.png" />
-<link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg?v=2" />
+<link rel="icon" type="image/svg+xml" href="/m/icons/icon.svg?v=16" />
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;500;700;800&family=Noto+Sans+KR:wght@400;500;700;900&family=IM+Fell+DW+Pica:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <script>
   /* FOUC 방지 — 페이지 렌더 직전에 테마 적용 */
@@ -257,17 +257,20 @@
   .top-bar-brand {
     display: flex; align-items: center; gap: 10px;
   }
-  /* 로고 워드마크 */
+  /* 로고 워드마크 — Bodoni 72 */
   .brand-logo {
-    font-family: 'IM Fell DW Pica', 'Nanum Myeongjo', Georgia, serif;
+    font-family: 'Bodoni 72', 'Bodoni 72 Oldstyle', Didot, 'Nanum Myeongjo', Georgia, serif;
     font-weight: 400;
     font-size: 24px;
     line-height: 1;
-    letter-spacing: 0;
+    letter-spacing: 0.02em;     /* 아주 살짝 넓힘 */
     color: var(--espresso);
     cursor: pointer;
     user-select: none;
+    white-space: nowrap;
   }
+  .brand-logo .cap { font-size: 1.08em; }     /* D, S 살짝 크게 */
+  .brand-logo .dot { margin-left: 0.12em; }   /* t와 마침표 사이 간격 */
   .brand-logo:active { opacity: 0.55; }
   /* 상세 화면 헤더는 제목이 세로로 3줄(DAILY SCRIPT/작품명/부제) 쌓이므로 높이를 늘려 잘림 방지 */
   #detail-screen .top-bar {
@@ -1265,7 +1268,7 @@
 <!-- ===== Top Bar (Home/Archive show HomeTopBar; Settings shows SettingsTopBar; Detail shows DetailTopBar) ===== -->
 <header id="top-bar-home" class="top-bar">
   <div class="top-bar-brand">
-    <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동">Daily Script.</span>
+    <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
   </div>
   <div style="display:flex;align-items:center;gap:14px;">
     <div title="실시간 동기화 상태" style="display:flex;align-items:center;gap:6px;">
@@ -1279,7 +1282,7 @@
 </header>
 
 <header id="top-bar-settings" class="top-bar" style="display:none;">
-  <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동">Daily Script.</span>
+  <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
   <button id="feedback-entry"
           style="background:var(--espresso);border:0.5px solid var(--espresso);color:var(--paper);-webkit-text-fill-color:var(--paper);
                  padding:6px 10px 6px 12px;font-family:'Noto Sans KR',sans-serif;font-size:10px;letter-spacing:0.2em;text-align:center;text-transform:uppercase;
