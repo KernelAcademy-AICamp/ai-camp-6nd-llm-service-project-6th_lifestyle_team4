@@ -1236,6 +1236,79 @@
 </head>
 <body>
 
+<!-- ===== 로고 인트로 스플래시 (로딩 중 표시, JS 없이 즉시 재생) ===== -->
+<style>
+  #ds-splash{position:fixed;inset:0;z-index:9999;background:#0E0C0A;display:flex;align-items:center;justify-content:center;
+    transition:opacity .55s ease;}
+  #ds-splash.ds-out{opacity:0;pointer-events:none;}
+  #ds-splash .layer{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+  /* 워드마크 */
+  #ds-splash .word{font-family:'Bodoni 72','Bodoni 72 Oldstyle',Didot,Georgia,serif;color:#FBF8F1;
+    font-size:clamp(40px,13vmin,84px);line-height:0.96;letter-spacing:0.01em;
+    display:flex;flex-direction:column;align-items:center;transform-origin:50% 50%;
+    animation:dsGather .46s cubic-bezier(.55,0,.85,.2) 1.7s forwards;}
+  #ds-splash .wline{display:inline-block;white-space:nowrap;opacity:0;}
+  #ds-splash .wline1{animation:dsFadeUp .6s cubic-bezier(.2,.8,.2,1) .1s both;}
+  #ds-splash .wline2{animation:dsFadeUp .6s cubic-bezier(.2,.8,.2,1) .28s both;}
+  #ds-splash .cap{font-size:1.08em;}
+  #ds-splash .per{color:#D85A30;margin-left:.06em;}
+  /* 책등(i) — 양쪽 동일 */
+  #ds-splash .bk{display:inline-block;position:relative;width:.11em;height:.64em;background:#D85A30;
+    border-radius:.03em;vertical-align:baseline;margin:0 .04em;transform-origin:50% 100%;
+    animation:dsBookDrop .55s cubic-bezier(.2,.85,.25,1) .3s both;}
+  #ds-splash .wline2 .bk{animation-delay:.46s;}
+  #ds-splash .bk::before{content:"";position:absolute;left:.016em;right:.016em;top:25%;height:.05em;background:rgba(255,253,247,.95);border-radius:999px;opacity:0;animation:dsFadeIn .3s ease .8s both;}
+  #ds-splash .bk::after{content:"";position:absolute;left:.016em;right:.016em;top:40%;height:.03em;background:rgba(255,253,247,.8);border-radius:999px;opacity:0;animation:dsFadeIn .3s ease .9s both;}
+  /* 심볼(최종 로고) */
+  #ds-splash .symbol{opacity:0;transform-origin:50% 50%;animation:dsSymUp .6s cubic-bezier(.2,.9,.25,1.12) 1.92s both;}
+  #ds-splash .mark{display:flex;align-items:flex-end;gap:3.9vmin;transform:translateX(4.2vmin);
+    animation:dsBreathe 2.6s ease-in-out 3.4s infinite;}
+  #ds-splash .sp{position:relative;width:9.6vmin;height:34vmin;background:#D85A30;border-radius:1.4vmin;}
+  #ds-splash .sp::before{content:"";position:absolute;left:1.4vmin;right:1.4vmin;top:25%;height:1.3vmin;background:rgba(255,253,247,.95);border-radius:999px;}
+  #ds-splash .sp::after{content:"";position:absolute;left:1.4vmin;right:1.4vmin;top:40%;height:.8vmin;background:rgba(255,253,247,.8);border-radius:999px;}
+  #ds-splash .dt{width:4.5vmin;height:4.5vmin;border-radius:50%;background:#D85A30;margin-bottom:.3vmin;
+    transform-origin:50% 50%;animation:dsDotPop .5s cubic-bezier(.2,1.5,.4,1) 2.5s both;}
+  @keyframes dsFadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:none;}}
+  @keyframes dsFadeIn{to{opacity:1;}}
+  @keyframes dsBookDrop{from{opacity:0;transform:scaleY(0);}to{opacity:1;transform:scaleY(1);}}
+  /* 워드마크가 중앙으로 확 모임(수평 수축) */
+  @keyframes dsGather{0%{transform:scaleX(1);opacity:1;}70%{opacity:.5;}100%{transform:scaleX(0.04);opacity:0;}}
+  /* 모인 자리에서 심볼이 위로 솟음(세로 성장) */
+  @keyframes dsSymUp{0%{opacity:0;transform:scaleY(0.16);}40%{opacity:1;}100%{opacity:1;transform:scaleY(1);}}
+  @keyframes dsDotPop{0%{opacity:0;transform:scale(0);}70%{opacity:1;transform:scale(1.12);}100%{transform:scale(1);}}
+  @keyframes dsBreathe{0%,100%{transform:translateX(4.2vmin) scale(1);}50%{transform:translateX(4.2vmin) scale(1.035);}}
+  @media (prefers-reduced-motion: reduce){
+    #ds-splash .word,#ds-splash .wline,#ds-splash .bk,#ds-splash .bk::before,#ds-splash .bk::after,
+    #ds-splash .symbol,#ds-splash .dt,#ds-splash .mark{animation:none!important;}
+    #ds-splash .word{display:none;} #ds-splash .symbol{opacity:1;}
+  }
+</style>
+<div id="ds-splash" aria-hidden="true">
+  <div class="layer">
+    <div class="word">
+      <span class="wline wline1"><span class="cap">D</span>a<span class="bk"></span>ly</span>
+      <span class="wline wline2"><span class="cap">S</span>cr<span class="bk"></span>pt<span class="per">.</span></span>
+    </div>
+  </div>
+  <div class="layer">
+    <div class="symbol"><div class="mark"><div class="sp"></div><div class="dt"></div></div></div>
+  </div>
+</div>
+<script>
+  /* 스플래시 해제: 인트로(최소 3.1s) 후 홈 준비되면 페이드아웃, 최대 8s 캡 */
+  (function(){
+    var splash = document.getElementById('ds-splash');
+    if (!splash) return;
+    var start = Date.now(), MIN = 3100, CAP = 8000;
+    function ready(){ var c = document.getElementById('home-content'); return c && c.style.display !== 'none'; }
+    function dismiss(){ splash.classList.add('ds-out'); setTimeout(function(){ if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }, 600); }
+    var iv = setInterval(function(){
+      var el = Date.now() - start;
+      if (el >= CAP || (el >= MIN && ready())) { clearInterval(iv); dismiss(); }
+    }, 120);
+  })();
+</script>
+
 <!-- ===== Top Bar (Home/Archive show HomeTopBar; Settings shows SettingsTopBar; Detail shows DetailTopBar) ===== -->
 <header id="top-bar-home" class="top-bar">
   <div class="top-bar-brand">
