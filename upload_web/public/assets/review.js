@@ -14,6 +14,7 @@ const state = {
   current: null, // open candidate
   claimTtlMinutes: 10,
   loading: false,
+  selected: new Set(), // 일괄 액션용 — 선택된 candidate_id 들
 };
 
 // ---------- helpers ----------
@@ -113,8 +114,15 @@ function renderQueue() {
     }
   }
 
+  // 항목이 사라졌으면 selected 에서 자동 제거 (rollover/refresh 대응)
+  const validIds = new Set(state.items.map((it) => it.candidate_id));
+  for (const id of [...state.selected]) {
+    if (!validIds.has(id)) state.selected.delete(id);
+  }
+
   if (state.items.length === 0) {
     emptyEl.classList.remove('hidden');
+    updateBulkBar();
     return;
   }
   emptyEl.classList.add('hidden');
@@ -131,8 +139,14 @@ function renderQueue() {
     const reviewerLine = it.reviewer_id
       ? `<span class="text-xs text-on-surface-variant">검토자 ${escapeHtml(labelFor(it.reviewer_id))} · ${formatRelative(it.reviewed_at)}</span>`
       : '';
+    const isSelected = state.selected.has(it.candidate_id);
+    // 다른 관리자가 점유 중이면 체크박스 숨김 (선택 불가)
+    const checkboxHtml = lockedByOther
+      ? '<div class="w-4 h-4 flex-shrink-0"></div>'
+      : `<input type="checkbox" data-cb="${it.candidate_id}" ${isSelected ? 'checked' : ''} class="row-checkbox w-4 h-4 flex-shrink-0 mt-1 rounded border-outline-variant text-primary cursor-pointer" />`;
     row.innerHTML = `
-      <div class="flex justify-between items-start gap-4">
+      <div class="flex items-start gap-3">
+        ${checkboxHtml}
         <div class="flex-1 min-w-0">
           <p class="text-xs text-on-surface-variant mb-1">#${it.candidate_id} · ${escapeHtml(workLabel(it.works))}</p>
           <p class="text-base font-medium text-on-surface mb-2 truncate">${escapeHtml(it.quote || '')}</p>
@@ -144,15 +158,65 @@ function renderQueue() {
             ${reviewerLine}
           </div>
         </div>
-        <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+        <span class="material-symbols-outlined text-on-surface-variant flex-shrink-0">chevron_right</span>
       </div>
     `;
+    // 체크박스 클릭 — 선택 토글만, 상세 열기 X (이벤트 버블링 차단)
+    const cb = row.querySelector('.row-checkbox');
+    if (cb) {
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        if (cb.checked) state.selected.add(it.candidate_id);
+        else state.selected.delete(it.candidate_id);
+        updateBulkBar();
+      });
+    }
+    // 행 클릭(체크박스 외 영역) — 상세 열기
     if (!lockedByOther) {
       row.addEventListener('click', () => onOpenDetail(it));
     } else {
       row.addEventListener('click', () => toast('다른 관리자가 검토중입니다', 'err'));
     }
     listEl.appendChild(row);
+  }
+
+  updateBulkBar();
+}
+
+// 일괄 액션바 상태 업데이트 — 선택 카운트, 버튼 활성화, 전체선택 체크박스.
+function updateBulkBar() {
+  const bar = $('#bulk-action-bar');
+  const countEl = $('#selected-count');
+  const delBtn = $('#bulk-delete-btn');
+  const apvBtn = $('#bulk-approve-btn');
+  const selectAllCb = $('#select-all-checkbox');
+
+  // 카드가 한 장이라도 있어야 액션바 표시
+  const hasItems = state.items.length > 0;
+  if (!bar) return;
+  bar.classList.toggle('hidden', !hasItems);
+  if (!hasItems) return;
+
+  const selectableIds = state.items
+    .filter((it) => !(it.claim_active && it.claimed_by && it.claimed_by !== state.currentUserId))
+    .map((it) => it.candidate_id);
+  const selectedCount = state.selected.size;
+
+  if (countEl) countEl.textContent = `${selectedCount}장 선택됨 / 전체 ${selectableIds.length}장`;
+  if (delBtn) delBtn.disabled = selectedCount === 0;
+  if (apvBtn) apvBtn.disabled = selectedCount === 0;
+
+  if (selectAllCb) {
+    if (selectedCount === 0) {
+      selectAllCb.checked = false;
+      selectAllCb.indeterminate = false;
+    } else if (selectedCount === selectableIds.length) {
+      selectAllCb.checked = true;
+      selectAllCb.indeterminate = false;
+    } else {
+      selectAllCb.checked = false;
+      selectAllCb.indeterminate = true;
+    }
   }
 }
 
@@ -543,6 +607,107 @@ async function fillEnForCandidate(it, workMetaDone) {
   });
 }
 
+// ---------- 일괄 액션 (전체선택 / 일괄 삭제 / 일괄 승인) ----------
+// 전체선택 — 현재 표시 중인 후보 중 다른 관리자가 점유하지 않은 것만 토글.
+function onSelectAll(e) {
+  const checked = !!e.target.checked;
+  const selectableIds = state.items
+    .filter((it) => !(it.claim_active && it.claimed_by && it.claimed_by !== state.currentUserId))
+    .map((it) => it.candidate_id);
+  if (checked) {
+    for (const id of selectableIds) state.selected.add(id);
+  } else {
+    for (const id of selectableIds) state.selected.delete(id);
+  }
+  // 체크박스 시각 상태도 즉시 반영
+  $$('.row-checkbox').forEach((cb) => {
+    const id = Number(cb.dataset.cb);
+    cb.checked = state.selected.has(id);
+  });
+  updateBulkBar();
+}
+
+// 일괄 삭제 — 선택된 후보를 순차 DELETE. 부분 실패는 경고.
+async function onBulkDelete() {
+  const ids = [...state.selected];
+  if (!ids.length) return;
+  if (!confirm(`선택한 ${ids.length}장을 삭제하시겠습니까?\n(영구 제거 — 복구 불가)`)) return;
+
+  const btn = $('#bulk-delete-btn');
+  const apvBtn = $('#bulk-approve-btn');
+  const refresh = $('#refresh-btn');
+  btn.disabled = true; apvBtn.disabled = true; if (refresh) refresh.disabled = true;
+  const orig = btn.innerHTML;
+  let done = 0, failed = 0;
+  const errors = [];
+  try {
+    for (const id of ids) {
+      btn.innerHTML = `<span class="material-symbols-outlined animate-spin" style="font-size:18px;">progress_activity</span> 삭제 중 (${done + failed}/${ids.length})`;
+      try {
+        await apiFetch('/api/candidates', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'delete', candidateId: id }),
+        });
+        done++;
+        state.selected.delete(id);
+      } catch (e) {
+        failed++;
+        errors.push(`#${id}: ${e.message || e}`);
+      }
+    }
+    if (failed === 0) {
+      toast(`${done}장 삭제 완료`, 'ok');
+    } else {
+      toast(`삭제 ${done}장 성공 / ${failed}장 실패 — 첫 오류: ${errors[0]}`, 'err');
+    }
+  } finally {
+    btn.innerHTML = orig;
+    btn.disabled = false; apvBtn.disabled = false; if (refresh) refresh.disabled = false;
+    await loadList();
+  }
+}
+
+// 일괄 승인 — 선택된 후보를 순차 approve. 검증(quote≈script, 길이미달 등) 실패는 그 카드만 skip.
+async function onBulkApprove() {
+  const ids = [...state.selected];
+  if (!ids.length) return;
+  if (!confirm(`선택한 ${ids.length}장을 승인하시겠습니까?\n(승인 시 자동으로 영문 채우기까지 진행됨)`)) return;
+
+  const btn = $('#bulk-approve-btn');
+  const delBtn = $('#bulk-delete-btn');
+  const refresh = $('#refresh-btn');
+  btn.disabled = true; delBtn.disabled = true; if (refresh) refresh.disabled = true;
+  const orig = btn.innerHTML;
+  let done = 0, failed = 0;
+  const errors = [];
+  try {
+    for (const id of ids) {
+      btn.innerHTML = `<span class="material-symbols-outlined animate-spin" style="font-size:18px;">progress_activity</span> 승인 중 (${done + failed}/${ids.length})`;
+      try {
+        await apiFetch('/api/candidates', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'decide', candidateId: id, decision: 'approved' }),
+        });
+        done++;
+        state.selected.delete(id);
+      } catch (e) {
+        failed++;
+        errors.push(`#${id}: ${e.message || e}`);
+        console.warn('[review] bulk approve failed:', id, e?.message);
+      }
+    }
+    if (failed === 0) {
+      toast(`${done}장 승인 완료 → 조회로 이동됨`, 'ok');
+    } else {
+      toast(`승인 ${done}장 성공 / ${failed}장 실패 — 첫 오류: ${errors[0]}`, 'err');
+    }
+  } finally {
+    btn.innerHTML = orig;
+    btn.disabled = false; delBtn.disabled = false; if (refresh) refresh.disabled = false;
+    await loadList();
+  }
+}
+
 // 🌐 영문 일괄 채우기 — 비어 있는 영문 필드만 KO→EN 자동 번역해 채움
 function wireFillEnBulk() {
   const btn = document.getElementById('fill-en-bulk-btn');
@@ -772,6 +937,9 @@ function wireKeywordEditor() {
   });
   $('#refresh-btn').addEventListener('click', () => loadList());
   $('#queue-fill-en-btn')?.addEventListener('click', onQueueFillEn);
+  $('#select-all-checkbox')?.addEventListener('change', onSelectAll);
+  $('#bulk-delete-btn')?.addEventListener('click', onBulkDelete);
+  $('#bulk-approve-btn')?.addEventListener('click', onBulkApprove);
   $('#back-to-queue').addEventListener('click', onBack);
   // 모달 백드롭 클릭으로 닫기
   $('#view-detail').addEventListener('click', (e) => {

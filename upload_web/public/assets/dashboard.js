@@ -1391,9 +1391,10 @@ if (selectAllBtn) {
 // ---------------------------------------------------------------------------
 // Translate
 // ---------------------------------------------------------------------------
-// 단일 카드 번역 요청 (개별/전체 번역 공용)
+// 단일 카드 번역 요청 — translate-card-batch 에 1장짜리 배열로 보내고 응답을 기존 형태로 변환.
+// (v89: Vercel Hobby 함수 12개 한도 때문에 /api/translate 제거 → translate-card-batch 로 통합)
 async function requestTranslation(token, card) {
-  return apiFetch('/api/translate', {
+  const res = await apiFetch('/api/translate-card-batch', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1401,13 +1402,26 @@ async function requestTranslation(token, card) {
     },
     body: JSON.stringify({
       work: state.work || null,
-      card: {
-        quote: card.quote,
-        script_excerpt: card.script_excerpt,
-        excerpt_description: card.excerpt_description,
-      },
+      cards: [{
+        id: 0,
+        quote: card.quote || '',
+        script_excerpt: card.script_excerpt || '',
+        excerpt_description: card.excerpt_description || '',
+        significance: card.significance || '',
+        keywords: Array.isArray(card.keywords) ? card.keywords : [],
+      }],
     }),
   });
+  const r = (res?.results || [])[0];
+  if (!r) throw new Error('번역 응답 없음');
+  // EN 원본이면 ko 가 KO 번역, KO 원본이면 ko 는 source echo (둘 다 한국어 자리에 맞음).
+  const ko = r.ko || {};
+  return {
+    quote_translated: ko.quote || null,
+    script_excerpt_translated: ko.script_excerpt || null,
+    confidence: 'high',
+    note: '',
+  };
 }
 
 async function onTranslateClick(idx) {
