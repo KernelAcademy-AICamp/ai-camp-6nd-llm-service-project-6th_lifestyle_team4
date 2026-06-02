@@ -563,50 +563,102 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
   };
 }
 
-// 추출된 카드 후처리:
-//  1) quote 와 script_excerpt 가 완전히 같은 카드는 제거 (LLM 이 지문 확장을 안 한 케이스).
-//     '명대사가 발췌 안에 포함'은 정상이므로 contains 가 아닌 strict equal 만 제거.
-//  2) script_excerpt 가 2000자 미만인 카드는 경고 로그 (카테고리별 예외 적용 — 시는 하한 없음).
-//  3) 응답 work + filtered cards 그대로.
+// 추출된 카드 후처리 — 추출 프롬프트의 hard rule 을 서버에서도 강제.
+//  1) quote == script_excerpt (정규화 후 완전 동일) → drop. '포함' 은 정상이라 strict equal 만.
+//  2) script_excerpt 길이 미달 → drop (카테고리별 최소치).
+//     · poem: 0 (시는 짧을수록 좋음 — 프롬프트 예외)
+//     · prose/essay: 0 (짧은 산문 예외 — 프롬프트 명시)
+//     · screen/novel/play/opera: 2000자 강제
+//  3) 안전망: 전체 카드 중 70% 이상이 drop 대상이면 LLM 이 완전히 규칙을 어긴 것 →
+//     drop 안 하고 warn 만 (관리자에게 보여서 직접 판단). 추출 자체를 0장 응답하는 사고 방지.
 const MIN_SCRIPT_CHARS_BY_CATEGORY = {
-  // 시는 짧을수록 좋음 — 하한 없음
   poem: 0,
-  // 산문은 짧은 글 한 편이 그보다 짧을 수 있음 — 권장 하한만 (드랍은 안 함)
-  prose: 500,
-  essay: 500,
-  // 그 외(영화/드라마/소설/연극/오페라 등): 2000자 강제
+  prose: 0,
+  essay: 0,
   screen: 2000, novel: 2000, play: 2000, opera: 2000,
 };
+const DROP_RATE_SAFETY = 0.7;
 
 function _norm(s) { return String(s ?? '').trim().replace(/\s+/g, ' '); }
 
 function validateAndFilterCards(cards, category) {
-  if (!Array.isArray(cards)) return { cards: [], summary: { total: 0, dropped: 0, shortExcerpt: 0 } };
+  if (!Array.isArray(cards)) {
+    return { cards: [], summary: { total: 0, kept: 0, dropped_identical: 0, dropped_short: 0, min_chars: 0, category } };
+  }
   const minChars = MIN_SCRIPT_CHARS_BY_CATEGORY[category] ?? 2000;
 
-  let droppedIdentical = 0;
-  let shortExcerpt = 0;
-  const survivors = [];
-  for (const c of cards) {
+  // 1차: drop 판정 (분류만 — 실제 drop 은 안전망 검사 후)
+  const verdicts = cards.map((c) => {
     const q = _norm(c?.quote);
     const s = _norm(c?.script_excerpt);
-    if (q && s && q === s) {
-      droppedIdentical++;
-      console.warn(`[extract] dropping card: quote == script_excerpt (len=${q.length})`);
-      continue;
+    if (q && s && q === s) return { c, drop: 'identical' };
+    if (minChars > 0 && (!c?.script_excerpt || String(c.script_excerpt).length < minChars)) {
+      return { c, drop: 'short' };
     }
-    if (minChars > 0 && c?.script_excerpt && String(c.script_excerpt).length < minChars) {
-      shortExcerpt++;
-      console.warn(`[extract] short script_excerpt: ${String(c.script_excerpt).length}<${minChars} (category=${category}) — kept but warned`);
+    return { c, drop: null };
+  });
+
+  const toDropCount = verdicts.filter((v) => v.drop).length;
+  const dropRate = cards.length ? (toDropCount / cards.length) : 0;
+  const safetyFallback = dropRate >= DROP_RATE_SAFETY;
+  if (safetyFallback) {
+    console.warn(
+      `[extract] SAFETY: drop rate ${(dropRate * 100).toFixed(0)}% (>=${(DROP_RATE_SAFETY * 100).toFixed(0)}%) — ` +
+      `LLM appears to have violated prompt broadly. Falling back to warn-only so admin can review.`
+    );
+  }
+
+  let droppedIdentical = 0;
+  let droppedShort = 0;
+  let warnedIdentical = 0;
+  let warnedShort = 0;
+  const survivors = [];
+
+  for (const { c, drop } of verdicts) {
+    if (drop === 'identical') {
+      if (safetyFallback) {
+        warnedIdentical++;
+        console.warn(`[extract] (warn) card has quote == script_excerpt (len=${String(c?.quote||'').length})`);
+        survivors.push(c);
+      } else {
+        droppedIdentical++;
+        console.warn(`[extract] drop: quote == script_excerpt (len=${String(c?.quote||'').length})`);
+      }
+    } else if (drop === 'short') {
+      const slen = String(c?.script_excerpt || '').length;
+      if (safetyFallback) {
+        warnedShort++;
+        console.warn(`[extract] (warn) short script_excerpt ${slen}<${minChars} category=${category}`);
+        survivors.push(c);
+      } else {
+        droppedShort++;
+        console.warn(`[extract] drop: short script_excerpt ${slen}<${minChars} category=${category}`);
+      }
+    } else {
+      survivors.push(c);
     }
-    survivors.push(c);
   }
-  if (droppedIdentical || shortExcerpt) {
-    console.log(`[extract] validation: in=${cards.length} out=${survivors.length} dropped_identical=${droppedIdentical} short_excerpt_warn=${shortExcerpt} (min=${minChars})`);
-  }
+
+  console.log(
+    `[extract] validation: in=${cards.length} out=${survivors.length} ` +
+    `dropped_identical=${droppedIdentical} dropped_short=${droppedShort} ` +
+    `${safetyFallback ? `(safety: warned identical=${warnedIdentical} short=${warnedShort})` : ''} ` +
+    `min=${minChars} category=${category}`
+  );
+
   return {
     cards: survivors,
-    summary: { total: cards.length, kept: survivors.length, dropped_identical: droppedIdentical, short_excerpt_warn: shortExcerpt, min_chars: minChars, category },
+    summary: {
+      total: cards.length,
+      kept: survivors.length,
+      dropped_identical: droppedIdentical,
+      dropped_short: droppedShort,
+      warned_identical: warnedIdentical,
+      warned_short: warnedShort,
+      safety_fallback: safetyFallback,
+      min_chars: minChars,
+      category,
+    },
   };
 }
 
