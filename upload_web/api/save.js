@@ -1,9 +1,25 @@
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase-admin.js';
-import { runKoreanizeAuthor } from '../lib/anthropic.js';
+import { runKoreanizeAuthor, validateAndFilterCards } from '../lib/anthropic.js';
 import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
 const ALLOWED_FORMATS = new Set(['movie', 'drama', 'play', 'musical', 'opera', 'novel', 'poem', 'essay', 'prose']);
+
+// works.format → 추출 프롬프트 카테고리 (validateAndFilterCards 의 MIN_SCRIPT_CHARS_BY_CATEGORY 와 정합)
+function formatToCategory(format) {
+  switch (format) {
+    case 'movie':
+    case 'drama':   return 'screen';
+    case 'musical':
+    case 'opera':   return 'opera';
+    case 'play':    return 'play';
+    case 'novel':   return 'novel';
+    case 'poem':    return 'poem';
+    case 'essay':   return 'essay';
+    case 'prose':   return 'prose';
+    default:        return 'screen';
+  }
+}
 
 const MAX_CARDS_PER_SAVE = 150;
 const MAX_FULL_SCRIPT_CHARS = 5000000;
@@ -250,7 +266,19 @@ export default async function handler(req, res) {
     // 3) card_candidates bulk insert — 검토 게이트.
     //    cards 로 직접 들어가지 않는다. 어드민이 review 페이지에서 승인해야
     //    promote_candidate RPC 가 해당 행을 cards 로 복사한다.
-    const cardRows = body.cards.map((c) => {
+    //    저장 직전 2차 검증 — extract 단계에서 빠져나왔거나 클라이언트가 직접 보낸
+    //    카드 중 quote==script_excerpt 또는 길이 미달은 여기서 다시 한 번 거른다.
+    const category = formatToCategory(workInput.format);
+    const validated = validateAndFilterCards(body.cards, category);
+    const goodCards = validated.cards;
+    if (goodCards.length === 0) {
+      throw new HttpError(
+        '저장 가능한 카드가 없습니다. 모든 카드가 추출 프롬프트 규칙을 위반했습니다 ' +
+        `(중복: ${validated.summary.dropped_identical}, 길이미달: ${validated.summary.dropped_short}).`,
+        422
+      );
+    }
+    const cardRows = goodCards.map((c) => {
       const normalized = normalizeCard(c, createdWorkId);
       return buildCandidateMeta(c, normalized, workInput.full_script_text, adminUser?.id);
     });
@@ -266,6 +294,7 @@ export default async function handler(req, res) {
       candidate_count: inserted.length,
       verbatim_verified_count: verifiedCount,
       pending_review: true,
+      validation: validated.summary,
     });
   } catch (err) {
     if (err instanceof AuthError) {

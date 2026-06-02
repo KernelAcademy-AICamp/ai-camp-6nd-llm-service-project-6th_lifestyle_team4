@@ -10,8 +10,24 @@
 
 import { requireAdmin, AuthError } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase-admin.js';
-import { runTranslateField } from '../lib/anthropic.js';
+import { runTranslateField, validateAndFilterCards } from '../lib/anthropic.js';
 import { HttpError, readJsonBody, sendError } from '../lib/http.js';
+
+// works.format → 추출 프롬프트 카테고리 (save.js 와 동일 매핑)
+function formatToCategory(format) {
+  switch (format) {
+    case 'movie':
+    case 'drama':   return 'screen';
+    case 'musical':
+    case 'opera':   return 'opera';
+    case 'play':    return 'play';
+    case 'novel':   return 'novel';
+    case 'poem':    return 'poem';
+    case 'essay':   return 'essay';
+    case 'prose':   return 'prose';
+    default:        return 'screen';
+  }
+}
 
 // 승인(approve) 시 promote_candidate + KO→EN 자동 채우기까지 한 번에 처리.
 // 카드당 LLM 호출 최대 ~6회 (각 ~2~5s). Vercel 기본 60s 한도를 넘을 여지가 있어 120s 로 확장.
@@ -206,10 +222,11 @@ async function decideCandidate(req, res, body, adminUser) {
   const notes = body.notes != null ? String(body.notes).slice(0, 2000) : null;
 
   // 잠금 검증: 다른 사람이 점유 중인 행은 결정할 수 없다.
+  // 승인 검증을 위해 quote / script_excerpt / works.format 도 함께 가져온다.
   const cutoffMs = Date.now() - CLAIM_TTL_MIN * 60 * 1000;
   const { data: row, error: getErr } = await supabaseAdmin
     .from('card_candidates')
-    .select('candidate_id, work_id, claimed_by, claimed_at, status, promoted_card_id')
+    .select('candidate_id, work_id, claimed_by, claimed_at, status, promoted_card_id, quote, script_excerpt, works:work_id(format)')
     .eq('candidate_id', id)
     .maybeSingle();
   if (getErr) throw getErr;
@@ -218,6 +235,26 @@ async function decideCandidate(req, res, body, adminUser) {
   if (row.claimed_by && row.claimed_by !== adminUser.id
       && row.claimed_at && Date.parse(row.claimed_at) >= cutoffMs) {
     throw new HttpError('candidate is currently claimed by another reviewer', 409);
+  }
+
+  // 승인(promote) 직전 게이트 — 편집 적용 후 최종 카드 본문이 추출 프롬프트 규칙 위반이면 차단.
+  //  · quote == script_excerpt (또는 95% 이상 포함)
+  //  · script_excerpt 가 카테고리별 최소 길이 미달
+  // 추출/저장 시점에 검증이 통과했어도, 사람이 편집해서 다시 깨질 수 있으므로 여기서 마지막 게이트.
+  if (decision === 'approved') {
+    const finalQuote = (edits.quote != null) ? edits.quote : row.quote;
+    const finalScript = (edits.script_excerpt != null) ? edits.script_excerpt : row.script_excerpt;
+    const category = formatToCategory(row.works?.format);
+    const checked = validateAndFilterCards(
+      [{ quote: finalQuote, script_excerpt: finalScript }],
+      category
+    );
+    if (checked.cards.length === 0) {
+      const reason = checked.summary.dropped_identical
+        ? '명대사(quote)와 대본 발췌(script_excerpt)가 동일/거의 동일합니다. 발췌에 앞뒤 맥락을 더 포함하도록 편집해 주세요.'
+        : `대본 발췌가 카테고리(${category}) 최소 길이(${checked.summary.min_chars}자) 미달입니다.`;
+      throw new HttpError(`승인 불가: ${reason}`, 422);
+    }
   }
 
   // 결정 + 편집 동시 적용. status=approved 면 promote_candidate RPC 호출.
