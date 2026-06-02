@@ -65,6 +65,8 @@ const translateAllBtn = $('#translate-all-btn');
   const sb = await getSupabase();
   const { data } = await sb.auth.getUser();
   userEmailEl.textContent = emailToDisplayId(data?.user?.email);
+  // 어드민 인증 후 이전 작업 복원 안내
+  maybeOfferRestore();
 })();
 
 logoutBtn.addEventListener('click', async () => {
@@ -234,13 +236,12 @@ async function handleFile(file) {
     fd.append('model', state.model);
     const titleHint = document.querySelector('#title-input')?.value?.trim();
     if (titleHint) fd.append('title', titleHint);
-    setProgressStage('LLM 으로 카드 추출 중 ⋯ (Haiku 과부하 시 자동 재시도)');
-    const json = await apiFetch('/api/extract', {
+    setProgressStage('LLM 으로 카드 추출 중 ⋯ (서버 진행 이벤트 스트리밍)');
+    const json = await callExtractStreaming('/api/extract', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
-      signal,
-    });
+    }, signal);
     applyExtraction(json);
     setProgressStage(`완료 — 카드 ${Array.isArray(json?.cards) ? json.cards.length : 0}장`);
     if (json?._truncated) {
@@ -251,7 +252,12 @@ async function handleFile(file) {
   } catch (err) {
     if (isAbortError(err)) {
       logProgress('중단됨');
-      toast('중단됨', 'info');
+      if (err.partial && Array.isArray(err.partial.cards) && err.partial.cards.length > 0) {
+        applyExtraction(err.partial);
+        toast(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'info');
+      } else {
+        toast('중단됨', 'info');
+      }
     } else {
       console.error(err);
       toast(err.message || '추출 실패', 'error');
@@ -346,6 +352,143 @@ progressStopBtn?.addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Leave-page guard
+//   추출 진행 중이거나 저장하지 않은 카드가 있을 때 사이드바 클릭 / 새로고침 /
+//   탭 닫기 → 확인 후 진행. 잃어버릴 게 없으면 (state.cards 비어있고 추출 중 아님)
+//   확인 안내 안 함.
+//   /api/save 가 의도적으로 location.href 를 바꿀 때는 intentionallyNavigating
+//   플래그로 차단 해제.
+// ---------------------------------------------------------------------------
+let intentionallyNavigating = false;
+
+function isExtracting() { return currentExtractAbort != null; }
+function hasUnsavedCards() { return Array.isArray(state.cards) && state.cards.length > 0; }
+function guardActive() { return isExtracting() || hasUnsavedCards(); }
+
+function guardMessage() {
+  if (isExtracting()) {
+    return '추출이 진행 중입니다. 이동하면 작업이 취소됩니다. 계속하시겠어요?';
+  }
+  return '저장하지 않은 카드가 있습니다. 이동하면 잃어버립니다. 계속하시겠어요?';
+}
+
+// 1) Reload / 탭 닫기 / 주소창 직접 입력 — 브라우저 기본 confirm 다이얼로그
+window.addEventListener('beforeunload', (e) => {
+  if (intentionallyNavigating) return;
+  if (!guardActive()) return;
+  e.preventDefault();
+  // 일부 브라우저는 returnValue 가 truthy 인지만 본다 (메시지 자체는 무시되고 기본 문구 표시)
+  e.returnValue = '';
+});
+
+// 2) 사이드바 nav 링크 클릭 — 우리 confirm 다이얼로그
+function wireNavGuard() {
+  document.querySelectorAll('aside a[href]').forEach((a) => {
+    const href = a.getAttribute('href') || '';
+    // # 으로 시작하는 disabled 링크는 스킵 (히스토리 Coming soon 등)
+    if (!href || href === '#') return;
+    a.addEventListener('click', (e) => {
+      if (!guardActive()) return; // 잃을 게 없으면 통과
+      e.preventDefault();
+      if (confirm(guardMessage())) {
+        // 사용자가 확인 — 추출 중이면 abort 도 같이 해서 서버 부담 줄임
+        if (currentExtractAbort) currentExtractAbort.abort();
+        intentionallyNavigating = true;
+        window.location.href = href;
+      }
+    });
+  });
+}
+wireNavGuard();
+
+// V2 NDJSON 스트리밍 호출 — /api/extract 가 진행 이벤트를 1줄 JSON 으로 흘려준다.
+// 각 이벤트는 progress 패널의 stage/log 로 그대로 반영. 'result' 이벤트가 최종 응답.
+// 사용자가 [중단] 누르면 fetch 가 abort → 서버 IncomingMessage 'close' 가 발화 →
+// callClaude 에 전달된 signal 이 Anthropic SDK 호출까지 끊는다 (V1 의 한계 해결).
+async function callExtractStreaming(url, fetchOptions, signal) {
+  const headers = { ...(fetchOptions.headers || {}), Accept: 'application/x-ndjson' };
+  const res = await fetch(url, { ...fetchOptions, headers, signal });
+  // 서버가 스트리밍 헤더를 못 보냈으면(예: 401 / 404) 일반 JSON 경로로 처리
+  const ct = String(res.headers.get('content-type') || '');
+  if (!ct.includes('application/x-ndjson')) {
+    const raw = await res.text();
+    let json = null; try { json = JSON.parse(raw); } catch { /* not json */ }
+    if (!res.ok) {
+      const detail = json?.error || raw.slice(0, 300) || res.statusText;
+      throw new Error(`HTTP ${res.status} · ${detail}`);
+    }
+    // (이론상 발생 안 함 — 스트리밍 요청에 일반 JSON 200 응답)
+    return json;
+  }
+  if (!res.body) throw new Error('스트리밍 응답에 body 없음');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let resultPayload = null;
+  let partialPayload = null;  // chunked 추출 중단 시 서버가 보내는 부분 결과
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line) continue;
+      let event;
+      try { event = JSON.parse(line); } catch { continue; }
+      switch (event.t) {
+        case 'stage':
+          setProgressStage(event.m);
+          break;
+        case 'log':
+          logProgress(event.m);
+          break;
+        case 'llm_call':
+          logProgress(`LLM 호출 (${event.model}, 시도 ${event.attempt}, max=${event.max_tokens})`);
+          break;
+        case 'llm_done':
+          logProgress(`LLM 응답 수신 (시도 ${event.attempt})`);
+          break;
+        case 'llm_retry':
+          logProgress(`LLM 재시도 — ${event.delayMs}ms 후 (${event.model}, status=${event.status ?? '?'})`);
+          break;
+        case 'chunk_start':
+          logProgress(`청크 ${event.index}/${event.total} 시작 (${event.chars.toLocaleString()}자)`);
+          break;
+        case 'chunk_done':
+          logProgress(`청크 ${event.index}/${event.total} 완료 — 누적 ${event.completed}/${event.total}`);
+          break;
+        case 'partial_result':
+          partialPayload = event.d;
+          logProgress(`부분 결과 보존됨 — 카드 ${Array.isArray(event.d?.cards) ? event.d.cards.length : 0}장 (청크 ${event.d?.__chunked?.completed}/${event.d?.__chunked?.chunks} 완료)`);
+          break;
+        case 'aborted': {
+          const a = new Error('aborted');
+          a.name = 'AbortError';
+          if (partialPayload) a.partial = partialPayload;
+          throw a;
+        }
+        case 'error':
+          throw new Error(event.m || 'extract error');
+        case 'result':
+          resultPayload = event.d;
+          break;
+        case 'ping':
+          // 서버가 프록시 버퍼링 회피용으로 보낸 padding 이벤트 — 조용히 무시
+          break;
+        default:
+          // 미지의 이벤트 — 디버깅용 raw 로그
+          logProgress(`(unknown event: ${event.t})`);
+      }
+    }
+  }
+  if (!resultPayload) throw new Error('스트림이 result 없이 종료됨');
+  return resultPayload;
+}
+
+// ---------------------------------------------------------------------------
 // Wikisource KR — 위 #title-input 의 값으로 ko.wikisource.org 검색 → 본문 가져오기.
 // 본문은 합성 .txt File 로 만들어 기존 handleFile() 에 흘려보낸다 — 파일 업로드와
 // 동일 경로로 extract → render 가 진행된다.
@@ -403,7 +546,31 @@ function escapeHtmlBasic(s) {
 }
 function escapeAttr(s) { return escapeHtmlBasic(s); }
 
+// 검색 중에는 같은 버튼이 "검색 중지" 로 변신. 다시 클릭하면 abort.
+let currentWsSearchAbort = null;
+function setWsSearchBtnBusy(busy) {
+  if (!wsSearchBtn) return;
+  if (busy) {
+    wsSearchBtn.innerHTML =
+      '<span class="material-symbols-outlined" style="font-size:18px;">stop</span>' +
+      '<span>검색 중지</span>';
+    wsSearchBtn.classList.remove('border-primary', 'text-primary');
+    wsSearchBtn.classList.add('border-error', 'text-error');
+  } else {
+    wsSearchBtn.innerHTML =
+      '<span class="material-symbols-outlined" style="font-size:18px;">search</span>' +
+      '<span>위키문헌 검색</span>';
+    wsSearchBtn.classList.remove('border-error', 'text-error');
+    wsSearchBtn.classList.add('border-primary', 'text-primary');
+  }
+}
+
 async function onWsSearch() {
+  // 검색 진행 중이면 이 클릭은 "중지" — 진행 중인 fetch abort
+  if (currentWsSearchAbort) {
+    currentWsSearchAbort.abort();
+    return;
+  }
   const titleInput = document.querySelector('#title-input');
   const query = (titleInput?.value || '').trim();
   if (!query) {
@@ -413,6 +580,8 @@ async function onWsSearch() {
   }
   setWsStatus(`검색 중: "${query}"`, 'info');
   renderWsResults([]);
+  currentWsSearchAbort = new AbortController();
+  setWsSearchBtnBusy(true);
   try {
     const token = await getAccessToken();
     const j = await apiFetch('/api/fetch-source', {
@@ -422,6 +591,7 @@ async function onWsSearch() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ kind: 'wikisource_kr', op: 'search', query }),
+      signal: currentWsSearchAbort.signal,
     });
     const results = Array.isArray(j.results) ? j.results : [];
     if (results.length === 0) {
@@ -431,8 +601,17 @@ async function onWsSearch() {
     setWsStatus(`${results.length}개 결과 — 가져올 항목을 클릭하세요.`, 'ok');
     renderWsResults(results);
   } catch (err) {
+    if (isAbortError(err)) {
+      // 사용자가 명시적으로 중지 — 깨끗하게 idle 로 복귀, 에러 토스트 없음
+      setWsStatus('', 'info');
+      renderWsResults([]);
+      return;
+    }
     console.error('[ws] search failed', err);
     setWsStatus(`검색 실패: ${err.message || err}`, 'err');
+  } finally {
+    currentWsSearchAbort = null;
+    setWsSearchBtnBusy(false);
   }
 }
 
@@ -463,11 +642,11 @@ async function onWsPickResult(item) {
     const finalTitle = (titleInput?.value.trim()) || fetchJson.title || item.title;
     if (titleInput && !titleInput.value.trim()) titleInput.value = finalTitle;
 
-    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, Haiku 과부하 시 자동 재시도)`);
+    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, 서버 스트리밍)`);
     // 파일 업로드 경로 (multipart) 가 아닌 JSON 경로로 /api/extract 호출.
     // 외부 PD 소스에서 가져온 본문은 이미 텍스트라 multipart 래핑이 불필요 + Busboy
     // 가 합성 File 의 Korean 파일명에서 "Unexpected end of form" 으로 떨어지는 문제 회피.
-    const extractJson = await apiFetch('/api/extract', {
+    const extractJson = await callExtractStreaming('/api/extract', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -479,8 +658,7 @@ async function onWsPickResult(item) {
         model: state.model,
         title: finalTitle,
       }),
-      signal,
-    });
+    }, signal);
     applyExtraction(extractJson);
     setProgressStage(`완료 — 카드 ${Array.isArray(extractJson?.cards) ? extractJson.cards.length : 0}장`);
     if (extractJson?._truncated) {
@@ -492,8 +670,14 @@ async function onWsPickResult(item) {
   } catch (err) {
     if (isAbortError(err)) {
       logProgress('중단됨');
-      setWsStatus('중단됨', 'err');
-      toast('중단됨', 'info');
+      if (err.partial && Array.isArray(err.partial.cards) && err.partial.cards.length > 0) {
+        applyExtraction(err.partial);
+        setWsStatus(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'ok');
+        toast(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'info');
+      } else {
+        setWsStatus('중단됨', 'err');
+        toast('중단됨', 'info');
+      }
       return;
     }
     console.error('[ws] fetch failed', err);
@@ -509,6 +693,16 @@ if (wsSearchBtn) wsSearchBtn.addEventListener('click', onWsSearch);
 // 작품명 입력칸에서 Enter 키도 위키문헌 검색을 트리거 (이미 검색 결과를 가지고 있지 않을 때만).
 document.querySelector('#title-input')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); onWsSearch(); }
+});
+// 작품명을 사용자가 직접 수정하면 카테고리 피커에서 채워둔 책 ID 는 무효화
+// (다른 작품을 의미할 수 있어 검색 로직이 다시 작동해야 함)
+document.querySelector('#title-input')?.addEventListener('input', () => {
+  const bookIdInput = document.querySelector('#title-book-id');
+  if (bookIdInput?.value) {
+    bookIdInput.value = '';
+    const hint = document.getElementById('gb-cat-picked-hint');
+    if (hint) hint.classList.add('hidden');
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -568,15 +762,51 @@ function renderGbResults(results) {
   }
 }
 
+// 검색 중에는 같은 버튼이 "검색 중지" 로 변신. 다시 클릭하면 abort.
+// Gutendex /books?search 가 30~60초 걸릴 수 있어 특히 유용.
+let currentGbSearchAbort = null;
+function setGbSearchBtnBusy(busy) {
+  if (!gbSearchBtn) return;
+  if (busy) {
+    gbSearchBtn.innerHTML =
+      '<span class="material-symbols-outlined" style="font-size:18px;">stop</span>' +
+      '<span>검색 중지</span>';
+    gbSearchBtn.classList.remove('border-primary', 'text-primary');
+    gbSearchBtn.classList.add('border-error', 'text-error');
+  } else {
+    gbSearchBtn.innerHTML =
+      '<span class="material-symbols-outlined" style="font-size:18px;">search</span>' +
+      '<span>Gutenberg 검색</span>';
+    gbSearchBtn.classList.remove('border-error', 'text-error');
+    gbSearchBtn.classList.add('border-primary', 'text-primary');
+  }
+}
+
 async function onGbSearch() {
+  // 검색 진행 중이면 이 클릭은 "중지" — 진행 중인 fetch abort
+  if (currentGbSearchAbort) {
+    currentGbSearchAbort.abort();
+    return;
+  }
   const titleInput = document.querySelector('#title-input');
+  const bookIdInput = document.querySelector('#title-book-id');
   const query = (titleInput?.value || '').trim();
   if (!query) {
     setGbStatus('위쪽 "작품명" 칸에 검색어를 입력하세요 (제목 또는 Gutenberg 책 ID).', 'err');
     titleInput?.focus();
     return;
   }
-  // 숫자만 입력했으면 책 ID 로 바로 fetch (검색 endpoint 가 느릴 때 유용)
+  // 카테고리 피커에서 골랐으면 hidden #title-book-id 에 책 ID 가 있음 → 검색 생략하고 바로 fetch
+  const pickedBookId = (bookIdInput?.value || '').trim();
+  if (pickedBookId && /^\d+$/.test(pickedBookId)) {
+    const bookId = Number.parseInt(pickedBookId, 10);
+    setGbStatus(`Gutenberg #${bookId} 로 바로 가져옵니다 (카테고리에서 선택)…`, 'info');
+    renderGbResults([]);
+    await gbFetchAndExtract({ bookId, title: query });
+    return;
+  }
+  // 숫자만 입력했으면 책 ID 로 바로 fetch (검색 endpoint 가 느릴 때 유용).
+  // 직접 fetch 경로는 자체적인 progress 패널 [중단] 버튼으로 abort 가능 — 별도 처리 X.
   if (/^#?\d+$/.test(query)) {
     const bookId = Number.parseInt(query.replace(/^#/, ''), 10);
     setGbStatus(`Gutenberg #${bookId} 로 바로 가져옵니다…`, 'info');
@@ -586,6 +816,8 @@ async function onGbSearch() {
   }
   setGbStatus(`Gutendex 카탈로그 검색 중: "${query}" (느릴 수 있음, 최대 60초)`, 'info');
   renderGbResults([]);
+  currentGbSearchAbort = new AbortController();
+  setGbSearchBtnBusy(true);
   try {
     const token = await getAccessToken();
     const j = await apiFetch('/api/fetch-source', {
@@ -595,6 +827,7 @@ async function onGbSearch() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ kind: 'gutenberg', op: 'search', query }),
+      signal: currentGbSearchAbort.signal,
     });
     const results = Array.isArray(j.results) ? j.results : [];
     const transBadge = (j.translatedFrom && j.effectiveQuery && j.effectiveQuery !== j.translatedFrom)
@@ -607,8 +840,17 @@ async function onGbSearch() {
     setGbStatus(`${results.length}개 결과${transBadge} — 가져올 항목 클릭.`, 'ok');
     renderGbResults(results);
   } catch (err) {
+    if (isAbortError(err)) {
+      // 사용자가 명시적으로 중지 — 깨끗하게 idle 로 복귀, 에러 토스트 없음
+      setGbStatus('', 'info');
+      renderGbResults([]);
+      return;
+    }
     console.error('[gb] search failed', err);
     setGbStatus(`검색 실패: ${err.message || err}. 책 ID 를 직접 입력해 보세요.`, 'err');
+  } finally {
+    currentGbSearchAbort = null;
+    setGbSearchBtnBusy(false);
   }
 }
 
@@ -646,8 +888,8 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
       : (fetchJson.title || title || `Gutenberg #${bookId}`);
     if (titleInput) titleInput.value = finalTitle;
 
-    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, Haiku 과부하 시 자동 재시도)`);
-    const extractJson = await apiFetch('/api/extract', {
+    setProgressStage(`LLM 으로 카드 추출 중 ⋯ (모델: ${state.model}, 서버 스트리밍)`);
+    const extractJson = await callExtractStreaming('/api/extract', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -659,8 +901,7 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
         model: state.model,
         title: finalTitle,
       }),
-      signal,
-    });
+    }, signal);
     applyExtraction(extractJson);
     setProgressStage(`완료 — 카드 ${Array.isArray(extractJson?.cards) ? extractJson.cards.length : 0}장`);
     toast('추출 완료 — 영문 카드. 카드별 번역 버튼으로 한국어 변환 가능.', 'success');
@@ -668,8 +909,14 @@ async function gbFetchAndExtract({ bookId, plainTextUrl, title }) {
   } catch (err) {
     if (isAbortError(err)) {
       logProgress('중단됨');
-      setGbStatus('중단됨', 'err');
-      toast('중단됨', 'info');
+      if (err.partial && Array.isArray(err.partial.cards) && err.partial.cards.length > 0) {
+        applyExtraction(err.partial);
+        setGbStatus(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'ok');
+        toast(`중단됨 — 부분 결과 ${err.partial.cards.length}장 보존`, 'info');
+      } else {
+        setGbStatus('중단됨', 'err');
+        toast('중단됨', 'info');
+      }
       return;
     }
     console.error('[gb] fetch/extract failed', err);
@@ -690,9 +937,94 @@ function applyExtraction(payload) {
   state.work = payload?.work || null;
   state.fullScriptText = payload?.full_script_text || '';
   state.cards = Array.isArray(payload?.cards)
-    ? payload.cards.map((c) => ({ ...c, selected: false, translated: null, showingTranslation: false, editing: false }))
+    ? payload.cards.map((c) => ({ ...c, selected: false, translated: null, translated_commentary: null, showingTranslation: false, editing: false }))
     : [];
   render();
+  // 추출 결과를 localStorage 에 백업 — 새로고침/탭 닫힘 사고 보호. /api/save 성공시 정리.
+  saveDraft();
+}
+
+// ---------------------------------------------------------------------------
+// Autosave — 추출 결과(work + full_script_text + cards)를 localStorage 에 보관해서
+// 사용자가 새로고침/탭 닫음/실수 시 잃지 않도록. 5MB 한도가 있어 큰 본문은 실패할 수
+// 있고, 실패 시 조용히 넘긴다 (사용자 흐름을 막지 않음).
+// ---------------------------------------------------------------------------
+const AUTOSAVE_KEY = 'ds.admin.extract.draft';
+const AUTOSAVE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24시간 — 오래된 초안은 자동 폐기
+
+function saveDraft() {
+  if (!state.work && (!state.cards || state.cards.length === 0)) return; // 의미 있는 내용 없음
+  const draft = {
+    v: 1,
+    savedAt: new Date().toISOString(),
+    category: state.category,
+    model: state.model,
+    work: state.work,
+    fullScriptText: state.fullScriptText,
+    cards: state.cards,
+  };
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(draft));
+  } catch (e) {
+    // QuotaExceededError 등 — 본문이 너무 크면 cards 만 저장 시도
+    try {
+      const lighter = { ...draft, fullScriptText: '' };
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(lighter));
+      console.warn('[autosave] fullScriptText 가 너무 커서 비우고 저장 — 복원시 본문 재추출 필요');
+    } catch (e2) {
+      console.warn('[autosave] localStorage 저장 실패:', e2?.message || e2);
+    }
+  }
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    if (!draft || draft.v !== 1) return null;
+    const age = Date.now() - Date.parse(draft.savedAt || 0);
+    if (!Number.isFinite(age) || age > AUTOSAVE_MAX_AGE_MS) {
+      localStorage.removeItem(AUTOSAVE_KEY);
+      return null;
+    }
+    return draft;
+  } catch (e) {
+    console.warn('[autosave] localStorage 읽기 실패:', e?.message || e);
+    return null;
+  }
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(AUTOSAVE_KEY); } catch { /* noop */ }
+}
+
+function maybeOfferRestore() {
+  const draft = loadDraft();
+  if (!draft) return;
+  const cardCount = Array.isArray(draft.cards) ? draft.cards.length : 0;
+  const title = draft.work?.title || '(제목 없음)';
+  const ageMin = Math.floor((Date.now() - Date.parse(draft.savedAt)) / 60000);
+  const ageLabel = ageMin < 60 ? `${ageMin}분 전` : `${Math.floor(ageMin / 60)}시간 전`;
+  const ok = confirm(
+    `이전 추출 작업이 남아 있어요 (${ageLabel}, "${title}", 카드 ${cardCount}장).\n` +
+    '복원할까요?\n\n' +
+    '(취소하면 폐기합니다.)'
+  );
+  if (ok) {
+    state.category = draft.category || state.category;
+    state.model = draft.model || state.model;
+    paintCategory();
+    paintModel();
+    applyExtraction({
+      work: draft.work,
+      full_script_text: draft.fullScriptText,
+      cards: draft.cards,
+    });
+    toast(`복원됨 — 카드 ${cardCount}장`, 'success');
+  } else {
+    clearDraft();
+  }
 }
 
 function render() {
@@ -1145,6 +1477,21 @@ async function onTranslateAll() {
     } else {
       toast(`전체 번역 종료 · 성공 ${done} / 실패 ${failed}`, done ? 'info' : 'error');
     }
+
+    // ★ 추가 — quote/script 번역 끝나면 description/significance/keywords KO→EN 도 채움.
+    // 카드 N장이 많을 때 한 번의 LLM 호출은 응답 잘림 위험 → 10장씩 청크로 동시 3개 호출.
+    // 일부 청크가 실패해도 나머지는 저장되어 검토 단계에서 ↻KO 또는 영문 일괄 채우기로 보충 가능.
+    try {
+      await fillCommentaryEn(token);
+      toast('해설(의의·설명) 영문도 채웠어요', 'success');
+    } catch (e) {
+      console.warn('[translate-all] commentary fill failed:', e);
+      if (e.partial) {
+        toast(`해설 일부 청크 실패 — 성공한 카드는 저장됩니다. 검토에서 ↻KO 또는 영문 일괄 채우기로 보충`, 'info');
+      } else {
+        toast(`해설 영문화 실패 — 저장 후 검토 페이지에서 영문 일괄 채우기로 보충 가능`, 'info');
+      }
+    }
   } catch (err) {
     console.error(err);
     toast(err.message || '전체 번역 실패', 'error');
@@ -1152,6 +1499,72 @@ async function onTranslateAll() {
     translateAllBtn.disabled = false;
     translateAllBtn.innerHTML = orig;
     render();
+  }
+}
+
+// 모든 카드의 description / significance / keywords 를 KO→EN 일괄 번역.
+// 카드 N장이 많을 때 한 번의 LLM 호출은 응답 토큰이 넘쳐 잘리거나 timeout 위험 →
+// 10장씩 청크로 나눠 동시 3개씩 호출. 청크별 실패는 격리(다른 청크엔 영향 X).
+async function fillCommentaryEn(token) {
+  const all = state.cards.map((c, i) => ({
+    id: i,
+    description: c.excerpt_description || '',
+    significance: c.significance || '',
+    keywords: Array.isArray(c.keywords) ? c.keywords : [],
+  })).filter((p) => p.description || p.significance || (p.keywords && p.keywords.length));
+  if (!all.length) return;
+
+  const CHUNK = 10;
+  const chunks = [];
+  for (let i = 0; i < all.length; i += CHUNK) chunks.push(all.slice(i, i + CHUNK));
+
+  // 청크별 호출. 동시성 3 — Anthropic 레이트 보호.
+  const CONCURRENCY = 3;
+  let cursor = 0;
+  const errors = [];
+
+  async function worker() {
+    while (cursor < chunks.length) {
+      const idx = cursor++;
+      const chunk = chunks[idx];
+      // 진행률 표시
+      translateAllBtn.innerHTML =
+        `<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>` +
+        `<span>해설 영문화 중⋯ (청크 ${idx + 1}/${chunks.length})</span>`;
+      try {
+        const res = await fetch('/api/translate-commentary-batch', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ cards: chunk, work: state.work || null }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
+        const results = Array.isArray(body?.results) ? body.results : [];
+        results.forEach((r) => {
+          const i = Number(r?.id);
+          if (Number.isNaN(i) || !state.cards[i]) return;
+          state.cards[i].translated_commentary = {
+            excerpt_description_original: r.description_en || null,
+            significance_original:        r.significance_en || null,
+            keywords_original: Array.isArray(r.keywords_en) ? r.keywords_en : null,
+          };
+        });
+      } catch (e) {
+        console.warn(`[translate-all] commentary chunk ${idx + 1}/${chunks.length} failed:`, e?.message || e);
+        errors.push({ chunk: idx + 1, error: e?.message || String(e) });
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker));
+
+  if (errors.length) {
+    const detail = errors.map((e) => `#${e.chunk}: ${e.error}`).join(' | ');
+    const err = new Error(`${errors.length}/${chunks.length} 청크 실패 — ${detail}`);
+    err.partial = errors.length < chunks.length;
+    throw err;
   }
 }
 
@@ -1181,6 +1594,8 @@ saveBtn.addEventListener('click', async () => {
       significance: c.significance || null,
       translated: c.translated || null,
       showingTranslation: !!c.showingTranslation,
+      // ★ 번역 단계에서 KO→EN 배치로 채운 해설 영문 — save.js 가 *_original 컬럼에 INSERT
+      translated_commentary: c.translated_commentary || null,
     }));
 
     const json = await apiFetch('/api/save', {
@@ -1202,12 +1617,14 @@ saveBtn.addEventListener('click', async () => {
     const verifiedMsg = verified != null ? ` · 원문 검증 ${verified}/${n}` : '';
     toast(`후보 ${n}건 저장됨 — 검토 큐로 이동${verifiedMsg}`, 'success');
 
-    // 검토 페이지로 자동 이동 (잠깐 토스트 보여주고).
-    setTimeout(() => { location.href = '/review.html'; }, 1500);
+    // 저장 성공 — 더 이상 복원할 필요 없음, autosave 초안 정리.
+    clearDraft();
 
-    // Reset selection so user can re-curate or upload a new file
-    state.cards.forEach((c) => (c.selected = false));
+    // 검토 페이지로 자동 이동 — guard 가 막지 않도록 의도적 이동 플래그 + cards 비움.
+    intentionallyNavigating = true;
+    state.cards = [];
     render();
+    setTimeout(() => { location.href = '/review.html'; }, 1500);
   } catch (err) {
     console.error(err);
     toast(err.message || '저장 실패', 'error');
@@ -1232,4 +1649,226 @@ function toast(msg, kind = 'info') {
 
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.add('hidden'), 3500);
+}
+
+// ---------------------------------------------------------------------------
+// Gutenberg 카테고리 피커 — 작품명 아래 노출.
+// 2단계 드롭다운(상위 → 하위) → 작품 목록 → 작품 클릭 시 #title-input + #title-book-id 채움.
+// 작품 목록은 서버 프록시 /api/gutenberg-list?category=<id> 가 가져옴 (라이브 fetch + 캐싱).
+// ---------------------------------------------------------------------------
+const GB_CATEGORY_TREE = [
+  { section: 'Literature', cats: [
+    'Adventure', 'American Literature', 'British Literature',
+    'French Literature', 'German Literature', 'Russian Literature',
+    'Classics of Literature', 'Biographies', 'Novels',
+    'Short Stories', 'Poetry', 'Plays/Films/Dramas',
+    'Romance', 'Science-Fiction & Fantasy', 'Crime, Thrillers & Mystery',
+    'Mythology, Legends & Folklore', 'Humour',
+    'Children & Young Adult Reading', 'Literature - Other',
+  ]},
+  { section: 'Science & Technology', cats: [
+    'Engineering & Technology', 'Mathematics', 'Science - Physics',
+    'Science - Chemistry/Biochemistry', 'Science - Biology',
+    'Science - Earth/Agricultural/Farming',
+    'Research Methods/Statistics/Information Sys', 'Environmental Issues',
+  ]},
+  { section: 'History', cats: [
+    'History - American', 'History - British', 'History - European',
+    'History - Ancient', 'History - Medieval/Middle Ages',
+    'History - Early Modern (c. 1450-1750)', 'History - Modern (1750+)',
+    'History - Religious', 'History - Royalty', 'History - Warfare',
+    'History - Schools & Universities', 'History - Other',
+    'Archaeology & Anthropology',
+  ]},
+  { section: 'Social Sciences & Society', cats: [
+    'Business/Management', 'Economics', 'Law & Criminology',
+    'Gender & Sexuality Studies', 'Psychiatry/Psychology',
+    'Sociology', 'Politics', 'Parenthood & Family Relations',
+    'Old Age & the Elderly',
+  ]},
+  { section: 'Arts & Culture', cats: [
+    'Art', 'Architecture', 'Music', 'Fashion',
+    'Journalism/Media/Writing', 'Language & Communication',
+    'Essays, Letters & Speeches',
+  ]},
+  { section: 'Religion & Philosophy', cats: [
+    'Religion/Spirituality', 'Philosophy & Ethics',
+  ]},
+  { section: 'Lifestyle & Hobbies', cats: [
+    'Cooking & Drinking', 'Sports/Hobbies', 'How To ...',
+    'Travel Writing', 'Nature/Gardening/Animals', 'Sexuality & Erotica',
+  ]},
+  { section: 'Health & Medicine', cats: [
+    'Health & Medicine', 'Drugs/Alcohol/Pharmacology', 'Nutrition',
+  ]},
+  { section: 'Education & Reference', cats: [
+    'Encyclopedias/Dictionaries/Reference', 'Teaching & Education',
+    'Reports & Conference Proceedings', 'Journals',
+  ]},
+];
+
+function gbCatIdOf(name) {
+  return String(name).toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/[\/,()+]/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+(function initGutenbergCategoryPicker() {
+  const sectionSel  = document.getElementById('gb-section-select');
+  const subcatRow   = document.getElementById('gb-subcat-row');
+  const subcatSel   = document.getElementById('gb-subcat-select');
+  const subcatMeta  = document.getElementById('gb-subcat-meta');
+  const worksPanel  = document.getElementById('gb-cat-works-panel');
+  const worksList   = document.getElementById('gb-cat-works-list');
+  const worksCount  = document.getElementById('gb-cat-works-count');
+  const worksLabel  = document.getElementById('gb-cat-works-label');
+  const pickedHint  = document.getElementById('gb-cat-picked-hint');
+  if (!sectionSel || !subcatSel) return;
+
+  // 1단계 옵션 채우기
+  GB_CATEGORY_TREE.forEach((sec) => {
+    const opt = document.createElement('option');
+    opt.value = sec.section;
+    opt.textContent = `${sec.section} (${sec.cats.length}개)`;
+    sectionSel.appendChild(opt);
+  });
+
+  function setPickedHighlight(el, on) {
+    if (!el) return;
+    if (on) {
+      el.classList.add('border-primary', 'bg-primary/5', 'font-semibold', 'text-on-primary-container');
+    } else {
+      el.classList.remove('border-primary', 'bg-primary/5', 'font-semibold', 'text-on-primary-container');
+    }
+  }
+
+  let activeSection = null;
+  let activeCatId = null;
+  // 카테고리별 작품 응답 캐시 (같은 카테고리 다시 선택 시 재호출 안 함)
+  const worksCache = new Map();
+
+  sectionSel.addEventListener('change', () => {
+    const name = sectionSel.value;
+    if (!name) {
+      setPickedHighlight(sectionSel, false);
+      subcatRow.classList.add('hidden');
+      subcatRow.style.display = 'none';
+      worksPanel.classList.add('hidden');
+      worksPanel.style.display = 'none';
+      activeSection = null;
+      activeCatId = null;
+      return;
+    }
+    activeSection = GB_CATEGORY_TREE.find((s) => s.section === name);
+    if (!activeSection) return;
+    setPickedHighlight(sectionSel, true);
+
+    // 2단계 옵션 재구성
+    subcatSel.innerHTML = '<option value="">— 하위 카테고리 선택 —</option>';
+    activeSection.cats.forEach((cat) => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      subcatSel.appendChild(opt);
+    });
+    setPickedHighlight(subcatSel, false);
+    subcatMeta.textContent = `${activeSection.section} 의 ${activeSection.cats.length}개`;
+    subcatRow.classList.remove('hidden');
+    subcatRow.style.display = '';
+    worksPanel.classList.add('hidden');
+    worksPanel.style.display = 'none';
+    activeCatId = null;
+  });
+
+  subcatSel.addEventListener('change', async () => {
+    const catName = subcatSel.value;
+    if (!catName || !activeSection) {
+      setPickedHighlight(subcatSel, false);
+      worksPanel.classList.add('hidden');
+      worksPanel.style.display = 'none';
+      activeCatId = null;
+      return;
+    }
+    setPickedHighlight(subcatSel, true);
+    activeCatId = gbCatIdOf(catName);
+    worksLabel.textContent = `${activeSection.section} · ${catName}`;
+    worksCount.textContent = '⋯';
+    worksList.innerHTML =
+      '<div class="px-3 py-4 text-center text-sm text-on-surface-variant">작품 목록 불러오는 중⋯</div>';
+    worksPanel.classList.remove('hidden');
+    worksPanel.style.display = '';
+    pickedHint.classList.add('hidden');
+
+    // 캐시 우선
+    let works = worksCache.get(activeCatId);
+    if (!works) {
+      try {
+        const token = await getAccessToken();
+        const json = await apiFetch(
+          `/api/gutenberg-list?category=${encodeURIComponent(catName)}`,
+          {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        works = Array.isArray(json?.works) ? json.works : [];
+        worksCache.set(activeCatId, works);
+      } catch (e) {
+        console.warn('[gb-picker] fetch failed:', e);
+        worksList.innerHTML =
+          `<div class="px-3 py-4 text-center text-sm text-error">작품 목록 불러오기 실패: ${escapeForToast(e.message || String(e))}</div>`;
+        worksCount.textContent = '0';
+        return;
+      }
+    }
+
+    worksList.innerHTML = '';
+    worksCount.textContent = String(works.length);
+    if (!works.length) {
+      worksList.innerHTML =
+        '<div class="px-3 py-4 text-center text-sm text-on-surface-variant">이 카테고리 작품을 찾지 못했습니다.</div>';
+      return;
+    }
+    works.forEach((w) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-primary/5 transition-colors';
+      row.innerHTML = `
+        <div class="flex items-baseline justify-between gap-3">
+          <span class="font-semibold text-on-surface truncate">${escapeForToast(w.title || '')}</span>
+          <span class="text-xs text-on-surface-variant shrink-0">${w.year ? String(w.year) : ''}</span>
+        </div>
+        <div class="text-xs text-on-surface-variant mt-0.5">${escapeForToast(w.author || '')}${w.bookId ? ` · Gutenberg #${w.bookId}` : ''}</div>
+      `;
+      row.addEventListener('click', () => {
+        const titleInput = document.querySelector('#title-input');
+        const bookIdInput = document.querySelector('#title-book-id');
+        if (titleInput) titleInput.value = w.title || '';
+        if (bookIdInput) bookIdInput.value = w.bookId ? String(w.bookId) : '';
+        // 시각 강조
+        worksList.querySelectorAll('button').forEach((b) => b.classList.remove('bg-primary/20'));
+        row.classList.add('bg-primary/20');
+        pickedHint.textContent = `✓ 선택됨: ${w.title}${w.bookId ? ' · Gutenberg #' + w.bookId + ' · 검색 없이 바로 가져오기' : ''}`;
+        pickedHint.classList.remove('hidden');
+        // 하단 Gutenberg 검색 버튼 깜빡 강조
+        const gbBtn = document.getElementById('gb-search-btn');
+        if (gbBtn) {
+          gbBtn.classList.add('ring-2', 'ring-primary');
+          setTimeout(() => gbBtn.classList.remove('ring-2', 'ring-primary'), 1200);
+          gbBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+      worksList.appendChild(row);
+    });
+  });
+})();
+
+function escapeForToast(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[c]));
 }

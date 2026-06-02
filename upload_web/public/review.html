@@ -57,6 +57,63 @@
 
   .keyword-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: #ede9fe; color: #5b21b6; font-size: 12px; font-weight: 600; margin-right: 6px; margin-bottom: 6px; }
   .keyword-tag button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0; font-size: 14px; line-height: 1; }
+
+  /* 카드 상세 팝업 — 조회 페이지의 pullout-modal 패턴 차용 */
+  .review-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 90; display: none; align-items: center; justify-content: center; padding: 24px;
+  }
+  .review-modal.open { display: flex; }
+  .review-modal-card {
+    background: #fff; border-radius: 12px;
+    max-width: 1400px; width: 96vw;
+    max-height: calc(100vh - 48px);
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+    animation: review-modal-slide 0.25s ease;
+  }
+  .review-modal-body {
+    overflow-y: auto; flex: 1 1 auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px;
+  }
+  .review-modal-body::-webkit-scrollbar { width: 8px; }
+  .review-modal-body::-webkit-scrollbar-thumb { background: #c7c4d8; border-radius: 4px; }
+  @keyframes review-modal-slide {
+    0% { transform: translateY(20px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  .review-modal-close {
+    position: absolute; top: 12px; right: 12px;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid #e5e7eb; border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    z-index: 1;
+  }
+  .review-modal-close:hover { background: #f3f4f6; }
+
+  /* 이중 언어 편집 — 좌(KO) / 우(EN) 2열 */
+  .bilingual-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 900px) { .bilingual-row { grid-template-columns: 1fr; } }
+  .editable-en { background: #fffbf0; border-color: #fbbf24; }
+  .editable-en:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.15); }
+  .field-label-en { color: #92400e; }
+  .translate-back-btn {
+    font-size: 11px; padding: 2px 8px; border-radius: 4px;
+    border: 1px solid #3b82f6; color: #2563eb; background: white;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .translate-back-btn:hover { background: #eff6ff; }
+  .translate-back-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .fill-en-bulk-btn {
+    font-size: 12px; padding: 6px 12px; border-radius: 6px;
+    border: 1px solid #f59e0b; color: #92400e; background: #fffbeb;
+    cursor: pointer; font-weight: 600;
+  }
+  .fill-en-bulk-btn:hover { background: #fef3c7; }
+  .fill-en-bulk-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 <script id="tailwind-config">
   tailwind.config = {
@@ -144,15 +201,17 @@
       <div class="flex justify-between items-end mb-6">
         <div>
           <h1 class="text-2xl font-bold mb-1">검토 대기 카드</h1>
-          <p class="text-sm text-on-surface-variant">승인하면 PWA / iOS 앱에 노출됩니다. 거절 / 수정 필요로 표시하면 노출되지 않습니다.</p>
+          <p class="text-sm text-on-surface-variant">승인하면 조회 (cards) 에 노출되고 PWA / iOS 앱에서 사용됩니다. 삭제하면 영구 제거됩니다.</p>
         </div>
         <div class="flex gap-2 items-center">
-          <select id="status-filter" class="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-white">
+          <!-- 검토 큐는 검토 대기 (pending) 만 표시. 승인된 카드는 조회, 삭제된 카드는 완전 제거. -->
+          <select id="status-filter" hidden>
             <option value="pending" selected>검토 대기 (pending)</option>
-            <option value="approved">승인됨 (approved)</option>
-            <option value="rejected">거절됨 (rejected)</option>
-            <option value="needs_edit">수정 필요 (needs_edit)</option>
           </select>
+          <button id="queue-fill-en-btn" class="px-3 py-2 border border-primary text-primary rounded-lg text-sm hover:bg-primary/10 flex items-center gap-1" title="검토 대기 카드 중 영문 비어 있는 필드만 KO→EN 자동 채우기. 본문 재번역 X (이미 채워진 영문은 그대로 보존).">
+            <span class="material-symbols-outlined" style="font-size:18px;">language</span>
+            영문 일괄 채우기
+          </button>
           <button id="refresh-btn" class="px-3 py-2 border border-outline-variant rounded-lg text-sm hover:bg-surface-container-low flex items-center gap-1">
             <span class="material-symbols-outlined" style="font-size:18px;">refresh</span>
             새로고침
@@ -165,16 +224,16 @@
       <div id="queue-list" class="flex flex-col gap-2"></div>
     </section>
 
-    <!-- ===== Detail / edit view ===== -->
-    <section id="view-detail" class="hidden">
-      <button id="back-to-queue" class="decide-btn btn-back mb-4 flex items-center gap-1">
-        <span class="material-symbols-outlined" style="font-size:18px;">arrow_back</span>
-        목록으로
-      </button>
+    <!-- ===== Detail / edit popup — 조회 페이지처럼 모달 ===== -->
+    <div id="view-detail" class="review-modal">
+      <div class="review-modal-card relative">
+        <button id="back-to-queue" class="review-modal-close" title="닫기 (목록으로)">
+          <span class="material-symbols-outlined" style="font-size:20px;">close</span>
+        </button>
+        <div class="review-modal-body">
+          <div id="detail-claim-banner" class="hidden mb-4 p-3 rounded-lg border border-violet-300 bg-violet-50 text-sm text-violet-900"></div>
 
-      <div id="detail-claim-banner" class="hidden mb-4 p-3 rounded-lg border border-violet-300 bg-violet-50 text-sm text-violet-900"></div>
-
-      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+          <div>
         <div class="flex justify-between items-start mb-4">
           <div>
             <p id="detail-work" class="text-sm text-on-surface-variant mb-1"></p>
@@ -188,28 +247,135 @@
         </div>
 
         <div class="grid gap-5 mt-4">
-          <div>
-            <label class="field-label">명대사 (quote)</label>
-            <textarea id="edit-quote" class="editable-field editable-textarea" rows="3"></textarea>
+          <!-- 도구 행 — 영문 일괄 채우기 -->
+          <div class="flex justify-end -mb-2">
+            <button id="fill-en-bulk-btn" class="fill-en-bulk-btn" title="비어 있는 영문 필드만 KO→EN 자동 번역해서 채웁니다">
+              🌐 영문 일괄 채우기
+            </button>
           </div>
-          <div>
-            <label class="field-label">대본 발췌 (script_excerpt)</label>
-            <textarea id="edit-script-excerpt" class="editable-field editable-textarea" rows="6"></textarea>
+
+          <!-- 작품 메타 (works) — 제목·부제·작가 좌/우 -->
+          <details class="border border-outline-variant rounded-lg p-3 bg-surface-container-low" open>
+            <summary class="text-xs font-bold text-on-surface cursor-pointer select-none">📚 작품 정보 (이 작품의 모든 카드에 공유)</summary>
+            <div class="mt-3 flex flex-col gap-3">
+              <div class="bilingual-row">
+                <div>
+                  <label class="field-label">제목 (한국어)</label>
+                  <input id="edit-work-title" class="editable-field" />
+                </div>
+                <div>
+                  <div class="flex items-center justify-between">
+                    <label class="field-label field-label-en">Title (영문)</label>
+                    <button type="button" data-trans-back="#edit-work-title-original" data-trans-field="title" class="translate-back-btn">↻ KO</button>
+                  </div>
+                  <input id="edit-work-title-original" class="editable-field editable-en" placeholder="(영문 원본 없음)" />
+                </div>
+              </div>
+              <div class="bilingual-row">
+                <div>
+                  <label class="field-label">부제 (한국어)</label>
+                  <input id="edit-work-subtitle" class="editable-field" placeholder="없으면 빈 칸" />
+                </div>
+                <div>
+                  <div class="flex items-center justify-between">
+                    <label class="field-label field-label-en">Subtitle (영문)</label>
+                    <button type="button" data-trans-back="#edit-work-subtitle-original" data-trans-field="subtitle" class="translate-back-btn">↻ KO</button>
+                  </div>
+                  <input id="edit-work-subtitle-original" class="editable-field editable-en" placeholder="(영문 원본 없음)" />
+                </div>
+              </div>
+              <div class="bilingual-row">
+                <div>
+                  <label class="field-label">작가 (한국어)</label>
+                  <input id="edit-work-author" class="editable-field" />
+                </div>
+                <div>
+                  <div class="flex items-center justify-between">
+                    <label class="field-label field-label-en">Author (영문)</label>
+                    <button type="button" data-trans-back="#edit-work-author-original" data-trans-field="author" class="translate-back-btn">↻ KO</button>
+                  </div>
+                  <input id="edit-work-author-original" class="editable-field editable-en" placeholder="(영문 원본 없음)" />
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- 명대사 (quote) 좌/우 -->
+          <div class="bilingual-row">
+            <div>
+              <label class="field-label">명대사 (한국어)</label>
+              <textarea id="edit-quote" class="editable-field editable-textarea" rows="3"></textarea>
+            </div>
+            <div>
+              <div class="flex items-center justify-between">
+                <label class="field-label field-label-en">Quote (영문)</label>
+                <button type="button" data-trans-back="#edit-quote-original" data-trans-field="quote" class="translate-back-btn">↻ KO</button>
+              </div>
+              <textarea id="edit-quote-original" class="editable-field editable-textarea editable-en" rows="3" placeholder="(영문 원본 없음)"></textarea>
+            </div>
           </div>
-          <div>
-            <label class="field-label">발췌 설명 (excerpt_description)</label>
-            <textarea id="edit-excerpt-description" class="editable-field editable-textarea" rows="3"></textarea>
+
+          <!-- 대본 발췌 (script_excerpt) 좌/우 -->
+          <div class="bilingual-row">
+            <div>
+              <label class="field-label">대본 발췌 (한국어)</label>
+              <textarea id="edit-script-excerpt" class="editable-field editable-textarea" rows="8"></textarea>
+            </div>
+            <div>
+              <div class="flex items-center justify-between">
+                <label class="field-label field-label-en">Script Excerpt (영문)</label>
+                <button type="button" data-trans-back="#edit-script-excerpt-original" data-trans-field="script_excerpt" class="translate-back-btn">↻ KO</button>
+              </div>
+              <textarea id="edit-script-excerpt-original" class="editable-field editable-textarea editable-en" rows="8" placeholder="(영문 원본 없음)"></textarea>
+            </div>
           </div>
-          <div>
-            <label class="field-label">의의 (significance)</label>
-            <textarea id="edit-significance" class="editable-field editable-textarea" rows="3"></textarea>
+
+          <!-- 발췌 설명 좌/우 -->
+          <div class="bilingual-row">
+            <div>
+              <label class="field-label">발췌 설명 (한국어)</label>
+              <textarea id="edit-excerpt-description" class="editable-field editable-textarea" rows="3"></textarea>
+            </div>
+            <div>
+              <div class="flex items-center justify-between">
+                <label class="field-label field-label-en">Description (영문)</label>
+                <button type="button" data-trans-back="#edit-excerpt-description-original" data-trans-field="excerpt_description" class="translate-back-btn">↻ KO</button>
+              </div>
+              <textarea id="edit-excerpt-description-original" class="editable-field editable-textarea editable-en" rows="3" placeholder="(영문 원본 없음)"></textarea>
+            </div>
           </div>
-          <div>
-            <label class="field-label">키워드 (keywords) — 최대 10개</label>
-            <div id="keywords-container"></div>
-            <div class="flex gap-2 mt-2">
-              <input id="keyword-input" type="text" class="editable-field flex-1" placeholder="새 키워드 입력 후 Enter" maxlength="40" />
-              <button id="keyword-add-btn" type="button" class="decide-btn btn-save">추가</button>
+
+          <!-- 의의 좌/우 -->
+          <div class="bilingual-row">
+            <div>
+              <label class="field-label">의의 (한국어)</label>
+              <textarea id="edit-significance" class="editable-field editable-textarea" rows="3"></textarea>
+            </div>
+            <div>
+              <div class="flex items-center justify-between">
+                <label class="field-label field-label-en">Significance (영문)</label>
+                <button type="button" data-trans-back="#edit-significance-original" data-trans-field="significance" class="translate-back-btn">↻ KO</button>
+              </div>
+              <textarea id="edit-significance-original" class="editable-field editable-textarea editable-en" rows="3" placeholder="(영문 원본 없음)"></textarea>
+            </div>
+          </div>
+
+          <!-- 키워드 좌/우 (한국어 태그 + 영문 쉼표 입력) -->
+          <div class="bilingual-row">
+            <div>
+              <label class="field-label">키워드 (한국어) — 최대 10개</label>
+              <div id="keywords-container"></div>
+              <div class="flex gap-2 mt-2">
+                <input id="keyword-input" type="text" class="editable-field flex-1" placeholder="새 키워드 입력 후 Enter" maxlength="40" />
+                <button id="keyword-add-btn" type="button" class="decide-btn btn-save">추가</button>
+              </div>
+            </div>
+            <div>
+              <div class="flex items-center justify-between">
+                <label class="field-label field-label-en">Keywords (영문) — 쉼표 구분</label>
+                <button type="button" data-trans-back="#edit-keywords-original" data-trans-field="keywords" class="translate-back-btn">↻ KO</button>
+              </div>
+              <input id="edit-keywords-original" class="editable-field editable-en" placeholder="keyword1, keyword2, keyword3" />
             </div>
           </div>
 
@@ -231,12 +397,14 @@
         </div>
 
         <div class="mt-6 pt-5 border-t border-outline-variant flex flex-wrap gap-2 justify-end">
-          <button id="decide-needs-edit" class="decide-btn btn-needs">수정 필요</button>
-          <button id="decide-reject" class="decide-btn btn-reject">거절</button>
-          <button id="decide-approve" class="decide-btn btn-approve">승인 → cards 로</button>
+          <button id="decide-delete" class="decide-btn btn-reject">🗑️ 삭제</button>
+          <button id="action-save" class="decide-btn btn-save">💾 저장</button>
+          <button id="decide-approve" class="decide-btn btn-approve">✓ 승인 → 조회로</button>
+        </div>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
 
   </div>
 </main>

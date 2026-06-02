@@ -86,6 +86,16 @@ function normalizeCard(card, workId) {
     throw new HttpError('card.quote and card.script_excerpt are required', 400);
   }
   const display = pickDisplayedFields(card);
+
+  // dashboard.js 가 번역 단계에서 KO→EN 배치로 채운 해설 영문. 마이그레이션 025 후 candidate 에도 직접 저장.
+  const tc = card.translated_commentary && typeof card.translated_commentary === 'object'
+    ? card.translated_commentary : null;
+  const descOrig = tc?.excerpt_description_original || null;
+  const sigOrig  = tc?.significance_original || null;
+  const kwOrigArr = Array.isArray(tc?.keywords_original)
+    ? tc.keywords_original.map((k) => String(k).trim()).filter(Boolean).slice(0, 10)
+    : null;
+
   return {
     work_id: workId,
     quote: normalizeText(display.quote)?.slice(0, 2000),
@@ -99,9 +109,13 @@ function normalizeCard(card, workId) {
     intensity: clampInt(card.intensity, 1, 5),
     // 의의(significance) — DB의 cards.significance 컬럼에 저장 (텍스트, NULL 허용)
     significance: card.significance ? normalizeText(String(card.significance)).slice(0, 3000) : null,
-    // 이중 언어 — 영문 원본 (있을 때만, 마이그레이션 021)
+    // 이중 언어 — 영문 원본 (마이그레이션 021/022/023 의 cards 컬럼; 025 로 card_candidates 도 동일 컬럼 보유)
     quote_original:          display.quote_original          ? String(display.quote_original).slice(0, 2000) : null,
     script_excerpt_original: display.script_excerpt_original ? String(display.script_excerpt_original).slice(0, 10000) : null,
+    // 해설(설명·의의·키워드) 영문 — 번역 버튼에서 배치로 채워 보냄
+    excerpt_description_original: descOrig ? String(descOrig).slice(0, 2000) : null,
+    significance_original:        sigOrig  ? String(sigOrig).slice(0, 3000)  : null,
+    keywords_original:            (kwOrigArr && kwOrigArr.length) ? kwOrigArr : null,
   };
 }
 
@@ -117,17 +131,9 @@ function buildCandidateMeta(card, normalizedCard, fullScriptText, extractedBy) {
     && typeof normalizedCard.quote === 'string'
     && fullScriptText.includes(normalizedCard.quote);
 
-  // 이중 언어 컬럼(*_original)은 cards 테이블에는 있지만 card_candidates 에는 없다
-  // (마이그레이션 021/022/023 은 cards 만 확장). normalizedCard 에 섞여 있으면 candidate
-  // insert 가 schema cache 에러로 500. 분리해서 original_payload JSONB 안에 보존 →
-  // 향후 promote_candidate RPC 가 cards 로 다시 복원할 수 있게 한다.
-  const {
-    quote_original,
-    script_excerpt_original,
-    ...candidateFields
-  } = normalizedCard;
-
-  // 원본 LLM 출력 + 이중 언어 원본을 그대로 보관 — 인라인 편집 후 비교/감사 + bilingual 복원용
+  // 마이그레이션 025 이후 card_candidates 에도 quote/script_excerpt/excerpt_description/
+  // significance/keywords 의 *_original 컬럼이 있음 → normalizedCard 를 그대로 spread.
+  // 감사용 original_payload 는 LLM 원본 그대로 (편집 흔적 비교용).
   const originalPayload = {
     quote: card.quote ?? null,
     script_excerpt: card.script_excerpt ?? null,
@@ -137,14 +143,12 @@ function buildCandidateMeta(card, normalizedCard, fullScriptText, extractedBy) {
     intensity: card.intensity ?? null,
     significance: card.significance ?? null,
     translated: card.translated ?? null,
+    translated_commentary: card.translated_commentary ?? null,
     showingTranslation: !!card.showingTranslation,
-    // bilingual originals — candidate schema 에는 컬럼이 없어서 JSONB 안에 보존.
-    quote_original:          quote_original          ?? null,
-    script_excerpt_original: script_excerpt_original ?? null,
   };
 
   return {
-    ...candidateFields,
+    ...normalizedCard,
     status: 'pending',
     source_kind: 'uploaded_doc',
     source_url: null,

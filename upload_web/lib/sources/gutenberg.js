@@ -19,34 +19,62 @@ function containsKorean(s) {
   return /[가-힯]/.test(String(s || ''));
 }
 
-async function getJson(url) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA, Accept: 'application/json' },
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`gutendex HTTP ${res.status}`);
-    return await res.json();
-  } finally {
-    clearTimeout(t);
+// gutendex.com / gutenberg.org 가 일시적으로 응답 안 할 때(Node native fetch 의 'fetch failed')
+// 를 자동으로 재시도. 3회 시도, 백오프 1.5/3/6초. Vercel 함수 timeout 안에서 안전.
+async function fetchWithRetry(url, opts = {}, label = 'gutendex') {
+  const MAX_ATTEMPTS = 3;
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, { ...opts, signal: ctrl.signal });
+      clearTimeout(t);
+      if (!res.ok) {
+        // 5xx 만 재시도. 4xx 는 그대로 throw (요청 오류라 재시도해도 의미 없음)
+        if (res.status >= 500 && attempt < MAX_ATTEMPTS) {
+          lastErr = new Error(`${label} HTTP ${res.status}`);
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+          continue;
+        }
+        throw new Error(`${label} HTTP ${res.status}`);
+      }
+      return res;
+    } catch (err) {
+      clearTimeout(t);
+      // 'fetch failed' (Node native fetch 의 underlying network 실패) — cause 에 자세한 에러
+      const cause = err?.cause?.message || err?.cause?.code || '';
+      const msg = err?.message || String(err);
+      console.warn(`[${label}] attempt ${attempt} failed: ${msg}${cause ? ' / cause: ' + cause : ''}`);
+      lastErr = err;
+      if (attempt === MAX_ATTEMPTS) break;
+      // AbortError 는 timeout — 다음 시도
+      // network error 는 다음 시도 (DNS/TLS 일시 오류 흔함)
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+    }
   }
+  // 마지막 에러를 사용자가 이해할 만하게 다시 throw
+  const cause = lastErr?.cause?.message || lastErr?.cause?.code;
+  const friendly = cause
+    ? `${label} 연결 실패 (${cause}) — gutendex.com 일시 장애일 수 있어요. 잠시 후 다시 시도해주세요.`
+    : `${label} 응답 없음 — ${lastErr?.message || '네트워크 오류'}`;
+  const e = new Error(friendly);
+  e.status = 502;
+  throw e;
+}
+
+async function getJson(url) {
+  const res = await fetchWithRetry(url, {
+    headers: { 'User-Agent': UA, Accept: 'application/json' },
+  }, 'gutendex');
+  return await res.json();
 }
 
 async function getText(url) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA, Accept: 'text/plain' },
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`gutenberg HTTP ${res.status}`);
-    return await res.text();
-  } finally {
-    clearTimeout(t);
-  }
+  const res = await fetchWithRetry(url, {
+    headers: { 'User-Agent': UA, Accept: 'text/plain' },
+  }, 'gutenberg');
+  return await res.text();
 }
 
 // 한국어 작품명 → 영어 작품명. ko.wikipedia 의 langlinks(lllang=en) 사용.
@@ -105,6 +133,145 @@ async function fetchEnLangLink(koTitle) {
 //   author 정보까지 함께 돌려주므로 UI 에서 풍부한 리스트를 그릴 수 있다.
 //   languages 가 'ko' 인 PD 한국 문학도 일부 있지만, 본 어댑터는 영문 (en) 기본.
 //   한국어로 입력하면 ko.wikipedia 의 langlinks 로 자동 영문 변환 후 검색.
+// 카테고리(=bookshelf 또는 subject 유사어) 로 작품 목록 조회.
+//  - Gutendex /books?topic=<keyword> 가 bookshelves + subjects 둘 다 검색.
+//  - 우리 UI 카테고리명(예: "Crime, Thrillers & Mystery") 은 그대로 topic 검색에
+//    넣기에 너무 합성적이라 keywordsForCategory 로 간단한 매핑/정제 후 사용.
+//  - 결과는 다국어 섞임 가능 — 1차로 영문(en) 우선, 동일 title+author 중복 제거.
+//  - 응답은 최대 100건 (Gutendex page=1) — UI 측에서 표시.
+const CATEGORY_TOPIC = {
+  'adventure': 'adventure',
+  'american literature': 'american fiction',
+  'british literature': 'english fiction',
+  'french literature': 'french fiction',
+  'german literature': 'german fiction',
+  'russian literature': 'russian fiction',
+  'classics of literature': 'fiction',
+  'biographies': 'biography',
+  'novels': 'fiction',
+  'short stories': 'short stories',
+  'poetry': 'poetry',
+  'plays/films/dramas': 'drama',
+  'romance': 'love stories',
+  'science-fiction & fantasy': 'science fiction',
+  'crime, thrillers & mystery': 'detective',
+  'mythology, legends & folklore': 'mythology',
+  'humour': 'humor',
+  'children & young adult reading': "children's literature",
+  'literature - other': 'literature',
+  // Science & Technology
+  'engineering & technology': 'engineering',
+  'mathematics': 'mathematics',
+  'science - physics': 'physics',
+  'science - chemistry/biochemistry': 'chemistry',
+  'science - biology': 'biology',
+  'science - earth/agricultural/farming': 'agriculture',
+  'research methods/statistics/information sys': 'statistics',
+  'environmental issues': 'environment',
+  // History
+  'history - american': 'united states history',
+  'history - british': 'great britain history',
+  'history - european': 'europe history',
+  'history - ancient': 'ancient history',
+  'history - medieval/middle ages': 'middle ages',
+  'history - early modern (c. 1450-1750)': 'early modern history',
+  'history - modern (1750+)': 'modern history',
+  'history - religious': 'church history',
+  'history - royalty': 'royalty',
+  'history - warfare': 'military history',
+  'history - schools & universities': 'education history',
+  'history - other': 'history',
+  'archaeology & anthropology': 'archaeology',
+  // Social Sciences & Society
+  'business/management': 'business',
+  'economics': 'economics',
+  'law & criminology': 'law',
+  'gender & sexuality studies': 'gender',
+  'psychiatry/psychology': 'psychology',
+  'sociology': 'sociology',
+  'politics': 'politics',
+  'parenthood & family relations': 'family',
+  'old age & the elderly': 'old age',
+  // Arts & Culture
+  'art': 'art',
+  'architecture': 'architecture',
+  'music': 'music',
+  'fashion': 'fashion',
+  'journalism/media/writing': 'journalism',
+  'language & communication': 'language',
+  'essays, letters & speeches': 'essays',
+  // Religion & Philosophy
+  'religion/spirituality': 'religion',
+  'philosophy & ethics': 'philosophy',
+  // Lifestyle & Hobbies
+  'cooking & drinking': 'cooking',
+  'sports/hobbies': 'sports',
+  'how to ...': 'self-help',
+  'travel writing': 'travel',
+  'nature/gardening/animals': 'nature',
+  'sexuality & erotica': 'erotica',
+  // Health & Medicine
+  'health & medicine': 'medicine',
+  'drugs/alcohol/pharmacology': 'pharmacy',
+  'nutrition': 'nutrition',
+  // Education & Reference
+  'encyclopedias/dictionaries/reference': 'reference',
+  'teaching & education': 'education',
+  'reports & conference proceedings': 'conferences',
+  'journals': 'periodicals',
+};
+
+function keywordForCategory(name) {
+  const key = String(name || '').trim().toLowerCase();
+  if (CATEGORY_TOPIC[key]) return CATEGORY_TOPIC[key];
+  // 매핑 없으면 안전한 fallback — 카테고리명 그대로 (Gutendex topic 이 subject 매칭 시도)
+  return String(name || '').replace(/&/g, ' ').replace(/[\/,]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export async function listGutenbergByCategory(categoryName, limit = 50) {
+  const cat = String(categoryName || '').trim();
+  if (!cat) return { works: [], topic: '' };
+  const topic = keywordForCategory(cat);
+  const url = new URL(GUTENDEX_BASE);
+  url.searchParams.set('topic', topic);
+  // 가능하면 영어 우선 (다국어 PD 가 섞이지만 영문 PDF 추출이 우리 흐름이라 영어가 자연스러움)
+  url.searchParams.set('languages', 'en');
+  const j = await getJson(url.toString());
+  const items = Array.isArray(j?.results) ? j.results : [];
+
+  // 중복 제거: 정규화된 title + 첫 작가
+  const seen = new Set();
+  const works = [];
+  for (const b of items) {
+    if (works.length >= limit) break;
+    const title = String(b.title || '').trim();
+    if (!title) continue;
+    const authors = Array.isArray(b.authors) ? b.authors.map((a) => a?.name).filter(Boolean) : [];
+    const firstAuthor = authors[0] || '';
+    const normTitle = title.toLowerCase()
+      .replace(/^(the |a |an )/i, '')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ').trim();
+    const key = `${normTitle}|${firstAuthor.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // 작가 사망연도 사이의 첫 작가 출생/연대 추정 — life 시작연도가 있으면 사용 (Gutendex 가 제공)
+    const year = (b.authors && b.authors[0] && (b.authors[0].death_year || b.authors[0].birth_year)) || null;
+    works.push({
+      bookId: b.id,
+      title,
+      author: firstAuthor,
+      authors,
+      year,
+      downloadCount: b.download_count ?? null,
+      plainTextUrl: pickPlainTextUrl(b.formats || {}),
+    });
+  }
+  // 다운로드 수 내림차순 — 인기작 우선
+  works.sort((a, b) => (b.downloadCount || 0) - (a.downloadCount || 0));
+  return { works, topic };
+}
+
 export async function searchGutenberg(query, limit = 8) {
   const original = String(query || '').trim();
   if (!original) return { results: [], originalQuery: '', effectiveQuery: '', translatedFrom: null };

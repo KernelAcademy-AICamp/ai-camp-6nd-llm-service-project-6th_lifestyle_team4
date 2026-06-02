@@ -99,6 +99,8 @@ export default async function handler(req, res) {
       return sendError(res, err);
     }
     console.error('[fetch-source] error:', err);
-    return res.status(500).json({ error: err.message || 'internal_error' });
+    // 외부 소스(Gutendex/Wikisource)가 일시 장애일 때 502 로 표시해 클라이언트 가 친절한 메시지 보이게.
+    const status = err?.status === 502 ? 502 : 500;
+    return res.status(status).json({ error: err.message || 'internal_error' });
   }
 }

@@ -52,7 +52,16 @@ function getClient() {
 
 async function callClaude(
   prompt,
-  { maxTokens = 8192, model = null, system = null, temperature = null, topP = null, prefill = null } = {}
+  {
+    maxTokens = 8192,
+    model = null,
+    system = null,
+    temperature = null,
+    topP = null,
+    prefill = null,
+    signal = null,        // V2 streaming: 클라이언트 연결이 끊기면 abort
+    onProgress = null,    // V2 streaming: 진행 이벤트 emit (서버 → 클라이언트)
+  } = {}
 ) {
   // SDK가 이미 maxRetries=4로 재시도하므로, 외부 wrapper는 1회 추가 시도까지만 (총 ≤2회).
   // 외부 재시도 횟수가 많으면 Vercel 함수 timeout(300s)을 잡아먹어 전체 실패.
@@ -67,6 +76,11 @@ async function callClaude(
     messages.push({ role: 'assistant', content: prefill });
   }
   for (let attempt = 0; attempt < MAX_OUTER_ATTEMPTS; attempt++) {
+    if (signal?.aborted) {
+      const abortErr = new Error('aborted');
+      abortErr.name = 'AbortError';
+      throw abortErr;
+    }
     try {
       const payload = {
         model: useModel,
@@ -78,7 +92,9 @@ async function callClaude(
       // 신형 Claude 모델은 temperature 와 top_p 를 동시에 보내면 400 거부.
       // temperature 가 우선이고, top_p 는 temperature 가 없을 때만 보낸다.
       if (topP !== null && temperature === null) payload.top_p = topP;
-      const res = await getClient().messages.create(payload);
+      onProgress?.({ t: 'llm_call', model: useModel, max_tokens: maxTokens, attempt: attempt + 1 });
+      // Anthropic SDK 의 두 번째 인자(RequestOptions)에 signal 전달 → 진짜 LLM 호출 중단.
+      const res = await getClient().messages.create(payload, signal ? { signal } : undefined);
       const text = res.content
         .filter((b) => b.type === 'text')
         .map((b) => b.text)
@@ -87,8 +103,14 @@ async function callClaude(
       // 단, 모델이 prefill을 무시하고 '{'부터 새로 출력한 경우엔 그대로 둠 (이중 헤더 방지).
       const combined =
         prefill && !text.trimStart().startsWith('{') ? prefill + text : text;
+      onProgress?.({ t: 'llm_done', model: useModel, attempt: attempt + 1 });
       return parseJson(combined);
     } catch (err) {
+      // AbortError 는 재시도하지 않고 그대로 throw
+      if (err?.name === 'AbortError' || /aborted/i.test(String(err?.message || ''))) {
+        onProgress?.({ t: 'aborted', model: useModel });
+        throw err;
+      }
       lastErr = err;
       // 디버그 로그 — Vercel 함수 로그에 정확한 원인이 남도록
       console.error(
@@ -99,6 +121,7 @@ async function callClaude(
       if (!isRetryable(err) || attempt === MAX_OUTER_ATTEMPTS - 1) break;
       const delayMs = 3000 + Math.floor(Math.random() * 500);
       console.warn(`[anthropic] retrying after ${delayMs}ms (status=${err?.status})`);
+      onProgress?.({ t: 'llm_retry', model: useModel, attempt: attempt + 1, delayMs, status: err?.status ?? null });
       await new Promise((r) => setTimeout(r, delayMs));
     }
   }
@@ -339,9 +362,9 @@ export function splitScriptIntoChunks(
   }));
 }
 
-async function runExtractSingle(scriptText, category, seedBlock, model, chunkInfo = null) {
+async function runExtractSingle(scriptText, category, seedBlock, model, chunkInfo = null, { signal = null, onProgress = null } = {}) {
   const prompt = buildExtractPrompt(scriptText, category, seedBlock, chunkInfo);
-  return callClaude(prompt, { maxTokens: 16000, model });
+  return callClaude(prompt, { maxTokens: 16000, model, signal, onProgress });
 }
 
 function arrayOfStrings(value) {
@@ -411,7 +434,7 @@ function pickEvenly(items, limit) {
   return picked;
 }
 
-async function finalizeChunkedExtract(merged, model) {
+async function finalizeChunkedExtract(merged, model, { signal = null, onProgress = null } = {}) {
   const input = {
     work: merged.work,
     cards: pickEvenly(merged.cards, EXTRACT_FINAL_INPUT_CARDS),
@@ -434,17 +457,21 @@ Rules:
 INPUT_JSON:
 ${JSON.stringify(input, null, 2)}`;
 
-  const finalResult = await callClaude(prompt, { maxTokens: 16000, model });
+  const finalResult = await callClaude(prompt, { maxTokens: 16000, model, signal, onProgress });
   return {
     work: mergeWork(merged.work, finalResult?.work),
     cards: Array.isArray(finalResult?.cards) && finalResult.cards.length ? finalResult.cards : merged.cards,
   };
 }
 
-export async function runExtract(scriptText, category = 'screen', seedBlock = '', model = null) {
+export async function runExtract(scriptText, category = 'screen', seedBlock = '', model = null, { signal = null, onProgress = null } = {}) {
   const chunks = splitScriptIntoChunks(scriptText);
   if (chunks.length === 1) {
-    return runExtractSingle(scriptText, category, seedBlock, model);
+    onProgress?.({ t: 'stage', m: '본문 분석 중 (단일 청크)' });
+    const single = await runExtractSingle(scriptText, category, seedBlock, model, null, { signal, onProgress });
+    // 단일 청크 경로도 동일하게 검증 — quote==script_excerpt 제거 + 길이 미달 경고
+    const validated = validateAndFilterCards(single?.cards || [], category);
+    return { ...single, cards: validated.cards, __validation: validated.summary };
   }
 
   // 자동 결정된 실제 청크 사이즈 — 영문 PDF 는 더 큼.
@@ -453,46 +480,184 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
     `[anthropic] chunked extract chars=${String(scriptText || '').length} ` +
     `chunks=${chunks.length} firstChunkChars=${sampleSize} overlap=${EXTRACT_CHUNK_OVERLAP_CHARS}`
   );
+  onProgress?.({ t: 'stage', m: `본문이 길어 ${chunks.length}개 청크로 분할 — 동시 3개씩 분석` });
 
   // 청크 병렬 처리 — 순차로 돌면 6~7개 청크 × 30~60초 = Vercel 300s 한도 초과.
   // 동시 3개씩 처리해 wall-clock 을 1/3 로 단축. Anthropic 레이트는 SDK 가 자동 관리.
   const CHUNK_CONCURRENCY = 3;
   const results = new Array(chunks.length);
   let cursor = 0;
+  let completed = 0;
   async function worker() {
     while (cursor < chunks.length) {
+      if (signal?.aborted) { const a = new Error('aborted'); a.name = 'AbortError'; throw a; }
       const i = cursor++;
       const chunk = chunks[i];
       console.log(`[anthropic] extracting chunk ${chunk.index}/${chunk.total} chars=${chunk.text.length}`);
+      onProgress?.({ t: 'chunk_start', index: chunk.index, total: chunk.total, chars: chunk.text.length });
       results[i] = await runExtractSingle(chunk.text, category, seedBlock, model, {
         index: chunk.index,
         total: chunk.total,
         overlapChars: EXTRACT_CHUNK_OVERLAP_CHARS,
-      });
+      }, { signal, onProgress });
+      completed += 1;
+      onProgress?.({ t: 'chunk_done', index: chunk.index, total: chunk.total, completed });
     }
   }
-  await Promise.all(
-    Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, worker)
-  );
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, worker)
+    );
+  } catch (err) {
+    // Abort 시 지금까지 완료된 청크의 부분 결과를 client 에 보낸다 — 사용자가 8개 청크 중
+    // 5개 끝나고 중단했으면 그 5개 카드는 살려서 돌려준다.
+    if (err?.name === 'AbortError' || /aborted/i.test(String(err?.message || ''))) {
+      const completedResults = results.filter(Boolean);
+      if (completedResults.length > 0 && onProgress) {
+        try {
+          const partial = mergeExtractResults(completedResults);
+          onProgress({
+            t: 'partial_result',
+            d: {
+              ...partial,
+              __chunked: {
+                chunks: chunks.length,
+                completed: completedResults.length,
+                aborted: true,
+              },
+            },
+          });
+        } catch (mergeErr) {
+          console.warn('[anthropic] partial merge failed on abort:', mergeErr?.message || mergeErr);
+        }
+      }
+    }
+    throw err;
+  }
 
   const merged = mergeExtractResults(results);
   let finalResult = merged;
   let finalizeFailed = false;
   try {
-    finalResult = await finalizeChunkedExtract(merged, model);
+    onProgress?.({ t: 'stage', m: '청크 결과 병합 중' });
+    finalResult = await finalizeChunkedExtract(merged, model, { signal, onProgress });
   } catch (err) {
+    if (err?.name === 'AbortError') throw err;
     finalizeFailed = true;
     console.warn('[anthropic] chunk finalization failed, returning deterministic merge:', err?.message || err);
   }
 
+  // 카드 후처리 — 잘못된 카드(quote==script_excerpt) 제거 + 길이 미달 경고 로그.
+  const validated = validateAndFilterCards(finalResult?.cards || [], category);
   return {
     ...finalResult,
+    cards: validated.cards,
     __chunked: {
       chunks: chunks.length,
       target_chars: EXTRACT_CHUNK_TARGET_CHARS,
       window_chars: EXTRACT_CHUNK_WINDOW_CHARS,
       overlap_chars: EXTRACT_CHUNK_OVERLAP_CHARS,
       finalize_failed: finalizeFailed || undefined,
+    },
+    __validation: validated.summary,
+  };
+}
+
+// 추출된 카드 후처리 — 추출 프롬프트의 hard rule 을 서버에서도 강제.
+//  1) quote == script_excerpt (정규화 후 완전 동일) → drop. '포함' 은 정상이라 strict equal 만.
+//  2) script_excerpt 길이 미달 → drop (카테고리별 최소치).
+//     · poem: 0 (시는 짧을수록 좋음 — 프롬프트 예외)
+//     · prose/essay: 0 (짧은 산문 예외 — 프롬프트 명시)
+//     · screen/novel/play/opera: 2000자 강제
+//  3) 안전망: 전체 카드 중 70% 이상이 drop 대상이면 LLM 이 완전히 규칙을 어긴 것 →
+//     drop 안 하고 warn 만 (관리자에게 보여서 직접 판단). 추출 자체를 0장 응답하는 사고 방지.
+const MIN_SCRIPT_CHARS_BY_CATEGORY = {
+  poem: 0,
+  prose: 0,
+  essay: 0,
+  screen: 2000, novel: 2000, play: 2000, opera: 2000,
+};
+const DROP_RATE_SAFETY = 0.7;
+
+function _norm(s) { return String(s ?? '').trim().replace(/\s+/g, ' '); }
+
+function validateAndFilterCards(cards, category) {
+  if (!Array.isArray(cards)) {
+    return { cards: [], summary: { total: 0, kept: 0, dropped_identical: 0, dropped_short: 0, min_chars: 0, category } };
+  }
+  const minChars = MIN_SCRIPT_CHARS_BY_CATEGORY[category] ?? 2000;
+
+  // 1차: drop 판정 (분류만 — 실제 drop 은 안전망 검사 후)
+  const verdicts = cards.map((c) => {
+    const q = _norm(c?.quote);
+    const s = _norm(c?.script_excerpt);
+    if (q && s && q === s) return { c, drop: 'identical' };
+    if (minChars > 0 && (!c?.script_excerpt || String(c.script_excerpt).length < minChars)) {
+      return { c, drop: 'short' };
+    }
+    return { c, drop: null };
+  });
+
+  const toDropCount = verdicts.filter((v) => v.drop).length;
+  const dropRate = cards.length ? (toDropCount / cards.length) : 0;
+  const safetyFallback = dropRate >= DROP_RATE_SAFETY;
+  if (safetyFallback) {
+    console.warn(
+      `[extract] SAFETY: drop rate ${(dropRate * 100).toFixed(0)}% (>=${(DROP_RATE_SAFETY * 100).toFixed(0)}%) — ` +
+      `LLM appears to have violated prompt broadly. Falling back to warn-only so admin can review.`
+    );
+  }
+
+  let droppedIdentical = 0;
+  let droppedShort = 0;
+  let warnedIdentical = 0;
+  let warnedShort = 0;
+  const survivors = [];
+
+  for (const { c, drop } of verdicts) {
+    if (drop === 'identical') {
+      if (safetyFallback) {
+        warnedIdentical++;
+        console.warn(`[extract] (warn) card has quote == script_excerpt (len=${String(c?.quote||'').length})`);
+        survivors.push(c);
+      } else {
+        droppedIdentical++;
+        console.warn(`[extract] drop: quote == script_excerpt (len=${String(c?.quote||'').length})`);
+      }
+    } else if (drop === 'short') {
+      const slen = String(c?.script_excerpt || '').length;
+      if (safetyFallback) {
+        warnedShort++;
+        console.warn(`[extract] (warn) short script_excerpt ${slen}<${minChars} category=${category}`);
+        survivors.push(c);
+      } else {
+        droppedShort++;
+        console.warn(`[extract] drop: short script_excerpt ${slen}<${minChars} category=${category}`);
+      }
+    } else {
+      survivors.push(c);
+    }
+  }
+
+  console.log(
+    `[extract] validation: in=${cards.length} out=${survivors.length} ` +
+    `dropped_identical=${droppedIdentical} dropped_short=${droppedShort} ` +
+    `${safetyFallback ? `(safety: warned identical=${warnedIdentical} short=${warnedShort})` : ''} ` +
+    `min=${minChars} category=${category}`
+  );
+
+  return {
+    cards: survivors,
+    summary: {
+      total: cards.length,
+      kept: survivors.length,
+      dropped_identical: droppedIdentical,
+      dropped_short: droppedShort,
+      warned_identical: warnedIdentical,
+      warned_short: warnedShort,
+      safety_fallback: safetyFallback,
+      min_chars: minChars,
+      category,
     },
   };
 }
@@ -687,4 +852,86 @@ ${src}
   const out = String(result?.text ?? '').trim();
   if (!out) throw new Error('Translation response missing text');
   return out;
+}
+
+// 카드 N장의 description / significance / keywords 를 한 번의 LLM 호출로 KO→EN 일괄 번역.
+// 입력 cards = [{ id, description?, significance?, keywords?: string[] }, ...]
+// 응답: [{ id, description_en?, significance_en?, keywords_en?: string[] }, ...]
+// 비용 절감 — 카드당 3회 호출(60회) → 1회로 축소. 입력은 짧으니 한 prompt 에 안전하게 들어감.
+export async function runTranslateCommentaryBatch({ cards, work }) {
+  const items = Array.isArray(cards) ? cards : [];
+  if (!items.length) return [];
+
+  // LLM 입력으로 보낼 슬림한 페이로드 — 빈 필드는 빼서 토큰 절약.
+  const payload = items.map((c, i) => {
+    const o = { id: c.id ?? i };
+    if (c.description && String(c.description).trim()) o.description = String(c.description).trim();
+    if (c.significance && String(c.significance).trim()) o.significance = String(c.significance).trim();
+    if (Array.isArray(c.keywords) && c.keywords.length) o.keywords = c.keywords.map((k) => String(k).trim()).filter(Boolean);
+    return o;
+  }).filter((o) => o.description || o.significance || (o.keywords && o.keywords.length));
+
+  if (!payload.length) return [];
+
+  const w = work && typeof work === 'object' ? work : {};
+  const ctx = [
+    w.title    ? `Title: ${w.title}`        : null,
+    w.subtitle ? `Subtitle: ${w.subtitle}`  : null,
+    w.author   ? `Author: ${w.author}`      : null,
+    w.format   ? `Format: ${w.format}`      : null,
+  ].filter(Boolean).join('\n');
+
+  const system =
+    'You are a precise Korean→English literary translator. Translate each item faithfully and literally — match source length closely (do not exceed 1.8x), preserve sentence count, every detail. Output JSON only — no prose, no markdown.';
+
+  const prompt = `Translate Korean commentary fields into English for ${payload.length} card(s). One LLM call for all cards.
+
+[Translation rules — hard requirements]
+1. Translate Korean directly — no paraphrase, no reinterpretation, no added context.
+2. Each output sentence count = each input sentence count.
+3. Length per field ≤ ~1.8x of the Korean source.
+4. Preserve every detail, name, claim. Match tone (narrative commentary).
+5. keywords: same count and order as input. Each tag = single English word or short phrase. No quotes, no Oxford commas.
+6. If an input field is absent, omit it from the output (do NOT invent content).
+7. Match the id of each input item exactly.
+
+[Work context — for terminology consistency]
+${ctx || '(none)'}
+
+[Input — array of cards]
+${JSON.stringify(payload, null, 2)}
+
+Output: a single JSON object with key "results" whose value is an array. Same length and order as input.
+Each result object has: id (same as input), and optionally description_en, significance_en, keywords_en (array of strings).
+Example:
+{"results":[{"id":1,"description_en":"...","significance_en":"...","keywords_en":["love","betrayal"]}]}`;
+
+  // 출력 토큰: 카드 N장 × 평균 ~300자 영문 = ~150 tokens × 3필드 × N = N × 450 tokens.
+  // 안전 마진으로 cards 수 × 1500 토큰 또는 최소 6000 토큰 보장.
+  const maxTokens = Math.max(6000, Math.min(16000, payload.length * 1500));
+
+  const result = await callClaude(prompt, {
+    maxTokens,
+    system,
+    temperature: 0.3,
+    prefill: '{"results":[',
+  });
+
+  const arr = Array.isArray(result?.results) ? result.results : [];
+  // id 매칭이 어긋날 가능성 — 안전 가드.
+  const byId = new Map();
+  arr.forEach((r) => {
+    if (r && r.id != null) byId.set(String(r.id), r);
+  });
+
+  // 입력 순서대로 정렬해서 반환. 누락된 카드는 빈 객체.
+  return payload.map((p) => {
+    const r = byId.get(String(p.id)) || {};
+    return {
+      id: p.id,
+      description_en: r.description_en ? String(r.description_en).trim() : null,
+      significance_en: r.significance_en ? String(r.significance_en).trim() : null,
+      keywords_en: Array.isArray(r.keywords_en) ? r.keywords_en.map((s) => String(s).trim()).filter(Boolean) : null,
+    };
+  });
 }
