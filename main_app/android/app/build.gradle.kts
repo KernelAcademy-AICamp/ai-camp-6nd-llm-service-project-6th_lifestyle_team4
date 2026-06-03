@@ -20,6 +20,14 @@ val clarityProjectId: String = localProps.getProperty("CLARITY_PROJECT_ID")
     ?: System.getenv("CLARITY_PROJECT_ID")
     ?: "x0ojzn9obs"
 
+// Release signing. Values live in keystore.properties (git-ignored, per machine);
+// absent on machines without the keystore, so debug builds keep working.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = keystoreProps.getProperty("storeFile") != null
+
 fun buildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
@@ -43,8 +51,22 @@ android {
         buildConfigField("String", "CLARITY_PROJECT_ID", buildConfigString(clarityProjectId))
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
