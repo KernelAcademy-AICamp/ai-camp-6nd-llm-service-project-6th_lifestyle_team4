@@ -20,11 +20,15 @@ nonisolated struct UserRow: Decodable, Sendable {
     let userId: Int
     let nickname: String?
     let loginId: String?
+    let gender: String?
+    let ageGroup: String?
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
         case nickname
         case loginId = "login_id"
+        case gender
+        case ageGroup = "age_group"
     }
 }
 

@@ -61,7 +61,7 @@ final class Supa {
 
     func findUser(anonymousId: String) async throws -> UserRow? {
         let rows: [UserRow] = try await client.from("users")
-            .select("user_id, nickname, login_id")
+            .select("user_id, nickname, login_id, gender, age_group")
             .eq("anonymous_id", value: anonymousId)
             .limit(1)
             .execute()
@@ -89,6 +89,18 @@ final class Supa {
     func applySignupProfile(userId: Int, loginId: String) async throws {
         try await client.from("users")
             .update(["login_id": loginId])
+            .eq("user_id", value: userId)
+            .execute()
+    }
+
+    /// 프로필 저장 — 닉네임 + 선택 성별/나이대. gender/age_group은 nil이면 컬럼을 건드리지
+    /// 않는다(Android updateProfile과 동일: '선택 안 함'은 기존 값 유지). DB CHECK가 빈 문자열을 거부.
+    func updateProfile(userId: Int, nickname: String, gender: String?, ageGroup: String?) async throws {
+        var fields: [String: String] = ["nickname": nickname]
+        if let gender { fields["gender"] = gender }
+        if let ageGroup { fields["age_group"] = ageGroup }
+        try await client.from("users")
+            .update(fields)
             .eq("user_id", value: userId)
             .execute()
     }

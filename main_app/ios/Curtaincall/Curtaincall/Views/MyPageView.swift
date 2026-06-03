@@ -97,8 +97,12 @@ struct MyPageView: View {
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showNicknameSheet) {
-            NicknameEditor(initial: session.nickname) { newName in
-                Task { await session.updateNickname(newName) }
+            ProfileEditor(
+                initialNickname: session.nickname,
+                initialGender: session.gender,
+                initialAge: session.ageGroup
+            ) { name, g, a in
+                Task { await session.updateProfile(name, gender: g, ageGroup: a) }
                 showNicknameSheet = false
             } onCancel: {
                 showNicknameSheet = false
@@ -280,33 +284,79 @@ private struct FieldBox: View {
     }
 }
 
-private struct NicknameEditor: View {
-    let initial: String
-    let onSave: (String) -> Void
+private struct ProfileEditor: View {
+    let initialNickname: String
+    let initialGender: String   // "" | male | female | other
+    let initialAge: String      // "" | 10s..90s
+    let onSave: (String, String?, String?) -> Void
     let onCancel: () -> Void
-    @State private var draft: String
 
-    init(initial: String, onSave: @escaping (String) -> Void, onCancel: @escaping () -> Void) {
-        self.initial = initial
+    @State private var nickname: String
+    @State private var gender: String
+    @State private var age: String
+
+    init(initialNickname: String, initialGender: String, initialAge: String,
+         onSave: @escaping (String, String?, String?) -> Void, onCancel: @escaping () -> Void) {
+        self.initialNickname = initialNickname
+        self.initialGender = initialGender
+        self.initialAge = initialAge
         self.onSave = onSave
         self.onCancel = onCancel
-        _draft = State(initialValue: initial)
+        _nickname = State(initialValue: initialNickname)
+        _gender = State(initialValue: initialGender)
+        _age = State(initialValue: initialAge)
     }
+
+    private let genderValues = ["", "male", "female", "other"]
+    private let ageValues = ["", "10s", "20s", "30s", "40s", "50s", "60s", "70s", "80s", "90s"]
+
+    private func genderLabel(_ v: String) -> String {
+        switch v {
+        case "male": return "남성"
+        case "female": return "여성"
+        case "other": return "기타"
+        default: return "선택 안 함"
+        }
+    }
+    private func ageLabel(_ v: String) -> String { v.isEmpty ? "선택 안 함" : String(v.dropLast()) + "대" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("이름 변경").font(.headlineSerif(22)).foregroundStyle(.espresso)
-            FieldBox(placeholder: "표시할 이름", text: $draft)
-            Button { draft = AuthSession.randomCuteNickname() } label: {
+            Text("프로필 편집").font(.headlineSerif(22)).foregroundStyle(.espresso)
+            FieldBox(placeholder: "표시할 이름", text: $nickname)
+            Button { nickname = AuthSession.randomCuteNickname() } label: {
                 Text("랜덤 이름 생성").labelCaps()
             }
             .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("성별 · 선택").labelCaps()
+                Menu {
+                    ForEach(genderValues, id: \.self) { v in
+                        Button(genderLabel(v)) { gender = v }
+                    }
+                } label: { menuLabel(genderLabel(gender)) }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("나이대 · 선택").labelCaps()
+                Menu {
+                    ForEach(ageValues, id: \.self) { v in
+                        Button(ageLabel(v)) { age = v }
+                    }
+                } label: { menuLabel(ageLabel(age)) }
+            }
+            Text("성별·나이대를 알려주시면 취향에 맞는 명대사를 추천해드려요. (선택 입력)")
+                .font(.bodySans(12))
+                .foregroundStyle(.walnut)
+
             HStack {
                 Button { onCancel() } label: {
                     Text("취소").editorialButton(style: .outlined)
                 }
                 .buttonStyle(.plain)
-                Button { onSave(draft) } label: {
+                Button {
+                    onSave(nickname, gender.isEmpty ? nil : gender, age.isEmpty ? nil : age)
+                } label: {
                     Text("저장").editorialButton(style: .filled)
                 }
                 .buttonStyle(.plain)
@@ -315,6 +365,18 @@ private struct NicknameEditor: View {
         }
         .padding(24)
         .background(Color.paper.ignoresSafeArea())
-        .presentationDetents([.height(280)])
+        .presentationDetents([.medium, .large])
+    }
+
+    private func menuLabel(_ text: String) -> some View {
+        HStack {
+            Text(text).font(.bodySans(14)).foregroundStyle(.espresso)
+            Spacer()
+            Image(systemName: "chevron.down").font(.system(size: 11)).foregroundStyle(.walnut)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
     }
 }

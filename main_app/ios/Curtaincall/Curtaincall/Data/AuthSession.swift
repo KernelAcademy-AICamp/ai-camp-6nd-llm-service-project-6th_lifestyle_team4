@@ -20,6 +20,8 @@ final class AuthSession: ObservableObject {
     @Published var isAnonymous = true
     @Published var nickname = ""
     @Published var loginId = ""
+    @Published var gender = ""        // "" | male | female | other
+    @Published var ageGroup = ""      // "" | 10s..90s
     @Published var errorMessage: String?
 
     @Published var authInProgress = false
@@ -63,6 +65,8 @@ final class AuthSession: ObservableObject {
                 isAnonymous = anon
                 nickname = existing.nickname ?? ""
                 loginId = existing.loginId ?? ""
+                gender = existing.gender ?? ""
+                ageGroup = existing.ageGroup ?? ""
             } else {
                 // 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다.
                 let starting = anon ? "" : Self.randomCuteNickname()
@@ -71,6 +75,8 @@ final class AuthSession: ObservableObject {
                 isAnonymous = anon
                 nickname = row.nickname ?? starting
                 loginId = ""
+                gender = ""
+                ageGroup = ""
                 // 가입 직후라면 입력한 아이디를 기록하고 익명 북마크를 이전한다.
                 if !anon {
                     if let lid = recordLoginId, !lid.isEmpty {
@@ -162,6 +168,23 @@ final class AuthSession: ObservableObject {
             try await Supa.shared.updateNickname(userId: uid, nickname: trimmed)
             nickname = trimmed
             authMessage = "이름이 변경됐어요"
+        } catch {
+            authMessage = "저장 실패: \(error.localizedDescription)"
+        }
+    }
+
+    /// 프로필 저장 — 닉네임 + 선택 성별/나이대 (구글 등 소셜 회원도 동일하게 사용).
+    func updateProfile(_ newName: String, gender newGender: String?, ageGroup newAge: String?) async {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let uid = userId else { return }
+        guard !trimmed.isEmpty else { authMessage = "이름을 입력해주세요"; return }
+        guard trimmed.count <= 24 else { authMessage = "24자 이하로 입력해주세요"; return }
+        do {
+            try await Supa.shared.updateProfile(userId: uid, nickname: trimmed, gender: newGender, ageGroup: newAge)
+            nickname = trimmed
+            if let newGender { gender = newGender }
+            if let newAge { ageGroup = newAge }
+            authMessage = "프로필이 저장됐어요"
         } catch {
             authMessage = "저장 실패: \(error.localizedDescription)"
         }
