@@ -1,5 +1,6 @@
 package com.lifestyle.dailyscript.ui.settings
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,8 +36,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -251,6 +256,43 @@ fun SettingsScreen(
     }
 }
 
+/** 공식 로고가 들어간 소셜 로그인 버튼 (둥근 모서리, 브랜드 색). 로고 색 보존을 위해 Image 사용. */
+@Composable
+private fun SocialLoginButton(
+    text: String,
+    iconRes: Int,
+    background: Color,
+    contentColor: Color,
+    borderColor: Color? = null,
+    alpha: Float = 1f,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(alpha)
+            .background(background, shape)
+            .then(if (borderColor != null) Modifier.border(1.dp, borderColor, shape) else Modifier)
+            .clickable(onClick = onClick)
+            .padding(vertical = 13.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = text,
+            color = contentColor,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
 @Composable
 private fun SignInDialog(
     inProgress: Boolean,
@@ -306,18 +348,28 @@ private fun SignInDialog(
                     color = Walnut,
                 )
                 Box(modifier = Modifier.height(8.dp))
-                SharpButton(
-                    label = "Google로 계속하기",
+                SocialLoginButton(
+                    text = "Google로 로그인",
+                    iconRes = R.drawable.ic_google_logo,
+                    background = Color.White,
+                    contentColor = Color(0xFF1F1F1F),
+                    borderColor = Color(0xFFDADCE0),
                     onClick = { onSocialSignIn(SocialProvider.GOOGLE) },
-                    variant = SharpButtonVariant.Outline,
-                    modifier = Modifier.fillMaxWidth(),
                 )
                 Box(modifier = Modifier.height(8.dp))
-                SharpButton(
-                    label = "카카오로 계속하기",
+                SocialLoginButton(
+                    text = "카카오로 로그인 (준비 중)",
+                    iconRes = R.drawable.ic_kakao_symbol,
+                    background = Color(0xFFFEE500),
+                    contentColor = Color(0xFF000000),
+                    alpha = 0.55f,
                     onClick = { onSocialSignIn(SocialProvider.KAKAO) },
-                    variant = SharpButtonVariant.Outline,
-                    modifier = Modifier.fillMaxWidth(),
+                )
+                Box(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "소셜 로그인은 회원 식별 및 로그인 목적으로만 사용되며, 소셜 계정의 프로필 정보는 사용하지 않습니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Walnut,
                 )
             }
         },

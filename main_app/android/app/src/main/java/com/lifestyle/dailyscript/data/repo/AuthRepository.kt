@@ -160,8 +160,7 @@ class AuthRepository {
         pendingLoginId = null
         when (provider) {
             SocialProvider.GOOGLE -> auth.signInWith(Google)
-            // 카카오: 미설정 스코프(account_email 등) 요청 시 KOE205. 닉네임만 요청한다(앱은 미사용).
-            SocialProvider.KAKAO -> auth.signInWith(Kakao) { scopes.add("profile_nickname") }
+            SocialProvider.KAKAO -> auth.signInWith(Kakao)
         }
     }
 

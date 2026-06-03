@@ -145,21 +145,42 @@ struct MyPageView: View {
             Text("또는 소셜 계정으로")
                 .font(.bodySans(12))
                 .foregroundStyle(.walnut)
-            Spacer().frame(height: 8)
+            Spacer().frame(height: 10)
+            // 구글 — 공식 컬러 G 로고, 흰 배경 + 회색 테두리, 둥근 모서리(10)
             Button {
                 Task { await session.signInWithOAuth(.google) }
             } label: {
-                Text("Google로 계속하기").editorialButton(style: .outlined)
+                HStack(spacing: 10) {
+                    Image("GoogleLogo").resizable().renderingMode(.original).frame(width: 18, height: 18)
+                    Text("Google로 로그인").font(.bodySans(15)).foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(red: 0.855, green: 0.863, blue: 0.878), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .disabled(session.authInProgress)
+            // 카카오 — 옐로우(#FEE500) + 말풍선 심볼. 비즈앱 전까진 "준비 중"(흐림).
+            Spacer().frame(height: 8)
             Button {
-                Task { await session.signInWithOAuth(.kakao) }
+                session.authMessage = "카카오 로그인은 준비 중입니다."
             } label: {
-                Text("카카오로 계속하기").editorialButton(style: .outlined)
+                HStack(spacing: 8) {
+                    Image("KakaoSymbol").resizable().renderingMode(.original).frame(width: 18, height: 18)
+                    Text("카카오로 로그인 (준비 중)").font(.bodySans(15)).foregroundStyle(.black)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(Color(red: 0.996, green: 0.898, blue: 0.0), in: RoundedRectangle(cornerRadius: 10))
+                .opacity(0.55)
             }
             .buttonStyle(.plain)
-            .disabled(session.authInProgress)
+            Spacer().frame(height: 14)
+            Text("소셜 로그인은 회원 식별 및 로그인 목적으로만 사용되며, 소셜 계정의 프로필 정보는 사용하지 않습니다.")
+                .font(.bodySans(12))
+                .foregroundStyle(.walnut)
+                .bookLeading(size: 12)
         }
     }
 

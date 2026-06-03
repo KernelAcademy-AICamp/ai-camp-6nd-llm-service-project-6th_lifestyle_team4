@@ -2739,12 +2739,12 @@ async function startOAuth(provider) {
     const sb = await getSupabase();
     // 현재 익명 user_id를 마이그레이션용으로 백업
     if (state.userId) safeStorageSet('ds.prevAnonUserId', String(state.userId));
-    // 카카오는 Supabase 기본 요청 스코프(account_email·profile_image 등)가 카카오 앱에
-    // 미설정이면 KOE205가 난다. 닉네임 하나만 요청해 에러를 막는다 — 앱은 이 값을 쓰지 않고
-    // 항상 랜덤 닉네임을 부여하므로 실제로 개인정보를 사용하진 않는다.
-    const options = { redirectTo: `${location.origin}/m/` };
-    if (provider === 'kakao') options.scopes = 'profile_nickname';
-    const { error } = await sb.auth.signInWithOAuth({ provider, options });
+    const { error } = await sb.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${location.origin}/m/`,
+      },
+    });
     if (error) throw error;
     // 성공 시 브라우저가 OAuth 제공자로 리디렉트됨 — 돌아오면 자동 세션 복원
   } catch (err) {
@@ -2753,9 +2753,10 @@ async function startOAuth(provider) {
   }
 }
 
-// OAuth 버튼은 현재 HTML에서 제거됨 — 추후 사용시 다시 활성화
 signinGoogle?.addEventListener('click', () => startOAuth('google'));
-signinKakao?.addEventListener('click', () => startOAuth('kakao'));
+// 카카오: Supabase가 account_email 스코프를 강제 → 카카오 "비즈니스 앱" 필요. 그 전까진 "준비 중" 안내.
+// 비즈앱 전환 후 동의항목(account_email/profile_image) 켜지면 아래 한 줄을 startOAuth('kakao')로 되돌리면 됨.
+signinKakao?.addEventListener('click', () => toast('카카오 로그인은 준비 중입니다.'));
 
 // ---------- ID + Password 로그인 ----------
 const openSigninModalBtn = $('#open-signin-modal');

@@ -79,6 +79,12 @@ class AppSessionViewModel : ViewModel() {
 
     /** Social (Google/Kakao) sign-in. Browser opens; completion re-bootstraps via observeAuthChanges. */
     fun signInWithProvider(provider: SocialProvider) {
+        // 카카오는 Supabase가 account_email 스코프를 강제 → 카카오 비즈니스 앱 전환 전까지 "준비 중".
+        // 비즈앱 전환 + 동의항목(account_email/profile_image) 활성화 후엔 이 가드만 제거하면 켜진다.
+        if (provider == SocialProvider.KAKAO) {
+            _authMessage.value = "카카오 로그인은 준비 중입니다."
+            return
+        }
         if (_authInProgress.value) return
         val current = (_state.value as? SessionState.Ready)?.session
         _authInProgress.value = true
