@@ -736,13 +736,11 @@ async function bootstrapAuth() {
   state.authUid = user?.id ?? null;
   if (!state.authUid) throw new Error('auth uid 없음');
 
-  // 소셜 인증 정보 추출 (provider, identity 데이터)
+  // 소셜 로그인은 "인증 수단"으로만 사용한다 — provider(로그인 방법)만 기록하고
+  // 제공자의 이름·프로필 사진 등 개인정보는 받지/쓰지 않는다. (닉네임은 항상 랜덤 부여)
   state.isAnonymous = !!user.is_anonymous;
   state.authProvider = user.app_metadata?.provider ?? null;
   state.authEmail = user.email ?? null;
-  const meta = user.user_metadata || {};
-  state.authName = meta.full_name || meta.name || meta.nickname || meta.user_name || null;
-  state.authAvatarUrl = meta.avatar_url || meta.picture || null;
 
   // users 행 조회/생성
   // login_id/gender/age_group는 마이그레이션(015) 후에 생기는 컬럼 — 없으면 기본 컬럼만으로 폴백
@@ -770,8 +768,8 @@ async function bootstrapAuth() {
     return;
   }
   // 신규 user — 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다.
-  // (OAuth 이름이 있으면 우선, 없으면 자동 닉네임. 익명은 빈 값으로 둔다.)
-  const startingNickname = state.isAnonymous ? '' : (state.authName || randomCuteNickname());
+  // 소셜 로그인이라도 제공자 이름을 쓰지 않고 ID/PW 가입과 동일하게 랜덤 닉네임을 부여한다.
+  const startingNickname = state.isAnonymous ? '' : randomCuteNickname();
   const { data: inserted, error: insErr } = await sb
     .from('users')
     .insert({
@@ -2741,12 +2739,12 @@ async function startOAuth(provider) {
     const sb = await getSupabase();
     // 현재 익명 user_id를 마이그레이션용으로 백업
     if (state.userId) safeStorageSet('ds.prevAnonUserId', String(state.userId));
-    const { error } = await sb.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${location.origin}/m/`,
-      },
-    });
+    // 카카오는 Supabase 기본 요청 스코프(account_email·profile_image 등)가 카카오 앱에
+    // 미설정이면 KOE205가 난다. 닉네임 하나만 요청해 에러를 막는다 — 앱은 이 값을 쓰지 않고
+    // 항상 랜덤 닉네임을 부여하므로 실제로 개인정보를 사용하진 않는다.
+    const options = { redirectTo: `${location.origin}/m/` };
+    if (provider === 'kakao') options.scopes = 'profile_nickname';
+    const { error } = await sb.auth.signInWithOAuth({ provider, options });
     if (error) throw error;
     // 성공 시 브라우저가 OAuth 제공자로 리디렉트됨 — 돌아오면 자동 세션 복원
   } catch (err) {
@@ -3252,7 +3250,7 @@ function paintAuthIdentity() {
   } else {
     if (identityBlock) identityBlock.style.display = 'flex';
     if (identitySpacer) identitySpacer.style.display = '';
-    const name = state.userNickname || state.authName || state.userLoginId || 'Signed In';
+    const name = state.userNickname || state.userLoginId || 'Signed In';
     settingsName.textContent = name;
   }
   // EDIT 버튼도 로그인 상태에서만

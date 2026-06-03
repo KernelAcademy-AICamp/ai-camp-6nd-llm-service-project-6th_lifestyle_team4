@@ -54,7 +54,9 @@ class AuthRepository {
         val user = auth.currentUserOrNull()
             ?: throw IllegalStateException("Could not establish a session.")
         val authedUserId = user.id
-        val isAnonymous = user.email.isNullOrBlank()
+        // 익명 사용자는 연결된 identity가 없다. 이메일 유무로 판별하면 "이메일 미동의 카카오
+        // 로그인"이 익명으로 잘못 분류되므로 identities로 판별한다. (iOS/PWA의 is_anonymous와 동일 의미)
+        val isAnonymous = user.identities.isNullOrEmpty()
 
         val existing: UserRow? = client.postgrest["users"]
             .select {
@@ -158,7 +160,8 @@ class AuthRepository {
         pendingLoginId = null
         when (provider) {
             SocialProvider.GOOGLE -> auth.signInWith(Google)
-            SocialProvider.KAKAO -> auth.signInWith(Kakao)
+            // 카카오: 미설정 스코프(account_email 등) 요청 시 KOE205. 닉네임만 요청한다(앱은 미사용).
+            SocialProvider.KAKAO -> auth.signInWith(Kakao) { scopes.add("profile_nickname") }
         }
     }
 

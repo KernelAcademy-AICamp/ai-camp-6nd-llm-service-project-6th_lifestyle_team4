@@ -130,7 +130,9 @@ final class AuthSession: ObservableObject {
         do {
             try await Supa.shared.client.auth.signInWithOAuth(
                 provider: supaProvider,
-                redirectTo: URL(string: "curtaincall://login-callback")
+                redirectTo: URL(string: "curtaincall://login-callback"),
+                // 카카오: 미설정 스코프(account_email 등) 요청 시 KOE205. 닉네임만 요청(앱은 미사용).
+                scopes: provider == .kakao ? "profile_nickname" : nil
             ) { (webSession: ASWebAuthenticationSession) in
                 webSession.presentationContextProvider = WebAuthPresentationContextProvider.shared
                 webSession.prefersEphemeralWebBrowserSession = false
