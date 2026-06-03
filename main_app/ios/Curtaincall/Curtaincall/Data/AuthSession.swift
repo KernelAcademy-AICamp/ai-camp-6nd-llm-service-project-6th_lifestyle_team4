@@ -27,6 +27,9 @@ final class AuthSession: ObservableObject {
     @Published var authInProgress = false
     @Published var authMessage: String?
 
+    /// 소셜 첫 가입 직후 1회 성별·나이 입력 프롬프트를 띄울지.
+    @Published var needsProfileSetup = false
+
     enum BootstrapStatus: Equatable {
         case idle
         case bootstrapping
@@ -59,6 +62,7 @@ final class AuthSession: ObservableObject {
             }
             let anon = user.isAnonymous
             let anonId = user.id.uuidString
+            needsProfileSetup = false
 
             if let existing = try await Supa.shared.findUser(anonymousId: anonId) {
                 userId = existing.userId
@@ -82,6 +86,9 @@ final class AuthSession: ObservableObject {
                     if let lid = recordLoginId, !lid.isEmpty {
                         try? await Supa.shared.applySignupProfile(userId: row.userId, loginId: lid)
                         loginId = lid
+                    } else {
+                        // 소셜(OAuth) 첫 가입 — 직후 1회 성별·나이 입력 프롬프트
+                        needsProfileSetup = true
                     }
                     if let old = migrateFromUserId, old != row.userId {
                         try? await Supa.shared.migrateBookmarks(oldUserId: old, newUserId: row.userId)
@@ -189,6 +196,8 @@ final class AuthSession: ObservableObject {
             authMessage = "저장 실패: \(error.localizedDescription)"
         }
     }
+
+    func consumeProfileSetup() { needsProfileSetup = false }
 
     // MARK: - Helpers
 

@@ -48,6 +48,7 @@ import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.settings.LegalScreen
 import com.lifestyle.dailyscript.ui.settings.MyCommentsScreen
 import com.lifestyle.dailyscript.ui.settings.MyFeedScreen
+import com.lifestyle.dailyscript.ui.settings.ProfileDialog
 import com.lifestyle.dailyscript.ui.settings.SettingsScreen
 import com.lifestyle.dailyscript.ui.settings.privacyDoc
 import com.lifestyle.dailyscript.ui.settings.termsDoc
@@ -90,6 +91,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
 
     val authMessage by sessionVm.authMessage.collectAsState()
     val authInProgress by sessionVm.authInProgress.collectAsState()
+    val showProfilePrompt by sessionVm.profilePromptVisible.collectAsState()
 
     val noticeVm: NoticeViewModel = viewModel()
     val noticeBadge by noticeVm.unread.collectAsState()
@@ -273,6 +275,19 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         }
         }
         CoachTourOverlay(coach)
+        // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(기존 프로필 다이얼로그 재사용, 건너뛰기 가능).
+        if (showProfilePrompt) {
+            ProfileDialog(
+                initialNickname = session.nickname,
+                initialGender = session.gender,
+                initialAge = session.ageGroup,
+                onDismiss = { sessionVm.consumeProfilePrompt() },
+                onSave = { name, g, a ->
+                    sessionVm.updateProfile(name, g, a)
+                    sessionVm.consumeProfilePrompt()
+                },
+            )
+        }
       }
     }
 }

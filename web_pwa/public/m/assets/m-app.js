@@ -391,6 +391,8 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
     history.replaceState({ tab: state.currentView }, '', '#' + state.currentView);
     // 첫 접속/첫 로그인 시 사용법 안내 1회. 안내가 떴으면 로그인 유도는 다음 기회로 미룬다.
     if (!(await maybeShowGuide())) maybeShowLanding();
+    // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(프로필 편집기, 건너뛰기 가능)
+    if (state.justSocialSignup) { state.justSocialSignup = false; openNicknameModal(); }
     // 공지를 불러와 새 공지가 있으면 NOTICE 탭에 안 읽음 점 표시 (부팅을 막지 않게 백그라운드)
     loadNotices().then(paintNoticeBadge);
     // 데이터 변경을 실시간으로 받아 즉시 반영
@@ -785,6 +787,11 @@ async function bootstrapAuth() {
   if (!state.isAnonymous) {
     // 회원가입 직후라면 저장해둔 프로필(로그인 ID·성별·나이대)을 새 행에 기록
     await applySignupProfile(sb, state.userId);
+    // 소셜 첫 가입(이메일 가입은 폼에서 이미 받음) → 직후 1회 성별·나이 입력 프롬프트
+    if ((state.authProvider === 'google' || state.authProvider === 'kakao')
+        && !state.userGender && !state.userAgeGroup) {
+      state.justSocialSignup = true;
+    }
     const prevAnonUserId = safeStorageGet('ds.prevAnonUserId');
     if (prevAnonUserId && prevAnonUserId !== String(state.userId)) {
       await migrateAnonymousBookmarks(parseInt(prevAnonUserId, 10), state.userId);

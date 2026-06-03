@@ -26,6 +26,8 @@ data class UserSession(
     val gender: String? = null,
     val ageGroup: String? = null,
     val loginId: String? = null,
+    /** 소셜 첫 가입 직후 1회 성별·나이 입력 프롬프트를 띄울지. */
+    val needsProfileSetup: Boolean = false,
 )
 
 class AuthRepository {
@@ -100,6 +102,8 @@ class AuthRepository {
         // Just signed up / logged in → stamp the entered id and carry the old
         // anonymous bookmarks into the freshly created account.
         val recordedLoginId = pendingLoginId?.takeIf { it.isNotBlank() }
+        // 소셜(OAuth) 첫 가입: 비익명 신규인데 입력 아이디가 없음(= ID/PW 가입이 아님).
+        val isSocialSignup = !isAnonymous && recordedLoginId == null
         if (!isAnonymous) {
             recordedLoginId?.let { id -> runCatching { updateLoginId(newUserId, id) } }
             val oldUserId = pendingMigrationUserId
@@ -108,7 +112,11 @@ class AuthRepository {
             }
         }
         clearPending()
-        return UserSession(newUserId, isAnonymous, startingNickname, loginId = recordedLoginId)
+        return UserSession(
+            newUserId, isAnonymous, startingNickname,
+            loginId = recordedLoginId,
+            needsProfileSetup = isSocialSignup,
+        )
     }
 
     /**

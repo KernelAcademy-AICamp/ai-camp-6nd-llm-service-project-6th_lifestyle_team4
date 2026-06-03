@@ -33,6 +33,10 @@ class AppSessionViewModel : ViewModel() {
     private val _authInProgress = MutableStateFlow(false)
     val authInProgress: StateFlow<Boolean> = _authInProgress.asStateFlow()
 
+    /** 소셜 첫 가입 직후 성별·나이 입력 프롬프트 노출 여부 (세션 copy 경쟁을 피하려 별도 플로우). */
+    private val _profilePromptVisible = MutableStateFlow(false)
+    val profilePromptVisible: StateFlow<Boolean> = _profilePromptVisible.asStateFlow()
+
     init {
         bootstrap()
         observeAuthChanges()
@@ -141,6 +145,8 @@ class AppSessionViewModel : ViewModel() {
 
     fun consumeAuthMessage() { _authMessage.value = null }
 
+    fun consumeProfilePrompt() { _profilePromptVisible.value = false }
+
     private fun observeAuthChanges() {
         // OAuth(소셜) 로그인은 외부 브라우저에서 비동기로 완료된다. sessionStatus를 관찰해
         // auth 사용자 id가 바뀌면(=로그인/로그아웃) 세션을 다시 bootstrap한다.
@@ -163,6 +169,8 @@ class AppSessionViewModel : ViewModel() {
         _state.value = result
             .map(SessionState::Ready)
             .getOrElse { SessionState.Error(it.messageOr("Sign-in failed")) }
+        // 소셜 첫 가입이면 직후 1회 성별·나이 입력 프롬프트.
+        if (result.getOrNull()?.needsProfileSetup == true) _profilePromptVisible.value = true
     }
 
     private fun Throwable?.messageOr(fallback: String): String =

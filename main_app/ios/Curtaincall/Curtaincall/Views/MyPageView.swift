@@ -284,7 +284,7 @@ private struct FieldBox: View {
     }
 }
 
-private struct ProfileEditor: View {
+struct ProfileEditor: View {
     let initialNickname: String
     let initialGender: String   // "" | male | female | other
     let initialAge: String      // "" | 10s..90s

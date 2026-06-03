@@ -53,6 +53,22 @@ struct RootView: View {
                 Task { await resolveAndPush(id: id) }
             }
         }
+        // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(기존 프로필 편집기 재사용, 건너뛰기 가능).
+        .sheet(isPresented: Binding(
+            get: { session.needsProfileSetup },
+            set: { if !$0 { session.consumeProfileSetup() } }
+        )) {
+            ProfileEditor(
+                initialNickname: session.nickname,
+                initialGender: session.gender,
+                initialAge: session.ageGroup
+            ) { name, g, a in
+                Task { await session.updateProfile(name, gender: g, ageGroup: a) }
+                session.consumeProfileSetup()
+            } onCancel: {
+                session.consumeProfileSetup()
+            }
+        }
     }
 
     private var tabs: some View {

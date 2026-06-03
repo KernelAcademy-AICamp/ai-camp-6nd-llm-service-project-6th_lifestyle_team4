@@ -385,7 +385,7 @@ private val AGE_OPTIONS: List<Pair<String?, String>> = listOf(null to "선택 �
     (1..9).map { "${it}0s" to "${it}0대" }
 
 @Composable
-private fun ProfileDialog(
+internal fun ProfileDialog(
     initialNickname: String,
     initialGender: String?,
     initialAge: String?,
