@@ -43,6 +43,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.BuildConfig
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.repo.AuthRepository
+import com.lifestyle.dailyscript.data.repo.SocialProvider
 import com.lifestyle.dailyscript.data.repo.UserSession
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
@@ -58,6 +59,7 @@ fun SettingsScreen(
     authMessage: String?,
     authInProgress: Boolean,
     onSignIn: (id: String, password: String, signUp: Boolean) -> Unit,
+    onSocialSignIn: (provider: SocialProvider) -> Unit,
     onSignOut: () -> Unit,
     onUpdateProfile: (nickname: String, gender: String?, ageGroup: String?) -> Unit,
     onOpenMyComments: () -> Unit,
@@ -101,18 +103,20 @@ fun SettingsScreen(
                 color = Espresso,
                 modifier = Modifier.weight(1f),
             )
-            Box(
-                modifier = Modifier
-                    .padding(top = 8.dp, start = 12.dp)
-                    .border(0.5.dp, Walnut)
-                    .clickable { showProfileDialog = true }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.edit_profile),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Walnut,
-                )
+            if (!session.isAnonymous) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 8.dp, start = 12.dp)
+                        .border(0.5.dp, Walnut)
+                        .clickable { showProfileDialog = true }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.edit_profile),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Walnut,
+                    )
+                }
             }
         }
         Box(modifier = Modifier.height(10.dp))
@@ -121,6 +125,15 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = Walnut.copy(alpha = 0.4f),
         )
+        // 로그인 상태에선 합성 이메일 대신 사람이 정한 아이디(login_id)만 노출.
+        session.loginId?.takeIf { !session.isAnonymous && it.isNotBlank() }?.let { loginId ->
+            Box(modifier = Modifier.height(6.dp))
+            Text(
+                text = "아이디 · $loginId",
+                style = MaterialTheme.typography.bodySmall,
+                color = Walnut,
+            )
+        }
 
         authMessage?.let { msg ->
             Box(modifier = Modifier.height(12.dp))
@@ -232,6 +245,7 @@ fun SettingsScreen(
             inProgress = authInProgress,
             message = authMessage,
             onSignIn = onSignIn,
+            onSocialSignIn = onSocialSignIn,
             onDismiss = { showSignInDialog = false },
         )
     }
@@ -242,6 +256,7 @@ private fun SignInDialog(
     inProgress: Boolean,
     message: String?,
     onSignIn: (id: String, password: String, signUp: Boolean) -> Unit,
+    onSocialSignIn: (provider: SocialProvider) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var id by remember { mutableStateOf("") }
@@ -284,6 +299,26 @@ private fun SignInDialog(
                     Box(modifier = Modifier.height(8.dp))
                     Text(text = it, style = MaterialTheme.typography.bodySmall, color = Cta)
                 }
+                Box(modifier = Modifier.height(18.dp))
+                Text(
+                    text = "또는 소셜 계정으로",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Walnut,
+                )
+                Box(modifier = Modifier.height(8.dp))
+                SharpButton(
+                    label = "Google로 계속하기",
+                    onClick = { onSocialSignIn(SocialProvider.GOOGLE) },
+                    variant = SharpButtonVariant.Outline,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Box(modifier = Modifier.height(8.dp))
+                SharpButton(
+                    label = "카카오로 계속하기",
+                    onClick = { onSocialSignIn(SocialProvider.KAKAO) },
+                    variant = SharpButtonVariant.Outline,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
         containerColor = Paper,

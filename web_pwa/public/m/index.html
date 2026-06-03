@@ -2127,7 +2127,17 @@
     <button id="signin-toggle-mode" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
       계정이 없으신가요? 회원가입
     </button>
-    <button id="signin-cancel" style="width:100%;background:transparent;border:none;margin-top:6px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);">
+
+    <!-- 소셜 로그인 (Supabase OAuth — startOAuth가 처리). 시크릿은 앱이 아니라 대시보드에. -->
+    <div style="display:flex;align-items:center;gap:10px;margin-top:20px;">
+      <div style="flex:1;height:0.5px;background:var(--latte);"></div>
+      <span class="t-label-sm c-walnut">또는</span>
+      <div style="flex:1;height:0.5px;background:var(--latte);"></div>
+    </div>
+    <button id="signin-google" class="sharp-btn outline" style="width:100%;margin-top:14px;">Google로 계속하기</button>
+    <button id="signin-kakao" class="sharp-btn outline" style="width:100%;margin-top:10px;">카카오로 계속하기</button>
+
+    <button id="signin-cancel" style="width:100%;background:transparent;border:none;margin-top:14px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);">
       취소
     </button>
   </div>

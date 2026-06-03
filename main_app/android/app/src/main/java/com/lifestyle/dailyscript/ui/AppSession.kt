@@ -3,8 +3,12 @@ package com.lifestyle.dailyscript.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifestyle.dailyscript.data.AppAnalytics
+import com.lifestyle.dailyscript.data.SupabaseProvider
 import com.lifestyle.dailyscript.data.repo.AuthRepository
+import com.lifestyle.dailyscript.data.repo.SocialProvider
 import com.lifestyle.dailyscript.data.repo.UserSession
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +18,10 @@ import kotlinx.coroutines.launch
 class AppSessionViewModel : ViewModel() {
 
     private val authRepo = AuthRepository()
+
+    // 마지막으로 bootstrap한 auth 사용자 id. OAuth(소셜) 로그인은 외부 브라우저에서
+    // 비동기로 완료되므로, sessionStatus를 관찰해 uid가 바뀌면 재bootstrap한다.
+    private var lastAuthUid: String? = null
 
     private val _state = MutableStateFlow<SessionState>(SessionState.Loading)
     val state: StateFlow<SessionState> = _state.asStateFlow()
@@ -25,7 +33,10 @@ class AppSessionViewModel : ViewModel() {
     private val _authInProgress = MutableStateFlow(false)
     val authInProgress: StateFlow<Boolean> = _authInProgress.asStateFlow()
 
-    init { bootstrap() }
+    init {
+        bootstrap()
+        observeAuthChanges()
+    }
 
     fun bootstrap() {
         viewModelScope.launch { bootstrapIntoState() }
@@ -51,7 +62,7 @@ class AppSessionViewModel : ViewModel() {
         _authMessage.value = null
         viewModelScope.launch {
             runCatching {
-                authRepo.signInWithId(id, password, signUp, current?.userId, current?.nickname)
+                authRepo.signInWithId(id, password, signUp, current?.userId)
             }.onSuccess {
                 bootstrapIntoState()
                 AppAnalytics.track(
@@ -62,6 +73,19 @@ class AppSessionViewModel : ViewModel() {
             }.onFailure {
                 _authMessage.value = friendlyAuthError(it.message.orEmpty())
             }
+            _authInProgress.value = false
+        }
+    }
+
+    /** Social (Google/Kakao) sign-in. Browser opens; completion re-bootstraps via observeAuthChanges. */
+    fun signInWithProvider(provider: SocialProvider) {
+        if (_authInProgress.value) return
+        val current = (_state.value as? SessionState.Ready)?.session
+        _authInProgress.value = true
+        _authMessage.value = null
+        viewModelScope.launch {
+            runCatching { authRepo.signInWithOAuth(provider, current?.userId) }
+                .onFailure { _authMessage.value = friendlyAuthError(it.message.orEmpty()) }
             _authInProgress.value = false
         }
     }
@@ -111,9 +135,26 @@ class AppSessionViewModel : ViewModel() {
 
     fun consumeAuthMessage() { _authMessage.value = null }
 
+    private fun observeAuthChanges() {
+        // OAuth(소셜) 로그인은 외부 브라우저에서 비동기로 완료된다. sessionStatus를 관찰해
+        // auth 사용자 id가 바뀌면(=로그인/로그아웃) 세션을 다시 bootstrap한다.
+        viewModelScope.launch {
+            SupabaseProvider.client.auth.sessionStatus.collect { status ->
+                if (status is SessionStatus.Authenticated) {
+                    val uid = status.session.user?.id
+                    if (uid != null && uid != lastAuthUid) {
+                        bootstrapIntoState()
+                    }
+                }
+            }
+        }
+    }
+
     private suspend fun bootstrapIntoState() {
         _state.value = SessionState.Loading
-        _state.value = runCatching { authRepo.bootstrap() }
+        val result = runCatching { authRepo.bootstrap() }
+        lastAuthUid = runCatching { SupabaseProvider.client.auth.currentUserOrNull()?.id }.getOrNull()
+        _state.value = result
             .map(SessionState::Ready)
             .getOrElse { SessionState.Error(it.messageOr("Sign-in failed")) }
     }
@@ -121,17 +162,27 @@ class AppSessionViewModel : ViewModel() {
     private fun Throwable?.messageOr(fallback: String): String =
         this?.message?.takeIf { it.isNotBlank() } ?: fallback
 
+    // 3개 클라이언트 공통 매핑 — web_pwa(submitSignin) / iOS(friendlyAuthError)와 동일 세트 유지.
+    // 더 구체적인 패턴을 위에 두어야 한다 (email rate limit → 일반 rate limit 순서).
     private fun friendlyAuthError(msg: String): String = when {
         Regex("Invalid login credentials", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
             "아이디 또는 비밀번호가 맞지 않습니다."
         Regex("User already registered", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
             "이미 가입된 아이디입니다. 로그인해주세요."
-        Regex("Password should be at least|Password should be", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
+        Regex("Password should be", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
             "비밀번호가 너무 짧습니다. (보통 6자 이상)"
-        Regex("signups not allowed|not enabled", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
-            "회원가입이 비활성화됨 — Supabase Auth 설정을 확인하세요."
+        Regex("email not confirmed", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
+            "이메일 확인이 필요합니다 — Supabase Auth에서 Confirm email을 끄세요."
+        Regex("email.*rate.?limit|email_send_rate_limit", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
+            "이메일 발송 제한 초과 — Supabase Auth에서 Confirm email을 끄고 다시 시도해주세요."
+        Regex("For security purposes|you can only request", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
+            "잠시 (약 1분) 후 다시 시도해주세요."
         Regex("rate limit", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
             "요청이 많습니다. 잠시 후 다시 시도해주세요."
+        Regex("signups not allowed|not enabled", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
+            "회원가입이 비활성화됨 — Supabase Auth 설정을 확인하세요."
+        Regex("unable to validate email|email.*not.*valid", RegexOption.IGNORE_CASE).containsMatchIn(msg) ->
+            "이 아이디는 사용할 수 없습니다 — 다른 아이디를 시도해주세요."
         msg.isBlank() -> "로그인에 실패했습니다."
         else -> msg
     }

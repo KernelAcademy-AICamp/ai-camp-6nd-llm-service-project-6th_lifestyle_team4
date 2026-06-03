@@ -1,10 +1,15 @@
 import Foundation
 import Combine
 import Supabase
+import AuthenticationServices
+import UIKit
 
 /// App session: anonymous bootstrap + ID/password login + nickname, mirroring
 /// the PWA. Comments/likes require a non-anonymous session (RLS), so login maps
 /// the entered ID to a synthetic email identical to the web app.
+/// Social OAuth providers we support (web-redirect flow via Supabase).
+enum SocialProvider { case google, kakao }
+
 @MainActor
 final class AuthSession: ObservableObject {
 
@@ -14,6 +19,7 @@ final class AuthSession: ObservableObject {
     @Published var userId: Int?
     @Published var isAnonymous = true
     @Published var nickname = ""
+    @Published var loginId = ""
     @Published var errorMessage: String?
 
     @Published var authInProgress = false
@@ -35,7 +41,7 @@ final class AuthSession: ObservableObject {
         await bootstrap()
     }
 
-    func bootstrap(migrateFromUserId: Int? = nil, carryNickname: String? = nil) async {
+    func bootstrap(migrateFromUserId: Int? = nil, recordLoginId: String? = nil) async {
         guard !bootstrapInProgress else { return }
         bootstrapInProgress = true
         bootstrapStatus = .bootstrapping
@@ -53,22 +59,27 @@ final class AuthSession: ObservableObject {
             let anonId = user.id.uuidString
 
             if let existing = try await Supa.shared.findUser(anonymousId: anonId) {
-                var nick = existing.nickname ?? ""
-                if nick.isEmpty && anon {
-                    nick = Self.randomCuteNickname()
-                    try? await Supa.shared.updateNickname(userId: existing.userId, nickname: nick)
-                }
                 userId = existing.userId
                 isAnonymous = anon
-                nickname = nick
+                nickname = existing.nickname ?? ""
+                loginId = existing.loginId ?? ""
             } else {
-                let starting = (carryNickname?.isEmpty == false) ? carryNickname! : Self.randomCuteNickname()
+                // 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다.
+                let starting = anon ? "" : Self.randomCuteNickname()
                 let row = try await Supa.shared.insertUser(anonymousId: anonId, nickname: starting)
                 userId = row.userId
                 isAnonymous = anon
                 nickname = row.nickname ?? starting
-                if !anon, let old = migrateFromUserId, old != row.userId {
-                    try? await Supa.shared.migrateBookmarks(oldUserId: old, newUserId: row.userId)
+                loginId = ""
+                // 가입 직후라면 입력한 아이디를 기록하고 익명 북마크를 이전한다.
+                if !anon {
+                    if let lid = recordLoginId, !lid.isEmpty {
+                        try? await Supa.shared.applySignupProfile(userId: row.userId, loginId: lid)
+                        loginId = lid
+                    }
+                    if let old = migrateFromUserId, old != row.userId {
+                        try? await Supa.shared.migrateBookmarks(oldUserId: old, newUserId: row.userId)
+                    }
                 }
             }
             errorMessage = nil
@@ -89,7 +100,7 @@ final class AuthSession: ObservableObject {
         authInProgress = true
         authMessage = nil
         let prevUserId = userId
-        let prevNickname = nickname
+        let enteredId = id.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             if signUp {
                 _ = try await auth.signUp(email: email, password: password)
@@ -98,10 +109,40 @@ final class AuthSession: ObservableObject {
             if auth.currentUser?.isAnonymous != false {
                 _ = try await auth.signIn(email: email, password: password)
             }
-            await bootstrap(migrateFromUserId: prevUserId, carryNickname: prevNickname)
+            await bootstrap(migrateFromUserId: prevUserId, recordLoginId: enteredId)
             authMessage = signUp ? "가입 완료" : "로그인 됐어요"
         } catch {
             authMessage = Self.friendlyAuthError(error.localizedDescription)
+        }
+        authInProgress = false
+    }
+
+    /// Social sign-in via Supabase OAuth (web-redirect). Opens an
+    /// ASWebAuthenticationSession; on success a new (non-anonymous) session is
+    /// established, then we re-bootstrap (migrating the anon user's bookmarks).
+    /// 시크릿은 앱이 아니라 Supabase 대시보드에 설정한다.
+    func signInWithOAuth(_ provider: SocialProvider) async {
+        guard !authInProgress else { return }
+        authInProgress = true
+        authMessage = nil
+        let prevUserId = userId
+        let supaProvider: Provider = (provider == .google) ? .google : .kakao
+        do {
+            try await Supa.shared.client.auth.signInWithOAuth(
+                provider: supaProvider,
+                redirectTo: URL(string: "curtaincall://login-callback")
+            ) { (webSession: ASWebAuthenticationSession) in
+                webSession.presentationContextProvider = WebAuthPresentationContextProvider.shared
+                webSession.prefersEphemeralWebBrowserSession = false
+            }
+            await bootstrap(migrateFromUserId: prevUserId)
+            authMessage = "로그인 됐어요"
+        } catch {
+            // 사용자가 취소한 경우(canceledLogin)는 조용히 무시.
+            let msg = error.localizedDescription
+            if !msg.lowercased().contains("cancel") {
+                authMessage = Self.friendlyAuthError(msg)
+            }
         }
         authInProgress = false
     }
@@ -128,8 +169,11 @@ final class AuthSession: ObservableObject {
 
     // MARK: - Helpers
 
-    /// Maps any entered ID to a stable synthetic email (same scheme as the PWA's
-    /// idToEmail — FNV-1a 32-bit) so the same account works on web + native.
+    /// Maps any entered ID to a stable synthetic email.
+    /// ⚠️ 3개 클라이언트 동기화 필수 — 바꾸면 기존 계정 로그인이 전부 깨진다.
+    ///   web_pwa: idToEmail                (web_pwa/public/m/assets/m-app.js)
+    ///   Android: AuthRepository.idToEmail (data/repo/AuthRepository.kt)
+    /// FNV-1a 32-bit over UTF-16 code units, so the same account works on web + native.
     static func idToEmail(_ id: String) -> String? {
         let raw = id.trimmingCharacters(in: .whitespacesAndNewlines)
         if raw.isEmpty { return nil }
@@ -153,16 +197,27 @@ final class AuthSession: ObservableObject {
         return "\(adj) \(noun)"
     }
 
+    // 3개 클라이언트 공통 매핑 — web_pwa(submitSignin) / Android(friendlyAuthError)와 동일 세트.
+    // 더 구체적인 패턴을 위에 둔다 (email rate limit → 일반 rate limit 순서).
     static func friendlyAuthError(_ msg: String) -> String {
         let lower = msg.lowercased()
         if lower.contains("invalid login credentials") { return "아이디 또는 비밀번호가 맞지 않습니다." }
         if lower.contains("already registered") { return "이미 가입된 아이디입니다. 로그인해주세요." }
         if lower.contains("password should be") { return "비밀번호가 너무 짧습니다. (보통 6자 이상)" }
         if lower.contains("email not confirmed") { return "이메일 확인이 필요합니다 — Supabase Auth에서 Confirm email을 끄세요." }
+        if lower.contains("email_send_rate_limit") || (lower.contains("email") && lower.contains("rate limit")) {
+            return "이메일 발송 제한 초과 — Supabase Auth에서 Confirm email을 끄고 다시 시도해주세요."
+        }
+        if lower.contains("for security purposes") || lower.contains("you can only request") {
+            return "잠시 (약 1분) 후 다시 시도해주세요."
+        }
+        if lower.contains("rate limit") { return "요청이 많습니다. 잠시 후 다시 시도해주세요." }
         if lower.contains("signups not allowed") || lower.contains("not enabled") {
             return "회원가입이 비활성화됨 — Supabase Auth 설정을 확인하세요."
         }
-        if lower.contains("rate limit") { return "요청이 많습니다. 잠시 후 다시 시도해주세요." }
+        if lower.contains("unable to validate email") || (lower.contains("email") && lower.contains("not valid")) {
+            return "이 아이디는 사용할 수 없습니다 — 다른 아이디를 시도해주세요."
+        }
         return msg.isEmpty ? "로그인에 실패했습니다." : msg
     }
 
@@ -178,4 +233,16 @@ final class AuthSession: ObservableObject {
         "두루미", "독수리", "늑대", "판다", "코알라",
         "돌고래", "학자", "낭만가", "몽상가", "여행자",
     ]
+}
+
+/// ASWebAuthenticationSession(OAuth 웹뷰)의 표시 앵커 제공자.
+/// 현재 foreground 윈도우를 앵커로 돌려준다.
+final class WebAuthPresentationContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    static let shared = WebAuthPresentationContextProvider()
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        return scene?.keyWindow ?? ASPresentationAnchor()
+    }
 }

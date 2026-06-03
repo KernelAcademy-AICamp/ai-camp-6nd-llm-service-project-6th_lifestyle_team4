@@ -61,7 +61,7 @@ final class Supa {
 
     func findUser(anonymousId: String) async throws -> UserRow? {
         let rows: [UserRow] = try await client.from("users")
-            .select("user_id, nickname")
+            .select("user_id, nickname, login_id")
             .eq("anonymous_id", value: anonymousId)
             .limit(1)
             .execute()
@@ -81,6 +81,14 @@ final class Supa {
     func updateNickname(userId: Int, nickname: String) async throws {
         try await client.from("users")
             .update(["nickname": nickname])
+            .eq("user_id", value: userId)
+            .execute()
+    }
+
+    /// 가입 직후 입력한 아이디를 users.login_id에 기록 (PWA applySignupProfile와 동일 역할).
+    func applySignupProfile(userId: Int, loginId: String) async throws {
+        try await client.from("users")
+            .update(["login_id": loginId])
             .eq("user_id", value: userId)
             .execute()
     }

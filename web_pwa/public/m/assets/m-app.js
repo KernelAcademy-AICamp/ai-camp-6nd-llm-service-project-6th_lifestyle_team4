@@ -767,20 +767,11 @@ async function bootstrapAuth() {
     state.userLoginId = existingUser.login_id || '';
     state.userGender = existingUser.gender || '';
     state.userAgeGroup = existingUser.age_group || '';
-    // 닉네임이 비어있는 익명 유저는 backfill — 귀여운 이름 자동 부여
-    if (!state.userNickname && state.isAnonymous) {
-      const generated = randomCuteNickname();
-      const { data: upd } = await sb.from('users')
-        .update({ nickname: generated })
-        .eq('user_id', state.userId)
-        .select('nickname').single();
-      state.userNickname = upd?.nickname || generated;
-    }
     return;
   }
-  // 신규 user — 이전 익명 닉네임(있다면) 또는 OAuth 이름 또는 자동 닉네임
-  const carriedNickname = safeStorageGet('ds.carryNickname', '') || '';
-  const startingNickname = carriedNickname || state.authName || randomCuteNickname();
+  // 신규 user — 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다.
+  // (OAuth 이름이 있으면 우선, 없으면 자동 닉네임. 익명은 빈 값으로 둔다.)
+  const startingNickname = state.isAnonymous ? '' : (state.authName || randomCuteNickname());
   const { data: inserted, error: insErr } = await sb
     .from('users')
     .insert({
@@ -791,8 +782,6 @@ async function bootstrapAuth() {
   if (insErr) throw insErr;
   state.userId = inserted.user_id;
   state.userNickname = inserted.nickname || startingNickname;
-  // 이전 닉네임 carry over 완료 → 정리
-  if (carriedNickname) safeStorageRemove('ds.carryNickname');
 
   // 소셜 로그인 직후라면 이전 익명 user_id의 북마크를 옮긴다
   if (!state.isAnonymous) {
@@ -3124,6 +3113,9 @@ async function checkSignupId() {
 }
 
 function idToEmail(id) {
+  // ⚠️ 3개 클라이언트 동기화 필수 — 이 알고리즘을 바꾸면 기존 계정 로그인이 전부 깨진다.
+  //    Android: AuthRepository.idToEmail  (main_app/android/.../data/repo/AuthRepository.kt)
+  //    iOS:     AuthSession.idToEmail     (main_app/ios/.../Data/AuthSession.swift)
   // 어떤 입력이든 안정적인 이메일로 매핑.
   //  - ASCII-safe (a-z 0-9 . _ - +) 이면 그대로 사용 — Supabase 패널에서 읽기 좋음
   //  - 한글/공백/특수문자가 있으면 FNV-1a 해시 → 'u_xxxxxxxx@user.local'
@@ -3166,9 +3158,6 @@ async function submitSignin() {
     const sb = await getSupabase();
     // 익명 사용자의 user_id 백업 (가입/로그인 직후 북마크 이전용)
     if (state.userId) safeStorageSet('ds.prevAnonUserId', String(state.userId));
-    // 현재 익명 닉네임도 보존
-    const carryNickname = state.userNickname || '';
-    safeStorageSet('ds.carryNickname', carryNickname);
 
     if (signinMode === 'signup') {
       const { data: signUpData, error: signUpError } = await sb.auth.signUp({ email, password });

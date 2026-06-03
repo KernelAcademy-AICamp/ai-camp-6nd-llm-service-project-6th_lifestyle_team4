@@ -27,7 +27,14 @@ object SupabaseProvider {
         }
         _client = runCatching {
             createSupabaseClient(supabaseUrl = url, supabaseKey = anonKey) {
-                install(Auth)
+                install(Auth) {
+                    // 소셜 로그인(OAuth) 콜백 딥링크. 이 값으로 만들어지는
+                    // redirect URL "com.lifestyle.dailyscript://login-callback" 은
+                    //  ① AndroidManifest의 intent-filter (scheme/host) 와 일치해야 하고
+                    //  ② Supabase 대시보드 Auth → URL Configuration → Redirect URLs 에 등록돼야 한다.
+                    scheme = "com.lifestyle.dailyscript"
+                    host = "login-callback"
+                }
                 install(Postgrest)
             }
         }.getOrElse { error ->

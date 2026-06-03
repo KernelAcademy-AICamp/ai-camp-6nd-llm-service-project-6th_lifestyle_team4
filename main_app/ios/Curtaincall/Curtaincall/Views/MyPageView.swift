@@ -37,6 +37,14 @@ struct MyPageView: View {
                         .foregroundStyle(.walnut)
                         .bookLeading(size: 16)
 
+                    // 로그인 상태에선 합성 이메일 대신 사람이 정한 아이디(login_id)만 노출.
+                    if !session.isAnonymous, !session.loginId.isEmpty {
+                        Spacer().frame(height: 6)
+                        Text("아이디 · \(session.loginId)")
+                            .font(.bodySans(13))
+                            .foregroundStyle(.walnut)
+                    }
+
                     if session.isAnonymous {
                         Spacer().frame(height: 28)
                         signInBlock
@@ -131,6 +139,27 @@ struct MyPageView: View {
                     .labelCaps()
             }
             .buttonStyle(.plain)
+
+            // 소셜 로그인 (Supabase OAuth — 시크릿은 대시보드에)
+            Spacer().frame(height: 14)
+            Text("또는 소셜 계정으로")
+                .font(.bodySans(12))
+                .foregroundStyle(.walnut)
+            Spacer().frame(height: 8)
+            Button {
+                Task { await session.signInWithOAuth(.google) }
+            } label: {
+                Text("Google로 계속하기").editorialButton(style: .outlined)
+            }
+            .buttonStyle(.plain)
+            .disabled(session.authInProgress)
+            Button {
+                Task { await session.signInWithOAuth(.kakao) }
+            } label: {
+                Text("카카오로 계속하기").editorialButton(style: .outlined)
+            }
+            .buttonStyle(.plain)
+            .disabled(session.authInProgress)
         }
     }
 

@@ -184,6 +184,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         authMessage = authMessage,
                         authInProgress = authInProgress,
                         onSignIn = { id, pw, signUp -> sessionVm.signIn(id, pw, signUp) },
+                        onSocialSignIn = sessionVm::signInWithProvider,
                         onSignOut = sessionVm::signOutAndReauth,
                         onUpdateProfile = sessionVm::updateProfile,
                         onOpenMyComments = {

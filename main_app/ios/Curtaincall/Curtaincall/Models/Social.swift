@@ -19,10 +19,12 @@ nonisolated func parseISODate(_ iso: String) -> Date? {
 nonisolated struct UserRow: Decodable, Sendable {
     let userId: Int
     let nickname: String?
+    let loginId: String?
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
         case nickname
+        case loginId = "login_id"
     }
 }
 

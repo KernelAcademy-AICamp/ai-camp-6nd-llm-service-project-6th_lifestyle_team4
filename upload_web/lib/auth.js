@@ -33,6 +33,7 @@ function getAnonClient() {
 }
 
 // app_metadata.role === 'admin' 인 사용자만 통과. 다른 경우 403.
+// (관리자 인증은 @admin.local 네임스페이스 — 사용자 앱의 @user.local 인증과 분리. auth-utils.js 참고.)
 export async function requireAdmin(req) {
   const user = await requireUser(req);
   const role = user?.app_metadata?.role;
