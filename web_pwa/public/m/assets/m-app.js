@@ -75,6 +75,7 @@ const archiveNoResult = $('#archive-no-result');
 const archiveCount = $('#archive-count');
 const archiveSearchInput = $('#archive-search-input');
 const archiveChips = $('#archive-chips');
+const archiveCat = $('#archive-cat');
 const bookModal = $('#book-modal');
 const bookEyebrow = $('#book-eyebrow');
 const bookTitleEl = $('#book-title');
@@ -1662,14 +1663,63 @@ function groupBookmarksByWork() {
   });
 }
 
+// ===== library 고양이 마스코트 — 상태별 자세/표정 =====
+const CAT_MOOD = {
+  idle:     { src: 'assets/cat/cat_idle.png',       h: 58 }, // 평상시(작품 3~4권)
+  empty:    { src: 'assets/cat/cat_empty.png',      h: 54 }, // 북마크 0
+  few:      { src: 'assets/cat/cat_shelf_few.png',  h: 82 }, // 작품 1~2권
+  many:     { src: 'assets/cat/cat_shelf_many.png', h: 90 }, // 작품 5권 이상
+  struck:   { src: 'assets/cat/cat_struck.png',     h: 90 }, // 저장 직후 / 탭
+  confused: { src: 'assets/cat/cat_confused.png',   h: 86 }, // 검색 결과 0
+};
+let catBaseMood = 'idle';
+let catStruckTimer = null;
+let catPrevBookmarkLen = -1;
+
+function applyCatMood(mood) {
+  if (!archiveCat) return;
+  const m = CAT_MOOD[mood] || CAT_MOOD.idle;
+  if (archiveCat.dataset.mood === mood) return;
+  archiveCat.dataset.mood = mood;
+  // crossfade: 페이드아웃 → src/높이 교체 → 페이드인
+  archiveCat.classList.add('swap');
+  setTimeout(() => {
+    archiveCat.src = m.src;
+    archiveCat.style.height = m.h + 'px';
+    archiveCat.classList.remove('swap');
+  }, 160);
+}
+
+function setCatBaseMood(mood) {
+  catBaseMood = mood;
+  if (!catStruckTimer) applyCatMood(mood); // struck 표시 중이 아니면 즉시 반영
+}
+
+function triggerCatStruck() {
+  applyCatMood('struck');
+  if (catStruckTimer) clearTimeout(catStruckTimer);
+  catStruckTimer = setTimeout(() => {
+    catStruckTimer = null;
+    applyCatMood(catBaseMood); // 끝나면 원래 상태로 복귀
+  }, 1400);
+}
+
 function renderArchive() {
   archiveLoading.style.display = 'none';
+
+  // 북마크가 늘어난 순간(=새 카드 저장)에 잠깐 놀라는 반응
+  if (catPrevBookmarkLen >= 0 && state.bookmarks.length > catPrevBookmarkLen) {
+    triggerCatStruck();
+  }
+  catPrevBookmarkLen = state.bookmarks.length;
 
   if (state.bookmarks.length === 0) {
     archiveShelves.style.display = 'none';
     archiveNoResult.style.display = 'none';
     archiveEmpty.style.display = 'block';
     archiveCount.textContent = '';
+    if (archiveCat) archiveCat.style.display = '';
+    setCatBaseMood('empty');
     return;
   }
 
@@ -1694,10 +1744,15 @@ function renderArchive() {
   if (works.length === 0) {
     archiveShelves.style.display = 'none';
     archiveNoResult.style.display = 'block';
+    if (archiveCat) archiveCat.style.display = '';
+    setCatBaseMood('confused');
     return;
   }
   archiveNoResult.style.display = 'none';
   archiveShelves.style.display = 'block';
+
+  // 책 있을 때는 각 책장 안/위에 고양이가 분산 배치되므로 우상단 단일 고양이는 숨긴다
+  if (archiveCat) archiveCat.style.display = 'none';
 
   // 사용자가 책꽂이를 옆으로 스크롤한 위치를 realtime/폴링 재렌더 후에도 유지하기 위해
   // 장르별 shelf-row 의 scrollLeft 를 미리 저장 → 재구성 후 복원.
@@ -1733,6 +1788,39 @@ function renderArchive() {
     };
     restore();
     requestAnimationFrame(restore);
+  }
+}
+
+// 책장 안/위에 고양이를 흩어 놓는다 — 현재 6종 포즈를 순환하고,
+// 장르마다 고정 시드를 써서 재렌더해도 위치가 튀지 않게 한다. (크기는 CSS .shelf-cat 48px로 통일)
+// 책장 테두리 위에 올릴 고양이 — 쭉 뻗어 엎드린 cat_empty로 확정
+// (배·앞발이 바닥에 붙은 포즈라 테두리에 안정적으로 얹힘)
+// cat_idle(상체 세우고 앞발 한쪽 늘어뜨린 컷)은 떠 보여서 보류
+const SHELF_CAT_POSES = ['cat_empty'];
+// 모두 책장 윗 테두리(선반) 위 — 세로 위치는 CSS(.shelf-cat bottom)로 통일, 좌우만 변주
+const SHELF_CAT_SPOTS = [
+  'left:8%;',
+  'left:33%;',
+  'left:58%;',
+  'right:7%;',
+];
+function decorateShelfWithCats(shelf, genre) {
+  let seed = 0;
+  for (const ch of genre) seed += ch.charCodeAt(0);
+  const nCats = 1; // 책장마다 1마리 (나머지는 보류)
+  const usedSpots = new Set();
+  for (let i = 0; i < nCats; i++) {
+    let spotIdx = (seed + i * 3) % SHELF_CAT_SPOTS.length;
+    while (usedSpots.has(spotIdx)) spotIdx = (spotIdx + 1) % SHELF_CAT_SPOTS.length;
+    usedSpots.add(spotIdx);
+    const pose = SHELF_CAT_POSES[(seed + i * 2) % SHELF_CAT_POSES.length];
+    const img = document.createElement('img');
+    img.className = 'shelf-cat';
+    img.src = `assets/cat/${pose}.png`;
+    img.alt = '';
+    img.style.cssText = SHELF_CAT_SPOTS[spotIdx];
+    img.style.animationDelay = `${((seed + i) % 7) * 0.2}s`; // 숨쉬기 타이밍 분산
+    shelf.appendChild(img);
   }
 }
 
@@ -1791,6 +1879,7 @@ function buildGenreShelf(genre, items) {
   });
 
   shelf.appendChild(row);
+  decorateShelfWithCats(shelf, genre); // 책장 안/위에 고양이 분산
   section.appendChild(shelf);
   return section;
 }
@@ -1874,6 +1963,9 @@ archiveSearchInput.addEventListener('input', (e) => {
     if (q) track('archive_searched', { query: q });
   }, 700);
 });
+
+// 고양이를 탭하면 잠깐 놀라는 반응 (이스터에그)
+archiveCat?.addEventListener('click', () => triggerCatStruck());
 
 // ===== Genre chips =====
 function renderArchiveChips() {
