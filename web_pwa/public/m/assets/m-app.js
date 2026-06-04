@@ -4933,9 +4933,36 @@ function setView(view) {
 // popstate로 setView 호출 시 다시 push되지 않도록 가드
 let suppressPushState = false;
 
+// 하단 메뉴(bottom-nav) 클릭 — 열려 있는 detail-screen 오버레이를 먼저 닫고
+// setView 로 탭 전환. 카드 상세를 열어 둔 채 메뉴를 눌러도 시각적으로 즉시 이동되게 함.
+function closeAllOpenOverlays() {
+  // 닫을 detail-screen overlay 들 — 모두 .detail-screen.open 패턴
+  document.querySelectorAll('.detail-screen.open').forEach((el) => {
+    el.classList.remove('open');
+    // 슬라이드 아웃 transition 끝나면 display:none (closeDetailInternal 패턴과 일치)
+    setTimeout(() => { if (!el.classList.contains('open')) el.style.display = 'none'; }, 250);
+  });
+  document.body.style.overflow = '';
+  // 카드 상세 state 정리 (열려 있었던 경우)
+  if (state) {
+    state.detailCardId = null;
+    state.detailCard = null;
+    state.detailComments = [];
+    state.detailLikes = new Map();
+  }
+  // history overlay state 초기화 — back 키 누를 때 다시 detail 로 안 가게
+  if (history.state && history.state.overlay) {
+    try {
+      const baseHash = (state && state.currentView) ? `#${state.currentView}` : location.pathname;
+      history.replaceState({ tab: state?.currentView || 'home' }, '', baseHash);
+    } catch { /* noop */ }
+  }
+}
+
 $$('[data-nav]').forEach((btn) => {
   btn.addEventListener('click', () => {
     track('nav', { to: btn.dataset.nav });
+    closeAllOpenOverlays();
     setView(btn.dataset.nav);
   });
 });
