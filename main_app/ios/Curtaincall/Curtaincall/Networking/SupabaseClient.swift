@@ -22,15 +22,15 @@ final class Supa {
     // PostgREST embedded-resource selects. Backslash-newlines keep one logical line.
     private let cardColumns = """
     card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
-    keywords, temperature, intensity, \
-    work:works(title, format, author, release_year, characters, work_genres(genres(name)))
+    keywords, temperature, intensity, view_count, \
+    work:works(title, subtitle, format, author, release_year, characters, work_genres(genres(name)))
     """
 
     private let bookmarkColumns = """
     bookmark_id, user_id, card_id, created_at, \
     cards(card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
-    keywords, temperature, intensity, \
-    work:works(title, format, author, release_year, characters, work_genres(genres(name))))
+    keywords, temperature, intensity, view_count, \
+    work:works(title, subtitle, format, author, release_year, characters, work_genres(genres(name))))
     """
 
     private let commentColumns =
@@ -55,6 +55,44 @@ final class Supa {
             .execute()
             .value
         return rows.first
+    }
+
+    func incrementCardView(cardId: Int) async throws {
+        try await client.rpc("increment_card_view", params: ["p_card_id": cardId])
+            .execute()
+    }
+
+    func fetchBookmarkCounts(cardIds: [Int]) async throws -> [Int: Int] {
+        guard !cardIds.isEmpty else { return [:] }
+        let rows: [CardBookmarkCount] = try await client.from("card_bookmark_counts")
+            .select("card_id, bookmark_count")
+            .in("card_id", values: cardIds)
+            .execute()
+            .value
+        return Dictionary(uniqueKeysWithValues: rows.map { ($0.cardId, $0.bookmarkCount) })
+    }
+
+    func fetchLatestNotice() async throws -> Notice? {
+        let rows: [Notice] = try await client.from("notices")
+            .select("notice_id, tag, title, body, pinned, created_at")
+            .eq("published", value: true)
+            .order("pinned", ascending: false)
+            .order("created_at", ascending: false)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
+    }
+
+    func fetchNotices(limit: Int = 50) async throws -> [Notice] {
+        try await client.from("notices")
+            .select("notice_id, tag, title, body, pinned, created_at")
+            .eq("published", value: true)
+            .order("pinned", ascending: false)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
     }
 
     // MARK: - Users
@@ -194,6 +232,17 @@ final class Supa {
             .eq("comment_id", value: commentId)
             .eq("user_id", value: userId)
             .execute()
+    }
+
+    func updateComment(commentId: Int, userId: Int, body: String) async throws -> Comment {
+        try await client.from("card_comments")
+            .update(CommentUpdate(body: body))
+            .eq("comment_id", value: commentId)
+            .eq("user_id", value: userId)
+            .select(commentColumns)
+            .single()
+            .execute()
+            .value
     }
 
     func setLike(commentId: Int, userId: Int, liked: Bool) async throws {

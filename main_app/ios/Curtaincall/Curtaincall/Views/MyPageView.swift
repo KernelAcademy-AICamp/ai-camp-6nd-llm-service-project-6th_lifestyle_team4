@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MyPageView: View {
+    @Binding var selectedTab: Tab
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
@@ -16,30 +17,38 @@ struct MyPageView: View {
             Hairline()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Spacer().frame(height: 40)
+                    Spacer().frame(height: 16)
 
-                    // Identity
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(session.isAnonymous ? "익명 독자" : (session.nickname.isEmpty ? "익명 독자" : session.nickname))
-                            .font(.displaySerif(32))
-                            .foregroundStyle(.espresso)
-                        Spacer()
-                        if !session.isAnonymous {
+                    if !session.isAnonymous {
+                        HStack(alignment: .top, spacing: 12) {
+                            Text(session.nickname.isEmpty ? "Signed In" : session.nickname)
+                                .font(.displaySerif(32))
+                                .foregroundStyle(.espresso)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             Button { showNicknameSheet = true } label: {
-                                Text("EDIT").labelCaps()
+                                Text("프로필 편집")
+                                    .font(.custom("Pretendard-Medium", size: 10))
+                                    .tracking(2)
+                                    .foregroundStyle(.walnut)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 7)
+                                    .overlay(Rectangle().stroke(Color.walnut, lineWidth: 0.5))
                             }
                             .buttonStyle(.plain)
                         }
+                        Spacer().frame(height: 10)
+                        Text("매일 한 장의 명대사로 하루를 시작합니다.")
+                            .font(.bodySans(12))
+                            .foregroundStyle(.walnut.opacity(0.6))
+                            .bookLeading(size: 12)
+                        Spacer().frame(height: 16)
+                        Hairline()
                     }
-                    Spacer().frame(height: 10)
-                    Text("매일 한 장의 명대사로 하루를 시작합니다.")
-                        .font(.bodySans(16))
-                        .foregroundStyle(.walnut)
-                        .bookLeading(size: 16)
 
                     if session.isAnonymous {
-                        Spacer().frame(height: 28)
                         signInBlock
+                        Spacer().frame(height: 32)
+                        Hairline()
                     }
 
                     if let msg = session.authMessage {
@@ -47,8 +56,16 @@ struct MyPageView: View {
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
 
-                    Spacer().frame(height: 32)
-                    Hairline()
+                    if !session.isAnonymous {
+                        Spacer().frame(height: 20)
+                        sectionLabel("내 활동")
+                        activityRow(
+                            title: "내 서재",
+                            subtitle: "보관한 명대사와 작품별 책장 보기"
+                        ) {
+                            selectedTab = .archive
+                        }
+                    }
 
                     Spacer().frame(height: 40)
                     sectionLabel("GENERAL PREFERENCES")
@@ -108,8 +125,9 @@ struct MyPageView: View {
 
     private var signInBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionLabel("SIGN IN")
-            Text("아이디와 비밀번호로 로그인하면 다른 기기에서도 같은 계정을 쓸 수 있어요.")
+            Spacer().frame(height: 16)
+            sectionLabel("ACCOUNT")
+            Text("아이디와 비밀번호로 로그인하면 다른 기기에서도 북마크가 동기화됩니다.")
                 .font(.bodySans(12))
                 .foregroundStyle(.walnut)
             Spacer().frame(height: 4)
@@ -151,6 +169,30 @@ struct MyPageView: View {
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text).labelCaps().padding(.bottom, 12)
+    }
+
+    private func activityRow(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 0) {
+            Button(action: action) {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.titleSerif(16))
+                            .foregroundStyle(.espresso)
+                        Text(subtitle)
+                            .font(.bodySans(12))
+                            .foregroundStyle(.walnut)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(.walnut)
+                }
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(.plain)
+            Hairline()
+        }
     }
 
     @ViewBuilder

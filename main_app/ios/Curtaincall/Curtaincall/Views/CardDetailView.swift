@@ -2,14 +2,21 @@ import SwiftUI
 
 struct CardDetailView: View {
     let card: Card
+    let onLoginRequested: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @StateObject private var comments: CommentsModel
+    @State private var showAccountPrompt = false
+    @State private var displayedViewCount: Int
+    @State private var bookmarkCount = 0
+    @State private var didIncrementView = false
 
-    init(card: Card) {
+    init(card: Card, onLoginRequested: (() -> Void)? = nil) {
         self.card = card
+        self.onLoginRequested = onLoginRequested
         _comments = StateObject(wrappedValue: CommentsModel(cardId: card.cardId))
+        _displayedViewCount = State(initialValue: card.viewCount ?? 0)
     }
 
     private var bookmarked: Bool { bookmarks.isBookmarked(card.cardId) }
@@ -27,6 +34,8 @@ struct CardDetailView: View {
                 VStack(alignment: .center, spacing: 0) {
                     Spacer().frame(height: 40)
                     metadataChipsRow
+                    Spacer().frame(height: 10)
+                    CardCountsRow(viewCount: displayedViewCount, bookmarkCount: bookmarkCount)
                     Spacer().frame(height: 28)
 
                     if let desc = card.excerptDescription, !desc.isEmpty {
@@ -77,7 +86,7 @@ struct CardDetailView: View {
                     Spacer().frame(height: 32)
 
                     Button {
-                        Task { await bookmarks.toggle(userId: session.userId, cardId: card.cardId) }
+                        toggleBookmark()
                     } label: {
                         Text(bookmarked ? "Collected" : "Collect Script Artifact")
                             .editorialButton(style: .outlined)
@@ -105,6 +114,17 @@ struct CardDetailView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+        .task { await loadCountsAndIncrementView() }
+        .overlay {
+            if showAccountPrompt {
+                AccountRequiredPrompt {
+                    showAccountPrompt = false
+                    onLoginRequested?()
+                } onClose: {
+                    showAccountPrompt = false
+                }
+            }
+        }
     }
 
     /// Script excerpt with speaker lines (matching work.characters) bolded.
@@ -142,11 +162,16 @@ struct CardDetailView: View {
                     .font(.headlineSerif(20))
                     .foregroundStyle(.espresso)
                     .lineLimit(1)
+                if let subtitle = card.work.subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .labelCaps()
+                        .lineLimit(1)
+                }
             }
             Spacer()
 
             Button {
-                Task { await bookmarks.toggle(userId: session.userId, cardId: card.cardId) }
+                toggleBookmark()
             } label: {
                 Image(systemName: bookmarked ? "bookmark.fill" : "bookmark")
                     .font(.system(size: 18, weight: .regular))
@@ -158,6 +183,37 @@ struct CardDetailView: View {
         .padding(.horizontal, 20)
         .frame(height: 64)
         .background(Color.paper)
+    }
+
+    private func toggleBookmark() {
+        guard !session.isAnonymous else {
+            showAccountPrompt = true
+            return
+        }
+        Task {
+            await bookmarks.toggle(userId: session.userId, cardId: card.cardId)
+            await loadBookmarkCount()
+        }
+    }
+
+    private func loadCountsAndIncrementView() async {
+        await loadBookmarkCount()
+        guard !didIncrementView else { return }
+        didIncrementView = true
+        displayedViewCount += 1
+        do {
+            try await Supa.shared.incrementCardView(cardId: card.cardId)
+        } catch {
+            displayedViewCount = max(0, displayedViewCount - 1)
+        }
+    }
+
+    private func loadBookmarkCount() async {
+        do {
+            bookmarkCount = try await Supa.shared.fetchBookmarkCounts(cardIds: [card.cardId])[card.cardId] ?? 0
+        } catch {
+            // Cosmetic count only.
+        }
     }
 
     private var metadataChipsRow: some View {

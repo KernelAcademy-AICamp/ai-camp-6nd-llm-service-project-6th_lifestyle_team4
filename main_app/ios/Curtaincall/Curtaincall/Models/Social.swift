@@ -70,6 +70,38 @@ nonisolated struct CardIdRow: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case cardId = "card_id" }
 }
 
+nonisolated struct CardBookmarkCount: Decodable, Sendable {
+    let cardId: Int
+    let bookmarkCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case bookmarkCount = "bookmark_count"
+    }
+}
+
+// MARK: - Notices
+
+nonisolated struct Notice: Decodable, Identifiable, Sendable {
+    let noticeId: Int
+    let tag: String
+    let title: String
+    let body: String
+    let pinned: Bool
+    let createdAt: String
+
+    var id: Int { noticeId }
+
+    enum CodingKeys: String, CodingKey {
+        case noticeId = "notice_id"
+        case tag
+        case title
+        case body
+        case pinned
+        case createdAt = "created_at"
+    }
+}
+
 // MARK: - Comments + likes
 
 nonisolated struct Comment: Decodable, Identifiable, Hashable, Sendable {
@@ -108,6 +140,10 @@ nonisolated struct CommentInsert: Encodable, Sendable {
         case authorNickname = "author_nickname"
         case body
     }
+}
+
+nonisolated struct CommentUpdate: Encodable, Sendable {
+    let body: String
 }
 
 nonisolated struct CommentLike: Codable, Sendable {
