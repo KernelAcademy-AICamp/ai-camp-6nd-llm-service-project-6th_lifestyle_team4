@@ -280,9 +280,10 @@
     padding-bottom: 12px;
   }
 
-  /* Bottom nav (mirror BottomNavBar.kt) */
+  /* Bottom nav (mirror BottomNavBar.kt)
+     ★ z-index 51 — detail-screen(50) 보다 위. 카드 상세 등 다른 화면에서도 항상 노출. */
   .bottom-nav {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 51;
     background: var(--paper);
     height: 64px;
     display: flex;
@@ -330,9 +331,13 @@
     white-space: nowrap;
   }
 
-  /* Detail screen modal (full screen sheet) */
+  /* Detail screen modal (full screen sheet)
+     ★ 하단 메뉴(bottom-nav) 64px 항상 노출 — bottom: 64px 로 그 위까지만 차지.
+     안전영역(safe-area-inset-bottom) 고려해 max() 로 더 큰 값 사용. */
   .detail-screen {
-    position: fixed; inset: 0; z-index: 50;
+    position: fixed; top: 0; left: 0; right: 0;
+    bottom: max(64px, calc(64px + env(safe-area-inset-bottom)));
+    z-index: 50;
     background: var(--paper);
     display: flex; flex-direction: column;
     transform: translateY(100%);
