@@ -11,7 +11,11 @@
 const GUTENDEX_BASE = 'https://gutendex.com/books';
 const WIKIPEDIA_KO_API = 'https://ko.wikipedia.org/w/api.php';
 const UA = 'CurtaincallScraperGB/0.1 (admin tool; contact: yub)';
-const FETCH_TIMEOUT_MS = 60_000;  // Gutendex /books?search 가 종종 느림 — 직접 ID 조회는 보통 5~10s.
+// 메타 조회용 짧은 timeout — Gutendex /books JSON 은 보통 1~5s. 12s 면 충분.
+// (이전 60s 는 Vercel 함수 maxDuration 60s 와 같아 한 번 느려지면 함수 강제 종료됨)
+const FETCH_TIMEOUT_META_MS = 12_000;
+// 본문 다운로드 — gutenberg.org 의 큰 plain text 파일은 30s 까지 허용.
+const FETCH_TIMEOUT_TEXT_MS = 30_000;
 const MAX_FETCH_CHARS = 1_000_000; // ~1MB plain text
 
 // 입력에 한글 음절이 하나라도 있으면 Korean 으로 간주.
@@ -20,21 +24,22 @@ function containsKorean(s) {
 }
 
 // gutendex.com / gutenberg.org 가 일시적으로 응답 안 할 때(Node native fetch 의 'fetch failed')
-// 를 자동으로 재시도. 3회 시도, 백오프 1.5/3/6초. Vercel 함수 timeout 안에서 안전.
-async function fetchWithRetry(url, opts = {}, label = 'gutendex') {
-  const MAX_ATTEMPTS = 3;
+// 를 자동으로 재시도. 2회 시도, 백오프 1초/2초. Vercel 함수 timeout(60s) 안에서 안전:
+//   최악의 경우 12s × 2 + 1s 백오프 = 25s (메타) / 30s × 2 + 1s = 61s (본문 — text 만 시도 1회로)
+//   text 용량 큰 경우 retry 1회로 줄여 안전.
+async function fetchWithRetry(url, opts = {}, label = 'gutendex', { timeoutMs = FETCH_TIMEOUT_META_MS, maxAttempts = 2 } = {}) {
   let lastErr;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const res = await fetch(url, { ...opts, signal: ctrl.signal });
       clearTimeout(t);
       if (!res.ok) {
         // 5xx 만 재시도. 4xx 는 그대로 throw (요청 오류라 재시도해도 의미 없음)
-        if (res.status >= 500 && attempt < MAX_ATTEMPTS) {
+        if (res.status >= 500 && attempt < maxAttempts) {
           lastErr = new Error(`${label} HTTP ${res.status}`);
-          await new Promise((r) => setTimeout(r, 1500 * attempt));
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
           continue;
         }
         throw new Error(`${label} HTTP ${res.status}`);
@@ -47,10 +52,10 @@ async function fetchWithRetry(url, opts = {}, label = 'gutendex') {
       const msg = err?.message || String(err);
       console.warn(`[${label}] attempt ${attempt} failed: ${msg}${cause ? ' / cause: ' + cause : ''}`);
       lastErr = err;
-      if (attempt === MAX_ATTEMPTS) break;
+      if (attempt === maxAttempts) break;
       // AbortError 는 timeout — 다음 시도
       // network error 는 다음 시도 (DNS/TLS 일시 오류 흔함)
-      await new Promise((r) => setTimeout(r, 1500 * attempt));
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
     }
   }
   // 마지막 에러를 사용자가 이해할 만하게 다시 throw
@@ -64,16 +69,18 @@ async function fetchWithRetry(url, opts = {}, label = 'gutendex') {
 }
 
 async function getJson(url) {
+  // 메타 JSON — 짧은 timeout(12s), 2회 재시도
   const res = await fetchWithRetry(url, {
     headers: { 'User-Agent': UA, Accept: 'application/json' },
-  }, 'gutendex');
+  }, 'gutendex', { timeoutMs: FETCH_TIMEOUT_META_MS, maxAttempts: 2 });
   return await res.json();
 }
 
 async function getText(url) {
+  // 본문 — 큰 파일이므로 timeout 길게(30s), 재시도 1회 (총 30s 이내 끝나야 Vercel 함수에 마진)
   const res = await fetchWithRetry(url, {
     headers: { 'User-Agent': UA, Accept: 'text/plain' },
-  }, 'gutenberg');
+  }, 'gutenberg', { timeoutMs: FETCH_TIMEOUT_TEXT_MS, maxAttempts: 1 });
   return await res.text();
 }
 

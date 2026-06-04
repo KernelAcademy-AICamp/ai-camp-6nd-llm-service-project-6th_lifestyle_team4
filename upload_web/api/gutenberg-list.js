@@ -9,8 +9,9 @@ import { listGutenbergByCategory } from '../lib/sources/gutenberg.js';
 import { HttpError, sendError } from '../lib/http.js';
 
 export const config = {
-  // Gutendex 가 가끔 느림 — 60s 마진
-  maxDuration: 60,
+  // Gutendex 메타 호출 — fetchWithRetry 가 12s × 2 + 1s 백오프 = 최대 25s 안에 끝남.
+  // Vercel 함수 timeout 은 30s 로 마진 5s. 이걸 넘기면 504 → 사용자에게 친절한 에러로 변환.
+  maxDuration: 30,
 };
 
 export default async function handler(req, res) {
@@ -42,6 +43,12 @@ export default async function handler(req, res) {
       return sendError(res, err);
     }
     console.error('[gutenberg-list] error:', err);
+    // gutendex 502 (응답 없음) 는 사용자에게 친절한 메시지로
+    if (err?.status === 502 || /연결 실패|응답 없음/.test(err?.message || '')) {
+      return res.status(503).json({
+        error: 'Gutenberg 카탈로그(gutendex.com) 가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해주세요.',
+      });
+    }
     return res.status(500).json({ error: err.message || 'Internal error' });
   }
 }
