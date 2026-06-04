@@ -1274,7 +1274,10 @@ function applyTodayCard(card) {
 
   // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
   const workTitle = displayTitle(card.works?.title || '');
-  const speaker = extractSpeaker(card.script_excerpt, card.works?.characters, card.quote);
+  // 산문(novel/essay/prose)은 화자 개념이 없어 머리말을 숨긴다 (대본/오페라 등만 화자 표시).
+  const speaker = isProseFormat(card.works?.format)
+    ? ''
+    : extractSpeaker(card.script_excerpt, card.works?.characters, card.quote);
   if (speaker) {
     todaySpeaker.textContent = speaker;
     todaySpeaker.style.display = 'block';
@@ -1344,7 +1347,9 @@ function applyTodayLang(lang) {
   // 화자(speaker) — EN 모드면 영문 script/quote 에서 다시 추출. 영문 대본의 'VICTOR:' 같은
   // 라벨이 화자로 잡혀 한국어 화자(예: '빅터') 대신 표시된다.
   if (todaySpeaker) {
-    const speaker = extractSpeaker(scriptSrc, w.characters, quoteSrc);
+    const speaker = isProseFormat(w.format)
+      ? ''
+      : extractSpeaker(scriptSrc, w.characters, quoteSrc);
     if (speaker) {
       todaySpeaker.textContent = speaker;
       todaySpeaker.style.display = 'block';
