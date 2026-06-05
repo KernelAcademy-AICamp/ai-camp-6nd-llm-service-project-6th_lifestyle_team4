@@ -269,9 +269,11 @@ async function decideCandidate(req, res, body, adminUser) {
     const finalQuote = (edits.quote != null) ? edits.quote : row.quote;
     const finalScript = (edits.script_excerpt != null) ? edits.script_excerpt : row.script_excerpt;
     const category = formatToCategory(row.works?.format);
+    // approve 단계 — 잘린 문장 검사 skip. 사용자가 편집으로 보강 가능.
     const checked = validateAndFilterCards(
       [{ quote: finalQuote, script_excerpt: finalScript }],
-      category
+      category,
+      { skipIncomplete: true }
     );
     if (checked.cards.length === 0) {
       const reason = checked.summary.dropped_identical
