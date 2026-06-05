@@ -462,6 +462,13 @@
     font-family: 'Noto Sans KR', sans-serif;
     font-weight: 700;
   }
+  /* ★ 관리자 ** 굵게 마커 — 전역 강제 700.
+     본문 텍스트가 Nanum Myeongjo 같은 명조 폰트일 때 일부 환경에서 strong 의
+     기본 bold (= bolder 상속) 가 안 먹는 케이스 방지. quote-22 / t-body-* /
+     headline / title 모든 컨텍스트에서 동일 두께로 렌더. */
+  strong, b {
+    font-weight: 700;
+  }
   /* 상황설명 — 대사와 분리되도록 은은한 톤 블록으로 감싼다 */
   .scene-block {
     border: 0.5px solid var(--latte);
