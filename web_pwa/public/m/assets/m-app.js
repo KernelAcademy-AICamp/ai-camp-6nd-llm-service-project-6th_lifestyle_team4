@@ -1458,12 +1458,15 @@ function applyTodayLang(lang) {
 
   todayQuote.innerHTML = `“${renderMarkdownBold(cleanQuote(quoteSrc))}”`;
 
-  // 화자(speaker) — EN 모드면 영문 script/quote 에서 다시 추출. 영문 대본의 'VICTOR:' 같은
-  // 라벨이 화자로 잡혀 한국어 화자(예: '빅터') 대신 표시된다.
+  // 화자(speaker) — EN 모드면 영문 script/quote 에서 먼저 추출.
+  // 영문 추출 실패 시 한글 데이터로 폴백 (등장인물은 동일, 언어만 다름 → 한글에서 화자 보이면 영문에도 보장).
   if (todaySpeaker) {
-    const speaker = isProseFormat(w.format)
+    let speaker = isProseFormat(w.format)
       ? ''
       : extractSpeaker(scriptSrc, w.characters, quoteSrc);
+    if (!speaker && useEn && !isProseFormat(w.format)) {
+      speaker = extractSpeaker(card.script_excerpt, card.works?.characters, card.quote);
+    }
     if (speaker) {
       todaySpeaker.textContent = speaker;
       todaySpeaker.style.display = 'block';
