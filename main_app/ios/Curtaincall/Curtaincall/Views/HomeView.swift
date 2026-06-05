@@ -55,7 +55,7 @@ struct HomeView: View {
                     Spacer().frame(height: 20)
 
                     if let card = todayCard {
-                        if card.hasOriginalLanguage {
+                        if card.hasHomeOriginalLanguage {
                             HStack {
                                 Spacer()
                                 LangToggle(showOriginal: $todayShowOriginal)

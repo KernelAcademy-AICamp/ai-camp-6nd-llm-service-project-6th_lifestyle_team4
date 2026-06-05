@@ -38,6 +38,18 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
             || work.hasOriginalLanguage
     }
 
+    /// Narrower gate for the Home today-card toggle. Home only visibly swaps the
+    /// quote, keywords, and work title/subtitle/format label — it never renders
+    /// the script, scene description, or significance. So it checks only the
+    /// originals Home can actually show, avoiding a toggle that would appear to
+    /// do nothing on a row backfilled with only description/significance originals.
+    /// Detail keeps the broad `hasOriginalLanguage`.
+    var hasHomeOriginalLanguage: Bool {
+        quoteOriginal.filledValue != nil
+            || (keywordsOriginal?.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false)
+            || work.hasOriginalLanguage
+    }
+
     // Explicit snake_case keys so decoding is independent of any global
     // key-decoding strategy (supabase-swift's decoder does not convert keys).
     enum CodingKeys: String, CodingKey {
