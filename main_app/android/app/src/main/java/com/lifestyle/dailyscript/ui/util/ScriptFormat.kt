@@ -124,20 +124,23 @@ object ScriptFormat {
         quoteKo: String?,
     ): String {
         val en = extractSpeakerInternal(scriptEn, characters, quoteEn) ?: return ""
-        // 1) EN 직접 추출 — quote 매칭 블록 검증 후 라벨 정리
+        // 1) EN 직접 추출
+        //    - EN 블록 1개 (단독 화자 monologue) → 검증 skip, 그 화자 사용 (시인/거울의 기사 같은 케이스)
+        //    - EN 블록 여러 개 → quote 매칭 블록 검증 통과해야 신뢰
         if (en.speaker.isNotEmpty() && en.foundIdx in en.blocks.indices) {
+            val isSingle = en.blocks.size == 1
             val blk = en.blocks[en.foundIdx]
-            if (blockMatchesQuote(blk.second, quoteEn)) {
+            if (isSingle || blockMatchesQuote(blk.second, quoteEn)) {
                 val cleaned = cleanSpeakerLabel(en.speaker)
                 if (cleaned.isNotEmpty()) return cleaned
             }
         }
-        // 2) KO 블록 인덱스 → EN 같은 인덱스 라벨 (텍스트가 quoteEn 과 관련 있어야 신뢰)
+        // 2) KO 블록 인덱스 → EN 같은 인덱스 라벨
         val ko = extractSpeakerInternal(scriptKo, characters, quoteKo) ?: return ""
         val i = ko.foundIdx
         if (i < 0 || i >= en.blocks.size) return ""
         val enBlk = en.blocks[i]
-        if (!blockMatchesQuote(enBlk.second, quoteEn)) return ""
+        if (en.blocks.size > 1 && !blockMatchesQuote(enBlk.second, quoteEn)) return ""
         return cleanSpeakerLabel(enBlk.first)
     }
 
@@ -150,15 +153,20 @@ object ScriptFormat {
             val raw = rawIn.replace(Regex("""^\s*(?:[\-•·*]\s+|\d{1,3}[.)]\s+)"""), "")
             val t = raw.trim()
             if (t.isEmpty()) return null
-            // 0) **볼드 라인** 폴백 — "**LYSANDER**" / "**Antigone**." / "**Hamlet** (지문)"
-            //    라인 전체가 볼드 + 선택적 종결자 + 선택적 지문 까지만 허용 (부분 볼드는 제외).
+            // 0) **볼드 라인** 폴백 — 라인 시작이 **이름** + 종결자(:.,;—–) 또는 라인 끝 또는 (지문)
+            //    매칭: "**LYSANDER**" / "**Antigone**." / "**Poet**:" / "**Knight of the Mirror**;" /
+            //          "**Hamlet** (지문)" / "**Poet:**" (콜론이 별표 안쪽) / "**Antigone—**"
             run {
-                val boldLine = Regex("""^\*\*([^*\n]+?)\*\*\s*[.,:：]?\s*(\([^)\n]*\))?$""")
+                val boldLine = Regex("""^\s*\*\*([^*\n]+?)\*\*\s*(?:[:.,;—–]|$|\().*$""")
                 val bm = boldLine.find(t)
                 if (bm != null) {
-                    val nm = bm.groupValues[1].trim().trim('.', ',', ':', '：')
-                    if (nm.isNotEmpty() && nm.length <= 30) {
-                        val rest = bm.groupValues[2].trim()
+                    val inner = bm.groupValues[1].trim()
+                    val nm = inner.trim('.', ',', ':', '：', ';', '—', '–', ' ', '\t')
+                    if (nm.isNotEmpty() && nm.length <= 40) {
+                        val after = t.substring(bm.range.last + 1).trim()
+                        // 별표 닫힘 직후 종결자/지문 부분 — 본문(rest) 으로
+                        val restMatch = Regex("""^\s*\*\*[^*\n]+?\*\*\s*([:.,;—–])?\s*(.*)$""").find(t)
+                        val rest = restMatch?.groupValues?.get(2)?.trim().orEmpty()
                         return nm to rest
                     }
                 }

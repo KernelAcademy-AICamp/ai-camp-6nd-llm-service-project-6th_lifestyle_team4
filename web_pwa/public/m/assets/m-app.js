@@ -314,15 +314,19 @@ function extractSpeaker(scriptExcerpt, characters, quote, opts = {}) {
     raw = String(raw).replace(/^[\s]*(?:[\-•·*]\s+|\d{1,3}[.)]\s+)/, '');
     const t = raw.trim();
     if (!t) return null;
-    // 0) **볼드 라인** 폴백 — "**LYSANDER**" / "**Antigone**." / "**Hamlet** (지문)"
-    //    라인 전체가 볼드 + 선택적 종결자(.,:) + 선택적 지문 (...) 까지만 허용.
-    //    대사 안에 일부 단어만 볼드된 경우는 제외.
+    // 0) **볼드 라인** 폴백 — 라인 시작이 **이름** + 종결자(:.,;—–) 또는 라인 끝 또는 (지문)
+    //    매칭: "**LYSANDER**" / "**Antigone**." / "**Poet**:" / "**Knight of the Mirror**;" /
+    //          "**Hamlet** (지문)" / "**Poet:**" (콜론이 별표 안쪽) / "**Antigone—**"
+    //    제외: dialogue 한가운데 부분 볼드 (`**emphasis**`), 라인 시작 ** 다음 일반 텍스트
     {
-      const bm = t.match(/^\*\*([^*\n]+?)\*\*\s*[.,:：]?\s*(\([^)\n]*\))?$/);
+      const bm = t.match(/^\s*\*\*([^*\n]+?)\*\*\s*(?:[:.,;—–]|$|\()(.*)$/);
       if (bm) {
-        const nm = bm[1].replace(/^[\s.,:：]+|[\s.,:：]+$/g, '').trim();
-        if (nm && nm.length <= 30) {
-          const rest = bm[2] ? bm[2].trim() : '';
+        let nm = bm[1].trim().replace(/^[\s.,:：;—–]+|[\s.,:：;—–]+$/g, '').trim();
+        if (nm && nm.length <= 40) {
+          // 라인이 `**name**(지문)` 형태면 rest 안에 괄호가 다시 포함되어 들어갈 수 있으니
+          // 매칭 분기를 단순화 — 별표 닫힘 이후 텍스트 그대로 trim
+          const restRaw = (bm[2] || '').trim();
+          const rest = restRaw.replace(/^[:.,;—–]\s*/, '');
           return { name: nm, rest };
         }
       }
@@ -496,24 +500,27 @@ function blockMatchesQuote(blockText, quote) {
 
 function extractSpeakerEn(scriptEn, scriptKo, characters, quoteEn, quoteKo) {
   if (!scriptEn) return '';
-  // 1) 영문 script 직접 추출 — quote 매칭으로 잡힌 화자만 신뢰 (single-speaker 폴백은 검증)
+  // 1) 영문 script 직접 추출
+  //    - 영문 블록 1개 (단일 화자 monologue) → 검증 skip, 그 화자 그대로 사용 ("시인", "거울의 기사" 같은 단독 화자 카드 보장)
+  //    - 영문 블록 여러 개 → quote 매칭 블록 검증 통과해야 신뢰 (오매칭 방어)
   const enResult = extractSpeaker(scriptEn, characters, quoteEn, { returnBlocks: true });
   if (enResult.speaker) {
+    const isSingleBlock = enResult.blocks.length === 1;
     const blk = enResult.blocks[enResult.foundIdx];
-    if (blk && blockMatchesQuote(blk.text, quoteEn)) {
+    if (isSingleBlock || (blk && blockMatchesQuote(blk.text, quoteEn))) {
       const cleaned = cleanSpeakerLabel(enResult.speaker);
       if (cleaned) return cleaned;
     }
   }
   // 2) 한글 quote → 한글 블록 인덱스 → 영문 블록 같은 인덱스 라벨
-  //    영문 블록 텍스트가 quoteEn 과 관련 있어야 매칭 신뢰 (인덱스만으로는 부정확)
   if (!scriptKo) return '';
   const koResult = extractSpeaker(scriptKo, characters, quoteKo, { returnBlocks: true });
   const i = koResult.foundIdx;
   if (i < 0 || i >= enResult.blocks.length) return '';
   const enBlk = enResult.blocks[i];
   if (!enBlk) return '';
-  if (!blockMatchesQuote(enBlk.text, quoteEn)) return '';
+  // 영문 블록 1개면 검증 skip — 한글 인덱스 0 → 영문 0 = single speaker 매칭
+  if (enResult.blocks.length > 1 && !blockMatchesQuote(enBlk.text, quoteEn)) return '';
   return cleanSpeakerLabel(enBlk.speaker);
 }
 
