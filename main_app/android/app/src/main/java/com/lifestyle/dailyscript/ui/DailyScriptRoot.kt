@@ -1,5 +1,8 @@
 package com.lifestyle.dailyscript.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -55,6 +59,16 @@ import com.lifestyle.dailyscript.ui.settings.termsDoc
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Walnut
 
+/** Credential Manager는 Activity 컨텍스트가 필요하다 — Compose의 LocalContext에서 풀어낸다. */
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+
 @Composable
 fun DailyScriptRoot() {
     val sessionVm: AppSessionViewModel = viewModel()
@@ -88,6 +102,8 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+    val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
 
     val authMessage by sessionVm.authMessage.collectAsState()
     val authInProgress by sessionVm.authInProgress.collectAsState()
@@ -186,7 +202,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         authMessage = authMessage,
                         authInProgress = authInProgress,
                         onSignIn = { id, pw, signUp -> sessionVm.signIn(id, pw, signUp) },
-                        onSocialSignIn = sessionVm::signInWithProvider,
+                        onSocialSignIn = { provider -> sessionVm.signInWithProvider(provider, activity) },
                         onSignOut = sessionVm::signOutAndReauth,
                         onUpdateProfile = sessionVm::updateProfile,
                         onOpenMyComments = {

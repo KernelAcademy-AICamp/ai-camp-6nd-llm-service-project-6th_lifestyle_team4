@@ -1,5 +1,8 @@
 package com.lifestyle.dailyscript.ui
 
+import android.app.Activity
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifestyle.dailyscript.data.AppAnalytics
@@ -81,8 +84,11 @@ class AppSessionViewModel : ViewModel() {
         }
     }
 
-    /** Social (Google/Kakao) sign-in. Browser opens; completion re-bootstraps via observeAuthChanges. */
-    fun signInWithProvider(provider: SocialProvider) {
+    /**
+     * Social sign-in. 구글은 Credential Manager 네이티브 시트(브라우저 없음)로 처리하므로
+     * 호출부에서 [activity]를 넘겨준다. 네이티브 로그인은 동기 완료라 성공 즉시 재bootstrap한다.
+     */
+    fun signInWithProvider(provider: SocialProvider, activity: Activity?) {
         // 카카오는 Supabase가 account_email 스코프를 강제 → 카카오 비즈니스 앱 전환 전까지 "준비 중".
         // 비즈앱 전환 + 동의항목(account_email/profile_image) 활성화 후엔 이 가드만 제거하면 켜진다.
         if (provider == SocialProvider.KAKAO) {
@@ -90,12 +96,29 @@ class AppSessionViewModel : ViewModel() {
             return
         }
         if (_authInProgress.value) return
+        if (activity == null) {
+            _authMessage.value = "로그인을 시작할 수 없습니다. 다시 시도해주세요."
+            return
+        }
         val current = (_state.value as? SessionState.Ready)?.session
         _authInProgress.value = true
         _authMessage.value = null
         viewModelScope.launch {
-            runCatching { authRepo.signInWithOAuth(provider, current?.userId) }
-                .onFailure { _authMessage.value = friendlyAuthError(it.message.orEmpty()) }
+            runCatching { authRepo.signInWithGoogleNative(activity, current?.userId) }
+                .onSuccess {
+                    bootstrapIntoState()
+                    AppAnalytics.track("login", mapOf("method" to "google_native"))
+                    _authMessage.value = "로그인 됐어요"
+                }
+                .onFailure { e ->
+                    when (e) {
+                        // 사용자가 계정 선택 시트를 닫음 — 에러가 아니므로 조용히 넘긴다.
+                        is GetCredentialCancellationException -> Unit
+                        is NoCredentialException ->
+                            _authMessage.value = "사용 가능한 구글 계정이 없습니다. 기기에 구글 계정을 추가해주세요."
+                        else -> _authMessage.value = friendlyAuthError(e.message.orEmpty())
+                    }
+                }
             _authInProgress.value = false
         }
     }

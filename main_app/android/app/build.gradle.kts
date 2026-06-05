@@ -13,6 +13,11 @@ val localProps = Properties().apply {
 }
 val supabaseUrl: String = localProps.getProperty("SUPABASE_URL", "")
 val supabaseAnonKey: String = localProps.getProperty("SUPABASE_ANON_KEY", "")
+// 네이티브 구글 로그인용 "웹 애플리케이션" OAuth 클라이언트 ID(...apps.googleusercontent.com).
+// Supabase Auth → Providers → Google 의 Client ID 와 동일해야 한다. 비어 있으면 구글 로그인만 비활성.
+val googleWebClientId: String = localProps.getProperty("GOOGLE_WEB_CLIENT_ID")
+    ?: System.getenv("GOOGLE_WEB_CLIENT_ID")
+    ?: ""
 val amplitudeApiKey: String = localProps.getProperty("AMPLITUDE_API_KEY")
     ?: System.getenv("AMPLITUDE_API_KEY")
     ?: "016c6218aa17a49377b3ac38e6958070"
@@ -47,6 +52,7 @@ android {
 
         buildConfigField("String", "SUPABASE_URL", buildConfigString(supabaseUrl))
         buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(supabaseAnonKey))
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", buildConfigString(googleWebClientId))
         buildConfigField("String", "AMPLITUDE_API_KEY", buildConfigString(amplitudeApiKey))
         buildConfigField("String", "CLARITY_PROJECT_ID", buildConfigString(clarityProjectId))
     }
@@ -114,6 +120,11 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.browser)
     implementation(libs.kotlinx.serialization.json)
+
+    // 네이티브 구글 로그인 (Credential Manager + Sign in with Google)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.identity.googleid)
 
     val supabaseBom = platform(libs.supabase.bom)
     implementation(supabaseBom)

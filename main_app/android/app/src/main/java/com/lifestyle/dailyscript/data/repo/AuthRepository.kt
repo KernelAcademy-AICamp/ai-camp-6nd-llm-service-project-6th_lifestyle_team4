@@ -1,5 +1,13 @@
 package com.lifestyle.dailyscript.data.repo
 
+import android.app.Activity
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+import com.lifestyle.dailyscript.BuildConfig
 import com.lifestyle.dailyscript.data.SupabaseProvider
 import com.lifestyle.dailyscript.data.model.BookmarkInsert
 import com.lifestyle.dailyscript.data.model.CardIdRow
@@ -9,11 +17,14 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.Kakao
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
+import java.security.MessageDigest
+import java.util.UUID
 
 /** Social OAuth providers we support (web-redirect flow via Supabase). */
 enum class SocialProvider { GOOGLE, KAKAO }
@@ -158,10 +169,66 @@ class AuthRepository {
     }
 
     /**
+     * Native Google sign-in via Android Credential Manager — no browser/redirect.
+     * Shows the system account-picker sheet, gets a Google ID token, then exchanges
+     * it with Supabase via signInWith(IDToken). The call is synchronous (suspends
+     * until the session exists), so the caller can re-bootstrap immediately.
+     *
+     * We stash the current (anonymous) user_id so the next bootstrap can migrate
+     * its bookmarks into the freshly created account.
+     *
+     * Nonce: Google Sign-In wants a HASHED nonce in the request; Supabase verifies
+     * the token by hashing the RAW nonce we pass it. (Supabase 공식 Android 패턴)
+     */
+    suspend fun signInWithGoogleNative(activity: Activity, currentUserId: Long?) {
+        val webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
+        if (webClientId.isBlank()) {
+            throw IllegalStateException(
+                "구글 로그인이 설정되지 않았습니다. local.properties에 GOOGLE_WEB_CLIENT_ID를 추가하세요."
+            )
+        }
+        pendingMigrationUserId = currentUserId
+        pendingLoginId = null
+
+        val rawNonce = UUID.randomUUID().toString()
+        val hashedNonce = MessageDigest.getInstance("SHA-256")
+            .digest(rawNonce.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setServerClientId(webClientId)
+            // 처음엔 인증된 계정만 필터링하지 않고 모든 계정을 보여준다(첫 로그인 대비).
+            .setFilterByAuthorizedAccounts(false)
+            .setAutoSelectEnabled(false)
+            .setNonce(hashedNonce)
+            .build()
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        val response = CredentialManager.create(activity).getCredential(activity, request)
+        val credential = response.credential
+        if (credential !is CustomCredential || credential.type != TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+            throw IllegalStateException("구글 자격 증명을 받지 못했습니다.")
+        }
+        val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+
+        auth.signInWith(IDToken) {
+            this.idToken = idToken
+            this.provider = Google
+            this.nonce = rawNonce
+        }
+    }
+
+    /**
      * Social sign-in via Supabase OAuth (web-redirect). Launches the system
      * browser; completion arrives later as a deep link (handled in MainActivity),
      * after which AppSessionViewModel re-bootstraps. We stash the current
      * (anonymous) user_id so re-bootstrap can migrate its bookmarks over.
+     *
+     * 구글은 [signInWithGoogleNative]로 네이티브 처리하므로, 이 경로는 카카오 전용
+     * (비즈앱 전환 후 활성화) 또는 네이티브 실패 시 fallback 용도로 남겨둔다.
      */
     suspend fun signInWithOAuth(provider: SocialProvider, currentUserId: Long?) {
         pendingMigrationUserId = currentUserId
