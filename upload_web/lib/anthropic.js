@@ -983,7 +983,12 @@ export function validateAndFilterCards(cards, category) {
       console.warn(`[extract] drop: incomplete sentence in quote: "${String(c?.quote || '').slice(0, 80)}"`);
     } else if (drop === 'short') {
       const slen = String(c?.script_excerpt || '').length;
-      if (safetyFallback) {
+      // 빈 script_excerpt 는 safety fallback 면제 — 편집 불가능한 빈 카드 항상 drop.
+      // (LLM 응답 토큰 잘림/누락으로 빈 채로 추출된 카드. 편집해도 본문이 없으므로 무의미.)
+      if (slen === 0) {
+        droppedShort++;
+        console.warn(`[extract] drop: empty script_excerpt (safety fallback 면제) qlen=${String(c?.quote || '').length}`);
+      } else if (safetyFallback) {
         warnedShort++;
         console.warn(`[extract] (warn) short script_excerpt ${slen}<${minChars} category=${category}`);
         survivors.push(c);
