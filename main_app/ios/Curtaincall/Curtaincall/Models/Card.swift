@@ -9,6 +9,7 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
     let keywords: [String]
     let temperature: Int
     let intensity: Int
+    let viewCount: Int?
     let work: Work
 
     var id: Int { cardId }
@@ -24,6 +25,7 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
         case keywords
         case temperature
         case intensity
+        case viewCount = "view_count"
         case work
     }
 }
@@ -39,6 +41,7 @@ extension Card {
         keywords: ["자유의 경험", "첫사랑", "초월성"],
         temperature: 5,
         intensity: 4,
+        viewCount: 12,
         work: Work(title: "Titanic", format: .movie, author: "James Cameron", releaseYear: 1997)
     )
 }

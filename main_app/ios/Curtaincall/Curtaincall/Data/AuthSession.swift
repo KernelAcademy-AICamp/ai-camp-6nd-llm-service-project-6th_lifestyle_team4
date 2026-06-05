@@ -30,6 +30,11 @@ final class AuthSession: ObservableObject {
     /// 소셜 첫 가입 직후 1회 성별·나이 입력 프롬프트를 띄울지.
     @Published var needsProfileSetup = false
 
+    /// Non-fatal signal: set when merging an upgraded user's anonymous bookmarks
+    /// failed. The account upgrade itself still succeeded — this just keeps the
+    /// failure from being invisible (it was previously swallowed by `try?`).
+    @Published var migrationWarning: String?
+
     enum BootstrapStatus: Equatable {
         case idle
         case bootstrapping
@@ -91,7 +96,14 @@ final class AuthSession: ObservableObject {
                         needsProfileSetup = true
                     }
                     if let old = migrateFromUserId, old != row.userId {
-                        try? await Supa.shared.migrateBookmarks(oldUserId: old, newUserId: row.userId)
+                        do {
+                            try await Supa.shared.migrateBookmarks(oldUserId: old, newUserId: row.userId)
+                        } catch {
+                            // Upgrade succeeded; a merge failure is non-fatal but must not
+                            // be invisible. Surface it without failing the whole bootstrap.
+                            migrationWarning = error.localizedDescription
+                            print("[auth] bookmark migration failed: \(error)")
+                        }
                     }
                 }
             }

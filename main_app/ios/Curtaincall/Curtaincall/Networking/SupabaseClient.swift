@@ -22,16 +22,30 @@ final class Supa {
     // PostgREST embedded-resource selects. Backslash-newlines keep one logical line.
     private let cardColumns = """
     card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
-    keywords, temperature, intensity, \
-    work:works(title, format, author, release_year, characters, work_genres(genres(name)))
+    keywords, temperature, intensity, view_count, \
+    work:works(title, subtitle, format, author, release_year, characters, work_genres(genres(name)))
     """
 
     private let bookmarkColumns = """
     bookmark_id, user_id, card_id, created_at, \
     cards(card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
-    keywords, temperature, intensity, \
-    work:works(title, format, author, release_year, characters, work_genres(genres(name))))
+    keywords, temperature, intensity, view_count, \
+    work:works(title, subtitle, format, author, release_year, characters, work_genres(genres(name))))
     """
+
+    private let feedCardColumns = """
+    cards(card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
+    keywords, temperature, intensity, view_count, \
+    work:works(title, subtitle, format, author, release_year, characters, work_genres(genres(name))))
+    """
+
+    private var feedPostColumns: String {
+        "post_id, card_id, user_id, author_nickname, body, created_at, \(feedCardColumns)"
+    }
+
+    private var highlightColumns: String {
+        "highlight_id, card_id, user_id, author_nickname, selected_text, user_note, created_at, \(feedCardColumns)"
+    }
 
     private let commentColumns =
         "comment_id, card_id, user_id, parent_comment_id, author_nickname, body, created_at"
@@ -55,6 +69,77 @@ final class Supa {
             .execute()
             .value
         return rows.first
+    }
+
+    func incrementCardView(cardId: Int) async throws {
+        try await client.rpc("increment_card_view", params: ["p_card_id": cardId])
+            .execute()
+    }
+
+    func fetchBookmarkCounts(cardIds: [Int]) async throws -> [Int: Int] {
+        guard !cardIds.isEmpty else { return [:] }
+        let rows: [CardBookmarkCount] = try await client.from("card_bookmark_counts")
+            .select("card_id, bookmark_count")
+            .in("card_id", values: cardIds)
+            .execute()
+            .value
+        return Dictionary(uniqueKeysWithValues: rows.map { ($0.cardId, $0.bookmarkCount) })
+    }
+
+    func fetchLatestNotice() async throws -> Notice? {
+        let rows: [Notice] = try await client.from("notices")
+            .select("notice_id, tag, title, body, pinned, created_at")
+            .eq("published", value: true)
+            .order("pinned", ascending: false)
+            .order("created_at", ascending: false)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
+    }
+
+    func fetchNotices(limit: Int = 50) async throws -> [Notice] {
+        try await client.from("notices")
+            .select("notice_id, tag, title, body, pinned, created_at")
+            .eq("published", value: true)
+            .order("pinned", ascending: false)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+    }
+
+    // MARK: - Feed
+
+    func fetchFeedPosts(limit: Int = 50) async throws -> [FeedPost] {
+        try await client.from("feed_posts")
+            .select(feedPostColumns)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+    }
+
+    func fetchCardHighlights(limit: Int = 50) async throws -> [CardHighlight] {
+        try await client.from("card_highlights")
+            .select(highlightColumns)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+    }
+
+    func addFeedPost(cardId: Int, userId: Int, body: String, authorNickname: String?) async throws {
+        try await client.from("feed_posts")
+            .insert(
+                FeedPostInsert(
+                    cardId: cardId,
+                    userId: userId,
+                    authorNickname: authorNickname,
+                    body: body
+                )
+            )
+            .execute()
     }
 
     // MARK: - Users
@@ -151,7 +236,17 @@ final class Supa {
             .value
         guard !old.isEmpty else { return }
         let rows = old.map { BookmarkInsert(userId: newUserId, cardId: $0.cardId) }
-        _ = try? await client.from("user_bookmarks").insert(rows).execute()
+        // True union with dedupe, mirroring the PWA (web_pwa m-app.js:864). Relies on
+        // the unique constraint user_bookmarks_user_card_unique (user_id, card_id).
+        // `try` (not `try?`) so a botched merge propagates instead of vanishing.
+        try await client.from("user_bookmarks")
+            .upsert(rows, onConflict: "user_id,card_id", ignoreDuplicates: true)
+            .execute()
+        // Cleanup of the old anonymous rows runs AFTER the auth identity has switched
+        // to the new user, so under the current RLS these are scoped to the NEW user
+        // and effectively no-op (the users delete is additionally blocked: no DELETE
+        // policy/grant). Left best-effort on purpose — the correct home for this is a
+        // server-side SECURITY DEFINER function. See review notes on RLS (#3).
         _ = try? await client.from("user_bookmarks").delete().eq("user_id", value: oldUserId).execute()
         _ = try? await client.from("users").delete().eq("user_id", value: oldUserId).execute()
     }
@@ -204,6 +299,17 @@ final class Supa {
             .eq("comment_id", value: commentId)
             .eq("user_id", value: userId)
             .execute()
+    }
+
+    func updateComment(commentId: Int, userId: Int, body: String) async throws -> Comment {
+        try await client.from("card_comments")
+            .update(CommentUpdate(body: body))
+            .eq("comment_id", value: commentId)
+            .eq("user_id", value: userId)
+            .select(commentColumns)
+            .single()
+            .execute()
+            .value
     }
 
     func setLike(commentId: Int, userId: Int, liked: Bool) async throws {

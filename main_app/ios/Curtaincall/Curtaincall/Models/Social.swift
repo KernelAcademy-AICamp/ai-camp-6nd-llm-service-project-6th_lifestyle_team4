@@ -76,6 +76,38 @@ nonisolated struct CardIdRow: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case cardId = "card_id" }
 }
 
+nonisolated struct CardBookmarkCount: Decodable, Sendable {
+    let cardId: Int
+    let bookmarkCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case bookmarkCount = "bookmark_count"
+    }
+}
+
+// MARK: - Notices
+
+nonisolated struct Notice: Decodable, Identifiable, Sendable {
+    let noticeId: Int
+    let tag: String
+    let title: String
+    let body: String
+    let pinned: Bool
+    let createdAt: String
+
+    var id: Int { noticeId }
+
+    enum CodingKeys: String, CodingKey {
+        case noticeId = "notice_id"
+        case tag
+        case title
+        case body
+        case pinned
+        case createdAt = "created_at"
+    }
+}
+
 // MARK: - Comments + likes
 
 nonisolated struct Comment: Decodable, Identifiable, Hashable, Sendable {
@@ -116,6 +148,10 @@ nonisolated struct CommentInsert: Encodable, Sendable {
     }
 }
 
+nonisolated struct CommentUpdate: Encodable, Sendable {
+    let body: String
+}
+
 nonisolated struct CommentLike: Codable, Sendable {
     let commentId: Int
     let userId: Int
@@ -123,5 +159,69 @@ nonisolated struct CommentLike: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case commentId = "comment_id"
         case userId = "user_id"
+    }
+}
+
+// MARK: - Feed
+
+nonisolated struct FeedPost: Decodable, Identifiable, Sendable {
+    let postId: Int
+    let cardId: Int
+    let userId: Int
+    let authorNickname: String?
+    let body: String
+    let createdAt: String
+    let card: Card?
+
+    var id: Int { postId }
+    var createdDate: Date? { parseISODate(createdAt) }
+
+    enum CodingKeys: String, CodingKey {
+        case postId = "post_id"
+        case cardId = "card_id"
+        case userId = "user_id"
+        case authorNickname = "author_nickname"
+        case body
+        case createdAt = "created_at"
+        case card = "cards"
+    }
+}
+
+nonisolated struct FeedPostInsert: Encodable, Sendable {
+    let cardId: Int
+    let userId: Int
+    let authorNickname: String?
+    let body: String
+
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case userId = "user_id"
+        case authorNickname = "author_nickname"
+        case body
+    }
+}
+
+nonisolated struct CardHighlight: Decodable, Identifiable, Sendable {
+    let highlightId: Int
+    let cardId: Int
+    let userId: Int
+    let authorNickname: String?
+    let selectedText: String
+    let userNote: String?
+    let createdAt: String
+    let card: Card?
+
+    var id: Int { highlightId }
+    var createdDate: Date? { parseISODate(createdAt) }
+
+    enum CodingKeys: String, CodingKey {
+        case highlightId = "highlight_id"
+        case cardId = "card_id"
+        case userId = "user_id"
+        case authorNickname = "author_nickname"
+        case selectedText = "selected_text"
+        case userNote = "user_note"
+        case createdAt = "created_at"
+        case card = "cards"
     }
 }

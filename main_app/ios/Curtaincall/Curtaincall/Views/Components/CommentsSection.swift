@@ -8,6 +8,7 @@ final class CommentsModel: ObservableObject {
     @Published var submitting = false
     @Published var errorMessage: String?
     @Published var replyingTo: Comment?
+    @Published var editingCommentId: Int?
 
     private let cardId: Int
     init(cardId: Int) { self.cardId = cardId }
@@ -67,9 +68,26 @@ final class CommentsModel: ObservableObject {
             try await Supa.shared.deleteComment(commentId: commentId, userId: userId)
             comments.removeAll { $0.commentId == commentId || $0.parentCommentId == commentId }
             if replyingTo?.commentId == commentId { replyingTo = nil }
+            if editingCommentId == commentId { editingCommentId = nil }
         } catch {
             errorMessage = "삭제 실패: \(error.localizedDescription)"
         }
+    }
+
+    func update(userId: Int, commentId: Int, body: String) async {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !submitting else { return }
+        submitting = true
+        do {
+            let updated = try await Supa.shared.updateComment(commentId: commentId, userId: userId, body: trimmed)
+            if let index = comments.firstIndex(where: { $0.commentId == commentId }) {
+                comments[index] = updated
+            }
+            editingCommentId = nil
+        } catch {
+            errorMessage = "수정 실패: \(error.localizedDescription)"
+        }
+        submitting = false
     }
 
     /// Top-level comments paired with their replies (1 level deep, normalized).
@@ -93,6 +111,7 @@ struct CommentsSection: View {
     let nickname: String
 
     @State private var draft = ""
+    @State private var editDraft = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -190,6 +209,7 @@ struct CommentsSection: View {
         let likeUsers = model.likes[c.commentId] ?? []
         let likedByMe = userId != nil && likeUsers.contains(userId!)
         let isMine = userId != nil && c.userId == userId!
+        let isEditing = model.editingCommentId == c.commentId
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -199,36 +219,62 @@ struct CommentsSection: View {
                 Spacer()
                 Text(Self.relativeTime(c.createdAt)).labelCaps()
             }
-            Text(c.body)
-                .font(.bodySans(14))
-                .foregroundStyle(.espresso)
-                .bookLeading(size: 14)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if isEditing {
+                editBox
+            } else {
+                Text(c.body)
+                    .font(.bodySans(14))
+                    .foregroundStyle(.espresso)
+                    .bookLeading(size: 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack(spacing: 16) {
-                Button {
-                    if let uid = userId, !isAnonymous {
-                        Task { await model.toggleLike(userId: uid, commentId: c.commentId) }
+                if !isEditing {
+                    Button {
+                        if let uid = userId, !isAnonymous {
+                            Task { await model.toggleLike(userId: uid, commentId: c.commentId) }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: likedByMe ? "heart.fill" : "heart").font(.system(size: 14))
+                            Text("\(likeUsers.count)").font(.bodySans(12))
+                        }
+                        .foregroundStyle(likedByMe ? Color.cta : .walnut)
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: likedByMe ? "heart.fill" : "heart").font(.system(size: 14))
-                        Text("\(likeUsers.count)").font(.bodySans(12))
+                    .buttonStyle(.plain)
+                    if !isReply && !isAnonymous {
+                        Button { model.replyingTo = c } label: { Text("REPLY").labelCaps() }
+                            .buttonStyle(.plain)
                     }
-                    .foregroundStyle(likedByMe ? Color.cta : .walnut)
-                }
-                .buttonStyle(.plain)
-                if !isReply && !isAnonymous {
-                    Button { model.replyingTo = c } label: { Text("REPLY").labelCaps() }
-                        .buttonStyle(.plain)
                 }
                 Spacer()
                 if isMine {
-                    Button {
-                        if let uid = userId {
-                            Task { await model.delete(userId: uid, commentId: c.commentId) }
-                        }
-                    } label: { Text("DELETE").labelCaps() }
-                        .buttonStyle(.plain)
+                    if isEditing {
+                        Button {
+                            model.editingCommentId = nil
+                            editDraft = ""
+                        } label: { Text("CANCEL").labelCaps() }
+                            .buttonStyle(.plain)
+                        Button {
+                            if let uid = userId {
+                                Task { await model.update(userId: uid, commentId: c.commentId, body: editDraft) }
+                            }
+                        } label: { Text("SAVE").labelCaps(color: .cta) }
+                            .buttonStyle(.plain)
+                            .disabled(model.submitting || editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    } else {
+                        Button {
+                            editDraft = c.body
+                            model.editingCommentId = c.commentId
+                        } label: { Text("EDIT").labelCaps() }
+                            .buttonStyle(.plain)
+                        Button {
+                            if let uid = userId {
+                                Task { await model.delete(userId: uid, commentId: c.commentId) }
+                            }
+                        } label: { Text("DELETE").labelCaps() }
+                            .buttonStyle(.plain)
+                    }
                 }
             }
             .padding(.top, 2)
@@ -238,6 +284,30 @@ struct CommentsSection: View {
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.latte, lineWidth: 0.5))
         .padding(.leading, isReply ? 24 : 0)
         .padding(.bottom, 10)
+    }
+
+    private var editBox: some View {
+        ZStack(alignment: .topLeading) {
+            if editDraft.isEmpty {
+                Text("댓글을 수정하세요…")
+                    .font(.bodySans(14))
+                    .foregroundStyle(.walnut)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 14)
+            }
+            TextEditor(text: $editDraft)
+                .font(.bodySans(14))
+                .foregroundStyle(.espresso)
+                .frame(minHeight: 64)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .scrollContentBackground(.hidden)
+                .onChange(of: editDraft) { _, newValue in
+                    if newValue.count > 500 { editDraft = String(newValue.prefix(500)) }
+                }
+        }
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
     }
 
     static func relativeTime(_ iso: String) -> String {

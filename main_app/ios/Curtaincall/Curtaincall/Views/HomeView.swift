@@ -12,6 +12,9 @@ struct HomeView: View {
     @State private var hasLoaded = false
     @State private var isLoading = false
     @State private var fetchFailed = false
+    @State private var showAccountPrompt = false
+    @State private var latestNotice: Notice?
+    @State private var bookmarkCounts: [Int: Int] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,18 +26,27 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 32)
-                    Text(Self.formattedToday).labelCaps()
+                    if let latestNotice {
+                        NoticeBanner(notice: latestNotice)
+                        Spacer().frame(height: 24)
+                    }
+                    Text(Self.formattedToday)
+                        .labelCaps()
+                        .frame(maxWidth: .infinity)
                     Spacer().frame(height: 8)
-                    HStack(alignment: .center) {
+                    ZStack(alignment: .trailing) {
                         Text("오늘의 명대사")
-                            .font(.displaySerif(32))
+                            .font(.displaySerif(28))
                             .foregroundStyle(.espresso)
-                        Spacer()
+                            .frame(maxWidth: .infinity)
                         Button { Task { await reload(deterministic: false) } } label: {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 20, weight: .regular))
+                                .font(.system(size: 18, weight: .regular))
                                 .foregroundStyle(.walnut)
-                                .frame(width: 40, height: 40)
+                                .frame(width: 36, height: 36)
+                                .background(Circle().fill(Color.paper))
+                                .overlay(Circle().stroke(Color.latte, lineWidth: 0.5))
+                                .shadow(color: Color.black.opacity(0.12), radius: 3, x: 0, y: 2)
                         }
                         .buttonStyle(.plain)
                         .disabled(isLoading)
@@ -44,7 +56,7 @@ struct HomeView: View {
                     if let card = todayCard {
                         todayCardView(card)
                     } else if isLoading {
-                        TodayCardBody(card: nil, isLoading: true)
+                        TodayCardBody(card: nil, isLoading: true, bookmarkCount: 0)
                     }
 
                     Spacer().frame(height: 56)
@@ -55,6 +67,10 @@ struct HomeView: View {
                             .font(.headlineSerif(22))
                             .foregroundStyle(.espresso)
                         Spacer()
+                        Button { selectedTab = .archive } label: {
+                            Text("VIEW LIBRARY").labelCaps()
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.top, 32)
                     .padding(.bottom, 12)
@@ -79,23 +95,43 @@ struct HomeView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
+        .navigationDestination(for: Card.self) {
+            CardDetailView(card: $0) {
+                showAccountPrompt = false
+                selectedTab = .settings
+            }
+        }
         .task { await loadOnce() }
+        .task { await loadLatestNotice() }
         .task { await bookmarks.load(userId: session.userId) }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
+        }
+        .overlay {
+            if showAccountPrompt {
+                AccountRequiredPrompt {
+                    showAccountPrompt = false
+                    selectedTab = .settings
+                } onClose: {
+                    showAccountPrompt = false
+                }
+            }
         }
     }
 
     private func todayCardView(_ card: Card) -> some View {
         ZStack(alignment: .topTrailing) {
             NavigationLink(value: card) {
-                TodayCardBody(card: card, isLoading: isLoading)
+                TodayCardBody(
+                    card: card,
+                    isLoading: isLoading,
+                    bookmarkCount: bookmarkCounts[card.cardId] ?? 0
+                )
             }
             .buttonStyle(.plain)
 
             Button {
-                Task { await bookmarks.toggle(userId: session.userId, cardId: card.cardId) }
+                toggleBookmark(cardId: card.cardId)
             } label: {
                 Image(systemName: bookmarks.isBookmarked(card.cardId) ? "bookmark.fill" : "bookmark")
                     .font(.system(size: 22, weight: .regular))
@@ -120,7 +156,7 @@ struct HomeView: View {
             }
             Spacer()
             Button { selectedTab = .settings } label: {
-                Text("MY PAGE")
+                Text(session.isAnonymous ? "로그인" : "MY PAGE")
                     .labelCaps()
                     .padding(.horizontal, 6)
                     .padding(.vertical, 4)
@@ -173,8 +209,41 @@ struct HomeView: View {
             if let pick { prefs.rememberShown(pick.cardId) }
             todayCard = pick
             recent = buildRecent()
+            await refreshBookmarkCounts(for: [pick].compactMap { $0 } + recent)
         } catch {
             fetchFailed = true
+        }
+    }
+
+    private func toggleBookmark(cardId: Int) {
+        guard !session.isAnonymous else {
+            showAccountPrompt = true
+            return
+        }
+        Task {
+            await bookmarks.toggle(userId: session.userId, cardId: cardId)
+            await refreshBookmarkCounts(for: [todayCard].compactMap { $0 } + recent)
+        }
+    }
+
+    private func refreshBookmarkCounts(for cards: [Card]) async {
+        let ids = Array(Set(cards.map(\.cardId)))
+        guard !ids.isEmpty else {
+            bookmarkCounts = [:]
+            return
+        }
+        do {
+            bookmarkCounts = try await Supa.shared.fetchBookmarkCounts(cardIds: ids)
+        } catch {
+            // Keep counts cosmetic; failures should not block reading.
+        }
+    }
+
+    private func loadLatestNotice() async {
+        do {
+            latestNotice = try await Supa.shared.fetchLatestNotice()
+        } catch {
+            latestNotice = nil
         }
     }
 
@@ -188,6 +257,7 @@ struct HomeView: View {
 private struct TodayCardBody: View {
     let card: Card?
     let isLoading: Bool
+    let bookmarkCount: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -198,14 +268,32 @@ private struct TodayCardBody: View {
                 if let kw = card?.keywords.first {
                     Chip(text: kw, filled: false)
                 }
+                if let card {
+                    CardCountsRow(viewCount: card.viewCount ?? 0, bookmarkCount: bookmarkCount)
+                        .padding(.leading, 4)
+                }
                 Spacer()
             }
-            Spacer().frame(height: 28)
+            Spacer().frame(height: 20)
+            if let speaker {
+                Text(speaker)
+                    .font(.bodySans(17))
+                    .fontWeight(.bold)
+                    .foregroundStyle(.espresso)
+                Spacer().frame(height: 12)
+            }
             Text(card.map { "\u{201C}\($0.quote)\u{201D}" } ?? (isLoading ? "Loading…" : "—"))
                 .font(.headlineSerif(22))
                 .foregroundStyle(.espresso)
                 .fixedSize(horizontal: false, vertical: true)
                 .bookLeading(size: 22)
+            if let workLine {
+                Spacer().frame(height: 20)
+                Text(workLine)
+                    .font(.bodySans(16))
+                    .foregroundStyle(.walnut)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer().frame(height: 24)
             Hairline()
             Spacer().frame(height: 12)
@@ -222,6 +310,52 @@ private struct TodayCardBody: View {
             Text("Read Full Script").editorialButton(style: .filled)
         }
         .padding(20)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
+    }
+
+    private var speaker: String? {
+        guard let card else { return nil }
+        let names = card.work.characters
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !names.isEmpty else { return nil }
+        for line in card.scriptExcerpt.components(separatedBy: .newlines).prefix(6) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let head = trimmed.components(separatedBy: CharacterSet(charactersIn: ":：(")).first ?? trimmed
+            if names.contains(head) { return head }
+        }
+        return nil
+    }
+
+    private var workLine: String? {
+        guard let card else { return nil }
+        let title = card.work.subtitle?.isEmpty == false
+            ? "<\(card.work.title)> \(card.work.subtitle!)"
+            : "<\(card.work.title)>"
+        let format = card.work.format.displayName
+        return format.isEmpty ? "— \(title)" : "— \(format) \(title)"
+    }
+}
+
+private struct NoticeBanner: View {
+    let notice: Notice
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(notice.tag.uppercased()).labelCaps(color: .cta)
+            Text(notice.title)
+                .font(.titleSerif(17))
+                .foregroundStyle(.espresso)
+                .lineLimit(2)
+            Text(notice.body)
+                .font(.bodySans(13))
+                .foregroundStyle(.walnut)
+                .lineLimit(2)
+                .bookLeading(size: 13)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
     }
