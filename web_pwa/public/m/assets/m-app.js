@@ -146,7 +146,6 @@ const detailDescription = $('#detail-description');
 const detailDescriptionBlock = $('#detail-description-block');
 const detailDescSpacer = $('#detail-desc-spacer');
 const detailScript = $('#detail-script');
-const detailSpeaker = $('#detail-speaker');
 const detailSignificanceBlock = $('#detail-significance-block');
 const detailSignificance = $('#detail-significance');
 const detailCollectBtn = $('#detail-collect-btn');
@@ -3608,19 +3607,6 @@ function openDetail(card) {
     detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
   }
 
-  // 화자 — 대본 위. 추출 가능할 때만 표시. (KO 초기 렌더 → applyDetailLang 가 EN 토글 시 갱신)
-  if (detailSpeaker) {
-    const sp = isProseFormat(w.format)
-      ? ''
-      : extractSpeaker(card.script_excerpt, w.characters, card.quote);
-    if (sp) {
-      detailSpeaker.textContent = sp;
-      detailSpeaker.style.display = 'block';
-    } else {
-      detailSpeaker.style.display = 'none';
-    }
-  }
-
   // significance — 네 프롬프트(screen/opera/play/literature) 모두 생성하므로
   // format 게이팅 없이 값이 있으면 표시. ** 굵게 마커도 렌더.
   if (card.significance && String(card.significance).trim()) {
@@ -3711,21 +3697,6 @@ function applyDetailLang(lang) {
           ? escapeHtml(flowProseScript(scriptSrc || ''))
           : boldSpeakerLines(cleanForDisplay(scriptSrc || '', w.characters), w.characters);
     detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
-  }
-
-  // 화자 — EN/KO 토글 시 갱신. EN 은 영문 직접 추출 → 실패 시 한글 인덱스 매칭.
-  if (detailSpeaker) {
-    const sp = isProseFormat(w.format)
-      ? ''
-      : (useEn
-        ? extractSpeakerEn(scriptSrc, card.script_excerpt, w.characters, quoteSrc, card.quote)
-        : extractSpeaker(scriptSrc, w.characters, quoteSrc));
-    if (sp) {
-      detailSpeaker.textContent = sp;
-      detailSpeaker.style.display = 'block';
-    } else {
-      detailSpeaker.style.display = 'none';
-    }
   }
 
   // 상황 설명 (excerpt_description) + 의의 (significance) 스왑
