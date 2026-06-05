@@ -311,7 +311,8 @@
   .bottom-nav .nav-item.active .nav-dot { background: var(--cta); }
 
   /* Main content padding */
-  main { padding: 0 20px; }
+  /* main 영역(home/library/feed/notice/settings) padding-bottom 으로 bottom-nav 가림 방지 */
+  main { padding: 0 20px 80px; }
 
   /* Bookmark row spacing */
   .bookmark-row {
@@ -332,12 +333,12 @@
   }
 
   /* Detail screen modal (full screen sheet)
-     ★ 하단 메뉴(bottom-nav) 64px 항상 노출 — bottom: 64px 로 그 위까지만 차지.
-     안전영역(safe-area-inset-bottom) 고려해 max() 로 더 큰 값 사용. */
+     ★ inset: 0 으로 전체 화면 덮음. bottom-nav 는 z-index 51 로 위에 떠 있어
+     항상 보임. 닫힌 상태에서 translateY(100%) 가 완전히 화면 밖으로 빠지도록
+     element height = 100vh 보장. detail-body 의 padding-bottom 으로 content
+     가 bottom-nav(64px) 뒤에 숨는 것 방지. */
   .detail-screen {
-    position: fixed; top: 0; left: 0; right: 0;
-    bottom: max(64px, calc(64px + env(safe-area-inset-bottom)));
-    z-index: 50;
+    position: fixed; inset: 0; z-index: 50;
     background: var(--paper);
     display: flex; flex-direction: column;
     transform: translateY(100%);
@@ -350,7 +351,9 @@
   .detail-screen.open { transform: none; }
   .detail-body {
     flex: 1; overflow-y: auto;
-    padding: 40px 20px;
+    /* padding-bottom = bottom-nav(64px) + breathing 40px = 104px
+       → 마지막 콘텐츠가 항상 nav 위로 스크롤 가능 */
+    padding: 40px 20px 104px;
     text-align: center;
     /* 오버레이 내부 스크롤이 끝에 닿아도 body로 전파(=PTR 오발동)되지 않게 격리 */
     overscroll-behavior: contain;
@@ -460,6 +463,13 @@
   .script-mono::-moz-selection { background: rgba(216,90,48,0.22); color: var(--espresso); }
   .script-mono strong {
     font-family: 'Noto Sans KR', sans-serif;
+    font-weight: 700;
+  }
+  /* ★ 관리자 ** 굵게 마커 — 전역 강제 700.
+     본문 텍스트가 Nanum Myeongjo 같은 명조 폰트일 때 일부 환경에서 strong 의
+     기본 bold (= bolder 상속) 가 안 먹는 케이스 방지. quote-22 / t-body-* /
+     headline / title 모든 컨텍스트에서 동일 두께로 렌더. */
+  strong, b {
     font-weight: 700;
   }
   /* 상황설명 — 대사와 분리되도록 은은한 톤 블록으로 감싼다 */

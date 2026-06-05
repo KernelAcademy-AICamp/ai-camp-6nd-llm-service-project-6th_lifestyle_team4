@@ -283,30 +283,118 @@ function displayTitle(rawTitle) {
 function extractSpeaker(scriptExcerpt, characters, quote) {
   if (!scriptExcerpt) return '';
   // 긴 이름 우선 정렬 — "줄리엣의 유모"가 "줄리엣"보다 먼저 매칭되도록
-  const names = (Array.isArray(characters) ? characters : [])
+  const rawNames = (Array.isArray(characters) ? characters : [])
     .map((c) => String(c).trim())
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length);
+    .filter(Boolean);
+  // 영문 희곡 대비 — full name 외에도 first name 단독, 모두 후보로 추가
+  //   ["Huck Finn"] → ["Huck Finn", "Huck"]
+  const expanded = new Set();
+  for (const n of rawNames) {
+    expanded.add(n);
+    const parts = n.split(/\s+/);
+    if (parts.length > 1) expanded.add(parts[0]); // first name
+  }
+  const names = [...expanded].sort((a, b) => b.length - a.length);
+
+  // 영문 대문자 표기 동의어용 — 모든 비교는 case-insensitive
+  function startsWithName(line, name) {
+    // 정확/대소문자무시 prefix 매칭. 단, 이름 직후가 단어 경계여야 함 (이름이 다른 단어 prefix 가 아님)
+    if (line.length < name.length) return false;
+    if (line.slice(0, name.length).toLowerCase() !== name.toLowerCase()) return false;
+    const next = line[name.length];
+    if (!next) return true;                             // 라인 끝
+    if (/[A-Za-z0-9가-힯]/.test(next)) return false;   // 단어 계속 (다른 사람)
+    return true;
+  }
 
   // 한 줄이 화자 줄이면 { name, rest(같은 줄에 붙은 대사) } 반환, 아니면 null
-  function speakerOf(raw) {
+  function speakerOf(rawIn) {
+    let raw = rawIn;
+    // (전처리) 줄 앞 마커/번호 무시 — "- ANTIGONE" / "• Antigone" / "1. ANTIGONE" / "1) Antigone"
+    raw = String(raw).replace(/^[\s]*(?:[\-•·*]\s+|\d{1,3}[.)]\s+)/, '');
     const t = raw.trim();
     if (!t) return null;
-    // 1) characters 매칭 — 이름 뒤(공백 무시)가 콜론/괄호/줄끝일 때만 화자로 인정.
-    //    이름 뒤에 바로 단어·문장부호가 오면 화자 라벨이 아님:
-    //      "노라." (호격), "랑크 의사 당신도…"(다른 인물을 부르며 하는 노라의 대사) 등.
+    // 0) **볼드 라인** 폴백 — "**LYSANDER**" / "**Antigone**." / "**Hamlet** (지문)"
+    //    라인 전체가 볼드 + 선택적 종결자(.,:) + 선택적 지문 (...) 까지만 허용.
+    //    대사 안에 일부 단어만 볼드된 경우는 제외.
+    {
+      const bm = t.match(/^\*\*([^*\n]+?)\*\*\s*[.,:：]?\s*(\([^)\n]*\))?$/);
+      if (bm) {
+        const nm = bm[1].replace(/^[\s.,:：]+|[\s.,:：]+$/g, '').trim();
+        if (nm && nm.length <= 30) {
+          const rest = bm[2] ? bm[2].trim() : '';
+          return { name: nm, rest };
+        }
+      }
+    }
+    // 1) characters 매칭 — case-insensitive prefix + 이름 뒤가 콜론/마침표/괄호/줄끝
+    //    영문 추가: 마침표 "HUCK." / 콤마 "HUCK," 등 흔한 희곡 표기
     for (const name of names) {
-      if (!t.startsWith(name)) continue;
-      const tt = t.slice(name.length).trim();
-      if (tt === '') return { name, rest: '' };                          // 이름만
+      if (!startsWithName(t, name)) continue;
+      const tail = t.slice(name.length);
+      const tt = tail.trim();
+      if (tt === '') return { name, rest: '' };                                        // 이름만
       if (tt[0] === ':' || tt[0] === '：') return { name, rest: tt.slice(1).trim() };  // 이름: 대사
-      if (tt[0] === '(' || tt[0] === '（') return { name, rest: tt };     // 이름 (지문)
+      if (tt[0] === '(' || tt[0] === '（') return { name, rest: tt };                  // 이름 (지문)
+      if (tt[0] === '.' || tt[0] === ',') return { name, rest: tt.slice(1).trim() };   // 이름. / 이름,
+      if (tt[0] === '—' || tt[0] === '–') return { name, rest: tt.slice(1).trim() };   // 이름— / 이름–
+      if (tt[0] === ';') return { name, rest: tt.slice(1).trim() };                    // 이름;
+    }
+    // 1.5) 대괄호 화자 — "[ANTIGONE]" / "[Antigone]" / "[안티고네] 대사"
+    {
+      const bk = t.match(/^[\[【]([^\]】\n]{1,30})[\]】]\s*[:：.,—–]?\s*(.*)$/);
+      if (bk) {
+        const nm = bk[1].trim();
+        if (nm) return { name: nm, rest: (bk[2] || '').trim() };
+      }
     }
     // 2) 콜론 패턴 폴백 — "이름: 대사"
-    const m = t.match(/^([^\n:：—\-]{1,20})[:：]\s*(.*)$/);
+    let m = t.match(/^([^\n:：—\-]{1,30})[:：]\s*(.*)$/);
     if (m) {
       const nm = m[1].replace(/\s*[(（].*?[)）]\s*$/, '').trim();
       if (nm) return { name: nm, rest: m[2] || '' };
+    }
+    // 2.5) em-dash 종결자 — "ANTIGONE—대사" / "Antigone—대사"
+    {
+      const dm = t.match(/^([^\n—–\-:：()\[\]【】]{1,30})\s*[—–]\s*(.*)$/);
+      if (dm) {
+        const nm = dm[1].trim();
+        const rest = (dm[2] || '').trim();
+        // nm 이 너무 짧거나 dialogue 안의 em-dash 인 경우 제외 — nm 에 알파벳/한글이 있어야
+        if (nm.length >= 2 && /[A-Za-z가-힯]/.test(nm)) {
+          return { name: nm, rest };
+        }
+      }
+    }
+    // 3) 영문 희곡 ALL-CAPS 라벨 폴백 — 라인 전체가 라벨일 때만 (종결자 후 라인 끝)
+    //    "HUCK." / "HUCK" / "ANTIGONE—" / "ANTIGONE;"
+    //    (콜론/em-dash + 같은 줄 대사는 이미 위 2/2.5번이 처리)
+    m = t.match(/^([A-Z][A-Z .'\-]{0,28})\s*[.,—–;]?\s*$/);
+    if (m) {
+      const nm = m[1].replace(/[.,]/g, '').trim();
+      if (nm.length >= 2 && nm.length <= 30 && /^[A-Z][A-Z .'\-]*$/.test(nm)) {
+        return { name: nm, rest: '' };
+      }
+    }
+    // 4) Title Case 라벨 폴백 — 라인 전체가 라벨일 때만
+    //    "Antigone." / "Antigone—" / "Tom Sawyer." / "Lady Macbeth"
+    //    "I think." 같은 짧은 문장 오인 방지: 마지막 단어가 흔한 verb/접속사면 제외
+    if (t.length <= 30) {
+      const tm = t.match(/^([A-Z][a-zA-Z]{1,}(?:\s[A-Z][a-zA-Z]+){0,3})\s*[.,—–;]?\s*$/);
+      if (tm) {
+        const candidate = tm[1].trim();
+        // verb/접속사 제외 — 일반 영문 문장 첫 단어로 자주 등장하는 것
+        const lower = candidate.toLowerCase();
+        const FALSE_POS = new Set([
+          'i', 'then', 'but', 'and', 'or', 'so', 'now', 'yet', 'thus', 'still',
+          'said', 'replied', 'cried', 'asked', 'whispered', 'shouted',
+          'mr', 'mrs', 'ms', 'dr', 'sir', 'madam', 'lord', 'lady',
+          'chapter', 'scene', 'act', 'prologue', 'epilogue',
+        ]);
+        if (!FALSE_POS.has(lower) && candidate.length >= 3) {
+          return { name: candidate, rest: '' };
+        }
+      }
     }
     return null;
   }
@@ -326,7 +414,32 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
       cur.text += '\n' + raw;
     }
   }
-  if (blocks.length === 0) return '';
+
+  // 블록이 없으면 — 소설/내러티브: "said X" / "X said" dialogue tag 폴백
+  // quote 주변 ±200자에서 등장인물 이름과 said/replied/answered 결합 찾기
+  if (blocks.length === 0) {
+    if (!names.length) return '';
+    const fullText = String(scriptExcerpt);
+    const qn = norm(quote);
+    if (!qn) return '';
+    // quote 위치 추정 — normalized 비교는 위치 계산 어려우니 첫 일치 단어로
+    const firstWord = String(quote).split(/\s+/).find((w) => w.length >= 3) || '';
+    const idx = firstWord ? fullText.indexOf(firstWord) : -1;
+    const window = idx >= 0 ? fullText.slice(Math.max(0, idx - 200), idx + (quote.length || 0) + 200) : fullText;
+    // dialogue tag 패턴 — "said X", "X said", "X replied", "X answered", "asked X" 등
+    // 영문 verb (said|replied|answered|asked|exclaimed|cried|whispered|shouted|murmured)
+    const verbs = 'said|replied|answered|asked|exclaimed|cried|whispered|shouted|murmured|added|continued|remarked|observed|declared|muttered|interrupted';
+    for (const name of names) {
+      const nameEsc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // "X said" / "X replied"
+      const a = new RegExp(`\\b${nameEsc}\\s+(?:${verbs})\\b`, 'i');
+      if (a.test(window)) return name;
+      // "said X" / "replied X"
+      const b = new RegExp(`\\b(?:${verbs})\\s+${nameEsc}\\b`, 'i');
+      if (b.test(window)) return name;
+    }
+    return '';
+  }
 
   // quote가 들어있는 블록 찾기
   const qn = norm(quote);
@@ -911,9 +1024,10 @@ function loadBookmarks() {
   loadBookmarksInFlight = (async () => {
     if (!state.userId) return;
     const sb = await getSupabase();
+    // ★ *_original 컬럼 포함 — 영문 토글 동작에 필요. loadAllCards SELECT 와 동일.
     const { data, error } = await sb
       .from('user_bookmarks')
-      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters))')
+      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original))')
       .eq('user_id', state.userId)
       .order('created_at', { ascending: false });
     if (error) { console.warn('[m] bookmarks load failed:', error); return; }
@@ -1274,7 +1388,10 @@ function applyTodayCard(card) {
 
   // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
   const workTitle = displayTitle(card.works?.title || '');
-  const speaker = extractSpeaker(card.script_excerpt, card.works?.characters, card.quote);
+  // 산문(novel/essay/prose)은 화자 개념이 없어 머리말을 숨긴다 (대본/오페라 등만 화자 표시).
+  const speaker = isProseFormat(card.works?.format)
+    ? ''
+    : extractSpeaker(card.script_excerpt, card.works?.characters, card.quote);
   if (speaker) {
     todaySpeaker.textContent = speaker;
     todaySpeaker.style.display = 'block';
@@ -1344,7 +1461,9 @@ function applyTodayLang(lang) {
   // 화자(speaker) — EN 모드면 영문 script/quote 에서 다시 추출. 영문 대본의 'VICTOR:' 같은
   // 라벨이 화자로 잡혀 한국어 화자(예: '빅터') 대신 표시된다.
   if (todaySpeaker) {
-    const speaker = extractSpeaker(scriptSrc, w.characters, quoteSrc);
+    const speaker = isProseFormat(w.format)
+      ? ''
+      : extractSpeaker(scriptSrc, w.characters, quoteSrc);
     if (speaker) {
       todaySpeaker.textContent = speaker;
       todaySpeaker.style.display = 'block';
@@ -3368,12 +3487,11 @@ function openDetail(card) {
   const LANG_LABEL_KO = '원문(영문)으로 보기';
   const LANG_LABEL_EN = 'View in Korean';
   if (detailLangRow && detailLangBtn) {
-    const hasEn = !!(card.quote_original || card.script_excerpt_original ||
-                     card.excerpt_description_original || card.significance_original ||
-                     (Array.isArray(card.keywords_original) && card.keywords_original.length) ||
-                     w.title_original || w.subtitle_original || w.author_original);
-    detailLangRow.style.display = hasEn ? 'flex' : 'none';
-    if (detailLangSpacer) detailLangSpacer.style.display = hasEn ? '' : 'none';
+    // ★ 토글 항상 노출 — 옛날 카드(영문 _original 없음) 도 보이도록.
+    //   영문이 없으면 applyDetailLang 의 fallback (useEn && X_original ? X_original : X) 으로
+    //   한국어가 그대로 표시됨. Android DetailScreen 의 LangRow 항상 표시 패턴과 일치.
+    detailLangRow.style.display = 'flex';
+    if (detailLangSpacer) detailLangSpacer.style.display = '';
     // 매번 OFF(KR) 상태로 리셋 — 새 카드 진입 시 한국어부터
     detailLangBtn.classList.remove('on');
     detailLangBtn.setAttribute('aria-checked', 'false');

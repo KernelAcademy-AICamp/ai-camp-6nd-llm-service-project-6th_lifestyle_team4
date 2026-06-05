@@ -1273,6 +1273,55 @@ function buildCardViewNode(card, idx) {
   return node;
 }
 
+// 편집 textarea 의 현재 선택을 ** 로 토글 감싸기 (library.js 패턴 차용).
+// - 선택 없으면 커서 위치에 **굵게** 삽입 후 안쪽 글자 자동 선택
+// - 이미 양 끝이 ** 면 풀어줌 (토글)
+function toggleBoldOnTextarea(ta) {
+  if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const value = ta.value;
+  if (s === e) {
+    const placeholder = '굵게';
+    ta.value = value.slice(0, s) + '**' + placeholder + '**' + value.slice(e);
+    ta.focus();
+    ta.setSelectionRange(s + 2, s + 2 + placeholder.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  const selected = value.slice(s, e);
+  if (/^\*\*[\s\S]+\*\*$/.test(selected)) {
+    const unwrapped = selected.slice(2, -2);
+    ta.value = value.slice(0, s) + unwrapped + value.slice(e);
+    ta.focus();
+    ta.setSelectionRange(s, s + unwrapped.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  const wrapped = '**' + selected + '**';
+  ta.value = value.slice(0, s) + wrapped + value.slice(e);
+  ta.focus();
+  ta.setSelectionRange(s, s + wrapped.length);
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// 카드 편집 노드 안의 모든 .dash-bold-btn + 대응 textarea 에 클릭/단축키(Ctrl/Cmd+B) 부착.
+function wireBoldButtons(root) {
+  root.querySelectorAll('.dash-bold-btn').forEach((btn) => {
+    const sel = btn.dataset.boldFor;
+    const ta = sel ? root.querySelector(sel) : null;
+    if (!ta) return;
+    btn.addEventListener('click', (ev) => { ev.preventDefault(); toggleBoldOnTextarea(ta); });
+  });
+  root.querySelectorAll('textarea').forEach((ta) => {
+    ta.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        toggleBoldOnTextarea(ta);
+      }
+    });
+  });
+}
+
 function buildCardEditNode(card, idx) {
   const node = cardEditTemplate.content.firstElementChild.cloneNode(true);
 
@@ -1283,6 +1332,9 @@ function buildCardEditNode(card, idx) {
   const kwEl = node.querySelector('.edit-keywords');
   const tempEl = node.querySelector('.edit-temperature');
   const intensityEl = node.querySelector('.edit-intensity');
+
+  // 볼드 버튼 / 단축키 부착 (선택 → B 클릭 또는 Ctrl/Cmd+B → **굵게**)
+  wireBoldButtons(node);
 
   // 표시할 텍스트 선택 — 사용자가 KO 토글 상태면 번역본 우선, 아니면 source.
   // 또한 한쪽이 비었으면 다른 쪽으로 fallback (편집기에서 빈 칸 방지).

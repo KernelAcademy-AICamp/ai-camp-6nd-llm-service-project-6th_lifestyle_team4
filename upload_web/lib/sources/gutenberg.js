@@ -8,7 +8,10 @@
 // 큰 작품(예: War and Peace ~3MB)은 MAX_FETCH_CHARS 로 잘라낸다 — extract 가
 // 다시 400K 로 잘라내므로 의미 있는 한계.
 
-const GUTENDEX_BASE = 'https://gutendex.com/books';
+// trailing slash 필수 — gutendex 가 '/books' → '/books/' 로 301 리다이렉트하면
+// Node fetch 가 redirect 따라가며 응답이 8~15s 까지 늘어남 (12s timeout 자주 걸림).
+// '/books/' 로 직접 호출하면 redirect 없이 곧장 200 → 1~2s.
+const GUTENDEX_BASE = 'https://gutendex.com/books/';
 const WIKIPEDIA_KO_API = 'https://ko.wikipedia.org/w/api.php';
 const UA = 'CurtaincallScraperGB/0.1 (admin tool; contact: yub)';
 // 메타 조회용 짧은 timeout — Gutendex /books JSON 은 보통 1~5s. 12s 면 충분.
@@ -334,7 +337,8 @@ export async function fetchGutenbergText({ bookId, plainTextUrl }) {
 
   if (!textUrl) {
     if (!bookId) throw new Error('bookId or plainTextUrl required');
-    const j = await getJson(`${GUTENDEX_BASE}/${encodeURIComponent(bookId)}`);
+    // GUTENDEX_BASE 끝에 '/' 있으므로 중복 방지
+    const j = await getJson(`${GUTENDEX_BASE}${encodeURIComponent(bookId)}/`);
     metadata = j || null;
     textUrl = pickPlainTextUrl(j?.formats || {});
     if (!textUrl) {
