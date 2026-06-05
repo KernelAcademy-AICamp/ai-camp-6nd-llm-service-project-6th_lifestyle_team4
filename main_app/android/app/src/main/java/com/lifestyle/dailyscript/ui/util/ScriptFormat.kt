@@ -85,6 +85,19 @@ object ScriptFormat {
         fun speakerOf(raw: String): Pair<String, String>? {
             val t = raw.trim()
             if (t.isEmpty()) return null
+            // 0) **볼드 라인** 폴백 — "**LYSANDER**" / "**Antigone**." / "**Hamlet** (지문)"
+            //    라인 전체가 볼드 + 선택적 종결자 + 선택적 지문 까지만 허용 (부분 볼드는 제외).
+            run {
+                val boldLine = Regex("""^\*\*([^*\n]+?)\*\*\s*[.,:：]?\s*(\([^)\n]*\))?$""")
+                val bm = boldLine.find(t)
+                if (bm != null) {
+                    val nm = bm.groupValues[1].trim().trim('.', ',', ':', '：')
+                    if (nm.isNotEmpty() && nm.length <= 30) {
+                        val rest = bm.groupValues[2].trim()
+                        return nm to rest
+                    }
+                }
+            }
             // 1) 등록된 characters 매칭 (case-insensitive prefix, 다양한 종결자)
             for (name in names) {
                 val len = name.length

@@ -311,6 +311,19 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
   function speakerOf(raw) {
     const t = raw.trim();
     if (!t) return null;
+    // 0) **볼드 라인** 폴백 — "**LYSANDER**" / "**Antigone**." / "**Hamlet** (지문)"
+    //    라인 전체가 볼드 + 선택적 종결자(.,:) + 선택적 지문 (...) 까지만 허용.
+    //    대사 안에 일부 단어만 볼드된 경우는 제외.
+    {
+      const bm = t.match(/^\*\*([^*\n]+?)\*\*\s*[.,:：]?\s*(\([^)\n]*\))?$/);
+      if (bm) {
+        const nm = bm[1].replace(/^[\s.,:：]+|[\s.,:：]+$/g, '').trim();
+        if (nm && nm.length <= 30) {
+          const rest = bm[2] ? bm[2].trim() : '';
+          return { name: nm, rest };
+        }
+      }
+    }
     // 1) characters 매칭 — case-insensitive prefix + 이름 뒤가 콜론/마침표/괄호/줄끝
     //    영문 추가: 마침표 "HUCK." / 콤마 "HUCK," 등 흔한 희곡 표기
     for (const name of names) {
