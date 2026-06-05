@@ -3427,12 +3427,11 @@ function openDetail(card) {
   const LANG_LABEL_KO = '원문(영문)으로 보기';
   const LANG_LABEL_EN = 'View in Korean';
   if (detailLangRow && detailLangBtn) {
-    const hasEn = !!(card.quote_original || card.script_excerpt_original ||
-                     card.excerpt_description_original || card.significance_original ||
-                     (Array.isArray(card.keywords_original) && card.keywords_original.length) ||
-                     w.title_original || w.subtitle_original || w.author_original);
-    detailLangRow.style.display = hasEn ? 'flex' : 'none';
-    if (detailLangSpacer) detailLangSpacer.style.display = hasEn ? '' : 'none';
+    // ★ 토글 항상 노출 — 옛날 카드(영문 _original 없음) 도 보이도록.
+    //   영문이 없으면 applyDetailLang 의 fallback (useEn && X_original ? X_original : X) 으로
+    //   한국어가 그대로 표시됨. Android DetailScreen 의 LangRow 항상 표시 패턴과 일치.
+    detailLangRow.style.display = 'flex';
+    if (detailLangSpacer) detailLangSpacer.style.display = '';
     // 매번 OFF(KR) 상태로 리셋 — 새 카드 진입 시 한국어부터
     detailLangBtn.classList.remove('on');
     detailLangBtn.setAttribute('aria-checked', 'false');
