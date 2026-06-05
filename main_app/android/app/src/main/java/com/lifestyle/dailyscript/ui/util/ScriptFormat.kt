@@ -82,7 +82,9 @@ object ScriptFormat {
         if (scriptExcerpt.isNullOrBlank()) return ""
         val names = characters.map { it.trim() }.filter { it.isNotEmpty() }.sortedByDescending { it.length }
 
-        fun speakerOf(raw: String): Pair<String, String>? {
+        fun speakerOf(rawIn: String): Pair<String, String>? {
+            // (전처리) 줄 앞 마커/번호 무시 — "- ANTIGONE" / "• Antigone" / "1. ANTIGONE"
+            val raw = rawIn.replace(Regex("""^\s*(?:[\-•·*]\s+|\d{1,3}[.)]\s+)"""), "")
             val t = raw.trim()
             if (t.isEmpty()) return null
             // 0) **볼드 라인** 폴백 — "**LYSANDER**" / "**Antigone**." / "**Hamlet** (지문)"
@@ -112,6 +114,16 @@ object ScriptFormat {
                     ':', '：' -> return name to tt.substring(1).trim()
                     '(', '（' -> return name to tt
                     '.', ',' -> return name to tt.substring(1).trim()
+                    '—', '–' -> return name to tt.substring(1).trim()
+                    ';' -> return name to tt.substring(1).trim()
+                }
+            }
+            // 1.5) 대괄호 화자 — "[ANTIGONE]" / "[Antigone]" / "[안티고네] 대사"
+            run {
+                val bk = Regex("""^[\[【]([^\]】\n]{1,30})[\]】]\s*[:：.,—–]?\s*(.*)$""").find(t)
+                if (bk != null) {
+                    val nm = bk.groupValues[1].trim()
+                    if (nm.isNotEmpty()) return nm to bk.groupValues[2].trim()
                 }
             }
             // 2) "이름: 대사" 콜론 폴백
@@ -120,9 +132,20 @@ object ScriptFormat {
                 val nm = m.groupValues[1].replace(TRAILING_PAREN, "").trim()
                 if (nm.isNotEmpty()) return nm to m.groupValues[2]
             }
-            // 3) ALL-CAPS 영문 화자 폴백 — "HUCK." / "HUCK"
+            // 2.5) em-dash 종결자 — "ANTIGONE—대사" / "Antigone—대사"
+            run {
+                val dm = Regex("""^([^\n—–\-:：()\[\]【】]{1,30})\s*[—–]\s*(.*)$""").find(t)
+                if (dm != null) {
+                    val nm = dm.groupValues[1].trim()
+                    val rest = dm.groupValues[2].trim()
+                    if (nm.length >= 2 && Regex("[A-Za-z가-힯]").containsMatchIn(nm)) {
+                        return nm to rest
+                    }
+                }
+            }
+            // 3) ALL-CAPS 영문 화자 폴백 — 라인 전체가 라벨일 때만 (종결자 후 라인 끝)
             if (t.length in 2..30) {
-                val allCaps = Regex("""^([A-Z][A-Z .,'\-]{0,28})\.?,?$""")
+                val allCaps = Regex("""^([A-Z][A-Z .'\-]{0,28})\s*[.,—–;]?\s*$""")
                 val am = allCaps.find(t)
                 if (am != null) {
                     val nm = am.groupValues[1].replace(Regex("[.,]"), "").trim()
@@ -131,9 +154,9 @@ object ScriptFormat {
                     }
                 }
             }
-            // 4) Title Case 영문 화자 폴백 — "Antigone." / "Lady Macbeth"
+            // 4) Title Case 영문 화자 폴백 — 라인 전체가 라벨일 때만
             if (t.length <= 30) {
-                val titleCase = Regex("""^([A-Z][a-zA-Z]{1,}(?:\s[A-Z][a-zA-Z]+){0,3})\.?$""")
+                val titleCase = Regex("""^([A-Z][a-zA-Z]{1,}(?:\s[A-Z][a-zA-Z]+){0,3})\s*[.,—–;]?\s*$""")
                 val tm = titleCase.find(t)
                 if (tm != null) {
                     val candidate = tm.groupValues[1].trim()

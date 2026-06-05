@@ -308,7 +308,10 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
   }
 
   // 한 줄이 화자 줄이면 { name, rest(같은 줄에 붙은 대사) } 반환, 아니면 null
-  function speakerOf(raw) {
+  function speakerOf(rawIn) {
+    let raw = rawIn;
+    // (전처리) 줄 앞 마커/번호 무시 — "- ANTIGONE" / "• Antigone" / "1. ANTIGONE" / "1) Antigone"
+    raw = String(raw).replace(/^[\s]*(?:[\-•·*]\s+|\d{1,3}[.)]\s+)/, '');
     const t = raw.trim();
     if (!t) return null;
     // 0) **볼드 라인** 폴백 — "**LYSANDER**" / "**Antigone**." / "**Hamlet** (지문)"
@@ -334,6 +337,16 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
       if (tt[0] === ':' || tt[0] === '：') return { name, rest: tt.slice(1).trim() };  // 이름: 대사
       if (tt[0] === '(' || tt[0] === '（') return { name, rest: tt };                  // 이름 (지문)
       if (tt[0] === '.' || tt[0] === ',') return { name, rest: tt.slice(1).trim() };   // 이름. / 이름,
+      if (tt[0] === '—' || tt[0] === '–') return { name, rest: tt.slice(1).trim() };   // 이름— / 이름–
+      if (tt[0] === ';') return { name, rest: tt.slice(1).trim() };                    // 이름;
+    }
+    // 1.5) 대괄호 화자 — "[ANTIGONE]" / "[Antigone]" / "[안티고네] 대사"
+    {
+      const bk = t.match(/^[\[【]([^\]】\n]{1,30})[\]】]\s*[:：.,—–]?\s*(.*)$/);
+      if (bk) {
+        const nm = bk[1].trim();
+        if (nm) return { name: nm, rest: (bk[2] || '').trim() };
+      }
     }
     // 2) 콜론 패턴 폴백 — "이름: 대사"
     let m = t.match(/^([^\n:：—\-]{1,30})[:：]\s*(.*)$/);
@@ -341,20 +354,33 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
       const nm = m[1].replace(/\s*[(（].*?[)）]\s*$/, '').trim();
       if (nm) return { name: nm, rest: m[2] || '' };
     }
-    // 3) 영문 희곡 ALL-CAPS 라벨 폴백 — "HUCK." / "HUCK" 만 있고 다음 줄에 대사
-    //    조건: 라인 전체가 짧고(≤30자), 알파벳 모두 대문자, 마침표/콤마 제외 단어 1~3개
-    m = t.match(/^([A-Z][A-Z .,'\-]{0,28})\.?,?$/);
+    // 2.5) em-dash 종결자 — "ANTIGONE—대사" / "Antigone—대사"
+    {
+      const dm = t.match(/^([^\n—–\-:：()\[\]【】]{1,30})\s*[—–]\s*(.*)$/);
+      if (dm) {
+        const nm = dm[1].trim();
+        const rest = (dm[2] || '').trim();
+        // nm 이 너무 짧거나 dialogue 안의 em-dash 인 경우 제외 — nm 에 알파벳/한글이 있어야
+        if (nm.length >= 2 && /[A-Za-z가-힯]/.test(nm)) {
+          return { name: nm, rest };
+        }
+      }
+    }
+    // 3) 영문 희곡 ALL-CAPS 라벨 폴백 — 라인 전체가 라벨일 때만 (종결자 후 라인 끝)
+    //    "HUCK." / "HUCK" / "ANTIGONE—" / "ANTIGONE;"
+    //    (콜론/em-dash + 같은 줄 대사는 이미 위 2/2.5번이 처리)
+    m = t.match(/^([A-Z][A-Z .'\-]{0,28})\s*[.,—–;]?\s*$/);
     if (m) {
       const nm = m[1].replace(/[.,]/g, '').trim();
       if (nm.length >= 2 && nm.length <= 30 && /^[A-Z][A-Z .'\-]*$/.test(nm)) {
         return { name: nm, rest: '' };
       }
     }
-    // 4) Title Case 라벨 폴백 — "Antigone." / "Tom Sawyer." / "Lady Macbeth"
-    //    (Title Case 단어 1~4개 + 선택 마침표, 라인 ≤ 30자)
+    // 4) Title Case 라벨 폴백 — 라인 전체가 라벨일 때만
+    //    "Antigone." / "Antigone—" / "Tom Sawyer." / "Lady Macbeth"
     //    "I think." 같은 짧은 문장 오인 방지: 마지막 단어가 흔한 verb/접속사면 제외
     if (t.length <= 30) {
-      const tm = t.match(/^([A-Z][a-zA-Z]{1,}(?:\s[A-Z][a-zA-Z]+){0,3})\.?$/);
+      const tm = t.match(/^([A-Z][a-zA-Z]{1,}(?:\s[A-Z][a-zA-Z]+){0,3})\s*[.,—–;]?\s*$/);
       if (tm) {
         const candidate = tm[1].trim();
         // verb/접속사 제외 — 일반 영문 문장 첫 단어로 자주 등장하는 것
