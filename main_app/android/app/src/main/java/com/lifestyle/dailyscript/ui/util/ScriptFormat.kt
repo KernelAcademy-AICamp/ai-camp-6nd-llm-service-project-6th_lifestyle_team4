@@ -153,19 +153,17 @@ object ScriptFormat {
             val raw = rawIn.replace(Regex("""^\s*(?:[\-•·*]\s+|\d{1,3}[.)]\s+)"""), "")
             val t = raw.trim()
             if (t.isEmpty()) return null
-            // 0) **볼드 라인** 폴백 — 라인 시작이 **이름** + 종결자(:.,;—–) 또는 라인 끝 또는 (지문)
-            //    매칭: "**LYSANDER**" / "**Antigone**." / "**Poet**:" / "**Knight of the Mirror**;" /
-            //          "**Hamlet** (지문)" / "**Poet:**" (콜론이 별표 안쪽) / "**Antigone—**"
+            // 0) **볼드 라인** 폴백 — 한쪽 ** 만 있어도 매칭 (LLM 출력 깨진 볼드 라벨 포함)
+            //    "**CORDELIA" / "**Poet**" / "**Poet:**" / "**Knight of the Mirror**;" /
+            //    "**Hamlet** (지문)" / "POET**" 등
             run {
-                val boldLine = Regex("""^\s*\*\*([^*\n]+?)\*\*\s*(?:[:.,;—–]|$|\().*$""")
+                val boldLine = Regex("""^\s*\*+([^*\n]+?)(?:\*+|$)\s*(?:[:.,;—–]|$|\().*$""")
                 val bm = boldLine.find(t)
                 if (bm != null) {
                     val inner = bm.groupValues[1].trim()
                     val nm = inner.trim('.', ',', ':', '：', ';', '—', '–', ' ', '\t')
                     if (nm.isNotEmpty() && nm.length <= 40) {
-                        val after = t.substring(bm.range.last + 1).trim()
-                        // 별표 닫힘 직후 종결자/지문 부분 — 본문(rest) 으로
-                        val restMatch = Regex("""^\s*\*\*[^*\n]+?\*\*\s*([:.,;—–])?\s*(.*)$""").find(t)
+                        val restMatch = Regex("""^\s*\*+[^*\n]+?(?:\*+|$)\s*([:.,;—–])?\s*(.*)$""").find(t)
                         val rest = restMatch?.groupValues?.get(2)?.trim().orEmpty()
                         return nm to rest
                     }

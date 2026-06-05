@@ -314,17 +314,19 @@ function extractSpeaker(scriptExcerpt, characters, quote, opts = {}) {
     raw = String(raw).replace(/^[\s]*(?:[\-•·*]\s+|\d{1,3}[.)]\s+)/, '');
     const t = raw.trim();
     if (!t) return null;
-    // 0) **볼드 라인** 폴백 — 라인 시작이 **이름** + 종결자(:.,;—–) 또는 라인 끝 또는 (지문)
-    //    매칭: "**LYSANDER**" / "**Antigone**." / "**Poet**:" / "**Knight of the Mirror**;" /
-    //          "**Hamlet** (지문)" / "**Poet:**" (콜론이 별표 안쪽) / "**Antigone—**"
-    //    제외: dialogue 한가운데 부분 볼드 (`**emphasis**`), 라인 시작 ** 다음 일반 텍스트
+    // 0) **볼드 라인** 폴백 — 라인 시작이 **이름** (닫는 ** 또는 라인 끝) + 종결자/지문
+    //    매칭:
+    //      "**LYSANDER**" / "**Antigone**." / "**Poet**:" / "**Knight of the Mirror**;"
+    //      "**Hamlet** (지문)" / "**Poet:**" (콜론이 별표 안쪽) / "**Antigone—**"
+    //      "**CORDELIA"  — 한쪽만 (LLM 출력 깨진 볼드, 닫는 ** 없음. 라인 끝까지)
+    //      "POET**"      — 시작 ** 없음, 끝만 (드물지만 안전)
+    //    제외: dialogue 한가운데 부분 볼드 (`**emphasis** said something`),
+    //          라인 시작 ** 뒤 종결자 없는 일반 텍스트
     {
-      const bm = t.match(/^\s*\*\*([^*\n]+?)\*\*\s*(?:[:.,;—–]|$|\()(.*)$/);
+      const bm = t.match(/^\s*\*+([^*\n]+?)(?:\*+|$)\s*(?:[:.,;—–]|$|\()(.*)$/);
       if (bm) {
         let nm = bm[1].trim().replace(/^[\s.,:：;—–]+|[\s.,:：;—–]+$/g, '').trim();
         if (nm && nm.length <= 40) {
-          // 라인이 `**name**(지문)` 형태면 rest 안에 괄호가 다시 포함되어 들어갈 수 있으니
-          // 매칭 분기를 단순화 — 별표 닫힘 이후 텍스트 그대로 trim
           const restRaw = (bm[2] || '').trim();
           const rest = restRaw.replace(/^[:.,;—–]\s*/, '');
           return { name: nm, rest };
