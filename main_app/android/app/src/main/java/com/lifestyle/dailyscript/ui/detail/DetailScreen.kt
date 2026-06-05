@@ -82,6 +82,7 @@ import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.ScreenplayMono
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.Markdown
+import com.lifestyle.dailyscript.ui.util.MarkdownBoldTransformation
 import com.lifestyle.dailyscript.ui.util.ScriptFormat
 import com.lifestyle.dailyscript.ui.util.descriptionFor
 import com.lifestyle.dailyscript.ui.util.displayAuthor
@@ -236,10 +237,11 @@ fun DetailScreen(
                 MetadataChipsRow(card = card, english = english, bookmarkCount = state.bookmarkCount)
                 Box(modifier = Modifier.height(24.dp))
 
-                if (hasEn) {
-                    LangRow(english = english, onToggle = { english = !english })
-                    Box(modifier = Modifier.height(20.dp))
-                }
+                // ★ LangRow 항상 노출 — 북마크/feed 카드도 동일하게 토글 보이게.
+                //   영문 원본 없으면 quoteFor/scriptFor 가 한국어로 fallback (Format.kt).
+                //   PWA m-app.js 의 lib-lang-toggle "항상 노출" 패턴과 일치.
+                LangRow(english = english, onToggle = { english = !english })
+                Box(modifier = Modifier.height(20.dp))
 
                 val description = card.descriptionFor(english)
                 if (!description.isNullOrBlank()) {
@@ -477,8 +479,11 @@ private fun ScriptBody(
 ) {
     val format = card.works?.format
     val names = card.works?.characterList().orEmpty()
+    // ★ MarkdownBoldTransformation — **bold** 마커를 실제 굵게로 렌더 + speaker bold 같이 처리.
+    // 이전엔 SpeakerBoldTransformation 만 사용해 **** 마커가 그대로 노출됐음 (관리자 페이지는 굵게 보이는데).
     val transformation = remember(names, format) {
-        if (ScriptFormat.usesSpeakerBold(format)) SpeakerBoldTransformation(names) else VisualTransformation.None
+        val speakerNames = if (ScriptFormat.usesSpeakerBold(format)) names else emptyList()
+        MarkdownBoldTransformation(speakerNames)
     }
     CompositionLocalProvider(
         LocalTextSelectionColors provides HighlightSelectionColors,
