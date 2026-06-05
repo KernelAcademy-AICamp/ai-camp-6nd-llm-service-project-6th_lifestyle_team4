@@ -74,12 +74,45 @@ object ScriptFormat {
     private val WS = Regex("\\s+")
     private val QUOTE_CHARS = Regex("[\"“”'`’]")
 
+    private data class SpeakerResult(
+        val speaker: String,
+        val blocks: List<Pair<String, String>>,
+        val foundIdx: Int,
+    )
+
     /**
      * The speaker of [quote] within [scriptExcerpt], using [characters] (mirrors the PWA's
      * extractSpeaker). Returns "" when ambiguous / not found.
      */
     fun extractSpeaker(scriptExcerpt: String?, characters: List<String>, quote: String?): String {
-        if (scriptExcerpt.isNullOrBlank()) return ""
+        return extractSpeakerInternal(scriptExcerpt, characters, quote)?.speaker ?: ""
+    }
+
+    /**
+     * EN-mode speaker — tries English script directly, then falls back to KO block index
+     * matching to read the EN label at the same block position. Same-script-same-order
+     * assumption mirrors the PWA's extractSpeakerEn. Korean chars in the EN label are
+     * suppressed to prevent KO names leaking into the EN view.
+     */
+    fun extractSpeakerEn(
+        scriptEn: String?,
+        scriptKo: String?,
+        characters: List<String>,
+        quoteEn: String?,
+        quoteKo: String?,
+    ): String {
+        val en = extractSpeakerInternal(scriptEn, characters, quoteEn) ?: return ""
+        if (en.speaker.isNotEmpty()) return en.speaker
+        val ko = extractSpeakerInternal(scriptKo, characters, quoteKo) ?: return ""
+        val i = ko.foundIdx
+        if (i < 0 || i >= en.blocks.size) return ""
+        val label = en.blocks[i].first
+        if (Regex("[가-힯]").containsMatchIn(label)) return ""
+        return label
+    }
+
+    private fun extractSpeakerInternal(scriptExcerpt: String?, characters: List<String>, quote: String?): SpeakerResult? {
+        if (scriptExcerpt.isNullOrBlank()) return null
         val names = characters.map { it.trim() }.filter { it.isNotEmpty() }.sortedByDescending { it.length }
 
         fun speakerOf(rawIn: String): Pair<String, String>? {
@@ -189,19 +222,30 @@ object ScriptFormat {
                 cur.text += "\n" + raw
             }
         }
-        if (blocks.isEmpty()) return ""
+        val blockPairs: List<Pair<String, String>> = blocks.map { it.speaker to it.text }
+        if (blocks.isEmpty()) return SpeakerResult("", blockPairs, -1)
 
+        var foundIdx = -1
         val qn = norm(quote)
         if (qn.isNotEmpty()) {
-            for (b in blocks) if (norm(b.text).contains(qn)) return b.speaker
-            val firstLine = (quote ?: "").split("\n").map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: ""
-            val fln = norm(firstLine)
-            if (fln.length >= 4) {
-                for (b in blocks) if (norm(b.text).contains(fln)) return b.speaker
+            foundIdx = blocks.indexOfFirst { norm(it.text).contains(qn) }
+            if (foundIdx < 0) {
+                val firstLine = (quote ?: "").split("\n").map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: ""
+                val fln = norm(firstLine)
+                if (fln.length >= 4) {
+                    foundIdx = blocks.indexOfFirst { norm(it.text).contains(fln) }
+                }
             }
         }
-        val distinct = blocks.map { it.speaker }.toSet()
-        return if (distinct.size == 1) blocks[0].speaker else ""
+        var speaker = if (foundIdx >= 0) blocks[foundIdx].speaker else ""
+        if (speaker.isEmpty()) {
+            val distinct = blocks.map { it.speaker }.toSet()
+            if (distinct.size == 1) {
+                speaker = blocks[0].speaker
+                foundIdx = 0
+            }
+        }
+        return SpeakerResult(speaker, blockPairs, foundIdx)
     }
 
     private fun cleanForDisplay(s: String, characterNames: List<String>): String {

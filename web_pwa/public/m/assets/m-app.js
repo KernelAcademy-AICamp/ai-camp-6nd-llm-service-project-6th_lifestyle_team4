@@ -280,8 +280,8 @@ function displayTitle(rawTitle) {
 //   화자 줄 판별 1순위: works.characters 배열과 라인 시작 매칭
 //                2순위: "이름: 대사" 콜론 패턴 (콜론 앞 20자 미만)
 // quote를 못 찾으면: 화자가 한 명뿐인 발췌문이면 그 화자, 여럿이면 ''(틀린 추측 대신 미표시).
-function extractSpeaker(scriptExcerpt, characters, quote) {
-  if (!scriptExcerpt) return '';
+function extractSpeaker(scriptExcerpt, characters, quote, opts = {}) {
+  if (!scriptExcerpt) return opts.returnBlocks ? { speaker: '', blocks: [], foundIdx: -1 } : '';
   // 긴 이름 우선 정렬 — "줄리엣의 유모"가 "줄리엣"보다 먼저 매칭되도록
   const rawNames = (Array.isArray(characters) ? characters : [])
     .map((c) => String(c).trim())
@@ -418,48 +418,71 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
   // 블록이 없으면 — 소설/내러티브: "said X" / "X said" dialogue tag 폴백
   // quote 주변 ±200자에서 등장인물 이름과 said/replied/answered 결합 찾기
   if (blocks.length === 0) {
-    if (!names.length) return '';
+    const finalize = (sp) => opts.returnBlocks ? { speaker: sp, blocks: [], foundIdx: -1 } : sp;
+    if (!names.length) return finalize('');
     const fullText = String(scriptExcerpt);
     const qn = norm(quote);
-    if (!qn) return '';
-    // quote 위치 추정 — normalized 비교는 위치 계산 어려우니 첫 일치 단어로
+    if (!qn) return finalize('');
     const firstWord = String(quote).split(/\s+/).find((w) => w.length >= 3) || '';
     const idx = firstWord ? fullText.indexOf(firstWord) : -1;
     const window = idx >= 0 ? fullText.slice(Math.max(0, idx - 200), idx + (quote.length || 0) + 200) : fullText;
-    // dialogue tag 패턴 — "said X", "X said", "X replied", "X answered", "asked X" 등
-    // 영문 verb (said|replied|answered|asked|exclaimed|cried|whispered|shouted|murmured)
     const verbs = 'said|replied|answered|asked|exclaimed|cried|whispered|shouted|murmured|added|continued|remarked|observed|declared|muttered|interrupted';
     for (const name of names) {
       const nameEsc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // "X said" / "X replied"
       const a = new RegExp(`\\b${nameEsc}\\s+(?:${verbs})\\b`, 'i');
-      if (a.test(window)) return name;
-      // "said X" / "replied X"
+      if (a.test(window)) return finalize(name);
       const b = new RegExp(`\\b(?:${verbs})\\s+${nameEsc}\\b`, 'i');
-      if (b.test(window)) return name;
+      if (b.test(window)) return finalize(name);
     }
-    return '';
+    return finalize('');
   }
 
-  // quote가 들어있는 블록 찾기
+  // quote가 들어있는 블록 찾기 — foundIdx 추적 (cross-lang 매칭용)
+  let foundIdx = -1;
   const qn = norm(quote);
   if (qn) {
-    for (const b of blocks) {
-      if (norm(b.text).includes(qn)) return b.speaker;
-    }
-    // quote 첫 문장만으로 재시도 (발췌문엔 quote 일부만 있을 때)
-    const firstLine = String(quote).split('\n').map((s) => s.trim()).find(Boolean) || '';
-    const fln = norm(firstLine);
-    if (fln.length >= 4) {
-      for (const b of blocks) {
-        if (norm(b.text).includes(fln)) return b.speaker;
+    foundIdx = blocks.findIndex((b) => norm(b.text).includes(qn));
+    if (foundIdx < 0) {
+      // quote 첫 문장만으로 재시도 (발췌문엔 quote 일부만 있을 때)
+      const firstLine = String(quote).split('\n').map((s) => s.trim()).find(Boolean) || '';
+      const fln = norm(firstLine);
+      if (fln.length >= 4) {
+        foundIdx = blocks.findIndex((b) => norm(b.text).includes(fln));
       }
     }
   }
+  let speaker = foundIdx >= 0 ? blocks[foundIdx].speaker : '';
 
   // 못 찾음 — 화자 한 명뿐(독백 등)이면 그 화자, 여럿이면 틀린 추측 대신 미표시
-  const distinct = new Set(blocks.map((b) => b.speaker));
-  return distinct.size === 1 ? blocks[0].speaker : '';
+  if (!speaker) {
+    const distinct = new Set(blocks.map((b) => b.speaker));
+    if (distinct.size === 1) {
+      speaker = blocks[0].speaker;
+      foundIdx = 0;
+    }
+  }
+
+  return opts.returnBlocks ? { speaker, blocks, foundIdx } : speaker;
+}
+
+// EN 모드 화자 추출 — 영문 script 에서 직접 추출 시도, 실패 시 한글 quote → 한글 블록
+// 인덱스 → 영문 블록 같은 인덱스의 영문 라벨을 가져온다. 영문/한글 발췌문이 같은 순서의
+// 같은 인물 대사를 담는다는 가정 (LLM 번역으로 보장됨). 영문 추출이 안 잡히는 카드에서도
+// 영문 이름을 보장하면서 한글 이름이 영문 모드에 섞이지 않게 한다.
+function extractSpeakerEn(scriptEn, scriptKo, characters, quoteEn, quoteKo) {
+  if (!scriptEn) return '';
+  // 1) 영문 script 직접 추출
+  const enResult = extractSpeaker(scriptEn, characters, quoteEn, { returnBlocks: true });
+  if (enResult.speaker) return enResult.speaker;
+  // 2) 한글 quote → 한글 블록 인덱스 → 영문 블록 같은 인덱스 라벨
+  if (!scriptKo) return '';
+  const koResult = extractSpeaker(scriptKo, characters, quoteKo, { returnBlocks: true });
+  const i = koResult.foundIdx;
+  if (i < 0 || i >= enResult.blocks.length) return '';
+  const enLabel = enResult.blocks[i]?.speaker || '';
+  // 한글 라벨이 그대로 영문 모드에 노출되지 않도록 — 한글 음절이 있으면 미표시
+  if (/[가-힯]/.test(enLabel)) return '';
+  return enLabel;
 }
 
 // ---------- 추천 관련 상수 ----------
@@ -1458,12 +1481,15 @@ function applyTodayLang(lang) {
 
   todayQuote.innerHTML = `“${renderMarkdownBold(cleanQuote(quoteSrc))}”`;
 
-  // 화자(speaker) — EN 모드면 영문 script/quote 에서만 추출.
-  // 영문 카드에 한글 이름이 섞이지 않도록 한글 폴백 금지 — 영문에서 못 잡으면 미표시.
+  // 화자(speaker) — EN 모드면 영문 script 직접 추출 → 실패 시 한글 블록 인덱스로
+  // 영문 같은 인덱스 라벨 매칭 (cross-lang). 한글 이름이 영문 모드에 섞이지 않게
+  // extractSpeakerEn 내부에서 가드. KO 모드면 평소대로 한글 script 추출.
   if (todaySpeaker) {
     const speaker = isProseFormat(w.format)
       ? ''
-      : extractSpeaker(scriptSrc, w.characters, quoteSrc);
+      : (useEn
+        ? extractSpeakerEn(scriptSrc, card.script_excerpt, w.characters, quoteSrc, card.quote)
+        : extractSpeaker(scriptSrc, w.characters, quoteSrc));
     if (speaker) {
       todaySpeaker.textContent = speaker;
       todaySpeaker.style.display = 'block';
