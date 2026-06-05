@@ -40,7 +40,9 @@ final class Supa {
     private let feedCardColumns = """
     cards(card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
     keywords, temperature, intensity, view_count, \
-    work:works(title, subtitle, format, author, release_year, characters, work_genres(genres(name))))
+    quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, \
+    work:works(title, subtitle, format, author, release_year, characters, \
+    title_original, subtitle_original, author_original, work_genres(genres(name))))
     """
 
     private var feedPostColumns: String {

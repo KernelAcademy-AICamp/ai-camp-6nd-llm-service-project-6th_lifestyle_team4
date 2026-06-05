@@ -24,11 +24,18 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
 
     var id: Int { cardId }
 
-    /// True only when this card actually carries original-language text to
-    /// toggle to. Mirrors the PWA's `hasEn` check (quote/title/subtitle/author
-    /// originals). When false, the KR/ENG toggle is hidden entirely.
+    /// True when this card carries any original-language text the KR/ENG views
+    /// can surface. Covers every field Home/Detail can swap — including
+    /// partially-backfilled rows that only have, say, `script_excerpt_original`
+    /// — so the toggle is offered whenever it would show useful content. When
+    /// false, the toggle is hidden entirely.
     var hasOriginalLanguage: Bool {
-        quoteOriginal.filledValue != nil || work.hasOriginalLanguage
+        quoteOriginal.filledValue != nil
+            || scriptExcerptOriginal.filledValue != nil
+            || excerptDescriptionOriginal.filledValue != nil
+            || significanceOriginal.filledValue != nil
+            || (keywordsOriginal?.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false)
+            || work.hasOriginalLanguage
     }
 
     // Explicit snake_case keys so decoding is independent of any global
