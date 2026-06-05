@@ -283,30 +283,59 @@ function displayTitle(rawTitle) {
 function extractSpeaker(scriptExcerpt, characters, quote) {
   if (!scriptExcerpt) return '';
   // 긴 이름 우선 정렬 — "줄리엣의 유모"가 "줄리엣"보다 먼저 매칭되도록
-  const names = (Array.isArray(characters) ? characters : [])
+  const rawNames = (Array.isArray(characters) ? characters : [])
     .map((c) => String(c).trim())
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length);
+    .filter(Boolean);
+  // 영문 희곡 대비 — full name 외에도 first name 단독, 모두 후보로 추가
+  //   ["Huck Finn"] → ["Huck Finn", "Huck"]
+  const expanded = new Set();
+  for (const n of rawNames) {
+    expanded.add(n);
+    const parts = n.split(/\s+/);
+    if (parts.length > 1) expanded.add(parts[0]); // first name
+  }
+  const names = [...expanded].sort((a, b) => b.length - a.length);
+
+  // 영문 대문자 표기 동의어용 — 모든 비교는 case-insensitive
+  function startsWithName(line, name) {
+    // 정확/대소문자무시 prefix 매칭. 단, 이름 직후가 단어 경계여야 함 (이름이 다른 단어 prefix 가 아님)
+    if (line.length < name.length) return false;
+    if (line.slice(0, name.length).toLowerCase() !== name.toLowerCase()) return false;
+    const next = line[name.length];
+    if (!next) return true;                             // 라인 끝
+    if (/[A-Za-z0-9가-힯]/.test(next)) return false;   // 단어 계속 (다른 사람)
+    return true;
+  }
 
   // 한 줄이 화자 줄이면 { name, rest(같은 줄에 붙은 대사) } 반환, 아니면 null
   function speakerOf(raw) {
     const t = raw.trim();
     if (!t) return null;
-    // 1) characters 매칭 — 이름 뒤(공백 무시)가 콜론/괄호/줄끝일 때만 화자로 인정.
-    //    이름 뒤에 바로 단어·문장부호가 오면 화자 라벨이 아님:
-    //      "노라." (호격), "랑크 의사 당신도…"(다른 인물을 부르며 하는 노라의 대사) 등.
+    // 1) characters 매칭 — case-insensitive prefix + 이름 뒤가 콜론/마침표/괄호/줄끝
+    //    영문 추가: 마침표 "HUCK." / 콤마 "HUCK," 등 흔한 희곡 표기
     for (const name of names) {
-      if (!t.startsWith(name)) continue;
-      const tt = t.slice(name.length).trim();
-      if (tt === '') return { name, rest: '' };                          // 이름만
+      if (!startsWithName(t, name)) continue;
+      const tail = t.slice(name.length);
+      const tt = tail.trim();
+      if (tt === '') return { name, rest: '' };                                        // 이름만
       if (tt[0] === ':' || tt[0] === '：') return { name, rest: tt.slice(1).trim() };  // 이름: 대사
-      if (tt[0] === '(' || tt[0] === '（') return { name, rest: tt };     // 이름 (지문)
+      if (tt[0] === '(' || tt[0] === '（') return { name, rest: tt };                  // 이름 (지문)
+      if (tt[0] === '.' || tt[0] === ',') return { name, rest: tt.slice(1).trim() };   // 이름. / 이름,
     }
     // 2) 콜론 패턴 폴백 — "이름: 대사"
-    const m = t.match(/^([^\n:：—\-]{1,20})[:：]\s*(.*)$/);
+    let m = t.match(/^([^\n:：—\-]{1,30})[:：]\s*(.*)$/);
     if (m) {
       const nm = m[1].replace(/\s*[(（].*?[)）]\s*$/, '').trim();
       if (nm) return { name: nm, rest: m[2] || '' };
+    }
+    // 3) 영문 희곡 ALL-CAPS 라벨 폴백 — "HUCK." / "HUCK" 만 있고 다음 줄에 대사
+    //    조건: 라인 전체가 짧고(≤30자), 알파벳 모두 대문자, 마침표/콤마 제외 단어 1~3개
+    m = t.match(/^([A-Z][A-Z .,'\-]{0,28})\.?,?$/);
+    if (m) {
+      const nm = m[1].replace(/[.,]/g, '').trim();
+      if (nm.length >= 2 && nm.length <= 30 && /^[A-Z][A-Z .'\-]*$/.test(nm)) {
+        return { name: nm, rest: '' };
+      }
     }
     return null;
   }
@@ -326,7 +355,32 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
       cur.text += '\n' + raw;
     }
   }
-  if (blocks.length === 0) return '';
+
+  // 블록이 없으면 — 소설/내러티브: "said X" / "X said" dialogue tag 폴백
+  // quote 주변 ±200자에서 등장인물 이름과 said/replied/answered 결합 찾기
+  if (blocks.length === 0) {
+    if (!names.length) return '';
+    const fullText = String(scriptExcerpt);
+    const qn = norm(quote);
+    if (!qn) return '';
+    // quote 위치 추정 — normalized 비교는 위치 계산 어려우니 첫 일치 단어로
+    const firstWord = String(quote).split(/\s+/).find((w) => w.length >= 3) || '';
+    const idx = firstWord ? fullText.indexOf(firstWord) : -1;
+    const window = idx >= 0 ? fullText.slice(Math.max(0, idx - 200), idx + (quote.length || 0) + 200) : fullText;
+    // dialogue tag 패턴 — "said X", "X said", "X replied", "X answered", "asked X" 등
+    // 영문 verb (said|replied|answered|asked|exclaimed|cried|whispered|shouted|murmured)
+    const verbs = 'said|replied|answered|asked|exclaimed|cried|whispered|shouted|murmured|added|continued|remarked|observed|declared|muttered|interrupted';
+    for (const name of names) {
+      const nameEsc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // "X said" / "X replied"
+      const a = new RegExp(`\\b${nameEsc}\\s+(?:${verbs})\\b`, 'i');
+      if (a.test(window)) return name;
+      // "said X" / "replied X"
+      const b = new RegExp(`\\b(?:${verbs})\\s+${nameEsc}\\b`, 'i');
+      if (b.test(window)) return name;
+    }
+    return '';
+  }
 
   // quote가 들어있는 블록 찾기
   const qn = norm(quote);
