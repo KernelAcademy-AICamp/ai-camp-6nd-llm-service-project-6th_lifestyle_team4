@@ -965,9 +965,10 @@ function loadBookmarks() {
   loadBookmarksInFlight = (async () => {
     if (!state.userId) return;
     const sb = await getSupabase();
+    // ★ *_original 컬럼 포함 — 영문 토글 동작에 필요. loadAllCards SELECT 와 동일.
     const { data, error } = await sb
       .from('user_bookmarks')
-      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters))')
+      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original))')
       .eq('user_id', state.userId)
       .order('created_at', { ascending: false });
     if (error) { console.warn('[m] bookmarks load failed:', error); return; }
