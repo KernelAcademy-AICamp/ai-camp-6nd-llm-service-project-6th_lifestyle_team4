@@ -921,6 +921,50 @@ function isIncompleteQuote(quote) {
   return false;
 }
 
+// script_excerpt 의 첫·끝 문장 잘림 검출 — 사용자 정의:
+//   "잘렸다는 건 제일 앞 문장과 제일 뒷 문장이 단어가 제대로 안 적혀있거나 문장이 끝나지 않은 경우"
+// 검사:
+//   끝) 하이픈/언더스코어로 끝남, 또는 문장 종결자 없음
+//   앞) 첫 의미 라인의 첫 토큰이 짧은 영문 소문자 fragment (일반 영어 단어 제외)
+//        화자 라벨·괄호 지문·ALL CAPS 라인은 건너뛰고 첫 본문 라인부터 검사.
+function isIncompleteScript(script) {
+  if (!script) return false;
+  const s = String(script).trim();
+  if (s.length < 50) return false; // 빈/짧은 카드는 별도 검증에서 처리
+
+  // === 끝 문장 검사 ===
+  // 끝이 하이픈/언더스코어 → 단어 잘림 ("we w-")
+  if (/[-_]\s*$/.test(s)) return true;
+  // 끝이 문장 종결자 아님 (영문/한글 종결 + 닫힘 따옴표/괄호 + 무대지시 닫힘)
+  if (!/[.!?"'”’…。！？\)\）\]\】]\s*$/.test(s)) return true;
+
+  // === 앞 문장 검사 ===
+  const lines = s.split('\n').map((l) => l.trim()).filter(Boolean);
+  const COMMON_SHORT_EN = new Set([
+    'a','an','i','is','it','in','on','of','to','or','no','so','we','me','my',
+    'be','by','at','as','if','do','go','up','us','he','am','oh','ah','ha',
+  ]);
+  for (const line of lines) {
+    // 라벨/지문 라인 건너뜀 (화자 표기는 검사 대상 아님)
+    const isLabel = line.length <= 30 && (
+      /^\*+/.test(line) ||                        // ** 시작 (볼드 라벨)
+      /:$/.test(line) ||                          // 콜론으로 끝 (Speaker:)
+      /^\(.*\)$/.test(line) ||                    // 괄호 지문
+      /^[A-Z][A-Z .'\-]*$/.test(line)             // ALL CAPS 라벨
+    );
+    if (isLabel) continue;
+    if (line.length < 10) continue; // 한두 단어 외침은 검사 skip
+    // 첫 토큰이 영문 소문자 1~3글자 fragment + 일반 단어 아님 → 잘린 단어로 판정
+    // (예: "rd I think..." 의 "rd")
+    const firstToken = (line.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
+    if (/^[a-z]{1,3}$/.test(firstToken) && !COMMON_SHORT_EN.has(firstToken.toLowerCase())) {
+      return true;
+    }
+    break; // 첫 본문 라인만 검사
+  }
+  return false;
+}
+
 export function validateAndFilterCards(cards, category) {
   if (!Array.isArray(cards)) {
     return { cards: [], summary: { total: 0, kept: 0, dropped_identical: 0, dropped_short: 0, dropped_incomplete: 0, min_chars: 0, category } };
@@ -940,8 +984,9 @@ export function validateAndFilterCards(cards, category) {
       const ratio = q.length / s.length;
       if (ratio >= QUOTE_RATIO_TOO_HIGH) return { c, drop: 'identical' };
     }
-    // ★ 잘린 문장 — PDF 추출 아티팩트로 단어/문장 중간에서 끊긴 quote 제외
+    // ★ 잘린 문장 — PDF 추출 아티팩트로 단어/문장 중간에서 끊긴 quote 또는 script 제외
     if (isIncompleteQuote(c?.quote)) return { c, drop: 'incomplete' };
+    if (isIncompleteScript(c?.script_excerpt)) return { c, drop: 'incomplete' };
     // 길이 미달
     if (minChars > 0 && (!c?.script_excerpt || String(c.script_excerpt).length < minChars)) {
       return { c, drop: 'short' };
