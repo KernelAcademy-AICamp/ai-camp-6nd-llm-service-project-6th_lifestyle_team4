@@ -598,7 +598,7 @@ function renderLibrary() {
 
   // 상태 표시 — 총 카드 / 현재 화면(필터 적용 후) 갯수.
   // 별도의 백필 진행 상태 표시 중에는 덮지 않음 (libraryStatus 에 '백필 중⋯' 가 떠 있으면 유지).
-  if (libraryStatus && !/백필 중|채우는 중|불러오는 중/.test(libraryStatus.textContent)) {
+  if (libraryStatus && !/백필 중|채우는 중/.test(libraryStatus.textContent)) {
     const total = state.rows.length;
     const visible = rows.length;
     libraryStatus.textContent = (total === visible)
