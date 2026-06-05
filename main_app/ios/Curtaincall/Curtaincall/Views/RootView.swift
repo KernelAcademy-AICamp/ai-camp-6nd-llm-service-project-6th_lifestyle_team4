@@ -104,7 +104,10 @@ struct RootView: View {
         }
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            EditorialTabBar(selection: $selectedTab)
+            EditorialTabBar(selection: Binding(
+                get: { selectedTab },
+                set: { selectTab($0) }
+            ))
         }
         .overlay {
             if showArchivePrompt {
@@ -118,6 +121,25 @@ struct RootView: View {
                     showArchivePrompt = false
                 }
             }
+        }
+    }
+
+    /// Tab-bar selection handler. Switching tabs just changes the selection;
+    /// re-tapping the already-active tab pops that tab's stack back to its root.
+    /// This restores the native "tap selected tab → pop to root" behavior lost
+    /// when the system tab bar was hidden, and matches Android, where a bottom-
+    /// nav tap returns to that tab's root (`navigate(route){ popUpTo(HOME) }`).
+    /// Without it, tapping Home while viewing a card detail did nothing.
+    private func selectTab(_ tab: Tab) {
+        guard tab == selectedTab else {
+            selectedTab = tab
+            return
+        }
+        switch tab {
+        case .home: homePath = NavigationPath()
+        case .archive: archivePath = NavigationPath()
+        case .feed: feedPath = NavigationPath()
+        case .notice, .settings: break  // stackless — no path to pop
         }
     }
 
