@@ -8,6 +8,7 @@ struct HomeView: View {
 
     @State private var allCards: [Card] = []
     @State private var todayCard: Card?
+    @State private var todayShowOriginal = false
     @State private var recent: [Card] = []
     @State private var hasLoaded = false
     @State private var isLoading = false
@@ -54,9 +55,16 @@ struct HomeView: View {
                     Spacer().frame(height: 20)
 
                     if let card = todayCard {
+                        if card.hasHomeOriginalLanguage {
+                            HStack {
+                                Spacer()
+                                LangToggle(showOriginal: $todayShowOriginal)
+                            }
+                            .padding(.bottom, 12)
+                        }
                         todayCardView(card)
                     } else if isLoading {
-                        TodayCardBody(card: nil, isLoading: true, bookmarkCount: 0)
+                        TodayCardBody(card: nil, isLoading: true, bookmarkCount: 0, showOriginal: false)
                     }
 
                     Spacer().frame(height: 56)
@@ -125,7 +133,8 @@ struct HomeView: View {
                 TodayCardBody(
                     card: card,
                     isLoading: isLoading,
-                    bookmarkCount: bookmarkCounts[card.cardId] ?? 0
+                    bookmarkCount: bookmarkCounts[card.cardId] ?? 0,
+                    showOriginal: todayShowOriginal
                 )
             }
             .buttonStyle(.plain)
@@ -208,6 +217,7 @@ struct HomeView: View {
             }
             if let pick { prefs.rememberShown(pick.cardId) }
             todayCard = pick
+            todayShowOriginal = false  // 새 카드는 항상 한국어부터 (PWA와 동일)
             recent = buildRecent()
             await refreshBookmarkCounts(for: [pick].compactMap { $0 } + recent)
         } catch {
@@ -258,14 +268,15 @@ private struct TodayCardBody: View {
     let card: Card?
     let isLoading: Bool
     let bookmarkCount: Int
+    let showOriginal: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                if let format = card?.work.format.displayName, !format.isEmpty {
+                if let format = card?.work.format.label(original: showOriginal), !format.isEmpty {
                     Chip(text: format, filled: true)
                 }
-                if let kw = card?.keywords.first {
+                if let kw = card?.displayKeywords(original: showOriginal).first {
                     Chip(text: kw, filled: false)
                 }
                 if let card {
@@ -282,7 +293,7 @@ private struct TodayCardBody: View {
                     .foregroundStyle(.espresso)
                 Spacer().frame(height: 12)
             }
-            Text(card.map { "\u{201C}\($0.quote)\u{201D}" } ?? (isLoading ? "Loading…" : "—"))
+            Text(card.map { "\u{201C}\($0.displayQuote(original: showOriginal))\u{201D}" } ?? (isLoading ? "Loading…" : "—"))
                 .font(.headlineSerif(22))
                 .foregroundStyle(.espresso)
                 .fixedSize(horizontal: false, vertical: true)
@@ -297,7 +308,7 @@ private struct TodayCardBody: View {
             Spacer().frame(height: 24)
             Hairline()
             Spacer().frame(height: 12)
-            if let keywords = card?.keywords, !keywords.isEmpty {
+            if let keywords = card?.displayKeywords(original: showOriginal), !keywords.isEmpty {
                 HStack(spacing: 12) {
                     ForEach(keywords, id: \.self) { kw in
                         Text("#\(kw)")
@@ -314,13 +325,17 @@ private struct TodayCardBody: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
     }
 
+    /// Speaker is derived from the displayed script by matching `work.characters`.
+    /// In the ENG view the script is English while characters are Korean names,
+    /// so no match is found and the speaker line is simply hidden (never wrong,
+    /// never blank content).
     private var speaker: String? {
         guard let card else { return nil }
         let names = card.work.characters
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         guard !names.isEmpty else { return nil }
-        for line in card.scriptExcerpt.components(separatedBy: .newlines).prefix(6) {
+        for line in card.displayScript(original: showOriginal).components(separatedBy: .newlines).prefix(6) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             let head = trimmed.components(separatedBy: CharacterSet(charactersIn: ":：(")).first ?? trimmed
             if names.contains(head) { return head }
@@ -330,10 +345,12 @@ private struct TodayCardBody: View {
 
     private var workLine: String? {
         guard let card else { return nil }
-        let title = card.work.subtitle?.isEmpty == false
-            ? "<\(card.work.title)> \(card.work.subtitle!)"
-            : "<\(card.work.title)>"
-        let format = card.work.format.displayName
+        let displayTitle = card.work.displayTitle(original: showOriginal)
+        let displaySubtitle = card.work.displaySubtitle(original: showOriginal)
+        let title = displaySubtitle?.isEmpty == false
+            ? "<\(displayTitle)> \(displaySubtitle!)"
+            : "<\(displayTitle)>"
+        let format = card.work.format.label(original: showOriginal)
         return format.isEmpty ? "— \(title)" : "— \(format) \(title)"
     }
 }

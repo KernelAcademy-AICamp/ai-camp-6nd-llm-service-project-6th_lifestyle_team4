@@ -11,6 +11,7 @@ struct CardDetailView: View {
     @State private var displayedViewCount: Int
     @State private var bookmarkCount = 0
     @State private var didIncrementView = false
+    @State private var showOriginal = false
 
     init(card: Card, onLoginRequested: (() -> Void)? = nil) {
         self.card = card
@@ -38,7 +39,17 @@ struct CardDetailView: View {
                     CardCountsRow(viewCount: displayedViewCount, bookmarkCount: bookmarkCount)
                     Spacer().frame(height: 28)
 
-                    if let desc = card.excerptDescription, !desc.isEmpty {
+                    if card.hasOriginalLanguage {
+                        HStack {
+                            Text(showOriginal ? "View in Korean" : "원문(영문)으로 보기")
+                                .labelCaps()
+                            Spacer()
+                            LangToggle(showOriginal: $showOriginal)
+                        }
+                        Spacer().frame(height: 24)
+                    }
+
+                    if let desc = card.displayDescription(original: showOriginal), !desc.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("SCENE")
                                 .labelCaps()
@@ -67,7 +78,7 @@ struct CardDetailView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if showSignificance, let sig = card.significance {
+                    if showSignificance, let sig = card.displaySignificance(original: showOriginal) {
                         Spacer().frame(height: 32)
                         Hairline()
                         Spacer().frame(height: 24)
@@ -128,9 +139,11 @@ struct CardDetailView: View {
     }
 
     /// Script excerpt with speaker lines (matching work.characters) bolded.
+    /// In the ENG view the script is English while characters are Korean names,
+    /// so no line matches and nothing is bolded — content still shows in full.
     private var scriptText: Text {
         let names = Set(card.work.characters.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
-        let lines = card.scriptExcerpt.components(separatedBy: "\n")
+        let lines = card.displayScript(original: showOriginal).components(separatedBy: "\n")
         var result = AttributedString()
         for (i, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -158,11 +171,11 @@ struct CardDetailView: View {
             Spacer()
             VStack(spacing: 2) {
                 Text("DAILY SCRIPT").labelCaps()
-                Text(card.work.title)
+                Text(card.work.displayTitle(original: showOriginal))
                     .font(.headlineSerif(20))
                     .foregroundStyle(.espresso)
                     .lineLimit(1)
-                if let subtitle = card.work.subtitle, !subtitle.isEmpty {
+                if let subtitle = card.work.displaySubtitle(original: showOriginal), !subtitle.isEmpty {
                     Text(subtitle)
                         .labelCaps()
                         .lineLimit(1)
@@ -219,8 +232,8 @@ struct CardDetailView: View {
     private var metadataChipsRow: some View {
         HStack(spacing: 12) {
             let items: [String] = [
-                card.work.format.displayName,
-                card.work.author?.uppercased() ?? "",
+                card.work.format.label(original: showOriginal),
+                card.work.displayAuthor(original: showOriginal)?.uppercased() ?? "",
                 card.work.releaseYear.map(String.init) ?? "",
             ].filter { !$0.isEmpty }
             ForEach(items, id: \.self) { v in
