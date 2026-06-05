@@ -88,11 +88,33 @@ object ScriptFormat {
         return extractSpeakerInternal(scriptExcerpt, characters, quote)?.speaker ?: ""
     }
 
+    /** Label 의 별표/콜론/공백 등 잡티 제거 + 한글 음절이 있으면 빈 문자열 (EN 모드 노출 차단). */
+    private fun cleanSpeakerLabel(raw: String): String {
+        var t = raw.trim()
+        if (t.isEmpty()) return ""
+        // 양쪽 별표/마침표/콜론/세미콜론/콤마/em-dash/공백 반복 제거
+        t = t.trim('*', ' ', '\t', '.', ',', ':', '：', ';', '—', '–')
+        if (t.isEmpty()) return ""
+        if (Regex("[가-힯]").containsMatchIn(t)) return ""
+        return t
+    }
+
+    /** 영문 블록 텍스트가 quote 와 실제로 관련 있는지 검증 (cross-lang 오매칭 방어). */
+    private fun blockMatchesQuote(blockText: String, quote: String?): Boolean {
+        if (quote.isNullOrEmpty()) return true
+        fun norm(s: String?): String = (s ?: "").replace(WS, "").replace(QUOTE_CHARS, "")
+        val bn = norm(blockText)
+        val qn = norm(quote)
+        if (bn.isEmpty() || qn.isEmpty()) return false
+        if (bn.contains(qn)) return true
+        val firstWord = quote.split(Regex("\\s+")).firstOrNull { it.length >= 5 } ?: ""
+        return firstWord.isNotEmpty() && bn.contains(norm(firstWord))
+    }
+
     /**
-     * EN-mode speaker — tries English script directly, then falls back to KO block index
-     * matching to read the EN label at the same block position. Same-script-same-order
-     * assumption mirrors the PWA's extractSpeakerEn. Korean chars in the EN label are
-     * suppressed to prevent KO names leaking into the EN view.
+     * EN-mode speaker — tries English script directly (quote-verified), then falls back to
+     * KO block index matching with EN-side quote verification. Label cleanup strips stray
+     * markdown markers and blocks Korean syllables from leaking into the EN view.
      */
     fun extractSpeakerEn(
         scriptEn: String?,
@@ -102,13 +124,21 @@ object ScriptFormat {
         quoteKo: String?,
     ): String {
         val en = extractSpeakerInternal(scriptEn, characters, quoteEn) ?: return ""
-        if (en.speaker.isNotEmpty()) return en.speaker
+        // 1) EN 직접 추출 — quote 매칭 블록 검증 후 라벨 정리
+        if (en.speaker.isNotEmpty() && en.foundIdx in en.blocks.indices) {
+            val blk = en.blocks[en.foundIdx]
+            if (blockMatchesQuote(blk.second, quoteEn)) {
+                val cleaned = cleanSpeakerLabel(en.speaker)
+                if (cleaned.isNotEmpty()) return cleaned
+            }
+        }
+        // 2) KO 블록 인덱스 → EN 같은 인덱스 라벨 (텍스트가 quoteEn 과 관련 있어야 신뢰)
         val ko = extractSpeakerInternal(scriptKo, characters, quoteKo) ?: return ""
         val i = ko.foundIdx
         if (i < 0 || i >= en.blocks.size) return ""
-        val label = en.blocks[i].first
-        if (Regex("[가-힯]").containsMatchIn(label)) return ""
-        return label
+        val enBlk = en.blocks[i]
+        if (!blockMatchesQuote(enBlk.second, quoteEn)) return ""
+        return cleanSpeakerLabel(enBlk.first)
     }
 
     private fun extractSpeakerInternal(scriptExcerpt: String?, characters: List<String>, quote: String?): SpeakerResult? {

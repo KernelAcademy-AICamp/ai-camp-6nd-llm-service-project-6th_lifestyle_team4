@@ -469,20 +469,52 @@ function extractSpeaker(scriptExcerpt, characters, quote, opts = {}) {
 // 인덱스 → 영문 블록 같은 인덱스의 영문 라벨을 가져온다. 영문/한글 발췌문이 같은 순서의
 // 같은 인물 대사를 담는다는 가정 (LLM 번역으로 보장됨). 영문 추출이 안 잡히는 카드에서도
 // 영문 이름을 보장하면서 한글 이름이 영문 모드에 섞이지 않게 한다.
+// 추출된 화자 라벨의 별표/콜론/공백 등 잡티 정리 + 한글 차단.
+function cleanSpeakerLabel(raw) {
+  let t = String(raw || '').trim();
+  if (!t) return '';
+  // 양쪽 별표/마침표/콜론/세미콜론/콤마/em-dash 반복 제거
+  t = t.replace(/^[\*\s.,:：;—–]+|[\*\s.,:：;—–]+$/g, '').trim();
+  if (!t) return '';
+  // 한글 음절이 있으면 영문 모드 노출 차단
+  if (/[가-힯]/.test(t)) return '';
+  return t;
+}
+
+// 영문 블록의 텍스트가 quoteEn 과 실제로 관련 있는지 검증 (cross-lang 오매칭 방어).
+function blockMatchesQuote(blockText, quote) {
+  if (!quote) return true; // quote 없으면 검증 skip
+  const norm = (s) => String(s || '').replace(/\s+/g, '').replace(/["“”'`']/g, '');
+  const bn = norm(blockText);
+  const qn = norm(quote);
+  if (!bn || !qn) return false;
+  if (bn.includes(qn)) return true;
+  // 첫 의미 단어 substring 검증 (LLM 번역 차이 흡수)
+  const firstWord = String(quote).split(/\s+/).find((w) => w.length >= 5) || '';
+  return !!(firstWord && bn.includes(norm(firstWord)));
+}
+
 function extractSpeakerEn(scriptEn, scriptKo, characters, quoteEn, quoteKo) {
   if (!scriptEn) return '';
-  // 1) 영문 script 직접 추출
+  // 1) 영문 script 직접 추출 — quote 매칭으로 잡힌 화자만 신뢰 (single-speaker 폴백은 검증)
   const enResult = extractSpeaker(scriptEn, characters, quoteEn, { returnBlocks: true });
-  if (enResult.speaker) return enResult.speaker;
+  if (enResult.speaker) {
+    const blk = enResult.blocks[enResult.foundIdx];
+    if (blk && blockMatchesQuote(blk.text, quoteEn)) {
+      const cleaned = cleanSpeakerLabel(enResult.speaker);
+      if (cleaned) return cleaned;
+    }
+  }
   // 2) 한글 quote → 한글 블록 인덱스 → 영문 블록 같은 인덱스 라벨
+  //    영문 블록 텍스트가 quoteEn 과 관련 있어야 매칭 신뢰 (인덱스만으로는 부정확)
   if (!scriptKo) return '';
   const koResult = extractSpeaker(scriptKo, characters, quoteKo, { returnBlocks: true });
   const i = koResult.foundIdx;
   if (i < 0 || i >= enResult.blocks.length) return '';
-  const enLabel = enResult.blocks[i]?.speaker || '';
-  // 한글 라벨이 그대로 영문 모드에 노출되지 않도록 — 한글 음절이 있으면 미표시
-  if (/[가-힯]/.test(enLabel)) return '';
-  return enLabel;
+  const enBlk = enResult.blocks[i];
+  if (!enBlk) return '';
+  if (!blockMatchesQuote(enBlk.text, quoteEn)) return '';
+  return cleanSpeakerLabel(enBlk.speaker);
 }
 
 // ---------- 추천 관련 상수 ----------
