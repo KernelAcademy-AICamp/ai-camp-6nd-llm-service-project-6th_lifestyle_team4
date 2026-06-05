@@ -709,28 +709,29 @@ private struct BookCover: View {
                 .stroke(gold.opacity(0.7), lineWidth: 1)
                 .padding(16)
 
-            VStack(spacing: 14) {
+            VStack(spacing: 22) {
                 Text("DAILY SCRIPT")
-                    .font(.custom("Pretendard-Medium", size: 10))
-                    .tracking(3)
-                Rectangle().fill(gilt.opacity(0.7)).frame(width: 36, height: 1)
+                    .font(.custom("Pretendard-Medium", size: 11))
+                    .tracking(3.5)
+                Rectangle().fill(gilt.opacity(0.7)).frame(width: 40, height: 1)
                 Text(work.title)
-                    .font(.displaySerif(26))
+                    .font(.displaySerif(30))
                     .multilineTextAlignment(.center)
+                    .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
                 if let author = work.author, !author.isEmpty {
                     Text(author.uppercased())
-                        .font(.custom("Pretendard-Medium", size: 10))
-                        .tracking(2)
+                        .font(.custom("Pretendard-Medium", size: 12))
+                        .tracking(2.5)
                 }
-                Spacer().frame(height: 6)
+                Spacer().frame(height: 12)
                 Text("VOL. \(volumeNo)")
-                    .font(.headlineSerif(13))
+                    .font(.headlineSerif(15))
             }
             .foregroundStyle(gold)
             .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
-            .padding(.horizontal, 36)
-            .padding(.vertical, 40)
+            .padding(.horizontal, 34)
+            .padding(.vertical, 46)
         }
         // Dark hinge band down the left spine edge.
         .overlay(alignment: .leading) {
@@ -760,24 +761,25 @@ private struct BookPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 16) {
                     Text(work.subtitle == nil
                          ? "COLLECTED · VOLUME \(volumeNo)"
                          : "\(work.series.uppercased()) · VOLUME \(volumeNo)")
-                        .labelCaps()
+                        .labelCaps(size: 12)
                     Text(work.title)
-                        .font(.displaySerif(28))
+                        .font(.displaySerif(32))
                         .foregroundStyle(.espresso)
+                        .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
                     Text([work.format.displayName.uppercased(), work.author, work.releaseYear.map(String.init)]
                         .compactMap { $0 }
                         .joined(separator: " · "))
-                        .labelCaps()
+                        .labelCaps(size: 12)
                 }
                 Spacer()
                 Button { onClose() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .regular))
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(.walnut)
                         .frame(width: 36, height: 36)
                 }
@@ -785,35 +787,36 @@ private struct BookPage: View {
             }
             .padding(.leading, 30)
             .padding(.trailing, 16)
-            .padding(.top, 22)
-            .padding(.bottom, 12)
+            .padding(.top, 28)
+            .padding(.bottom, 20)
 
             Rectangle().fill(Color.sand).frame(height: 0.5)
                 .padding(.leading, 22).padding(.trailing, 6)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 18) {
                     ForEach(work.rows) { row in
                         if let card = row.card {
                             Button {
                                 onOpen(card)
                             } label: {
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 12) {
                                     if let date = row.createdDate {
-                                        Text(Self.dateText(date)).labelCaps()
+                                        Text(Self.dateText(date)).labelCaps(size: 12)
                                     }
                                     Text("\"\(card.quote)\"")
-                                        .font(.titleSerif(16))
+                                        .font(.titleSerif(18))
                                         .foregroundStyle(.espresso)
+                                        .lineSpacing(3)
                                         .fixedSize(horizontal: false, vertical: true)
                                     if let desc = card.excerptDescription, !desc.isEmpty {
                                         Text(desc)
-                                            .font(.bodySans(12))
+                                            .font(.bodySans(13))
                                             .foregroundStyle(.walnut)
                                             .lineLimit(2)
                                     }
                                 }
-                                .padding(14)
+                                .padding(18)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(RoundedRectangle(cornerRadius: 6).fill(Color.paper.opacity(0.6)))
                                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.latte, lineWidth: 0.5))
@@ -824,11 +827,11 @@ private struct BookPage: View {
                     Text("— Daily Script · Limited Edition —")
                         .labelCaps()
                         .frame(maxWidth: .infinity)
-                        .padding(.top, 10)
+                        .padding(.top, 16)
                 }
                 .padding(.leading, 30)
                 .padding(.trailing, 16)
-                .padding(.vertical, 16)
+                .padding(.vertical, 20)
             }
         }
         .background {
