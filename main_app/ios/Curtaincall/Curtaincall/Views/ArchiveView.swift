@@ -63,15 +63,24 @@ struct ArchiveView: View {
         .navigationDestination(item: $selectedCard) { card in
             CardDetailView(card: card) { selectedTab = .settings }
         }
-        .sheet(item: $selectedWork) { work in
-            BookSheet(work: work) { card in
-                selectedWork = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                    selectedCard = card
-                }
+        // Centered, self-animating "open the book" modal (replaces the bottom
+        // sheet that covered the 5 nav buttons). Stays within the tab content's
+        // safe area, so the tab bar remains visible — and beats Android's flat
+        // page-rotate by swinging an actual leather cover open to reveal the page.
+        .overlay {
+            if let work = selectedWork {
+                OpenedBookView(
+                    work: work,
+                    volumeNo: (allWorks.firstIndex { $0.id == work.id } ?? 0) + 1,
+                    onOpen: { card in
+                        selectedWork = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            selectedCard = card
+                        }
+                    },
+                    onClose: { selectedWork = nil }
+                )
             }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
         .task { await bookmarks.load(userId: session.userId) }
     }
@@ -517,36 +526,39 @@ private struct BookSpine: View {
 
     private var gold: Color { Color(hex: 0xE6CC82) }
     private var gilt: Color { Color(hex: 0xC9A24B) }
-    private var leatherHex: UInt32 { Self.leatherColor(for: work.title) }
+    private var leatherHex: UInt32 { bookLeatherHex(for: work.title) }
     private var leather: Color { Color(hex: leatherHex) }
-    private var leatherShadow: Color { Self.blend(leatherHex, with: 0x000000, amount: 0.24) }
-    private var leatherDeepShadow: Color { Self.blend(leatherHex, with: 0x000000, amount: 0.30) }
-    private var leatherHighlight: Color { Self.blend(leatherHex, with: 0xFFFFFF, amount: 0.07) }
+    private var leatherShadow: Color { bookLeatherBlend(leatherHex, with: 0x000000, amount: 0.24) }
+    private var leatherDeepShadow: Color { bookLeatherBlend(leatherHex, with: 0x000000, amount: 0.30) }
+    private var leatherHighlight: Color { bookLeatherBlend(leatherHex, with: 0xFFFFFF, amount: 0.07) }
+}
 
-    private static func leatherColor(for title: String) -> UInt32 {
-        let palette: [UInt32] = [
-            0x0E0C0A, 0x5A2A24, 0x2F3A30, 0x293541,
-            0x6A4A30, 0x40303B, 0x3A463F, 0x1F2A3A,
-            0x4A2B1A, 0x3D2E22, 0x26393B, 0x2E2538,
-        ]
-        let hash = title.unicodeScalars.reduce(0) { (($0 &* 31) &+ Int($1.value)) & 0x7fffffff }
-        return palette[hash % palette.count]
-    }
+/// Stable per-title leather color (same hash the spines use) so the opened
+/// cover matches the book on the shelf. File-scope so `BookSpine` and the
+/// opened-book cover share one source of truth.
+private func bookLeatherHex(for title: String) -> UInt32 {
+    let palette: [UInt32] = [
+        0x0E0C0A, 0x5A2A24, 0x2F3A30, 0x293541,
+        0x6A4A30, 0x40303B, 0x3A463F, 0x1F2A3A,
+        0x4A2B1A, 0x3D2E22, 0x26393B, 0x2E2538,
+    ]
+    let hash = title.unicodeScalars.reduce(0) { (($0 &* 31) &+ Int($1.value)) & 0x7fffffff }
+    return palette[hash % palette.count]
+}
 
-    private static func blend(_ hex: UInt32, with target: UInt32, amount: Double) -> Color {
-        let clamped = min(1, max(0, amount))
-        let r = Double((hex >> 16) & 0xFF)
-        let g = Double((hex >> 8) & 0xFF)
-        let b = Double(hex & 0xFF)
-        let tr = Double((target >> 16) & 0xFF)
-        let tg = Double((target >> 8) & 0xFF)
-        let tb = Double(target & 0xFF)
-        return Color(
-            red: (r + (tr - r) * clamped) / 255,
-            green: (g + (tg - g) * clamped) / 255,
-            blue: (b + (tb - b) * clamped) / 255
-        )
-    }
+private func bookLeatherBlend(_ hex: UInt32, with target: UInt32, amount: Double) -> Color {
+    let clamped = min(1, max(0, amount))
+    let r = Double((hex >> 16) & 0xFF)
+    let g = Double((hex >> 8) & 0xFF)
+    let b = Double(hex & 0xFF)
+    let tr = Double((target >> 16) & 0xFF)
+    let tg = Double((target >> 8) & 0xFF)
+    let tb = Double(target & 0xFF)
+    return Color(
+        red: (r + (tr - r) * clamped) / 255,
+        green: (g + (tg - g) * clamped) / 255,
+        blue: (b + (tb - b) * clamped) / 255
+    )
 }
 
 private struct WoodGrain: View {
@@ -591,37 +603,193 @@ private struct ShelfShadowTexture: View {
     }
 }
 
-private struct BookSheet: View {
+/// Centered "open the book" modal. A leather cover (matching the shelf spine)
+/// swings open on its left hinge to reveal the paged contents underneath, over
+/// a dimming scrim that stops above the tab bar so the nav buttons stay live.
+private struct OpenedBookView: View {
     let work: ShelfWork
+    let volumeNo: Int
     let onOpen: (Card) -> Void
-    @Environment(\.dismiss) private var dismiss
+    let onClose: () -> Void
+
+    @State private var opened = false
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = min(geo.size.width - 48, 440)
+            let h = geo.size.height * 0.82
+            ZStack {
+                Color.black.opacity(opened ? 0.55 : 0)
+                    .ignoresSafeArea(edges: .top)
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismiss() }
+
+                ZStack {
+                    // Page-edge thickness peeking out on the right.
+                    ForEach(0..<3, id: \.self) { i in
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(Color(hex: 0xEFE7D6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 7)
+                                    .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
+                            )
+                            .frame(width: w, height: h)
+                            .offset(x: CGFloat(3 * (i + 1)), y: CGFloat(2 * (i + 1)))
+                    }
+
+                    BookPage(
+                        work: work,
+                        volumeNo: volumeNo,
+                        onOpen: onOpen,
+                        onClose: { dismiss() }
+                    )
+                    .frame(width: w, height: h)
+
+                    // The cover, swinging open on the left hinge and fading as it
+                    // passes edge-on so its back face never shows mirrored text.
+                    BookCover(work: work, volumeNo: volumeNo)
+                        .frame(width: w, height: h)
+                        .rotation3DEffect(
+                            .degrees(opened ? -168 : -4),
+                            axis: (x: 0, y: 1, z: 0),
+                            anchor: .leading,
+                            anchorZ: 0,
+                            perspective: 0.55
+                        )
+                        .opacity(opened ? 0 : 1)
+                        .shadow(color: .black.opacity(0.45), radius: 14, x: 10, y: 8)
+                }
+                .frame(width: w, height: h)
+                .shadow(color: .black.opacity(0.4), radius: 28, x: 0, y: 16)
+                .scaleEffect(opened ? 1 : 0.9)
+                .opacity(opened ? 1 : 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .sensoryFeedback(.impact(weight: .medium), trigger: opened)
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.74)) { opened = true }
+        }
+    }
+
+    private func dismiss() {
+        withAnimation(.easeIn(duration: 0.3)) { opened = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onClose() }
+    }
+}
+
+/// The leather front cover, embossed with gilt title — same per-title leather
+/// color as the shelf spine so the book you tapped is the book that opens.
+private struct BookCover: View {
+    let work: ShelfWork
+    let volumeNo: Int
+
+    private var leatherHex: UInt32 { bookLeatherHex(for: work.title) }
+    private var leather: Color { Color(hex: leatherHex) }
+    private var gold: Color { Color(hex: 0xE6CC82) }
+    private var gilt: Color { Color(hex: 0xC9A24B) }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7)
+                .fill(LinearGradient(
+                    stops: [
+                        .init(color: bookLeatherBlend(leatherHex, with: 0x000000, amount: 0.30), location: 0),
+                        .init(color: leather.opacity(0.97), location: 0.12),
+                        .init(color: bookLeatherBlend(leatherHex, with: 0xFFFFFF, amount: 0.06), location: 0.5),
+                        .init(color: leather.opacity(0.95), location: 0.86),
+                        .init(color: bookLeatherBlend(leatherHex, with: 0x000000, amount: 0.34), location: 1),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ))
+
+            // Gilt frame border.
+            RoundedRectangle(cornerRadius: 3)
+                .stroke(gold.opacity(0.7), lineWidth: 1)
+                .padding(16)
+
+            VStack(spacing: 14) {
+                Text("DAILY SCRIPT")
+                    .font(.custom("Pretendard-Medium", size: 10))
+                    .tracking(3)
+                Rectangle().fill(gilt.opacity(0.7)).frame(width: 36, height: 1)
+                Text(work.title)
+                    .font(.displaySerif(26))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let author = work.author, !author.isEmpty {
+                    Text(author.uppercased())
+                        .font(.custom("Pretendard-Medium", size: 10))
+                        .tracking(2)
+                }
+                Spacer().frame(height: 6)
+                Text("VOL. \(volumeNo)")
+                    .font(.headlineSerif(13))
+            }
+            .foregroundStyle(gold)
+            .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
+            .padding(.horizontal, 36)
+            .padding(.vertical, 40)
+        }
+        // Dark hinge band down the left spine edge.
+        .overlay(alignment: .leading) {
+            LinearGradient(
+                colors: [Color.black.opacity(0.42), Color.black.opacity(0.04)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 14)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .overlay(
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(Color.black.opacity(0.3), lineWidth: 0.5)
+        )
+    }
+}
+
+/// The opened page: ruled paper with a leather gutter, the collected quotes,
+/// and a close affordance. Pulled out of the old bottom sheet.
+private struct BookPage: View {
+    let work: ShelfWork
+    let volumeNo: Int
+    let onOpen: (Card) -> Void
+    let onClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(work.subtitle == nil ? "Collected · Volume" : "\(work.series.uppercased()) · Volume")
+                    Text(work.subtitle == nil
+                         ? "COLLECTED · VOLUME \(volumeNo)"
+                         : "\(work.series.uppercased()) · VOLUME \(volumeNo)")
                         .labelCaps()
                     Text(work.title)
-                        .font(.displaySerif(30))
+                        .font(.displaySerif(28))
                         .foregroundStyle(.espresso)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text([work.format.displayName.uppercased(), work.author, work.releaseYear.map(String.init)]
                         .compactMap { $0 }
                         .joined(separator: " · "))
                         .labelCaps()
                 }
                 Spacer()
-                Button { dismiss() } label: {
+                Button { onClose() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .regular))
+                        .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.walnut)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 36, height: 36)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(20)
+            .padding(.leading, 30)
+            .padding(.trailing, 16)
+            .padding(.top, 22)
+            .padding(.bottom, 12)
 
-            Hairline()
+            Rectangle().fill(Color.sand).frame(height: 0.5)
+                .padding(.leading, 22).padding(.trailing, 6)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -647,7 +815,7 @@ private struct BookSheet: View {
                                 }
                                 .padding(14)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.paper))
+                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.paper.opacity(0.6)))
                                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.latte, lineWidth: 0.5))
                             }
                             .buttonStyle(.plain)
@@ -658,10 +826,31 @@ private struct BookSheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 10)
                 }
-                .padding(20)
+                .padding(.leading, 30)
+                .padding(.trailing, 16)
+                .padding(.vertical, 16)
             }
         }
-        .background(Color.paper)
+        .background {
+            ZStack {
+                Color.paper
+                RuledLinesBackground()
+                // Leather gutter binding down the left edge.
+                LinearGradient(
+                    colors: [
+                        Color(hex: bookLeatherBlend2(work.title, 0x000000, 0.2)),
+                        Color(hex: bookLeatherHex(for: work.title)),
+                    ],
+                    startPoint: .leading, endPoint: .trailing
+                )
+                .frame(width: 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .overlay(
+            RoundedRectangle(cornerRadius: 7).stroke(Color.latte, lineWidth: 0.5)
+        )
     }
 
     private static func dateText(_ date: Date) -> String {
@@ -670,6 +859,41 @@ private struct BookSheet: View {
         formatter.dateFormat = "M. d  a h:mm"
         return formatter.string(from: date)
     }
+}
+
+/// Faint horizontal rule lines down the page, like a notebook leaf.
+private struct RuledLinesBackground: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let gap: CGFloat = 30
+            var y = gap
+            while y < size.height {
+                var path = Path()
+                path.move(to: CGPoint(x: 14, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+                ctx.stroke(path, with: .color(Color.walnut.opacity(0.07)), lineWidth: 0.5)
+                y += gap
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Helper: leather hex for a title, darkened toward `target` — returns a UInt32
+/// so it can feed `Color(hex:)` for the gutter gradient stop.
+private func bookLeatherBlend2(_ title: String, _ target: UInt32, _ amount: Double) -> UInt32 {
+    let hex = bookLeatherHex(for: title)
+    let clamped = min(1, max(0, amount))
+    let r = Double((hex >> 16) & 0xFF)
+    let g = Double((hex >> 8) & 0xFF)
+    let b = Double(hex & 0xFF)
+    let tr = Double((target >> 16) & 0xFF)
+    let tg = Double((target >> 8) & 0xFF)
+    let tb = Double(target & 0xFF)
+    let nr = UInt32((r + (tr - r) * clamped).rounded())
+    let ng = UInt32((g + (tg - g) * clamped).rounded())
+    let nb = UInt32((b + (tb - b) * clamped).rounded())
+    return (nr << 16) | (ng << 8) | nb
 }
 
 private extension String {
