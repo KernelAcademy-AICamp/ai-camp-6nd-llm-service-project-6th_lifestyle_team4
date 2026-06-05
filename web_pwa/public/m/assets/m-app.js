@@ -337,6 +337,26 @@ function extractSpeaker(scriptExcerpt, characters, quote) {
         return { name: nm, rest: '' };
       }
     }
+    // 4) Title Case 라벨 폴백 — "Antigone." / "Tom Sawyer." / "Lady Macbeth"
+    //    (Title Case 단어 1~4개 + 선택 마침표, 라인 ≤ 30자)
+    //    "I think." 같은 짧은 문장 오인 방지: 마지막 단어가 흔한 verb/접속사면 제외
+    if (t.length <= 30) {
+      const tm = t.match(/^([A-Z][a-zA-Z]{1,}(?:\s[A-Z][a-zA-Z]+){0,3})\.?$/);
+      if (tm) {
+        const candidate = tm[1].trim();
+        // verb/접속사 제외 — 일반 영문 문장 첫 단어로 자주 등장하는 것
+        const lower = candidate.toLowerCase();
+        const FALSE_POS = new Set([
+          'i', 'then', 'but', 'and', 'or', 'so', 'now', 'yet', 'thus', 'still',
+          'said', 'replied', 'cried', 'asked', 'whispered', 'shouted',
+          'mr', 'mrs', 'ms', 'dr', 'sir', 'madam', 'lord', 'lady',
+          'chapter', 'scene', 'act', 'prologue', 'epilogue',
+        ]);
+        if (!FALSE_POS.has(lower) && candidate.length >= 3) {
+          return { name: candidate, rest: '' };
+        }
+      }
+    }
     return null;
   }
 

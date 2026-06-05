@@ -85,19 +85,56 @@ object ScriptFormat {
         fun speakerOf(raw: String): Pair<String, String>? {
             val t = raw.trim()
             if (t.isEmpty()) return null
+            // 1) 등록된 characters 매칭 (case-insensitive prefix, 다양한 종결자)
             for (name in names) {
-                if (!t.startsWith(name)) continue
-                val tt = t.substring(name.length).trim()
+                val len = name.length
+                if (t.length < len) continue
+                if (!t.substring(0, len).equals(name, ignoreCase = true)) continue
+                val next = if (t.length > len) t[len] else null
+                // 단어 경계 — 다음 글자가 알파/한글/숫자면 다른 단어 (prefix 잘못 잡힘)
+                if (next != null && (next.isLetterOrDigit() || (next in '가'..'힯'))) continue
+                val tt = t.substring(len).trim()
                 if (tt.isEmpty()) return name to ""
                 when (tt[0]) {
                     ':', '：' -> return name to tt.substring(1).trim()
                     '(', '（' -> return name to tt
+                    '.', ',' -> return name to tt.substring(1).trim()
                 }
             }
+            // 2) "이름: 대사" 콜론 폴백
             val m = SPEAKER_COLON.find(t)
             if (m != null) {
                 val nm = m.groupValues[1].replace(TRAILING_PAREN, "").trim()
                 if (nm.isNotEmpty()) return nm to m.groupValues[2]
+            }
+            // 3) ALL-CAPS 영문 화자 폴백 — "HUCK." / "HUCK"
+            if (t.length in 2..30) {
+                val allCaps = Regex("""^([A-Z][A-Z .,'\-]{0,28})\.?,?$""")
+                val am = allCaps.find(t)
+                if (am != null) {
+                    val nm = am.groupValues[1].replace(Regex("[.,]"), "").trim()
+                    if (nm.length in 2..30 && Regex("""^[A-Z][A-Z .'\-]*$""").matches(nm)) {
+                        return nm to ""
+                    }
+                }
+            }
+            // 4) Title Case 영문 화자 폴백 — "Antigone." / "Lady Macbeth"
+            if (t.length <= 30) {
+                val titleCase = Regex("""^([A-Z][a-zA-Z]{1,}(?:\s[A-Z][a-zA-Z]+){0,3})\.?$""")
+                val tm = titleCase.find(t)
+                if (tm != null) {
+                    val candidate = tm.groupValues[1].trim()
+                    val lower = candidate.lowercase()
+                    val falsePos = setOf(
+                        "i", "then", "but", "and", "or", "so", "now", "yet", "thus", "still",
+                        "said", "replied", "cried", "asked", "whispered", "shouted",
+                        "mr", "mrs", "ms", "dr", "sir", "madam", "lord", "lady",
+                        "chapter", "scene", "act", "prologue", "epilogue",
+                    )
+                    if (lower !in falsePos && candidate.length >= 3) {
+                        return candidate to ""
+                    }
+                }
             }
             return null
         }
