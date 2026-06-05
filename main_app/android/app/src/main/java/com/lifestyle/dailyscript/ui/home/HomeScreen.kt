@@ -256,14 +256,9 @@ private fun TodayCard(
         }
         Box(modifier = Modifier.height(28.dp))
         // Speaker (bold) above the quote, when extractable — mirrors the PWA.
-        // 영문 추출 실패 시 한글 데이터로 폴백 — 등장인물은 동일, 언어만 다르므로
-        // 한글에서 화자 보이면 영문에도 (한글 이름으로) 보장 표시.
+        // EN 모드는 영문 script 에서만 추출 — 영문 카드에 한글 이름이 섞이지 않게 폴백 금지.
         val speaker = card?.let {
-            val characters = it.works?.characterList().orEmpty()
-            val primary = ScriptFormat.extractSpeaker(it.scriptFor(english), characters, it.quoteFor(english))
-            if (english && primary.isBlank()) {
-                ScriptFormat.extractSpeaker(it.scriptFor(false), characters, it.quoteFor(false))
-            } else primary
+            ScriptFormat.extractSpeaker(it.scriptFor(english), it.works?.characterList().orEmpty(), it.quoteFor(english))
         }.orEmpty()
         if (speaker.isNotBlank()) {
             Text(
