@@ -24,14 +24,18 @@ struct EditorialTabBar: View {
 
     private func tabItem(tab: Tab, active: Bool) -> some View {
         let tint: Color = active ? .espresso : .walnut
+        let labelSize: CGFloat = Tab.allCases.count >= 5 ? 10 : 11
+        let iconSize: CGFloat = Tab.allCases.count >= 5 ? 19 : 20
         return VStack(spacing: 4) {
             Image(systemName: tab.iconName)
-                .font(.system(size: 20, weight: .regular))
+                .font(.system(size: iconSize, weight: .regular))
                 .foregroundStyle(tint)
             Text(tab.title.uppercased())
-                .font(.custom("Pretendard-Medium", size: 11))
-                .tracking(11 * 0.2)
+                .font(.custom("Pretendard-Medium", size: labelSize))
+                .tracking(labelSize * 0.16)
                 .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
             Circle()
                 .fill(active ? Color.cta : Color.clear)
                 .frame(width: 4, height: 4)

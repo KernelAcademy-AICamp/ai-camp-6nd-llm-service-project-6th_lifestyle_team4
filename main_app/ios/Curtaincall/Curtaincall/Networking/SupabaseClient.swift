@@ -33,6 +33,20 @@ final class Supa {
     work:works(title, subtitle, format, author, release_year, characters, work_genres(genres(name))))
     """
 
+    private let feedCardColumns = """
+    cards(card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
+    keywords, temperature, intensity, view_count, \
+    work:works(title, subtitle, format, author, release_year, characters, work_genres(genres(name))))
+    """
+
+    private var feedPostColumns: String {
+        "post_id, card_id, user_id, author_nickname, body, created_at, \(feedCardColumns)"
+    }
+
+    private var highlightColumns: String {
+        "highlight_id, card_id, user_id, author_nickname, selected_text, user_note, created_at, \(feedCardColumns)"
+    }
+
     private let commentColumns =
         "comment_id, card_id, user_id, parent_comment_id, author_nickname, body, created_at"
 
@@ -93,6 +107,39 @@ final class Supa {
             .limit(limit)
             .execute()
             .value
+    }
+
+    // MARK: - Feed
+
+    func fetchFeedPosts(limit: Int = 50) async throws -> [FeedPost] {
+        try await client.from("feed_posts")
+            .select(feedPostColumns)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+    }
+
+    func fetchCardHighlights(limit: Int = 50) async throws -> [CardHighlight] {
+        try await client.from("card_highlights")
+            .select(highlightColumns)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+    }
+
+    func addFeedPost(cardId: Int, userId: Int, body: String, authorNickname: String?) async throws {
+        try await client.from("feed_posts")
+            .insert(
+                FeedPostInsert(
+                    cardId: cardId,
+                    userId: userId,
+                    authorNickname: authorNickname,
+                    body: body
+                )
+            )
+            .execute()
     }
 
     // MARK: - Users

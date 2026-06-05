@@ -1,14 +1,15 @@
 import SwiftUI
 
 enum Tab: Hashable, CaseIterable {
-    case home, archive, notice, settings
+    case home, archive, feed, notice, settings
 
     var title: String {
         switch self {
         case .home: return "Home"
-        case .archive: return "Archive"
+        case .archive: return "Library"
+        case .feed: return "Feed"
         case .notice: return "Notice"
-        case .settings: return "Settings"
+        case .settings: return "My"
         }
     }
 
@@ -16,6 +17,7 @@ enum Tab: Hashable, CaseIterable {
         switch self {
         case .home: return "house"
         case .archive: return "books.vertical"
+        case .feed: return "rectangle.stack"
         case .notice: return "megaphone"
         case .settings: return "person.crop.circle"
         }
@@ -30,6 +32,7 @@ struct RootView: View {
     @State private var selectedTab: Tab = .home
     @State private var homePath = NavigationPath()
     @State private var archivePath = NavigationPath()
+    @State private var feedPath = NavigationPath()
     @State private var showArchivePrompt = false
 
     var body: some View {
@@ -74,6 +77,10 @@ struct RootView: View {
                 ArchiveView(selectedTab: $selectedTab)
             }
             .tag(Tab.archive)
+            NavigationStack(path: $feedPath) {
+                FeedView(selectedTab: $selectedTab)
+            }
+            .tag(Tab.feed)
             NavigationStack { NoticeView() }
                 .tag(Tab.notice)
             NavigationStack { MyPageView(selectedTab: $selectedTab) }
