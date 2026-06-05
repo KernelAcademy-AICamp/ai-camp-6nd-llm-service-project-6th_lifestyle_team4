@@ -27,6 +27,30 @@ nonisolated enum WorkFormat: String, Decodable, Sendable {
         }
     }
 
+    /// English genre label for the original-language (ENG) view, mirroring the
+    /// PWA's `GENRE_LABEL_EN`. Used so an English work line reads "Movie <…>"
+    /// rather than the Korean "영화 <…>".
+    var displayNameEnglish: String {
+        switch self {
+        case .movie: return "Movie"
+        case .drama: return "Drama"
+        case .play: return "Play"
+        case .musical: return "Musical"
+        case .opera: return "Opera"
+        case .novel: return "Novel"
+        case .poem: return "Poem"
+        case .essay: return "Essay"
+        case .prose: return "Prose"
+        case .unknown: return ""
+        }
+    }
+
+    /// Genre label for the chosen language (ENG falls back to the Korean label
+    /// only if it has no English form, which it always does here except `.unknown`).
+    func label(original: Bool) -> String {
+        original ? displayNameEnglish : displayName
+    }
+
     /// Lenient decode: an unrecognized format string maps to `.unknown` instead
     /// of throwing, so one odd row never fails the whole `[Card]` fetch.
     init(from decoder: Decoder) throws {
@@ -44,6 +68,12 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
     let genres: [String]
     let characters: [String]
 
+    // Original-language (typically English) source fields, mirroring the PWA's
+    // works.*_original columns. Optional so works without them still decode.
+    let titleOriginal: String?
+    let subtitleOriginal: String?
+    let authorOriginal: String?
+
     init(
         title: String,
         subtitle: String? = nil,
@@ -51,7 +81,10 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         author: String?,
         releaseYear: Int?,
         genres: [String] = [],
-        characters: [String] = []
+        characters: [String] = [],
+        titleOriginal: String? = nil,
+        subtitleOriginal: String? = nil,
+        authorOriginal: String? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -60,6 +93,30 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         self.releaseYear = releaseYear
         self.genres = genres
         self.characters = characters
+        self.titleOriginal = titleOriginal
+        self.subtitleOriginal = subtitleOriginal
+        self.authorOriginal = authorOriginal
+    }
+
+    /// True only when an original-language work field is present.
+    var hasOriginalLanguage: Bool {
+        [titleOriginal, subtitleOriginal, authorOriginal].contains {
+            !($0 ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    /// Title for the chosen language, falling back to the Korean title so the
+    /// work line is never blank.
+    func displayTitle(original: Bool) -> String {
+        original ? (titleOriginal.filledValue ?? title) : title
+    }
+
+    func displaySubtitle(original: Bool) -> String? {
+        original ? (subtitleOriginal.filledValue ?? subtitle) : subtitle
+    }
+
+    func displayAuthor(original: Bool) -> String? {
+        original ? (authorOriginal.filledValue ?? author) : author
     }
 
     // Explicit snake_case keys (supabase-swift's decoder does not convert keys).
@@ -67,6 +124,9 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         case title, subtitle, format, author, characters
         case releaseYear = "release_year"
         case workGenres = "work_genres"
+        case titleOriginal = "title_original"
+        case subtitleOriginal = "subtitle_original"
+        case authorOriginal = "author_original"
     }
 
     private struct WorkGenreLink: Decodable {
@@ -87,5 +147,18 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         self.genres = links.map(\.genres.name)
         // characters is a jsonb array of strings; be lenient on null/odd shapes.
         self.characters = (try? c.decodeIfPresent([String].self, forKey: .characters)) ?? []
+        self.titleOriginal = try c.decodeIfPresent(String.self, forKey: .titleOriginal)
+        self.subtitleOriginal = try c.decodeIfPresent(String.self, forKey: .subtitleOriginal)
+        self.authorOriginal = try c.decodeIfPresent(String.self, forKey: .authorOriginal)
+    }
+}
+
+private extension Optional where Wrapped == String {
+    /// The string if it has non-whitespace content, otherwise nil — so a blank
+    /// original never wins over the Korean fallback.
+    var filledValue: String? {
+        guard let s = self,
+              !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return s
     }
 }
