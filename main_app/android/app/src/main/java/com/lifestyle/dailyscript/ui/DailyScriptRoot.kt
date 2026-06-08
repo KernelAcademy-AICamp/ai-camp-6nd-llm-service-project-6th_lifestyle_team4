@@ -152,7 +152,8 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.TERMS, Routes.PRIVACY)
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
-    val showBottomBar = !isFullScreen && currentRoute in mainTabs
+    // 상세(전문 보기)에서도 하단 바 노출 — 상단 바는 DetailTopBar(뒤로가기·북마크)가 대체하므로 그대로 숨김 유지.
+    val showBottomBar = currentRoute in mainTabs || isDetail
 
     CompositionLocalProvider(LocalCoachController provides coach) {
       Box(modifier = Modifier.fillMaxSize()) {
