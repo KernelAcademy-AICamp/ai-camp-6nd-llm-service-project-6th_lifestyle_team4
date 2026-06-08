@@ -768,7 +768,8 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
     // 자동 복구 — LLM 이 quote≈script 또는 짧게 만든 카드를 원본에서 발췌해 확장.
     const rescued = rescueIdenticalAndShort(single?.cards || [], scriptText, category);
     // 그래도 못 살린 카드(원본에 quote 없음 = LLM 환각) 는 여기서 drop.
-    const validated = validateAndFilterCards(rescued.cards, category);
+    // fullScript 전달 — 잘린 첫/끝 줄을 원본에서 복원.
+    const validated = validateAndFilterCards(rescued.cards, category, { fullScript: scriptText });
     return {
       ...single,
       cards: validated.cards,
@@ -854,7 +855,8 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
   //  1) rescue: LLM 이 quote≈script 또는 짧게 만든 카드는 원본에서 발췌해 script_excerpt 확장
   //  2) validate: 그래도 못 살린 카드(원본에 없음, 또는 복구 실패) 는 drop
   const rescued = rescueIdenticalAndShort(finalResult?.cards || [], scriptText, category);
-  const validated = validateAndFilterCards(rescued.cards, category);
+  // fullScript 전달 — 잘린 첫/끝 줄을 원본에서 복원.
+  const validated = validateAndFilterCards(rescued.cards, category, { fullScript: scriptText });
   return {
     ...finalResult,
     cards: validated.cards,
@@ -922,9 +924,81 @@ function isIncompleteQuote(quote) {
   return false;
 }
 
-// script_excerpt 의 첫/끝 줄에서 잘린 자투리 자동 제거.
-// 사용자 요구: "앞 뒤로 잘린 문장 꼭 필요한 문장이면 완전하게 다 넣던지 불필요한 문장이면 삭제".
-// LLM 이 안 지키므로 후처리로 강제 — 자투리는 제거, 본문 중간은 그대로.
+// script_excerpt 의 첫/끝 잘린 문장을 원본 본문(fullScript) 에서 직접 가져와 복원.
+// 사용자 요구: "잘린 문장의 본문을 가져와" — LLM 보강 X, 원본에서 직접 채움.
+//   첫 줄 잘림: 잘린 줄의 식별 가능한 토큰을 fullScript 에서 찾아 그 앞 문장 시작점부터 prepend
+//   끝 줄 잘림: 끝 줄 토큰으로 fullScript 위치 찾아 그 다음 종결자까지 append
+//   복원 실패 시 — cleanScriptExcerptEdges 가 자투리 그냥 제거 (사용자 요구 대안).
+function rescueScriptExcerptEdges(card, fullScript) {
+  if (!card?.script_excerpt || !fullScript) return;
+  const lines = card.script_excerpt.split('\n');
+  if (lines.length < 1) return;
+
+  // ── 첫 줄 검사 ──
+  // 잘림 판정: 영문 소문자 1~3자 fragment 로 시작 + 일반 단어 아님
+  const FIRST_FRAGMENT_RE = /^([a-z]{1,3})\b/;
+  const COMMON = new Set(['a','an','i','is','it','in','on','of','to','or','no','so','we','me','my','be','by','at','as','if','do','go','up','us','he','am','oh','ah','ha','the','and','but','for','you','her','him','our','out','all','was','had','has','can','not','too','now','one','two','who','why','how','any','its']);
+  for (let pass = 0; pass < 3; pass++) {
+    const first = (lines[0] || '').trim();
+    if (!first) { lines.shift(); continue; }
+    // 라벨/한글 라인은 건드리지 않음
+    if (/^\*+|:$|^\(.*\)$|^[A-Z][A-Z .'\-]*$/.test(first) || /[가-힯]/.test(first)) break;
+    const m = first.match(FIRST_FRAGMENT_RE);
+    if (!m || COMMON.has(m[1].toLowerCase())) break;
+    // 잘림 확정 — fullScript 에서 이 줄의 의미 토큰으로 위치 찾기
+    const probe = first.split(/\s+/).slice(1, 6).join(' '); // fragment 제외 다음 5단어
+    if (probe.length < 8) { lines.shift(); continue; }      // 너무 짧으면 매칭 어려움
+    const pos = fullScript.indexOf(probe);
+    if (pos < 0) { lines.shift(); continue; }
+    // 그 위치 앞쪽에서 마지막 문장 종결자(. ! ? \n) 찾기
+    const window = fullScript.slice(Math.max(0, pos - 500), pos);
+    const lastEnd = Math.max(
+      window.lastIndexOf('. '), window.lastIndexOf('! '), window.lastIndexOf('? '),
+      window.lastIndexOf('."'), window.lastIndexOf('!"'), window.lastIndexOf('?"'),
+      window.lastIndexOf('\n')
+    );
+    if (lastEnd < 0) { lines.shift(); continue; }
+    const sentenceStart = Math.max(0, pos - 500) + lastEnd + 1;
+    const prepend = fullScript.slice(sentenceStart, pos).replace(/^\s+/, '');
+    // fragment 부분 잘라내고 원본 prepend
+    const rest = first.replace(FIRST_FRAGMENT_RE, '').replace(/^\W+/, '');
+    lines[0] = (prepend + rest).trim();
+    break;
+  }
+
+  // ── 끝 줄 검사 ──
+  // 잘림 판정: 종결자 없이 끝, 또는 단어 중간 (영문자-하이픈/언더스코어)
+  for (let pass = 0; pass < 3; pass++) {
+    const last = (lines[lines.length - 1] || '').trim();
+    if (!last) { lines.pop(); continue; }
+    if (/^\*+|:$|^\(.*\)$|^[A-Z][A-Z .'\-]*$/.test(last) || /[가-힯]/.test(last)) break;
+    const endsClean = /[.!?"'”’…。！？\)\）\]\】]\s*$/.test(last);
+    const endsHyphen = /[a-zA-Z][-_]\s*$/.test(last);
+    if (endsClean) break;
+    // 끝 줄의 의미 토큰으로 fullScript 위치 찾기
+    const probe = endsHyphen
+      ? last.replace(/[-_]\s*$/, '').split(/\s+/).slice(-5).join(' ')
+      : last.split(/\s+/).slice(-5).join(' ');
+    if (probe.length < 8) { lines.pop(); continue; }
+    const pos = fullScript.indexOf(probe);
+    if (pos < 0) { lines.pop(); continue; }
+    // 그 다음 종결자까지 append
+    const tail = fullScript.slice(pos + probe.length, pos + probe.length + 500);
+    const m = tail.match(/^[^.!?…]*?[.!?…][")']?/);
+    if (!m) { lines.pop(); continue; }
+    const append = m[0];
+    if (endsHyphen) {
+      lines[lines.length - 1] = last.replace(/[-_]\s*$/, '') + append;
+    } else {
+      lines[lines.length - 1] = last + append;
+    }
+    break;
+  }
+
+  card.script_excerpt = lines.join('\n').replace(/^\n+|\n+$/g, '');
+}
+
+// 자투리 단순 제거 (fullScript 가 없는 케이스/복원 실패 시 fallback).
 function cleanScriptExcerptEdges(script) {
   if (!script) return script;
   const COMMON_SHORT_EN = new Set([
@@ -990,6 +1064,8 @@ function isIncompleteScript(script) {
 }
 
 export function validateAndFilterCards(cards, category, opts = {}) {
+  // opts.fullScript 있으면 잘린 첫/끝 줄을 원본에서 복원 시도 (보강).
+  const fullScript = opts.fullScript || null;
   if (!Array.isArray(cards)) {
     return { cards: [], summary: { total: 0, kept: 0, dropped_identical: 0, dropped_short: 0, dropped_incomplete: 0, min_chars: 0, category } };
   }
@@ -1073,16 +1149,14 @@ export function validateAndFilterCards(cards, category, opts = {}) {
     }
   }
 
-  // 첫/끝 줄 잘린 자투리 자동 정리 — survivors 의 script_excerpt 만 손봄.
-  // 사용자 요구: 자투리면 삭제, 필요하면 LLM 이 맥락 보강. 코드는 자투리 제거만 담당.
+  // 첫/끝 줄 잘린 문장 자동 복원 — survivors 의 script_excerpt 만 손봄.
+  // 사용자 요구: 잘린 문장의 본문(fullScript)을 직접 가져와 채움.
+  // fullScript 가 있으면 rescue 시도, 실패하면 자투리 제거 (LLM 보강 X).
   for (const c of survivors) {
-    if (c?.script_excerpt) {
-      const before = c.script_excerpt.length;
-      c.script_excerpt = cleanScriptExcerptEdges(c.script_excerpt);
-      if (c.script_excerpt.length < before) {
-        // 정리로 길이가 줄어들었음 — 디버그 로그만, drop 하지 않음
-      }
-    }
+    if (!c?.script_excerpt) continue;
+    if (fullScript) rescueScriptExcerptEdges(c, fullScript);
+    // rescue 후에도 자투리 남아있으면 그것만 마지막 정리
+    c.script_excerpt = cleanScriptExcerptEdges(c.script_excerpt);
   }
 
   console.log(
