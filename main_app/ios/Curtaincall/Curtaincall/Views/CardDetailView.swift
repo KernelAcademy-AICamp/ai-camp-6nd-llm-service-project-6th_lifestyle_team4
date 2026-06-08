@@ -12,6 +12,7 @@ struct CardDetailView: View {
     @State private var bookmarkCount = 0
     @State private var didIncrementView = false
     @State private var showOriginal = false
+    @FocusState private var composerFocused: Bool
 
     init(card: Card, onLoginRequested: (() -> Void)? = nil) {
         self.card = card
@@ -125,6 +126,24 @@ struct CardDetailView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+        // Chat-style composer pinned above the keyboard. The bottom safe-area
+        // inset rides up with the keyboard automatically; RootView hides the tab
+        // bar while it's focused (see ComposerFocusedPreferenceKey below).
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !session.isAnonymous {
+                CommentComposer(
+                    model: comments,
+                    userId: session.userId,
+                    nickname: session.nickname,
+                    focused: $composerFocused
+                )
+            }
+        }
+        .preference(key: ComposerFocusedPreferenceKey.self, value: composerFocused)
+        // Tapping REPLY on a comment focuses the composer (keyboard up).
+        .onChange(of: comments.replyingTo?.commentId) { _, newValue in
+            if newValue != nil { composerFocused = true }
+        }
         .task { await loadCountsAndIncrementView() }
         .overlay {
             if showAccountPrompt {

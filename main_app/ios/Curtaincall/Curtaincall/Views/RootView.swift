@@ -34,6 +34,8 @@ struct RootView: View {
     @State private var archivePath = NavigationPath()
     @State private var feedPath = NavigationPath()
     @State private var showArchivePrompt = false
+    @State private var composerActive = false
+    @State private var feedReselect = 0
 
     var body: some View {
         Group {
@@ -90,11 +92,11 @@ struct RootView: View {
             }
             .tag(Tab.home)
             NavigationStack(path: $archivePath) {
-                ArchiveView(selectedTab: $selectedTab)
+                ArchiveView(selectedTab: $selectedTab, path: $archivePath)
             }
             .tag(Tab.archive)
             NavigationStack(path: $feedPath) {
-                FeedView(selectedTab: $selectedTab)
+                FeedView(selectedTab: $selectedTab, reselect: feedReselect)
             }
             .tag(Tab.feed)
             NavigationStack { NoticeView() }
@@ -103,8 +105,16 @@ struct RootView: View {
                 .tag(Tab.settings)
         }
         .toolbar(.hidden, for: .tabBar)
+        // Hide the tab bar while the comment composer is focused (keyboard up),
+        // so the input can pin directly above the keyboard; restore on blur.
+        .onPreferenceChange(ComposerFocusedPreferenceKey.self) { active in
+            withAnimation(.easeInOut(duration: 0.2)) { composerActive = active }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            EditorialTabBar(selection: $selectedTab)
+            if !composerActive {
+                EditorialTabBar(selection: $selectedTab, onReselect: popToRoot)
+                    .transition(.move(edge: .bottom))
+            }
         }
         .overlay {
             if showArchivePrompt {
@@ -118,6 +128,18 @@ struct RootView: View {
                     showArchivePrompt = false
                 }
             }
+        }
+    }
+
+    /// Re-tapping the active tab pops that tab's navigation stack back to root.
+    private func popToRoot(_ tab: Tab) {
+        switch tab {
+        case .home: homePath = NavigationPath()
+        case .archive: archivePath = NavigationPath()
+        case .feed:
+            feedPath = NavigationPath()
+            feedReselect += 1  // scroll Feed to top + refresh
+        case .notice, .settings: break
         }
     }
 

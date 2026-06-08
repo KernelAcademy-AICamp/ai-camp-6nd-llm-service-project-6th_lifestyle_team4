@@ -2,8 +2,13 @@ import SwiftUI
 
 struct FeedView: View {
     @Binding var selectedTab: Tab
+    /// Bumped by RootView each time the already-active Feed tab is tapped — drives
+    /// scroll-to-top + refresh.
+    var reselect: Int = 0
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
+
+    private static let topID = "feedTop"
 
     @State private var category: FeedCategory = .today
     @State private var posts: [FeedPost] = []
@@ -29,9 +34,10 @@ struct FeedView: View {
             topBar
             Hairline()
             ZStack(alignment: .bottomTrailing) {
+              ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        Spacer().frame(height: 24)
+                        Spacer().frame(height: 24).id(Self.topID)
                         Text("피드")
                             .font(.displaySerif(32))
                             .foregroundStyle(.espresso)
@@ -60,6 +66,14 @@ struct FeedView: View {
                     .padding(.horizontal, 20)
                 }
                 .refreshable { await reload() }
+                // Tapping the active Feed tab: dismiss any pushed detail, snap to
+                // the top, and re-fetch — the same refresh as pull-to-refresh.
+                .onChange(of: reselect) { _, _ in
+                    selectedCard = nil
+                    withAnimation { proxy.scrollTo(Self.topID, anchor: .top) }
+                    Task { await reload() }
+                }
+              }
 
                 if !session.isAnonymous {
                     Button { showPicker = true } label: {

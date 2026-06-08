@@ -2,13 +2,13 @@ import SwiftUI
 
 struct ArchiveView: View {
     @Binding var selectedTab: Tab
+    @Binding var path: NavigationPath
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var session: AuthSession
 
     @State private var searchText = ""
     @State private var selectedGenre: WorkFormat?
     @State private var selectedWork: ShelfWork?
-    @State private var selectedCard: Card?
 
     private var allWorks: [ShelfWork] {
         Self.group(bookmarks.bookmarks)
@@ -60,13 +60,13 @@ struct ArchiveView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(item: $selectedCard) { card in
+        .navigationDestination(for: Card.self) { card in
             CardDetailView(card: card) { selectedTab = .settings }
         }
-        // Centered, self-animating "open the book" modal (replaces the bottom
-        // sheet that covered the 5 nav buttons). Stays within the tab content's
-        // safe area, so the tab bar remains visible — and beats Android's flat
-        // page-rotate by swinging an actual leather cover open to reveal the page.
+        // Leather "open the book" modal: the tapped spine swings its cover open
+        // to reveal the saved quotes, over a scrim that stops above the tab bar
+        // so the nav stays live. Tapping a quote closes the book and pushes the
+        // card onto the Library stack (so the Library tab can pop back to it).
         .overlay {
             if let work = selectedWork {
                 OpenedBookView(
@@ -75,7 +75,7 @@ struct ArchiveView: View {
                     onOpen: { card in
                         selectedWork = nil
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            selectedCard = card
+                            path.append(card)
                         }
                     },
                     onClose: { selectedWork = nil }
@@ -606,13 +606,17 @@ private struct ShelfShadowTexture: View {
 /// Centered "open the book" modal. A leather cover (matching the shelf spine)
 /// swings open on its left hinge to reveal the paged contents underneath, over
 /// a dimming scrim that stops above the tab bar so the nav buttons stay live.
+/// The swing + haptic are gated on Reduce Motion: with it on, the book is
+/// presented already-open (no rotation, no haptic).
 private struct OpenedBookView: View {
     let work: ShelfWork
     let volumeNo: Int
     let onOpen: (Card) -> Void
     let onClose: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var opened = false
+    @State private var hapticTrigger = false
 
     var body: some View {
         GeometryReader { geo in
@@ -666,13 +670,19 @@ private struct OpenedBookView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: opened)
+        .sensoryFeedback(.impact(weight: .medium), trigger: hapticTrigger)
         .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.74)) { opened = true }
+            if reduceMotion {
+                opened = true
+            } else {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.74)) { opened = true }
+                hapticTrigger.toggle()
+            }
         }
     }
 
     private func dismiss() {
+        guard !reduceMotion else { opened = false; onClose(); return }
         withAnimation(.easeIn(duration: 0.3)) { opened = false }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onClose() }
     }
@@ -751,7 +761,7 @@ private struct BookCover: View {
 }
 
 /// The opened page: ruled paper with a leather gutter, the collected quotes,
-/// and a close affordance. Pulled out of the old bottom sheet.
+/// and a close affordance.
 private struct BookPage: View {
     let work: ShelfWork
     let volumeNo: Int
@@ -781,12 +791,13 @@ private struct BookPage: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(.walnut)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
             .padding(.leading, 30)
-            .padding(.trailing, 16)
+            .padding(.trailing, 12)
             .padding(.top, 28)
             .padding(.bottom, 20)
 
@@ -841,7 +852,7 @@ private struct BookPage: View {
                 // Leather gutter binding down the left edge.
                 LinearGradient(
                     colors: [
-                        Color(hex: bookLeatherBlend2(work.title, 0x000000, 0.2)),
+                        bookLeatherBlend(bookLeatherHex(for: work.title), with: 0x000000, amount: 0.2),
                         Color(hex: bookLeatherHex(for: work.title)),
                     ],
                     startPoint: .leading, endPoint: .trailing
@@ -880,23 +891,6 @@ private struct RuledLinesBackground: View {
         }
         .allowsHitTesting(false)
     }
-}
-
-/// Helper: leather hex for a title, darkened toward `target` — returns a UInt32
-/// so it can feed `Color(hex:)` for the gutter gradient stop.
-private func bookLeatherBlend2(_ title: String, _ target: UInt32, _ amount: Double) -> UInt32 {
-    let hex = bookLeatherHex(for: title)
-    let clamped = min(1, max(0, amount))
-    let r = Double((hex >> 16) & 0xFF)
-    let g = Double((hex >> 8) & 0xFF)
-    let b = Double(hex & 0xFF)
-    let tr = Double((target >> 16) & 0xFF)
-    let tg = Double((target >> 8) & 0xFF)
-    let tb = Double(target & 0xFF)
-    let nr = UInt32((r + (tr - r) * clamped).rounded())
-    let ng = UInt32((g + (tg - g) * clamped).rounded())
-    let nb = UInt32((b + (tb - b) * clamped).rounded())
-    return (nr << 16) | (ng << 8) | nb
 }
 
 private extension String {
