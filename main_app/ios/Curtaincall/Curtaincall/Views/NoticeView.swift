@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct NoticeView: View {
+    @Binding var selectedTab: Tab
     @State private var notices: [Notice] = []
     @State private var isLoading = false
 
     var body: some View {
         VStack(spacing: 0) {
-            topBar
-            Hairline()
+            AppMasthead(onMyPage: { selectedTab = .settings })
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 24)
@@ -48,19 +48,6 @@ struct NoticeView: View {
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
-    }
-
-    private var topBar: some View {
-        HStack(alignment: .center) {
-            Text("Daily Script")
-                .font(.headlineSerif(22))
-                .foregroundStyle(.espresso)
-            Spacer()
-            Text("NOTICE").labelCaps()
-        }
-        .padding(.horizontal, 20)
-        .frame(height: 64)
-        .background(Color.paper)
     }
 
     private func load() async {

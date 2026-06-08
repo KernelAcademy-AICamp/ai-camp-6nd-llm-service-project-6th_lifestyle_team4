@@ -19,8 +19,7 @@ struct HomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            homeTopBar
-            Hairline()
+            AppMasthead(onMyPage: { selectedTab = .settings })
             if fetchFailed {
                 FetchErrorBanner { Task { await reload(deterministic: true) } }
             }
@@ -151,30 +150,6 @@ struct HomeView: View {
             .padding(.top, 8)
             .padding(.trailing, 8)
         }
-    }
-
-    private var homeTopBar: some View {
-        HStack(alignment: .center) {
-            HStack(spacing: 10) {
-                Image(systemName: "book.closed")
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(.espresso)
-                Text("Daily Script")
-                    .font(.headlineSerif(22))
-                    .foregroundStyle(.espresso)
-            }
-            Spacer()
-            Button { selectedTab = .settings } label: {
-                Text(session.isAnonymous ? "로그인" : "MY PAGE")
-                    .labelCaps()
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 20)
-        .frame(height: 64)
-        .background(Color.paper)
     }
 
     private static var formattedToday: String {
