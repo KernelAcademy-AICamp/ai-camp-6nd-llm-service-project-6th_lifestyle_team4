@@ -1019,32 +1019,48 @@ function cleanScriptExcerptEdges(script) {
   };
   const lines = script.split('\n');
 
-  // 첫 줄(들) 검사 — 잘린 단어로 시작하면 제거. 라벨/지문/한글 라인은 건드리지 않음.
-  while (lines.length > 1) {
-    const first = lines[0].trim();
-    if (!first) { lines.shift(); continue; }
-    if (isLabelLine(first)) break;
-    // 한글 라인은 검사 skip (한글 잘림 판별 어렵고 false positive 위험)
-    if (/[가-힯]/.test(first)) break;
-    const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
-    // 영문 소문자 1~3자 fragment + 일반 단어 아님 → 잘린 단어
-    if (/^[a-z]{1,3}$/.test(firstToken) && !COMMON_SHORT_EN.has(firstToken.toLowerCase())) {
-      lines.shift();
-      continue;
+  // 첫 줄 잘린 토큰 처리 — 카드 자체는 보존, 잘린 부분만 제거.
+  //  · 첫 문장 종결자(. ! ? …) 다음부터 시작 (그 앞 잘린 fragment 제거)
+  //  · 종결자 못 찾으면 잘린 토큰만 제거하고 줄 유지
+  //  · 줄 자체는 절대 제거 안 함 (카드 내용 손실 방지)
+  if (lines.length >= 1) {
+    const first = (lines[0] || '').trim();
+    if (first && !isLabelLine(first) && !/[가-힯]/.test(first)) {
+      const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
+      if (/^[a-z]{1,3}$/.test(firstToken) && !COMMON_SHORT_EN.has(firstToken.toLowerCase())) {
+        // ① 첫 문장 종결자 찾아 그 뒤부터
+        const sentenceEnd = first.match(/[.!?…]["'”’]?\s+/);
+        if (sentenceEnd) {
+          const cutPos = sentenceEnd.index + sentenceEnd[0].length;
+          lines[0] = first.slice(cutPos);
+        } else {
+          // ② 종결자 못 찾음 — 잘린 첫 토큰만 제거
+          lines[0] = first.replace(/^\W*\w{1,3}\W+/, '');
+        }
+      }
     }
-    break;
   }
 
-  // 끝 줄(들) 검사 — 종결자 없고 단어 잘림이면 제거.
-  while (lines.length > 1) {
-    const last = lines[lines.length - 1].trim();
-    if (!last) { lines.pop(); continue; }
-    // 종결자로 끝남 → OK, 유지
-    if (/[.!?"'”’…。！？\)\）\]\】]\s*$/.test(last)) break;
-    // 영문 + 하이픈/언더스코어 끝 → 단어 잘림 → 제거
-    if (/[a-zA-Z][-_]\s*$/.test(last)) { lines.pop(); continue; }
-    // 그 외 — 한글 줄, 또는 종결자 없는 긴 영문 문장 등은 유지
-    break;
+  // 끝 줄 잘린 토큰 처리 — 카드 자체는 보존, 잘린 부분만 제거.
+  //  · 마지막 종결자 이후 잘린 텍스트만 잘라냄
+  //  · 종결자 없으면 그대로 둠 (한글 종결자 없는 라인 많아 false positive 위험)
+  if (lines.length >= 1) {
+    const lastIdx = lines.length - 1;
+    const last = (lines[lastIdx] || '').trim();
+    if (last && !isLabelLine(last) && !/[가-힯]\s*$/.test(last)) {
+      const endsClean = /[.!?"'”’…。！？\)\）\]\】]\s*$/.test(last);
+      const hyphenCut = /[a-zA-Z][-_]\s*$/.test(last);
+      // 영문 + 종결자 없음 또는 하이픈 잘림 → 마지막 종결자까지만 남김
+      if (!endsClean || hyphenCut) {
+        const sentenceMatches = [...last.matchAll(/[.!?…]["'”’]?\s/g)];
+        if (sentenceMatches.length > 0) {
+          const m = sentenceMatches[sentenceMatches.length - 1];
+          const cutEnd = m.index + m[0].trimEnd().length;
+          lines[lastIdx] = last.slice(0, cutEnd);
+        }
+        // 종결자 못 찾으면 — 라인 그대로 (카드 보존 우선, 자투리 잠깐 유지)
+      }
+    }
   }
 
   return lines.join('\n').replace(/^\n+|\n+$/g, '');
