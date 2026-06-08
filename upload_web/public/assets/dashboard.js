@@ -698,8 +698,10 @@ document.querySelector('#title-input')?.addEventListener('keydown', (e) => {
 // (다른 작품을 의미할 수 있어 검색 로직이 다시 작동해야 함)
 document.querySelector('#title-input')?.addEventListener('input', () => {
   const bookIdInput = document.querySelector('#title-book-id');
+  const urlInput = document.querySelector('#title-plain-text-url');
   if (bookIdInput?.value) {
     bookIdInput.value = '';
+    if (urlInput) urlInput.value = '';
     const hint = document.getElementById('gb-cat-picked-hint');
     if (hint) hint.classList.add('hidden');
   }
@@ -752,7 +754,7 @@ document.querySelector('#title-input')?.addEventListener('input', () => {
     suggestEl.classList.remove('hidden');
 
     // 행 클릭 → 작품명/bookId 자동 입력 + 카테고리 dropdown 자동 설정 +
-    // 결과 목록에서 그 작품 강조/스크롤
+    // 결과 목록에서 그 작품 강조/스크롤 + plainTextUrl 저장 (gutendex 호출 우회)
     suggestEl.querySelectorAll('.title-suggest-row').forEach((btn, idx) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -762,7 +764,9 @@ document.querySelector('#title-input')?.addEventListener('input', () => {
         const pickedWork = (works || [])[idx] || (bid && ttl ? { bookId: Number(bid), title: ttl } : null);
         if (ttl) inputEl.value = ttl;
         if (bookIdInput && bid) bookIdInput.value = bid;
-        // 결과 목록 렌더가 픽한 작품을 강조 + 그 페이지로 이동 + 없으면 맨 위 삽입
+        // 본문 URL 도 함께 저장 — gbFetchAndExtract 가 gutendex 호출 우회하고 직접 fetch
+        const urlInput = document.querySelector('#title-plain-text-url');
+        if (urlInput) urlInput.value = pickedWork?.plainTextUrl || '';
         window.__pickedFromSuggest = pickedWork;
         if (suggestCat) applySuggestedCategory(suggestCat);
         hideSuggest();
@@ -930,13 +934,15 @@ async function onGbSearch() {
     titleInput?.focus();
     return;
   }
-  // 카테고리 피커에서 골랐으면 hidden #title-book-id 에 책 ID 가 있음 → 검색 생략하고 바로 fetch
+  // 카테고리 피커/자동완성에서 골랐으면 hidden #title-book-id 에 책 ID 가 있음 → 검색 생략하고 바로 fetch
+  // 더불어 hidden #title-plain-text-url 에 본문 URL 도 있으면 함께 전달 → gutendex 호출 우회
   const pickedBookId = (bookIdInput?.value || '').trim();
+  const pickedUrl = (document.querySelector('#title-plain-text-url')?.value || '').trim();
   if (pickedBookId && /^\d+$/.test(pickedBookId)) {
     const bookId = Number.parseInt(pickedBookId, 10);
     setGbStatus(`Gutenberg #${bookId} 로 바로 가져옵니다 (카테고리에서 선택)…`, 'info');
     renderGbResults([]);
-    await gbFetchAndExtract({ bookId, title: query });
+    await gbFetchAndExtract({ bookId, plainTextUrl: pickedUrl || undefined, title: query });
     return;
   }
   // 숫자만 입력했으면 책 ID 로 바로 fetch (검색 endpoint 가 느릴 때 유용).
@@ -2167,8 +2173,10 @@ function gbCatIdOf(name) {
       row.addEventListener('click', () => {
         const titleInput = document.querySelector('#title-input');
         const bookIdInput = document.querySelector('#title-book-id');
+        const urlInput = document.querySelector('#title-plain-text-url');
         if (titleInput) titleInput.value = w.title || '';
         if (bookIdInput) bookIdInput.value = w.bookId ? String(w.bookId) : '';
+        if (urlInput) urlInput.value = w.plainTextUrl || '';
         worksList.querySelectorAll('button.work-row').forEach((b) => b.classList.remove('bg-primary/20'));
         row.classList.add('bg-primary/20');
         pickedHint.textContent = `✓ 선택됨: ${w.title}${w.bookId ? ' · Gutenberg #' + w.bookId + ' · 검색 없이 바로 가져오기' : ''}`;
