@@ -137,6 +137,12 @@ struct CardDetailView: View {
                     nickname: session.nickname,
                     focused: $composerFocused
                 )
+                // When unfocused the tab bar is visible (a sibling bottom inset
+                // at RootView), so lift the composer to sit cleanly above it.
+                // When focused the tab bar is hidden and the keyboard raises the
+                // inset, so drop flush into the bottom safe area.
+                .padding(.bottom, composerFocused ? 0 : EditorialTabBar.barHeight)
+                .animation(.easeInOut(duration: 0.2), value: composerFocused)
             }
         }
         .preference(key: ComposerFocusedPreferenceKey.self, value: composerFocused)

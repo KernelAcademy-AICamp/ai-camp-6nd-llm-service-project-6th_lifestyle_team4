@@ -6,6 +6,10 @@ struct EditorialTabBar: View {
     /// navigation stack back to root).
     var onReselect: ((Tab) -> Void)? = nil
 
+    /// Content height of the bar (hairline + row), used by sibling bottom-pinned
+    /// views (e.g. the comment composer) to clear it when it's visible.
+    static let barHeight: CGFloat = 65
+
     var body: some View {
         VStack(spacing: 0) {
             Hairline()
