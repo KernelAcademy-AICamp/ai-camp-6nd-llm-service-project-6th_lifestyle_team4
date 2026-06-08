@@ -751,15 +751,19 @@ document.querySelector('#title-input')?.addEventListener('input', () => {
     }).join('');
     suggestEl.classList.remove('hidden');
 
-    // 행 클릭 → 작품명/bookId 자동 입력 + 카테고리 dropdown 자동 설정
-    suggestEl.querySelectorAll('.title-suggest-row').forEach((btn) => {
+    // 행 클릭 → 작품명/bookId 자동 입력 + 카테고리 dropdown 자동 설정 +
+    // 결과 목록에서 그 작품 강조/스크롤
+    suggestEl.querySelectorAll('.title-suggest-row').forEach((btn, idx) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         const bid = btn.getAttribute('data-book-id');
         const ttl = btn.getAttribute('data-title');
         const suggestCat = btn.getAttribute('data-suggest-cat') || '';
+        const pickedWork = (works || [])[idx] || (bid && ttl ? { bookId: Number(bid), title: ttl } : null);
         if (ttl) inputEl.value = ttl;
         if (bookIdInput && bid) bookIdInput.value = bid;
+        // 결과 목록 렌더가 픽한 작품을 강조 + 그 페이지로 이동 + 없으면 맨 위 삽입
+        window.__pickedFromSuggest = pickedWork;
         if (suggestCat) applySuggestedCategory(suggestCat);
         hideSuggest();
       });
@@ -2112,6 +2116,21 @@ function gbCatIdOf(name) {
       }
     }
 
+    // 자동완성으로 픽한 작품이 있으면 — 결과에 있는지 검사
+    //  · 있으면 그 작품이 있는 페이지를 시작 페이지로
+    //  · 없으면 맨 위에 강제 삽입 (사용자가 본 그 작품을 반드시 표시)
+    const pickedFromSuggest = window.__pickedFromSuggest;
+    window.__pickedFromSuggest = null; // 1회용
+    let pickedBookId = null;
+    if (pickedFromSuggest?.bookId) {
+      pickedBookId = Number(pickedFromSuggest.bookId);
+      const exists = works.some((w) => Number(w.bookId) === pickedBookId);
+      if (!exists) {
+        // 결과에 없음 — 맨 위에 삽입 (자동완성 응답이 작품 객체 그대로)
+        works = [pickedFromSuggest, ...works];
+      }
+    }
+
     worksList.innerHTML = '';
     worksCount.textContent = String(works.length);
     if (!works.length) {
@@ -2124,11 +2143,20 @@ function gbCatIdOf(name) {
     const PAGE_SIZE = 30;
     const totalPages = Math.max(1, Math.ceil(works.length / PAGE_SIZE));
     let currentPage = 1;
+    // 픽한 작품이 있으면 그 작품이 있는 페이지로 시작
+    if (pickedBookId) {
+      const idx = works.findIndex((w) => Number(w.bookId) === pickedBookId);
+      if (idx >= 0) currentPage = Math.floor(idx / PAGE_SIZE) + 1;
+    }
 
     function buildWorkRow(w) {
       const row = document.createElement('button');
       row.type = 'button';
-      row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-primary/5 transition-colors';
+      const isPicked = pickedBookId && Number(w.bookId) === pickedBookId;
+      row.className = `w-full text-left px-3 py-2 text-sm transition-colors ${
+        isPicked ? 'bg-primary/20 ring-2 ring-primary/40' : 'hover:bg-primary/5'
+      }`;
+      if (isPicked) row.dataset.picked = '1';
       row.innerHTML = `
         <div class="flex items-baseline justify-between gap-3">
           <span class="font-semibold text-on-surface truncate">${escapeForToast(w.title || '')}</span>
@@ -2196,11 +2224,13 @@ function gbCatIdOf(name) {
       works.slice(start, start + PAGE_SIZE).forEach((w) => worksList.appendChild(buildWorkRow(w)));
       worksList.appendChild(buildPaginationNav());
       worksCount.textContent = `${works.length} (${currentPage}/${totalPages}p)`;
-      // 페이지 변경 시 목록 최상단으로 스크롤
-      worksList.scrollTop = 0;
+      // 픽한 작품이 이 페이지에 있으면 그 행으로 스크롤, 아니면 최상단
+      const picked = worksList.querySelector('button[data-picked="1"]');
+      if (picked) picked.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      else worksList.scrollTop = 0;
     }
 
-    renderPage(1);
+    renderPage(currentPage);
   });
 })();
 
