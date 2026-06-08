@@ -125,28 +125,20 @@ struct CardDetailView: View {
                 .padding(.horizontal, 20)
             }
             .scrollDismissesKeyboard(.interactively)
-        }
-        .background(Color.paper)
-        .toolbar(.hidden, for: .navigationBar)
-        // Chat-style composer pinned above the keyboard. The bottom safe-area
-        // inset rides up with the keyboard automatically; RootView hides the tab
-        // bar while it's focused (see ComposerFocusedPreferenceKey below).
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !session.isAnonymous {
+            // Docked composer: solid bar, scroll content inset by its height
+            // (nothing hides behind it), flush above the tab bar when unfocused,
+            // dropping into the safe area above the keyboard when focused.
+            .dockedBottomBar(isActive: !session.isAnonymous, clearTabBar: !composerFocused) {
                 CommentComposer(
                     model: comments,
                     userId: session.userId,
                     nickname: session.nickname,
                     focused: $composerFocused
                 )
-                // When unfocused the tab bar is visible (a sibling bottom inset
-                // at RootView), so lift the composer to sit cleanly above it.
-                // When focused the tab bar is hidden and the keyboard raises the
-                // inset, so drop flush into the bottom safe area.
-                .padding(.bottom, composerFocused ? 0 : EditorialTabBar.barHeight)
-                .animation(.easeInOut(duration: 0.2), value: composerFocused)
             }
         }
+        .background(Color.paper)
+        .toolbar(.hidden, for: .navigationBar)
         .preference(key: ComposerFocusedPreferenceKey.self, value: composerFocused)
         // Tapping REPLY on a comment focuses the composer (keyboard up).
         .onChange(of: comments.replyingTo?.commentId) { _, newValue in
