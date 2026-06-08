@@ -33,8 +33,7 @@ struct FeedView: View {
         VStack(spacing: 0) {
             topBar
             Hairline()
-            ZStack(alignment: .bottomTrailing) {
-              ScrollViewReader { proxy in
+            ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         Spacer().frame(height: 24).id(Self.topID)
@@ -73,25 +72,23 @@ struct FeedView: View {
                     withAnimation { proxy.scrollTo(Self.topID, anchor: .top) }
                     Task { await reload() }
                 }
-              }
-
-                if !session.isAnonymous {
-                    Button { showPicker = true } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 22, weight: .regular))
-                            .foregroundStyle(Color.paper)
-                            .frame(width: 56, height: 56)
-                            .background(Circle().fill(Color.espresso))
-                            .shadow(color: Color.black.opacity(0.20), radius: 8, x: 0, y: 4)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
-                }
             }
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !session.isAnonymous {
+                HStack {
+                    Spacer()
+                    feedActionButton
+                }
+                .padding(.top, 12)
+                .padding(.trailing, 20)
+                .padding(.bottom, 16)
+                .background(Color.paper)
+                .overlay(alignment: .top) { Hairline() }
+            }
+        }
         .navigationDestination(item: $selectedCard) { card in
             CardDetailView(card: card) {
                 selectedTab = .settings
@@ -144,6 +141,18 @@ struct FeedView: View {
         .padding(.horizontal, 20)
         .frame(height: 64)
         .background(Color.paper)
+    }
+
+    private var feedActionButton: some View {
+        Button { showPicker = true } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(Color.paper)
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(Color.espresso))
+                .shadow(color: Color.black.opacity(0.20), radius: 8, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
     }
 
     private var categoryChips: some View {
