@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct CardDetailView: View {
     let card: Card
@@ -123,6 +124,7 @@ struct CardDetailView: View {
                 }
                 .padding(.horizontal, 20)
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
@@ -149,6 +151,12 @@ struct CardDetailView: View {
         // Tapping REPLY on a comment focuses the composer (keyboard up).
         .onChange(of: comments.replyingTo?.commentId) { _, newValue in
             if newValue != nil { composerFocused = true }
+        }
+        // Backstop: any keyboard dismissal path (interactive swipe, tap-away,
+        // return key) clears focus so the tab bar reliably restores — @FocusState
+        // alone doesn't always flip false on interactive dismissal.
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            if composerFocused { composerFocused = false }
         }
         .task { await loadCountsAndIncrementView() }
         .overlay {
