@@ -259,9 +259,12 @@ private fun TodayCard(
         }
         Box(modifier = Modifier.height(28.dp))
         // Speaker (bold) above the quote, when extractable — mirrors the PWA.
+        // 산문(novel/essay/prose) 은 화자 개념이 없어 추출 skip — 지문/묘사가 화자로
+        // 오인되어 굵게 표시되는 버그(예: "끔찍한 흉터로 일그러진 창백한 얼굴") 방지.
         // EN 모드: 영문 script 직접 추출 → 실패 시 한글 quote 의 블록 인덱스로 영문 같은
         // 인덱스 라벨 매칭 (cross-lang). 한글 라벨은 내부 가드로 영문 모드에 노출 차단.
         val speaker = card?.let {
+            if (ScriptFormat.isProse(it.works?.format)) return@let ""
             val characters = it.works?.characterList().orEmpty()
             if (english) {
                 ScriptFormat.extractSpeakerEn(
