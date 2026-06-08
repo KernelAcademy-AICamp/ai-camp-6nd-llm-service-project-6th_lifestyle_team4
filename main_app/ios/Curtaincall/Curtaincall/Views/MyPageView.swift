@@ -105,8 +105,10 @@ struct MyPageView: View {
                     .buttonStyle(.plain)
 
                     // Account deletion (App Store Guideline 5.1.1(v)). Members
-                    // only — anonymous users have no account to delete.
-                    if !session.isAnonymous {
+                    // only, and gated behind a flag that stays OFF until the
+                    // delete-account Edge Function is deployed (no non-functional
+                    // control ships).
+                    if FeatureFlags.accountDeletionEnabled && !session.isAnonymous {
                         Spacer().frame(height: 16)
                         Button {
                             showDeleteConfirm = true
