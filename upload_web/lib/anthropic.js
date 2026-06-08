@@ -782,11 +782,12 @@ export async function runExtract(scriptText, category = 'screen', seedBlock = ''
     `[anthropic] chunked extract chars=${String(scriptText || '').length} ` +
     `chunks=${chunks.length} firstChunkChars=${sampleSize} overlap=${EXTRACT_CHUNK_OVERLAP_CHARS}`
   );
-  onProgress?.({ t: 'stage', m: `본문이 길어 ${chunks.length}개 청크로 분할 — 동시 3개씩 분석` });
+  onProgress?.({ t: 'stage', m: `본문이 길어 ${chunks.length}개 청크로 분할 — 동시 6개씩 분석` });
 
-  // 청크 병렬 처리 — 순차로 돌면 6~7개 청크 × 30~60초 = Vercel 300s 한도 초과.
-  // 동시 3개씩 처리해 wall-clock 을 1/3 로 단축. Anthropic 레이트는 SDK 가 자동 관리.
-  const CHUNK_CONCURRENCY = 3;
+  // 청크 병렬 처리 — Vercel 300s 한도 안에 끝내려면 동시 처리량 ↑.
+  // 6 동시 처리: 20 청크면 4 라운드 × 30~60초 = 120~240초 (300s 안).
+  // Anthropic Haiku Tier 1 (50 RPM) / Tier 2+ (1000 RPM) 모두 안전.
+  const CHUNK_CONCURRENCY = 6;
   const results = new Array(chunks.length);
   let cursor = 0;
   let completed = 0;

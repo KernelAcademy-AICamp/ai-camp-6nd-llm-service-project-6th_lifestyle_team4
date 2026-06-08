@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/extract.js": { "maxDuration": 800 },
+    "api/extract.js": { "maxDuration": 300 },
     "api/translate-card-batch.js": { "maxDuration": 120 },
     "api/translate-fields.js": { "maxDuration": 90 },
     "api/save.js": { "maxDuration": 60 },
