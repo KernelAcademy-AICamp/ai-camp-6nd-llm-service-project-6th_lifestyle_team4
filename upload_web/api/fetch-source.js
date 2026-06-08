@@ -119,6 +119,7 @@ export default async function handler(req, res) {
 
         // 캐시 miss — 외부에서 1회 받아오고 Supabase 에 저장.
         // plainTextUrl 가 없으면 gutenberg_books.text_url 로 채움 (gutendex 호출 우회).
+        // 그것도 없으면 표준 URL 패턴 자동 생성.
         let effectiveUrl = plainTextUrl;
         if (!effectiveUrl && Number.isInteger(bookId)) {
           try {
@@ -130,6 +131,10 @@ export default async function handler(req, res) {
             if (bookMeta?.text_url) effectiveUrl = bookMeta.text_url;
           } catch (e) {
             console.warn('[fetch-source] gutenberg_books text_url lookup failed:', e?.message || e);
+          }
+          // 표준 URL 폴백 — RDF 메타 없는 책도 처리
+          if (!effectiveUrl) {
+            effectiveUrl = `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.txt`;
           }
         }
 

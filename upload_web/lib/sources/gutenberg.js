@@ -355,10 +355,9 @@ export async function fetchGutenbergText({ bookId, plainTextUrl }) {
     if (error || !row) {
       throw new Error(`book ${bookId} not found in Supabase gutenberg_books`);
     }
-    if (!row.text_url) {
-      throw new Error(`book ${bookId} has no plain-text URL in Supabase`);
-    }
-    textUrl = row.text_url;
+    // RDF 인덱싱 시 plain-text 메타 못 잡힌 책 — Gutenberg 표준 URL 패턴으로 자동 생성.
+    // https://www.gutenberg.org/cache/epub/<id>/pg<id>.txt 가 거의 모든 책에 일관 적용.
+    textUrl = row.text_url || `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.txt`;
     metadata = {
       id: row.book_id,
       title: row.title,
