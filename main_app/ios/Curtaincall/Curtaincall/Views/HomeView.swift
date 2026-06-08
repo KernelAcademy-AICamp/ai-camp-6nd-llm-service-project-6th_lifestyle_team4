@@ -27,7 +27,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 32)
                     if let latestNotice {
-                        NoticeBanner(notice: latestNotice)
+                        NoticeBanner(notice: latestNotice) { selectedTab = .notice }
                         Spacer().frame(height: 24)
                     }
                     Text(Self.formattedToday)
@@ -332,23 +332,50 @@ private struct TodayCardBody: View {
 
 private struct NoticeBanner: View {
     let notice: Notice
+    let action: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(notice.tag.uppercased()).labelCaps(color: .cta)
-            Text(notice.title)
-                .font(.titleSerif(17))
-                .foregroundStyle(.espresso)
-                .lineLimit(2)
-            Text(notice.body)
-                .font(.bodySans(13))
-                .foregroundStyle(.walnut)
-                .lineLimit(2)
-                .bookLeading(size: 13)
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(notice.tag.uppercased()).labelCaps(color: .cta)
+                    Text(notice.title)
+                        .font(.titleSerif(17))
+                        .foregroundStyle(.espresso)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(notice.body)
+                        .font(.bodySans(13))
+                        .foregroundStyle(.walnut)
+                        .lineLimit(2)
+                        .bookLeading(size: 13)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.sand)
+                    .padding(.top, 2)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
+        .buttonStyle(PressableCardStyle())
+    }
+}
+
+/// Subtle press feedback for tappable cards — a faint espresso wash on press,
+/// in design tokens (matches the EditorialButton press treatment).
+private struct PressableCardStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .overlay {
+                if configuration.isPressed {
+                    RoundedRectangle(cornerRadius: 8).fill(Color.espresso.opacity(0.06))
+                }
+            }
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
