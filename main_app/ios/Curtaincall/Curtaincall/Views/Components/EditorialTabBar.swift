@@ -2,13 +2,22 @@ import SwiftUI
 
 struct EditorialTabBar: View {
     @Binding var selection: Tab
+    /// Called when an already-selected tab is tapped again (e.g. to pop its
+    /// navigation stack back to root).
+    var onReselect: ((Tab) -> Void)? = nil
+
+    /// Content height of the bar (hairline + row), used by sibling bottom-pinned
+    /// views (e.g. the comment composer) to clear it when it's visible.
+    static let barHeight: CGFloat = 65
 
     var body: some View {
         VStack(spacing: 0) {
             Hairline()
             HStack(spacing: 0) {
                 ForEach(Tab.allCases, id: \.self) { tab in
-                    Button { selection = tab } label: {
+                    Button {
+                        if selection == tab { onReselect?(tab) } else { selection = tab }
+                    } label: {
                         tabItem(tab: tab, active: tab == selection)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)

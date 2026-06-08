@@ -1,6 +1,15 @@
 import SwiftUI
 import Combine
 
+/// Bubbles "the comment composer is focused" up to `RootView` so it can hide the
+/// tab bar while the keyboard is up. Default false; any focused composer wins.
+struct ComposerFocusedPreferenceKey: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
 @MainActor
 final class CommentsModel: ObservableObject {
     @Published var comments: [Comment] = []
@@ -110,7 +119,6 @@ struct CommentsSection: View {
     let isAnonymous: Bool
     let nickname: String
 
-    @State private var draft = ""
     @State private var editDraft = ""
 
     var body: some View {
@@ -124,8 +132,6 @@ struct CommentsSection: View {
                     .foregroundStyle(.walnut)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
-            } else {
-                composer
             }
 
             if let err = model.errorMessage {
@@ -151,58 +157,6 @@ struct CommentsSection: View {
             }
         }
         .task { await model.load() }
-    }
-
-    private var composer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let target = model.replyingTo {
-                HStack {
-                    Text("↳ \(target.authorNickname ?? "익명")에게 답글").labelCaps(color: .cta)
-                    Spacer()
-                    Button { model.replyingTo = nil } label: {
-                        Text("취소").font(.bodySans(12)).foregroundStyle(.walnut)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            ZStack(alignment: .topLeading) {
-                if draft.isEmpty {
-                    Text(model.replyingTo == nil ? "이 명대사에 대한 생각을 남겨보세요…" : "답글을 남기세요…")
-                        .font(.bodySans(14))
-                        .foregroundStyle(.walnut)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
-                }
-                TextEditor(text: $draft)
-                    .font(.bodySans(14))
-                    .foregroundStyle(.espresso)
-                    .frame(minHeight: 64)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .scrollContentBackground(.hidden)
-                    .onChange(of: draft) { _, newValue in
-                        if newValue.count > 500 { draft = String(newValue.prefix(500)) }
-                    }
-            }
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
-
-            HStack {
-                Text("\(draft.count) / 500").labelCaps()
-                Spacer()
-                Button {
-                    let body = draft
-                    draft = ""
-                    if let uid = userId {
-                        Task { await model.submit(userId: uid, nickname: nickname, body: body) }
-                    }
-                } label: {
-                    Text("등록").editorialButton(style: .filled).frame(width: 96)
-                }
-                .buttonStyle(.plain)
-                .disabled(model.submitting || draft.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
     }
 
     private func commentRow(_ c: Comment, isReply: Bool) -> some View {
@@ -324,5 +278,87 @@ struct CommentsSection: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy.MM.dd"
         return f.string(from: date)
+    }
+}
+
+/// Chat-style comment composer pinned above the keyboard by the host view's
+/// bottom safe-area inset. A growing field with the "등록" submit inline on the
+/// trailing edge, enabled only when there's non-blank text.
+struct CommentComposer: View {
+    @ObservedObject var model: CommentsModel
+    let userId: Int?
+    let nickname: String
+    var focused: FocusState<Bool>.Binding
+
+    @State private var draft = ""
+
+    private var trimmed: String {
+        draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    private var canSend: Bool { !model.submitting && !trimmed.isEmpty }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if model.replyingTo != nil || (focused.wrappedValue && !draft.isEmpty) {
+                HStack(spacing: 8) {
+                    if let target = model.replyingTo {
+                        Text("↳ \(target.authorNickname ?? "익명")에게 답글").labelCaps(color: .cta)
+                        Button { model.replyingTo = nil } label: {
+                            Text("취소").font(.bodySans(12)).foregroundStyle(.walnut)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer()
+                    if focused.wrappedValue && !draft.isEmpty {
+                        Text("\(draft.count)/500").labelCaps()
+                    }
+                }
+            }
+
+            HStack(alignment: .bottom, spacing: 0) {
+                TextField(
+                    model.replyingTo == nil ? "이 명대사에 대한 생각을 남겨보세요…" : "답글을 남기세요…",
+                    text: $draft,
+                    axis: .vertical
+                )
+                .font(.bodySans(14))
+                .foregroundStyle(.espresso)
+                .lineLimit(1...5)
+                .focused(focused)
+                .padding(.leading, 16)
+                .padding(.vertical, 10)
+                .onChange(of: draft) { _, newValue in
+                    if newValue.count > 500 { draft = String(newValue.prefix(500)) }
+                }
+
+                Button(action: send) {
+                    Text("등록")
+                        .labelCaps(color: canSend ? .paper : .walnut)
+                        .padding(.horizontal, 16)
+                        .frame(height: 36)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(canSend ? Color.espresso : Color.latte)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .padding(4)
+            }
+            .background(RoundedRectangle(cornerRadius: 22).fill(Color.paper))
+            .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.latte, lineWidth: 0.5))
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(Color.paper)
+        .overlay(alignment: .top) { Hairline() }
+    }
+
+    private func send() {
+        guard canSend, let uid = userId else { return }
+        let body = trimmed
+        draft = ""
+        Task { await model.submit(userId: uid, nickname: nickname, body: body) }
     }
 }

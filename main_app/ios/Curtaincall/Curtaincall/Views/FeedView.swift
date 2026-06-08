@@ -2,8 +2,13 @@ import SwiftUI
 
 struct FeedView: View {
     @Binding var selectedTab: Tab
+    /// Bumped by RootView each time the already-active Feed tab is tapped — drives
+    /// scroll-to-top + refresh.
+    var reselect: Int = 0
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
+
+    private static let topID = "feedTop"
 
     @State private var category: FeedCategory = .today
     @State private var posts: [FeedPost] = []
@@ -28,10 +33,10 @@ struct FeedView: View {
         VStack(spacing: 0) {
             topBar
             Hairline()
-            ZStack(alignment: .bottomTrailing) {
+            ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        Spacer().frame(height: 24)
+                        Spacer().frame(height: 24).id(Self.topID)
                         Text("피드")
                             .font(.displaySerif(32))
                             .foregroundStyle(.espresso)
@@ -60,24 +65,30 @@ struct FeedView: View {
                     .padding(.horizontal, 20)
                 }
                 .refreshable { await reload() }
-
-                if !session.isAnonymous {
-                    Button { showPicker = true } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 22, weight: .regular))
-                            .foregroundStyle(Color.paper)
-                            .frame(width: 56, height: 56)
-                            .background(Circle().fill(Color.espresso))
-                            .shadow(color: Color.black.opacity(0.20), radius: 8, x: 0, y: 4)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
+                // Tapping the active Feed tab: dismiss any pushed detail, snap to
+                // the top, and re-fetch — the same refresh as pull-to-refresh.
+                .onChange(of: reselect) { _, _ in
+                    selectedCard = nil
+                    withAnimation { proxy.scrollTo(Self.topID, anchor: .top) }
+                    Task { await reload() }
                 }
             }
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !session.isAnonymous {
+                HStack {
+                    Spacer()
+                    feedActionButton
+                }
+                .padding(.top, 12)
+                .padding(.trailing, 20)
+                .padding(.bottom, 16)
+                .background(Color.paper)
+                .overlay(alignment: .top) { Hairline() }
+            }
+        }
         .navigationDestination(item: $selectedCard) { card in
             CardDetailView(card: card) {
                 selectedTab = .settings
@@ -130,6 +141,18 @@ struct FeedView: View {
         .padding(.horizontal, 20)
         .frame(height: 64)
         .background(Color.paper)
+    }
+
+    private var feedActionButton: some View {
+        Button { showPicker = true } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(Color.paper)
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(Color.espresso))
+                .shadow(color: Color.black.opacity(0.20), radius: 8, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
     }
 
     private var categoryChips: some View {
