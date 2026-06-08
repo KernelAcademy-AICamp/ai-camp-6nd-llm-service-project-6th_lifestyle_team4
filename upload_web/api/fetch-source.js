@@ -13,6 +13,7 @@ import { requireAdmin, AuthError } from '../lib/auth.js';
 import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 import { searchWikisourceKr, fetchWikisourceKrPage } from '../lib/sources/wikisource-kr.js';
 import { searchGutenberg, fetchGutenbergText } from '../lib/sources/gutenberg.js';
+import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
 const MAX_BODY = 8 * 1024;
 
@@ -73,7 +74,82 @@ export default async function handler(req, res) {
         if (!Number.isInteger(bookId) && !plainTextUrl) {
           throw new HttpError('bookId or plainTextUrl required', 400);
         }
-        const r = await fetchGutenbergText({ bookId, plainTextUrl });
+
+        // ─── lazy caching: Supabase gutenberg_book_text 우선 조회 ───
+        // 캐시 hit → 즉시 반환 (외부 호출 0)
+        // 캐시 miss → gutenberg.org 1회 다운로드 → 캐시 저장 → 반환
+        const sb = getSupabaseAdmin();
+        if (Number.isInteger(bookId)) {
+          try {
+            const { data: cached } = await sb
+              .from('gutenberg_book_text')
+              .select('book_id, raw_text, text_length, source_url')
+              .eq('book_id', bookId)
+              .maybeSingle();
+            if (cached && cached.raw_text) {
+              // LRU 갱신 — last_used_at 업데이트 (실패해도 응답 진행)
+              sb.from('gutenberg_book_text')
+                .update({ last_used_at: new Date().toISOString() })
+                .eq('book_id', bookId)
+                .then(() => {}, () => {});
+              // 메타데이터는 gutenberg_books 에서 함께 채워 응답
+              const { data: meta } = await sb
+                .from('gutenberg_books')
+                .select('title, authors, languages')
+                .eq('book_id', bookId)
+                .maybeSingle();
+              return res.status(200).json({
+                kind, op,
+                bookId,
+                title: meta?.title || null,
+                authors: meta?.authors || [],
+                languages: meta?.languages || [],
+                text: cached.raw_text,
+                length: cached.text_length,
+                truncated: false,
+                url: `https://www.gutenberg.org/ebooks/${bookId}`,
+                sourceUrl: cached.source_url || null,
+                source: 'supabase_cache',
+              });
+            }
+          } catch (e) {
+            console.warn('[fetch-source] gutenberg_book_text read failed:', e?.message || e);
+          }
+        }
+
+        // 캐시 miss — 외부에서 1회 받아오고 Supabase 에 저장.
+        // plainTextUrl 가 없으면 gutenberg_books.text_url 로 채움 (gutendex 호출 우회).
+        let effectiveUrl = plainTextUrl;
+        if (!effectiveUrl && Number.isInteger(bookId)) {
+          try {
+            const { data: bookMeta } = await sb
+              .from('gutenberg_books')
+              .select('text_url')
+              .eq('book_id', bookId)
+              .maybeSingle();
+            if (bookMeta?.text_url) effectiveUrl = bookMeta.text_url;
+          } catch (e) {
+            console.warn('[fetch-source] gutenberg_books text_url lookup failed:', e?.message || e);
+          }
+        }
+
+        const r = await fetchGutenbergText({ bookId, plainTextUrl: effectiveUrl });
+
+        // 캐시 저장 (실패해도 응답 진행)
+        if (Number.isInteger(bookId) && r.text) {
+          sb.from('gutenberg_book_text').upsert(
+            {
+              book_id: bookId,
+              raw_text: r.text,
+              text_length: r.length,
+              source_url: r.sourceUrl || null,
+              fetched_at: new Date().toISOString(),
+              last_used_at: new Date().toISOString(),
+            },
+            { onConflict: 'book_id' }
+          ).then(() => {}, (e) => console.warn('[fetch-source] cache write failed:', e?.message || e));
+        }
+
         return res.status(200).json({
           kind, op,
           bookId: r.bookId,
@@ -85,6 +161,7 @@ export default async function handler(req, res) {
           truncated: r.truncated,
           url: r.pageUrl,
           sourceUrl: r.sourceUrl,
+          source: 'fresh_fetch',
         });
       }
       throw new HttpError(`unknown op: ${op} (expected search | fetch)`, 400);
