@@ -687,12 +687,13 @@ function rescueIdenticalAndShort(cards, fullScript, category) {
   const target = Math.floor(minChars * 1.2);
 
   const out = cards.map((card, cardIdx) => {
-    if (!card?.quote || !card?.script_excerpt) return card;
+    if (!card?.quote) return card;
     const q = _norm(card.quote);
-    const s = _norm(card.script_excerpt);
+    const s = _norm(card.script_excerpt || '');
+    const isEmpty = !String(card.script_excerpt || '').trim();
     const isIdentical = q && s && (q === s || q.length / s.length >= QUOTE_RATIO_TOO_HIGH);
-    const isShort = String(card.script_excerpt).length < minChars;
-    if (!isIdentical && !isShort) return card;
+    const isShort = String(card.script_excerpt || '').length < minChars;
+    if (!isEmpty && !isIdentical && !isShort) return card;
 
     const quoteStr = String(card.quote).trim();
     if (!quoteStr) return card;
@@ -1009,6 +1010,21 @@ function cleanScriptExcerptEdges(script) {
     'be','by','at','as','if','do','go','up','us','he','am','oh','ah','ha',
     'the','and','but','for','you','her','him','our','out','all','was','had',
     'has','can','not','too','now','one','two','who','why','how','any','its',
+    'when','that','this','with','from','have','will','they','what','were',
+    'them','then','more','said','only','some','than','also','very','just',
+    'over','your','here','into','time','make','like','many','well','also',
+    'know','take','come','want','look','give','find','need','feel','keep',
+  ]);
+  // 일반 5자 영어 단어 — fragment 오인 방지. 실제 잘린 5자 fragment ("hened" 등) 만 처리.
+  const COMMON_5LETTER = new Set([
+    'about','after','again','being','could','every','first','great','house',
+    'might','never','other','place','right','small','still','their','there',
+    'these','thing','think','those','three','under','where','which','while',
+    'world','would','young','heart','found','hello','world','asked','heard',
+    'death','began','came','went','look','seen','came','says','told','sees',
+    'know','life','side','part','says','must','need','give','came','went',
+    'made','said','rose','came','went','show','knew','done','seen','goes',
+    'next','last','left','feet','head','hand','door','room','road','same',
   ]);
   const isLabelLine = (line) => {
     if (line.length > 30) return false;
@@ -1027,7 +1043,13 @@ function cleanScriptExcerptEdges(script) {
     const first = (lines[0] || '').trim();
     if (first && !isLabelLine(first) && !/[가-힯]/.test(first)) {
       const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
-      if (/^[a-z]{1,3}$/.test(firstToken) && !COMMON_SHORT_EN.has(firstToken.toLowerCase())) {
+      // fragment 검사 1~5자 (이전 1~3자) — "hened", "ened" 같은 4-5자 잘림도 잡음.
+      // 일반 영어 단어 (COMMON_SHORT_EN_LONG) 는 제외하여 false positive 방지.
+      const isFragment =
+        /^[a-z]{1,5}$/.test(firstToken)
+        && !COMMON_SHORT_EN.has(firstToken.toLowerCase())
+        && !COMMON_5LETTER.has(firstToken.toLowerCase());
+      if (isFragment) {
         // ① 첫 문장 종결자 찾아 그 뒤부터
         const sentenceEnd = first.match(/[.!?…]["'”’]?\s+/);
         if (sentenceEnd) {
@@ -1035,7 +1057,7 @@ function cleanScriptExcerptEdges(script) {
           lines[0] = first.slice(cutPos);
         } else {
           // ② 종결자 못 찾음 — 잘린 첫 토큰만 제거
-          lines[0] = first.replace(/^\W*\w{1,3}\W+/, '');
+          lines[0] = first.replace(/^\W*\w{1,5}\W+/, '');
         }
       }
     }
