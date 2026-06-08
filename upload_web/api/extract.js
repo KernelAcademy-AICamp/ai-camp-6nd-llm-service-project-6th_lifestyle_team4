@@ -8,9 +8,10 @@ import { HttpError, readJsonBody, sendError } from '../lib/http.js';
 
 export const config = {
   api: { bodyParser: false },
-  // 큰 영문 PDF(예: 드라큘라) 는 80K 글자 청크가 6~7 개 생기고,
-  // 각 청크 LLM 호출이 30~60초 걸려 기본 60s 제한을 넘김. Pro 한도 300s 까지 허용.
-  maxDuration: 300,
+  // 큰 영문 PDF(예: 돈키호테, 드라큘라) 는 80K 글자 청크가 10+ 개 생기고,
+  // 각 청크 LLM 호출이 30~60초 걸려 300s 도 부족. Vercel Pro Fluid 한도 800s 까지 허용.
+  // (Hobby plan 은 300s 까지 — 그 위는 자동 무시되거나 배포 실패 가능)
+  maxDuration: 800,
 };
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
