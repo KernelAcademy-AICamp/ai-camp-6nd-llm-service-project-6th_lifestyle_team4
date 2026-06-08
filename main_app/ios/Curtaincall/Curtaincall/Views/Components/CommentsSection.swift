@@ -281,9 +281,10 @@ struct CommentsSection: View {
     }
 }
 
-/// Chat-style comment composer pinned above the keyboard by the host view's
-/// bottom safe-area inset. A growing field with the "등록" submit inline on the
-/// trailing edge, enabled only when there's non-blank text.
+/// Chat-style comment composer — the inner content of a `dockedBottomBar`, which
+/// supplies the solid background, top hairline, and safe-area/keyboard/scroll
+/// behavior. A growing field with the "등록" submit inline on the trailing edge,
+/// enabled only when there's non-blank text.
 struct CommentComposer: View {
     @ObservedObject var model: CommentsModel
     let userId: Int?
@@ -351,8 +352,6 @@ struct CommentComposer: View {
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .background(Color.paper)
-        .overlay(alignment: .top) { Hairline() }
     }
 
     private func send() {

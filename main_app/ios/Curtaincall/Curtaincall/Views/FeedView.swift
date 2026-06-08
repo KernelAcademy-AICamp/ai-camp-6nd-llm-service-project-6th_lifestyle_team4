@@ -31,8 +31,7 @@ struct FeedView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            topBar
-            Hairline()
+            AppMasthead(onMyPage: { selectedTab = .settings })
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -128,19 +127,6 @@ struct FeedView: View {
                 }
             }
         }
-    }
-
-    private var topBar: some View {
-        HStack(alignment: .center) {
-            Text("Daily Script")
-                .font(.headlineSerif(22))
-                .foregroundStyle(.espresso)
-            Spacer()
-            Text("FEED").labelCaps()
-        }
-        .padding(.horizontal, 20)
-        .frame(height: 64)
-        .background(Color.paper)
     }
 
     private var feedActionButton: some View {

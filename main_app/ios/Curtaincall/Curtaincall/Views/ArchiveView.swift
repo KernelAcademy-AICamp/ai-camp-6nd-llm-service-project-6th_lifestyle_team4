@@ -27,8 +27,7 @@ struct ArchiveView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            archiveTopBar
-            Hairline()
+            AppMasthead(onMyPage: { selectedTab = .settings })
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 24)
@@ -83,24 +82,6 @@ struct ArchiveView: View {
             }
         }
         .task { await bookmarks.load(userId: session.userId) }
-    }
-
-    private var archiveTopBar: some View {
-        HStack(alignment: .center) {
-            Text("Daily Script")
-                .font(.headlineSerif(22))
-                .foregroundStyle(.espresso)
-            Spacer()
-            ZStack {
-                Rectangle().stroke(Color.walnut, lineWidth: 0.5)
-                Text(String(session.nickname.prefix(1)).uppercased().ifEmpty("D"))
-                    .labelCaps(color: .espresso)
-            }
-            .frame(width: 36, height: 36)
-        }
-        .padding(.horizontal, 20)
-        .frame(height: 64)
-        .background(Color.paper)
     }
 
     private var genreChips: some View {

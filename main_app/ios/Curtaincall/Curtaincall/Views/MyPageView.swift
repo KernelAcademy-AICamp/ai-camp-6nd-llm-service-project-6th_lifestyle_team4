@@ -13,8 +13,7 @@ struct MyPageView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            settingsTopBar
-            Hairline()
+            AppMasthead()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 16)
@@ -201,24 +200,6 @@ struct MyPageView: View {
                 .foregroundStyle(.walnut)
                 .bookLeading(size: 12)
         }
-    }
-
-    private var settingsTopBar: some View {
-        HStack(alignment: .center) {
-            Text("Daily Script")
-                .font(.headlineSerif(22))
-                .foregroundStyle(.espresso)
-            Spacer()
-            ZStack {
-                Rectangle().stroke(Color.walnut, lineWidth: 0.5)
-                Text(String(session.nickname.prefix(1)).uppercased().isEmpty ? "D" : String(session.nickname.prefix(1)).uppercased())
-                    .labelCaps(color: .espresso)
-            }
-            .frame(width: 36, height: 36)
-        }
-        .padding(.horizontal, 20)
-        .frame(height: 64)
-        .background(Color.paper)
     }
 
     private func sectionLabel(_ text: String) -> some View {

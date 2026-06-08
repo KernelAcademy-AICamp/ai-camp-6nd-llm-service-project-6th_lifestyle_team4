@@ -99,7 +99,7 @@ struct RootView: View {
                 FeedView(selectedTab: $selectedTab, reselect: feedReselect)
             }
             .tag(Tab.feed)
-            NavigationStack { NoticeView() }
+            NavigationStack { NoticeView(selectedTab: $selectedTab) }
                 .tag(Tab.notice)
             NavigationStack { MyPageView(selectedTab: $selectedTab) }
                 .tag(Tab.settings)
