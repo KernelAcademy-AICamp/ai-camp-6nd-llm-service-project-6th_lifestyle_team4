@@ -19,6 +19,7 @@ data class CardDto(
     val temperature: Int,
     val intensity: Int,
     @SerialName("view_count") val viewCount: Int? = null,
+    @SerialName("comment_count") val commentCount: Int? = null,
     // --- Bilingual originals (English). Present only on bilingual cards; null otherwise. ---
     @SerialName("quote_original") val quoteOriginal: String? = null,
     @SerialName("script_excerpt_original") val scriptExcerptOriginal: String? = null,

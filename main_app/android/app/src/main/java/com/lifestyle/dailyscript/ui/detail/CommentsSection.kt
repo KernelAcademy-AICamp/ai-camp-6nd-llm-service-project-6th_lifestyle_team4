@@ -1,17 +1,23 @@
 package com.lifestyle.dailyscript.ui.detail
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -21,13 +27,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -129,6 +138,7 @@ fun CommentsSection(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun CommentComposer(
     submitting: Boolean,
@@ -137,6 +147,14 @@ private fun CommentComposer(
     onCancelReply: () -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
+    var focused by remember { mutableStateOf(false) }
+    // 입력란 포커스 + 키보드가 떠 있으면 등록 버튼 Row를 키보드 위로 끌어온다.
+    // 텍스트가 바뀔 때마다(줄바꿈/줄넘김 포함) 다시 호출돼 입력란이 커져도 등록 버튼이 계속 보인다.
+    val bringReq = remember { BringIntoViewRequester() }
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(focused, text, imeBottom) {
+        if (focused && imeBottom > 0) runCatching { bringReq.bringIntoView() }
+    }
     val shape = RoundedCornerShape(8.dp)
 
     if (replyingTo != null) {
@@ -177,7 +195,8 @@ private fun CommentComposer(
             cursorBrush = SolidColor(Cta),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp),
+                .heightIn(min = 48.dp)
+                .onFocusChanged { focused = it.isFocused },
             decorationBox = { inner ->
                 if (text.isEmpty()) {
                     Text(
@@ -193,7 +212,9 @@ private fun CommentComposer(
 
     Box(modifier = Modifier.height(8.dp))
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(bringReq),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {

@@ -7,7 +7,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -97,6 +101,7 @@ fun DailyScriptRoot() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel) {
     val navController = rememberNavController()
@@ -153,11 +158,13 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
     // 상세(전문 보기)에서도 하단 바 노출 — 상단 바는 DetailTopBar(뒤로가기·북마크)가 대체하므로 그대로 숨김 유지.
-    val showBottomBar = currentRoute in mainTabs || isDetail
+    // 단, 키보드(IME)가 떠 있으면 숨김 — 댓글 컴포저가 키보드 바로 위에 붙도록.
+    val imeVisible = WindowInsets.isImeVisible
+    val showBottomBar = (currentRoute in mainTabs || isDetail) && !imeVisible
 
     CompositionLocalProvider(LocalCoachController provides coach) {
       Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().imePadding()) {
         if (showTopBar) {
             when (currentRoute) {
                 Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(onMyPageClick = {

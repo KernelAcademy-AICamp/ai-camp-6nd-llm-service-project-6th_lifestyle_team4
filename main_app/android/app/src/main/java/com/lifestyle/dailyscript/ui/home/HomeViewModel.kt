@@ -118,8 +118,11 @@ class HomeViewModel : ViewModel() {
                         card,
                         mapOf("source" to "home_today"),
                     )
+                    val delta = if (now) 1 else -1
+                    val newCount = ((_state.value.bookmarkCounts[card.cardId] ?: 0) + delta).coerceAtLeast(0)
                     _state.value = _state.value.copy(
                         todayBookmarked = now,
+                        bookmarkCounts = _state.value.bookmarkCounts + (card.cardId to newCount),
                         bookmarkActionInFlight = false,
                     )
                 }
@@ -130,6 +133,17 @@ class HomeViewModel : ViewModel() {
                     )
                 }
         }
+    }
+
+    /**
+     * 오늘 카드 열람 즉시 홈의 조회수를 +1 선반영 — 상세 진입/복귀 시 숫자 깜빡임 없이 매끄럽게.
+     * 실제 DB 증가는 상세의 incrementView 가 처리하고, 복귀 시 load() 재조회가 최종값으로 맞춘다.
+     */
+    fun markTodayViewed() {
+        val card = _state.value.todayCard ?: return
+        _state.value = _state.value.copy(
+            todayCard = card.copy(viewCount = (card.viewCount ?: 0) + 1),
+        )
     }
 
     /** 지난 기록 — recently shown cards (newest first), excluding the current one. */

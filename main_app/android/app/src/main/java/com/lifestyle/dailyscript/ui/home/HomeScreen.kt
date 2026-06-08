@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +72,7 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.ScriptFormat
 import com.lifestyle.dailyscript.ui.util.displayTitle
+import com.lifestyle.dailyscript.ui.util.formatCount
 import com.lifestyle.dailyscript.ui.util.genreChipColor
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import com.lifestyle.dailyscript.ui.util.keywordsFor
@@ -146,8 +148,14 @@ fun HomeScreen(
             bookmarkActionInFlight = state.bookmarkActionInFlight,
             loading = state.loading,
             bookmarkCount = state.todayCard?.let { state.bookmarkCounts[it.cardId] } ?: 0,
+            commentCount = state.todayCard?.commentCount ?: 0,
             onBookmarkToggle = { vm.toggleTodayBookmark(userId) },
-            onOpen = { state.todayCard?.let { onOpenCard(it.cardId) } },
+            onOpen = {
+                state.todayCard?.let {
+                    vm.markTodayViewed()
+                    onOpenCard(it.cardId)
+                }
+            },
         )
 
         state.error?.let {
@@ -203,6 +211,7 @@ private fun TodayCard(
     bookmarkActionInFlight: Boolean,
     loading: Boolean,
     bookmarkCount: Int,
+    commentCount: Int,
     onBookmarkToggle: () -> Unit,
     onOpen: () -> Unit,
 ) {
@@ -233,7 +242,7 @@ private fun TodayCard(
                     ChipTag(text = format, filled = true, fillColor = genreChipColor(format)?.let { Color(it) })
                 }
                 if (card != null) {
-                    CardCounts(viewCount = card.viewCount, bookmarkCount = bookmarkCount)
+                    CardCounts(viewCount = card.viewCount, commentCount = commentCount)
                 }
             }
             Row(
@@ -243,18 +252,32 @@ private fun TodayCard(
                 if (card?.hasEnglish() == true) {
                     LangSegmented(english = english, onToggle = { english = !english })
                 }
-                Icon(
-                    imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                    contentDescription = stringResource(R.string.bookmark),
-                    tint = if (bookmarked) Cta else Walnut,
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .size(24.dp)
                         .coachAnchor(coach, "today_bookmark")
                         .clickable(
                             enabled = card != null && !bookmarkActionInFlight,
                             onClick = onBookmarkToggle,
                         ),
-                )
+                ) {
+                    Icon(
+                        imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                        contentDescription = stringResource(R.string.bookmark),
+                        tint = if (bookmarked) Cta else Walnut,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    if (card != null) {
+                        Text(
+                            text = formatCount(bookmarkCount),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                            ),
+                            color = Walnut,
+                        )
+                    }
+                }
             }
         }
         Box(modifier = Modifier.height(28.dp))

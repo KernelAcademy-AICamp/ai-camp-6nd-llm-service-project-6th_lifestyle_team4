@@ -24,6 +24,7 @@ class CardRepository {
         temperature,
         intensity,
         view_count,
+        comment_count,
         quote_original,
         script_excerpt_original,
         excerpt_description_original,

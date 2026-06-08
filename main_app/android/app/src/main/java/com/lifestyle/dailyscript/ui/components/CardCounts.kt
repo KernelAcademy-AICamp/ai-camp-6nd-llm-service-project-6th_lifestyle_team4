@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -20,7 +20,7 @@ import com.lifestyle.dailyscript.ui.util.formatCount
 @Composable
 fun CardCounts(
     viewCount: Int?,
-    bookmarkCount: Int,
+    commentCount: Int? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -35,13 +35,15 @@ fun CardCounts(
             modifier = Modifier.size(14.dp),
         )
         Text(text = formatCount(viewCount), style = MaterialTheme.typography.labelSmall, color = Walnut)
-        Text(text = "·", style = MaterialTheme.typography.labelSmall, color = Walnut)
-        Icon(
-            imageVector = Icons.Outlined.BookmarkBorder,
-            contentDescription = null,
-            tint = Walnut,
-            modifier = Modifier.size(14.dp),
-        )
-        Text(text = formatCount(bookmarkCount), style = MaterialTheme.typography.labelSmall, color = Walnut)
+        if (commentCount != null) {
+            Text(text = "·", style = MaterialTheme.typography.labelSmall, color = Walnut)
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.Comment,
+                contentDescription = null,
+                tint = Walnut,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(text = formatCount(commentCount), style = MaterialTheme.typography.labelSmall, color = Walnut)
+        }
     }
 }

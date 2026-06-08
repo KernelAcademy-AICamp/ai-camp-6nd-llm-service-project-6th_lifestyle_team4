@@ -212,6 +212,7 @@ fun DetailScreen(
             title = topTitle,
             subtitle = subtitle,
             bookmarked = state.bookmarked,
+            bookmarkCount = state.bookmarkCount,
             bookmarkEnabled = state.card != null && !state.bookmarkActionInFlight,
             onBack = onBack,
             onToggleBookmark = { vm.toggleBookmark(userId) },
@@ -234,7 +235,7 @@ fun DetailScreen(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
-                MetadataChipsRow(card = card, english = english, bookmarkCount = state.bookmarkCount)
+                MetadataChipsRow(card = card, english = english, commentCount = state.comments.size)
                 Box(modifier = Modifier.height(24.dp))
 
                 // ★ LangRow 항상 노출 — 북마크/feed 카드도 동일하게 토글 보이게.
@@ -587,7 +588,7 @@ private fun HighlightComposeDialog(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MetadataChipsRow(card: CardDto, english: Boolean, bookmarkCount: Int) {
+private fun MetadataChipsRow(card: CardDto, english: Boolean, commentCount: Int) {
     // Two centered lines (mirrors #detail-meta flex-direction:column):
     //   1) FORMAT · AUTHOR     2) YEAR · 👁 views · 🔖 bookmarks
     Column(
@@ -619,7 +620,7 @@ private fun MetadataChipsRow(card: CardDto, english: Boolean, bookmarkCount: Int
                 Text(text = year, style = MaterialTheme.typography.labelSmall, color = Walnut)
                 Text(text = "·", style = MaterialTheme.typography.labelSmall, color = Walnut)
             }
-            CardCounts(viewCount = card.viewCount, bookmarkCount = bookmarkCount)
+            CardCounts(viewCount = card.viewCount, commentCount = commentCount)
         }
     }
 }

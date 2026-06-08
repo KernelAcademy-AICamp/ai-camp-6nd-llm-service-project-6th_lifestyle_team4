@@ -37,9 +37,11 @@ class DetailViewModel : ViewModel() {
             val cardResult = runCatching { cardRepo.fetchCardById(cardId) }
             val bookmarkResult = runCatching { bookmarkRepo.isBookmarked(userId, cardId) }
             val count = runCatching { bookmarkRepo.counts(listOf(cardId))[cardId] }.getOrNull() ?: 0
+            val fetched = cardResult.getOrNull()
             _state.value = _state.value.copy(
                 loading = false,
-                card = cardResult.getOrNull(),
+                // 내 열람을 포함한 조회수를 즉시 표시 (DB 증가는 아래 incrementView 가 처리).
+                card = fetched?.copy(viewCount = (fetched.viewCount ?: 0) + 1),
                 bookmarked = bookmarkResult.getOrDefault(false),
                 bookmarkCount = count,
                 error = listOfNotNull(
@@ -47,9 +49,10 @@ class DetailViewModel : ViewModel() {
                     bookmarkResult.exceptionOrNull()?.message,
                 ).joinToString(" / ").ifBlank { null },
             )
+            // 조회(증가 전 값 읽기) 후에 증가시켜 +1 이 정확히 한 번만 반영되게 한다. 실패는 비치명적.
+            // (PWA m-app.js:3235 increment_card_view RPC.)
+            runCatching { cardRepo.incrementView(cardId) }
         }
-        // Fire-and-forget view increment (mirrors PWA m-app.js:3235). Failure is non-fatal.
-        viewModelScope.launch { runCatching { cardRepo.incrementView(cardId) } }
         loadComments()
     }
 

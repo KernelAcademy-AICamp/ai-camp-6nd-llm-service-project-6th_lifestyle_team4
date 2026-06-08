@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
@@ -37,6 +38,7 @@ import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.theme.WordmarkSerif
+import com.lifestyle.dailyscript.ui.util.formatCount
 
 private val TopBarHeight = 64.dp
 
@@ -102,6 +104,7 @@ fun DetailTopBar(
     title: String,
     subtitle: String? = null,
     bookmarked: Boolean,
+    bookmarkCount: Int,
     bookmarkEnabled: Boolean = true,
     onBack: () -> Unit,
     onToggleBookmark: () -> Unit,
@@ -145,15 +148,24 @@ fun DetailTopBar(
                 )
             }
         }
-        Icon(
-            imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-            contentDescription = stringResource(R.string.bookmark),
-            tint = if (bookmarked) Cta else Walnut,
-            modifier = Modifier
-                .size(40.dp)
-                .clickable(enabled = bookmarkEnabled, onClick = onToggleBookmark)
-                .padding(8.dp),
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                contentDescription = stringResource(R.string.bookmark),
+                tint = if (bookmarked) Cta else Walnut,
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable(enabled = bookmarkEnabled, onClick = onToggleBookmark)
+                    .padding(2.dp),
+            )
+            Text(
+                text = formatCount(bookmarkCount),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                ),
+                color = Walnut,
+            )
+        }
     }
 }
 
