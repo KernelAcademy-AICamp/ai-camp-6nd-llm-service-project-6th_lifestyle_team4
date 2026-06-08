@@ -13,6 +13,16 @@ extension View {
 
 private struct EditorialButtonModifier: ViewModifier {
     let style: EditorialButtonStyle
+    @State private var isPressed = false
+
+    /// Press feedback in design tokens, matching Android's SharpButton:
+    /// filled espresso → roast; outlined picks up a faint espresso wash.
+    private var fill: Color {
+        switch style {
+        case .filled: return isPressed ? .roast : .espresso
+        case .outlined: return isPressed ? Color.espresso.opacity(0.06) : .clear
+        }
+    }
 
     func body(content: Content) -> some View {
         content
@@ -22,7 +32,7 @@ private struct EditorialButtonModifier: ViewModifier {
             .padding(.horizontal, 24)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(style == .filled ? Color.espresso : Color.clear)
+                    .fill(fill)
             )
             .overlay {
                 if style == .outlined {
@@ -30,6 +40,13 @@ private struct EditorialButtonModifier: ViewModifier {
                         .stroke(Color.walnut, lineWidth: 1)
                 }
             }
+            .animation(.easeOut(duration: 0.12), value: isPressed)
+            // Track touch-down/up without consuming the enclosing Button's tap.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in if !isPressed { isPressed = true } }
+                    .onEnded { _ in isPressed = false }
+            )
     }
 }
 
