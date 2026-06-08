@@ -109,7 +109,30 @@ function rowToWork(row) {
     year: row.author_death || row.author_birth || null,
     downloadCount: row.download_count ?? null,
     plainTextUrl: row.text_url || null,
+    // 자동완성 선택 시 카테고리 dropdown 자동 설정용
+    suggestedCategory: pickSuggestedCategory(row.bookshelves, row.subjects),
   };
+}
+
+// 책의 bookshelves/subjects 에서 우리 UI 카테고리로 역매핑.
+// CATEGORY_TOPIC value (예: "drama") 가 책의 bookshelf/subject 안 포함되면 그 키 (카테고리명) 반환.
+// 우선순위: bookshelves 가 더 정확한 라벨 → subjects.
+function pickSuggestedCategory(bookshelves, subjects) {
+  const shelves = (bookshelves || []).map((s) => String(s).toLowerCase());
+  const subs = (subjects || []).map((s) => String(s).toLowerCase());
+  // CATEGORY_TOPIC 키를 우선순위(특이도)대로 — 좁은 카테고리부터 검사해서 너무 일반적인 매핑 회피
+  const ordered = Object.entries(CATEGORY_TOPIC).sort((a, b) => b[1].length - a[1].length);
+  for (const [catName, topic] of ordered) {
+    if (!topic) continue;
+    const needle = topic.toLowerCase();
+    if (shelves.some((s) => s.includes(needle))) return catName;
+  }
+  for (const [catName, topic] of ordered) {
+    if (!topic) continue;
+    const needle = topic.toLowerCase();
+    if (subs.some((s) => s.includes(needle))) return catName;
+  }
+  return null;
 }
 
 export default async function handler(req, res) {

@@ -737,10 +737,12 @@ document.querySelector('#title-input')?.addEventListener('input', () => {
       const dl = w.downloadCount != null
         ? `<span class="text-[10px] text-on-surface-variant ml-2">↓${w.downloadCount.toLocaleString()}</span>`
         : '';
+      const sc = w.suggestedCategory || '';
       return `
         <button type="button"
                 data-book-id="${w.bookId}"
                 data-title="${title}"
+                data-suggest-cat="${escapeHtmlBasic(sc)}"
                 class="title-suggest-row w-full text-left px-3 py-2 hover:bg-surface-container-low border-b border-outline-variant/30 last:border-b-0">
           <div class="text-sm font-medium text-on-surface truncate">${title}${year}</div>
           <div class="text-xs text-on-surface-variant truncate">${author}${dl}</div>
@@ -749,17 +751,39 @@ document.querySelector('#title-input')?.addEventListener('input', () => {
     }).join('');
     suggestEl.classList.remove('hidden');
 
-    // 행 클릭 → 작품명/bookId 자동 입력
+    // 행 클릭 → 작품명/bookId 자동 입력 + 카테고리 dropdown 자동 설정
     suggestEl.querySelectorAll('.title-suggest-row').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         const bid = btn.getAttribute('data-book-id');
         const ttl = btn.getAttribute('data-title');
+        const suggestCat = btn.getAttribute('data-suggest-cat') || '';
         if (ttl) inputEl.value = ttl;
         if (bookIdInput && bid) bookIdInput.value = bid;
+        if (suggestCat) applySuggestedCategory(suggestCat);
         hideSuggest();
       });
     });
+  }
+
+  // 자동완성 선택된 작품의 suggestedCategory 를 보고 카테고리 dropdown 두 단계 자동 설정.
+  // GB_CATEGORY_TREE 에서 해당 카테고리가 속한 섹션을 찾아 sectionSel/subcatSel 에 값 + change 이벤트.
+  function applySuggestedCategory(catName) {
+    if (!Array.isArray(GB_CATEGORY_TREE)) return;
+    const section = GB_CATEGORY_TREE.find((s) => s.cats?.includes(catName));
+    if (!section) return;
+    const secSel = document.querySelector('#gb-section-select');
+    const subSel = document.querySelector('#gb-subcat-select');
+    if (!secSel || !subSel) return;
+    // 상위 카테고리 설정 + change 이벤트 (이게 하위 옵션 채움)
+    secSel.value = section.section;
+    secSel.dispatchEvent(new Event('change', { bubbles: true }));
+    // 하위 카테고리 설정 + change 이벤트 (이게 작품 목록 로드)
+    // 다음 tick 에 — secSel change 가 subSel 옵션 채운 후 적용
+    setTimeout(() => {
+      subSel.value = catName;
+      subSel.dispatchEvent(new Event('change', { bubbles: true }));
+    }, 0);
   }
 
   async function fetchSuggest(query) {
