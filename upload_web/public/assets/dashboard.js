@@ -767,21 +767,32 @@ document.querySelector('#title-input')?.addEventListener('input', () => {
   }
 
   // 자동완성 선택된 작품의 suggestedCategory 를 보고 카테고리 dropdown 두 단계 자동 설정.
-  // GB_CATEGORY_TREE 에서 해당 카테고리가 속한 섹션을 찾아 sectionSel/subcatSel 에 값 + change 이벤트.
+  // case-insensitive 매칭 — CATEGORY_TOPIC 키(소문자) vs GB_CATEGORY_TREE cats(Title Case) 호환.
   function applySuggestedCategory(catName) {
-    if (!Array.isArray(GB_CATEGORY_TREE)) return;
-    const section = GB_CATEGORY_TREE.find((s) => s.cats?.includes(catName));
-    if (!section) return;
+    if (!catName || !Array.isArray(GB_CATEGORY_TREE)) return;
+    const lower = String(catName).toLowerCase();
+    let section = null;
+    let exactCat = null;
+    for (const sec of GB_CATEGORY_TREE) {
+      const hit = sec.cats?.find((c) => String(c).toLowerCase() === lower);
+      if (hit) { section = sec; exactCat = hit; break; }
+    }
+    if (!section || !exactCat) {
+      console.warn('[title-suggest] no GB_CATEGORY_TREE match for', catName);
+      return;
+    }
     const secSel = document.querySelector('#gb-section-select');
     const subSel = document.querySelector('#gb-subcat-select');
-    if (!secSel || !subSel) return;
-    // 상위 카테고리 설정 + change 이벤트 (이게 하위 옵션 채움)
+    if (!secSel || !subSel) {
+      console.warn('[title-suggest] section/subcat select not found');
+      return;
+    }
+    // 상위 카테고리 + change 이벤트 → 하위 옵션 채워짐
     secSel.value = section.section;
     secSel.dispatchEvent(new Event('change', { bubbles: true }));
-    // 하위 카테고리 설정 + change 이벤트 (이게 작품 목록 로드)
-    // 다음 tick 에 — secSel change 가 subSel 옵션 채운 후 적용
+    // 다음 tick — 하위 옵션 준비 후 적용
     setTimeout(() => {
-      subSel.value = catName;
+      subSel.value = exactCat;
       subSel.dispatchEvent(new Event('change', { bubbles: true }));
     }, 0);
   }
