@@ -360,14 +360,17 @@ function extractSpeaker(scriptExcerpt, characters, quote, opts = {}) {
       const nm = m[1].replace(/\s*[(（].*?[)）]\s*$/, '').trim();
       if (nm) return { name: nm, rest: m[2] || '' };
     }
-    // 2.5) em-dash 종결자 — "ANTIGONE—대사" / "Antigone—대사"
-    {
-      const dm = t.match(/^([^\n—–\-:：()\[\]【】]{1,30})\s*[—–]\s*(.*)$/);
+    // 2.5) em-dash 종결자 — 영문 화자만 ("ANTIGONE—대사" / "Antigone—대사")
+    //      한글은 characters 매칭(폴백 1)으로만 — "청하건대—후하게…—" 같은
+    //      대사 안 강조 표현이 화자로 오인되는 케이스 방지.
+    //      em-dash 2개 이상이면 dialogue 강조로 판정해 매칭 skip.
+    if ((t.match(/[—–]/g) || []).length < 2) {
+      // 영문 시작 + em-dash 1개만
+      const dm = t.match(/^([A-Za-z][A-Za-z .'\-]{1,29})\s*[—–]\s*(.*)$/);
       if (dm) {
         const nm = dm[1].trim();
         const rest = (dm[2] || '').trim();
-        // nm 이 너무 짧거나 dialogue 안의 em-dash 인 경우 제외 — nm 에 알파벳/한글이 있어야
-        if (nm.length >= 2 && /[A-Za-z가-힯]/.test(nm)) {
+        if (nm.length >= 2) {
           return { name: nm, rest };
         }
       }

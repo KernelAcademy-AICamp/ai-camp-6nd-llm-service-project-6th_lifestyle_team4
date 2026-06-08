@@ -201,13 +201,14 @@ object ScriptFormat {
                 val nm = m.groupValues[1].replace(TRAILING_PAREN, "").trim()
                 if (nm.isNotEmpty()) return nm to m.groupValues[2]
             }
-            // 2.5) em-dash 종결자 — "ANTIGONE—대사" / "Antigone—대사"
-            run {
-                val dm = Regex("""^([^\n—–\-:：()\[\]【】]{1,30})\s*[—–]\s*(.*)$""").find(t)
+            // 2.5) em-dash 종결자 — 영문 화자만. 한글은 characters 매칭으로만.
+            //      em-dash 2개 이상이면 dialogue 안 강조 표현 → 화자 아님 (skip).
+            if (Regex("[—–]").findAll(t).count() < 2) {
+                val dm = Regex("""^([A-Za-z][A-Za-z .'\-]{1,29})\s*[—–]\s*(.*)$""").find(t)
                 if (dm != null) {
                     val nm = dm.groupValues[1].trim()
                     val rest = dm.groupValues[2].trim()
-                    if (nm.length >= 2 && Regex("[A-Za-z가-힯]").containsMatchIn(nm)) {
+                    if (nm.length >= 2) {
                         return nm to rest
                     }
                 }
