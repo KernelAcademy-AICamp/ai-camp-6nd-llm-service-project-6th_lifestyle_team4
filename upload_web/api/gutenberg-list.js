@@ -115,23 +115,26 @@ function rowToWork(row) {
 }
 
 // 책의 bookshelves/subjects 에서 우리 UI 카테고리로 역매핑.
-// CATEGORY_TOPIC value (예: "drama") 가 책의 bookshelf/subject 안 포함되면 그 키 (카테고리명) 반환.
-// 우선순위: bookshelves 가 더 정확한 라벨 → subjects.
+// 너무 일반적인 키워드(fiction/literature)는 매칭 후보에서 제외 — 의미 있는 카테고리만 추천.
+const TOO_GENERIC_TOPICS = new Set(['fiction', 'literature']);
 function pickSuggestedCategory(bookshelves, subjects) {
   const shelves = (bookshelves || []).map((s) => String(s).toLowerCase());
   const subs = (subjects || []).map((s) => String(s).toLowerCase());
-  // CATEGORY_TOPIC 키를 우선순위(특이도)대로 — 좁은 카테고리부터 검사해서 너무 일반적인 매핑 회피
-  const ordered = Object.entries(CATEGORY_TOPIC).sort((a, b) => b[1].length - a[1].length);
+  // 좁은 카테고리부터 매칭 — value 길이 내림차순, fiction/literature 제외
+  const ordered = Object.entries(CATEGORY_TOPIC)
+    .filter(([, topic]) => topic && !TOO_GENERIC_TOPICS.has(String(topic).toLowerCase()))
+    .sort((a, b) => b[1].length - a[1].length);
+  // 1차: bookshelves 우선 (공식 라벨)
   for (const [catName, topic] of ordered) {
-    if (!topic) continue;
     const needle = topic.toLowerCase();
     if (shelves.some((s) => s.includes(needle))) return catName;
   }
+  // 2차: subjects (LCSH)
   for (const [catName, topic] of ordered) {
-    if (!topic) continue;
     const needle = topic.toLowerCase();
     if (subs.some((s) => s.includes(needle))) return catName;
   }
+  // 매칭 없음 — Literature - Other 같은 일반 카테고리로 떨어뜨리지 말고 null (자동 설정 skip)
   return null;
 }
 
@@ -189,7 +192,7 @@ export default async function handler(req, res) {
     const { data, error } = await sb.rpc('search_gutenberg_by_topic', {
       p_topic: topic,
       p_lang: 'en',
-      p_limit: 60,
+      p_limit: 200,
     });
     if (error) {
       console.error('[gutenberg-list] topic rpc error:', error);
