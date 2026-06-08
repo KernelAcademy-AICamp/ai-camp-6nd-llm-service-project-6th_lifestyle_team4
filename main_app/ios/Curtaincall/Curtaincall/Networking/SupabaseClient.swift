@@ -104,7 +104,7 @@ final class Supa {
         return rows.first
     }
 
-    func fetchNotices(limit: Int = 50) async throws -> [Notice] {
+    func fetchNotices(limit: Int = 100) async throws -> [Notice] {
         try await client.from("notices")
             .select("notice_id, tag, title, body, pinned, created_at")
             .eq("published", value: true)
@@ -203,6 +203,7 @@ final class Supa {
             .select(bookmarkColumns)
             .eq("user_id", value: userId)
             .order("created_at", ascending: false)
+            .limit(100)
             .execute()
             .value
     }

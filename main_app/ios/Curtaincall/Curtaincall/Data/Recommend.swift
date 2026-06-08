@@ -5,6 +5,11 @@ import Foundation
 /// the average temperature/intensity of the user's bookmarked cards.
 enum Recommend {
 
+    /// Taste-weighting only kicks in once the user has at least this many
+    /// bookmarks (matches Android's MIN_BOOKMARKS_FOR_TASTE); below that the
+    /// signal is too thin, so we fall back to seed/random picks.
+    static let minBookmarksForTaste = 10
+
     struct Taste {
         let avgTemperature: Double
         let avgIntensity: Double
@@ -17,7 +22,7 @@ enum Recommend {
     }
 
     static func computeTaste(_ cards: [Card]) -> Taste? {
-        guard !cards.isEmpty else { return nil }
+        guard cards.count >= minBookmarksForTaste else { return nil }
         let t = cards.map { Double($0.temperature) }.reduce(0, +) / Double(cards.count)
         let i = cards.map { Double($0.intensity) }.reduce(0, +) / Double(cards.count)
         return Taste(avgTemperature: t, avgIntensity: i, count: cards.count)
