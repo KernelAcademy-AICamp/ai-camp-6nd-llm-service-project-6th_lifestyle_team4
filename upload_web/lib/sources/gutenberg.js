@@ -282,6 +282,8 @@ export async function listGutenbergByCategory(categoryName, limit = 50) {
   return { works, topic };
 }
 
+// 작품명 검색 — Supabase gutenberg_books 직접 조회 (gutendex.com 의존 제거).
+// 한글 입력 시 ko.wikipedia langlinks 로 영문 변환은 유지 (선택적).
 export async function searchGutenberg(query, limit = 8) {
   const original = String(query || '').trim();
   if (!original) return { results: [], originalQuery: '', effectiveQuery: '', translatedFrom: null };
@@ -296,21 +298,26 @@ export async function searchGutenberg(query, limit = 8) {
     }
   }
 
-  const url = new URL(GUTENDEX_BASE);
-  url.searchParams.set('search', effective);
-  const j = await getJson(url.toString());
-  const items = Array.isArray(j?.results) ? j.results : [];
-  const results = items.slice(0, Math.max(1, Math.min(20, limit))).map((b) => ({
-    bookId: b.id,
+  // Supabase RPC — search_gutenberg_by_title (마이그레이션 031)
+  const { getSupabaseAdmin } = await import('../supabase-admin.js');
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb.rpc('search_gutenberg_by_title', {
+    p_query: effective,
+    p_lang: 'en',
+    p_limit: Math.max(1, Math.min(20, limit)),
+  });
+  if (error) {
+    console.warn('[searchGutenberg] rpc failed:', error.message || error);
+    return { results: [], originalQuery: original, effectiveQuery: effective, translatedFrom };
+  }
+  const results = (Array.isArray(data) ? data : []).map((b) => ({
+    bookId: b.book_id,
     title: b.title || '',
-    authors: Array.isArray(b.authors)
-      ? b.authors.map((a) => a?.name).filter(Boolean)
-      : [],
+    authors: Array.isArray(b.authors) ? b.authors : [],
     languages: Array.isArray(b.languages) ? b.languages : [],
     downloadCount: b.download_count ?? null,
-    url: `https://www.gutenberg.org/ebooks/${b.id}`,
-    // formats 안에 다양한 mime → URL 매핑. text/plain (utf-8) 우선 선택.
-    plainTextUrl: pickPlainTextUrl(b.formats || {}),
+    url: `https://www.gutenberg.org/ebooks/${b.book_id}`,
+    plainTextUrl: b.text_url || null,
   }));
   return { results, originalQuery: original, effectiveQuery: effective, translatedFrom };
 }
@@ -329,7 +336,7 @@ function pickPlainTextUrl(formats) {
 }
 
 // 책 ID 또는 미리 알고 있는 plain-text URL 에서 본문을 가져온다.
-//  - bookId 만 있으면 Gutendex 로 metadata 다시 가져와 plain-text URL 식별
+//  - plainTextUrl 없으면 Supabase gutenberg_books.text_url 에서 조회 (gutendex 의존 제거)
 //  - 가져온 텍스트는 stripGutenbergBoilerplate 로 헤더/푸터 제거
 export async function fetchGutenbergText({ bookId, plainTextUrl }) {
   let textUrl = plainTextUrl || null;
@@ -337,13 +344,27 @@ export async function fetchGutenbergText({ bookId, plainTextUrl }) {
 
   if (!textUrl) {
     if (!bookId) throw new Error('bookId or plainTextUrl required');
-    // GUTENDEX_BASE 끝에 '/' 있으므로 중복 방지
-    const j = await getJson(`${GUTENDEX_BASE}${encodeURIComponent(bookId)}/`);
-    metadata = j || null;
-    textUrl = pickPlainTextUrl(j?.formats || {});
-    if (!textUrl) {
-      throw new Error(`book ${bookId} has no plain-text format`);
+    // Supabase 의 gutenberg_books.text_url 사용 (gutendex 호출 안 함)
+    const { getSupabaseAdmin } = await import('../supabase-admin.js');
+    const sb = getSupabaseAdmin();
+    const { data: row, error } = await sb
+      .from('gutenberg_books')
+      .select('book_id, title, authors, languages, text_url')
+      .eq('book_id', bookId)
+      .maybeSingle();
+    if (error || !row) {
+      throw new Error(`book ${bookId} not found in Supabase gutenberg_books`);
     }
+    if (!row.text_url) {
+      throw new Error(`book ${bookId} has no plain-text URL in Supabase`);
+    }
+    textUrl = row.text_url;
+    metadata = {
+      id: row.book_id,
+      title: row.title,
+      authors: (row.authors || []).map((name) => ({ name })),
+      languages: row.languages || [],
+    };
   }
 
   let raw = await getText(textUrl);
