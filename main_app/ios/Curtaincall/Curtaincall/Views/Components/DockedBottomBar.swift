@@ -1,23 +1,26 @@
 import SwiftUI
 
 extension View {
-    /// Docks `bar` as a solid bottom bar over a scrollable view — the one place
-    /// to put any bottom-pinned input/action bar so the safe-area + keyboard +
-    /// scroll-inset behavior stays consistent and this bug class doesn't recur.
+    /// Docks `bar` as a solid bottom bar beneath a scrollable view — the one
+    /// place to put any bottom-pinned input/action bar so the behavior stays
+    /// consistent and this bug class doesn't recur.
     ///
-    /// Apply it to the **ScrollView/List** (not an outer container) so the inset
-    /// reliably reaches the scroll content. It:
-    /// - paints a `paper` background + top hairline across the full width — and
-    ///   crucially the background covers the tab-bar-clearance region too, so no
-    ///   scrolling content ever shows through under the bar;
-    /// - insets the scroll content by the bar's measured height (it's a
-    ///   `safeAreaInset`), and rides above the keyboard automatically;
+    /// Implemented as a bounded `VStack` (the scroll and the bar as siblings),
+    /// NOT `safeAreaInset`: in this app's nested `TabView` → `NavigationStack`
+    /// hierarchy a `.safeAreaInset(edge: .bottom)` on the ScrollView positioned
+    /// the bar but did not reliably push the scroll content, so content slid
+    /// under it (iOS 26.x). Bounding the scroll by layout instead means its
+    /// content can never float under the bar. The bar rides above the keyboard
+    /// via standard keyboard avoidance (the focused field lifts the VStack).
+    ///
+    /// Apply it to the **ScrollView/List**. It:
+    /// - paints a `paper` background + top hairline across the full width;
     /// - when `clearTabBar` is true, keeps a moderate gap above the tab bar —
     ///   enough to avoid accidental tab-bar taps when reaching for the bar, not a
     ///   full navbar-height void. Pass `false` while the tab bar is hidden (e.g.
-    ///   keyboard up) so it drops into the safe area.
+    ///   keyboard up) so it sits flush in the safe area.
     ///
-    /// When `isActive` is false no bar is shown and no inset is reserved.
+    /// When `isActive` is false no bar is shown.
     func dockedBottomBar<Bar: View>(
         isActive: Bool = true,
         clearTabBar: Bool = false,
@@ -25,15 +28,16 @@ extension View {
     ) -> some View {
         // Spacing-scale gap between the bar and the tab bar when docked.
         let tabBarGap: CGFloat = 16
-        return safeAreaInset(edge: .bottom, spacing: 0) {
+        return VStack(spacing: 0) {
+            self
             if isActive {
                 VStack(spacing: 0) {
                     Hairline()
                     bar()
                 }
                 .frame(maxWidth: .infinity)
-                // Pad for the gap, THEN paint paper — so the whole docked band
-                // (bar + gap) is opaque and nothing shows through under it.
+                // Pad for the gap, THEN paint paper — the whole docked band
+                // (bar + gap) is opaque, and the scroll above it is layout-bounded.
                 .padding(.bottom, clearTabBar ? tabBarGap : 0)
                 .background(Color.paper)
                 .animation(.easeInOut(duration: 0.2), value: clearTabBar)
