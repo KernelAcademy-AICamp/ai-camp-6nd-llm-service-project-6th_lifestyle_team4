@@ -115,26 +115,36 @@ function rowToWork(row) {
 }
 
 // 책의 bookshelves/subjects 에서 우리 UI 카테고리로 역매핑.
-// 너무 일반적인 키워드(fiction/literature)는 매칭 후보에서 제외 — 의미 있는 카테고리만 추천.
+// 4단계 매칭 — specific 우선, broad 는 fallback. 매칭 없으면 null.
 const TOO_GENERIC_TOPICS = new Set(['fiction', 'literature']);
 function pickSuggestedCategory(bookshelves, subjects) {
   const shelves = (bookshelves || []).map((s) => String(s).toLowerCase());
   const subs = (subjects || []).map((s) => String(s).toLowerCase());
-  // 좁은 카테고리부터 매칭 — value 길이 내림차순, fiction/literature 제외
-  const ordered = Object.entries(CATEGORY_TOPIC)
-    .filter(([, topic]) => topic && !TOO_GENERIC_TOPICS.has(String(topic).toLowerCase()))
+  const all = Object.entries(CATEGORY_TOPIC)
+    .filter(([, topic]) => topic)
     .sort((a, b) => b[1].length - a[1].length);
-  // 1차: bookshelves 우선 (공식 라벨)
-  for (const [catName, topic] of ordered) {
-    const needle = topic.toLowerCase();
-    if (shelves.some((s) => s.includes(needle))) return catName;
-  }
-  // 2차: subjects (LCSH)
-  for (const [catName, topic] of ordered) {
-    const needle = topic.toLowerCase();
-    if (subs.some((s) => s.includes(needle))) return catName;
-  }
-  // 매칭 없음 — Literature - Other 같은 일반 카테고리로 떨어뜨리지 말고 null (자동 설정 skip)
+  const specific = all.filter(([, topic]) => !TOO_GENERIC_TOPICS.has(String(topic).toLowerCase()));
+
+  const findIn = (entries, haystack) => {
+    for (const [catName, topic] of entries) {
+      const needle = topic.toLowerCase();
+      if (haystack.some((s) => s.includes(needle))) return catName;
+    }
+    return null;
+  };
+
+  // 1) specific 키워드 × bookshelves (공식 라벨, 가장 정확)
+  let hit = findIn(specific, shelves);
+  if (hit) return hit;
+  // 2) specific 키워드 × subjects (LCSH)
+  hit = findIn(specific, subs);
+  if (hit) return hit;
+  // 3) broad 키워드 (fiction/literature) × bookshelves — fallback
+  hit = findIn(all, shelves);
+  if (hit) return hit;
+  // 4) broad × subjects — 마지막 fallback (Don Quixote 같은 일반 소설용)
+  hit = findIn(all, subs);
+  if (hit) return hit;
   return null;
 }
 
