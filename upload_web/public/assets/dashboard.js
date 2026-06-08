@@ -706,6 +706,101 @@ document.querySelector('#title-input')?.addEventListener('input', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 작품명 자동완성 — title-input 에 2자 이상 타이핑하면 300ms 디바운스 후
+// /api/gutenberg-list?q=... 호출 → Gutenberg 책 12건 dropdown 표시.
+// 클릭 시 title-input(영문 정식 제목) + title-book-id(bookId) 자동 채움.
+// ---------------------------------------------------------------------------
+(() => {
+  const inputEl = document.querySelector('#title-input');
+  const suggestEl = document.querySelector('#title-suggest');
+  const bookIdInput = document.querySelector('#title-book-id');
+  if (!inputEl || !suggestEl) return;
+
+  let timer = null;
+  let lastQuery = '';
+  let abortCtrl = null;
+
+  function hideSuggest() {
+    suggestEl.classList.add('hidden');
+    suggestEl.innerHTML = '';
+  }
+
+  function renderSuggest(works) {
+    if (!works || works.length === 0) {
+      hideSuggest();
+      return;
+    }
+    suggestEl.innerHTML = works.map((w) => {
+      const title = escapeHtmlBasic(w.title || '');
+      const author = w.author ? escapeHtmlBasic(w.author) : '<span class="text-on-surface-variant">작가 미상</span>';
+      const year = w.year ? `<span class="text-xs text-on-surface-variant ml-2">${w.year}</span>` : '';
+      const dl = w.downloadCount != null
+        ? `<span class="text-[10px] text-on-surface-variant ml-2">↓${w.downloadCount.toLocaleString()}</span>`
+        : '';
+      return `
+        <button type="button"
+                data-book-id="${w.bookId}"
+                data-title="${title}"
+                class="title-suggest-row w-full text-left px-3 py-2 hover:bg-surface-container-low border-b border-outline-variant/30 last:border-b-0">
+          <div class="text-sm font-medium text-on-surface truncate">${title}${year}</div>
+          <div class="text-xs text-on-surface-variant truncate">${author}${dl}</div>
+        </button>
+      `;
+    }).join('');
+    suggestEl.classList.remove('hidden');
+
+    // 행 클릭 → 작품명/bookId 자동 입력
+    suggestEl.querySelectorAll('.title-suggest-row').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const bid = btn.getAttribute('data-book-id');
+        const ttl = btn.getAttribute('data-title');
+        if (ttl) inputEl.value = ttl;
+        if (bookIdInput && bid) bookIdInput.value = bid;
+        hideSuggest();
+      });
+    });
+  }
+
+  async function fetchSuggest(query) {
+    try {
+      if (abortCtrl) abortCtrl.abort();
+      abortCtrl = new AbortController();
+      const token = await getAccessToken();
+      const json = await apiFetch(
+        `/api/gutenberg-list?q=${encodeURIComponent(query)}`,
+        { method: 'GET', headers: { Authorization: `Bearer ${token}` }, signal: abortCtrl.signal },
+      );
+      if (lastQuery !== query) return; // 이미 새 입력 들어옴 — 무시
+      renderSuggest(Array.isArray(json?.works) ? json.works : []);
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      console.warn('[title-suggest] fetch failed:', e?.message || e);
+      hideSuggest();
+    }
+  }
+
+  inputEl.addEventListener('input', () => {
+    const q = inputEl.value.trim();
+    lastQuery = q;
+    if (timer) clearTimeout(timer);
+    if (q.length < 2) { hideSuggest(); return; }
+    timer = setTimeout(() => {
+      if (lastQuery === q) fetchSuggest(q);
+    }, 300);
+  });
+
+  // 포커스 잃으면 dropdown 닫기 (단, 클릭 이벤트 처리되도록 약간 지연)
+  inputEl.addEventListener('blur', () => {
+    setTimeout(hideSuggest, 150);
+  });
+  // ESC 로도 닫기
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideSuggest();
+  });
+})();
+
+// ---------------------------------------------------------------------------
 // Project Gutenberg — Wikisource KR 과 동일한 패턴. 다만 작품명이 숫자만이면
 // 검색을 건너뛰고 해당 책 ID 로 바로 fetch (Gutendex 카탈로그 search 가 종종
 // 느리거나 502 라 ID-direct 경로가 안전).

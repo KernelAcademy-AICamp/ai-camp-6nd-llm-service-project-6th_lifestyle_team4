@@ -1,10 +1,12 @@
-// GET /api/gutenberg-list?category=<friendly name>
-// Gutenberg 카테고리 피커가 호출. 응답: { works: [{ bookId, title, author, year, ... }], topic }
+// GET /api/gutenberg-list?category=<friendly name>  → 카테고리 작품 목록 (알파벳순)
+// GET /api/gutenberg-list?q=<제목 일부>             → 작품명 자동완성 (10건)
+//
+// 응답: { works: [{ bookId, title, author, year, ... }], topic? }
 //
 // 데이터 소스 (외부 의존 0):
 //   - Supabase public.gutenberg_books 테이블 (RDF dump 로 인덱싱한 ~78k 책)
-//   - RPC search_gutenberg_by_topic(p_topic, p_lang, p_limit)
-//     → bookshelves + subjects ILIKE 매칭 + download_count 내림차순
+//   - RPC search_gutenberg_by_topic(p_topic, p_lang, p_limit) — 카테고리
+//   - RPC search_gutenberg_by_title(p_query, p_lang, p_limit) — 작품명 자동완성
 //
 // gutendex.com 의존 완전 제거 — 외부 장애와 무관하게 즉시 응답.
 
@@ -117,7 +119,46 @@ export default async function handler(req, res) {
   try {
     await requireAdmin(req);
     const cat = String(req.query?.category || '').trim();
-    if (!cat) throw new HttpError('category is required', 400);
+    const q = String(req.query?.q || '').trim();
+
+    // ───── 모드 1: 작품명 자동완성 ─────
+    if (q) {
+      if (q.length < 2) {
+        return res.status(200).json({ q, works: [], source: 'gutenberg_books' });
+      }
+      const sb = getSupabaseAdmin();
+      const { data, error } = await sb.rpc('search_gutenberg_by_title', {
+        p_query: q,
+        p_lang: 'en',
+        p_limit: 12,
+      });
+      if (error) {
+        console.error('[gutenberg-list] title rpc error:', error);
+        throw new HttpError(`Gutenberg 검색 실패: ${error.message}`, 500);
+      }
+      const rows = Array.isArray(data) ? data : [];
+      const seen = new Set();
+      const works = [];
+      for (const row of rows) {
+        const title = String(row.title || '').trim();
+        if (!title) continue;
+        const firstAuthor = row.authors?.[0] || '';
+        const normTitle = title.toLowerCase()
+          .replace(/^(the |a |an )/i, '')
+          .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+          .replace(/\s+/g, ' ').trim();
+        const key = `${normTitle}|${firstAuthor.toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        works.push(rowToWork(row));
+      }
+      // 자동완성 결과 — 짧은 브라우저 캐싱 (다시 타이핑 시 즉시 응답)
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      return res.status(200).json({ q, works, source: 'gutenberg_books' });
+    }
+
+    // ───── 모드 2: 카테고리 작품 목록 (알파벳순) ─────
+    if (!cat) throw new HttpError('category or q is required', 400);
     const topic = keywordForCategory(cat);
     if (!topic) throw new HttpError(`unknown category: ${cat}`, 400);
 
@@ -128,7 +169,7 @@ export default async function handler(req, res) {
       p_limit: 60,
     });
     if (error) {
-      console.error('[gutenberg-list] rpc error:', error);
+      console.error('[gutenberg-list] topic rpc error:', error);
       throw new HttpError(`Gutenberg 검색 실패: ${error.message}`, 500);
     }
     const rows = Array.isArray(data) ? data : [];
@@ -149,6 +190,12 @@ export default async function handler(req, res) {
       seen.add(key);
       works.push(rowToWork(row));
     }
+    // 알파벳순 정렬 (사용자 요청 — 관사 무시한 정규화 title 기준 로컬 비교)
+    works.sort((a, b) => {
+      const an = String(a.title || '').toLowerCase().replace(/^(the |a |an )/i, '');
+      const bn = String(b.title || '').toLowerCase().replace(/^(the |a |an )/i, '');
+      return an.localeCompare(bn, 'en');
+    });
 
     // 카테고리 결과는 거의 안 변함 → CDN/브라우저 24h 캐싱
     res.setHeader(
