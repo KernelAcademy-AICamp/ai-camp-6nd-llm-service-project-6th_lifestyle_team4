@@ -513,7 +513,9 @@ export function splitScriptIntoChunks(
 async function runExtractSingle(scriptText, category, seedBlock, model, chunkInfo = null, { signal = null, onProgress = null } = {}) {
   const prompt = buildExtractPrompt(scriptText, category, seedBlock, chunkInfo);
   // 추출 1청크 출력: 카드 5~10장 × 카드당 ~3000자 ≈ 8K~15K 토큰. 마진 포함 12000.
-  return callClaude(prompt, { maxTokens: 12000, model, signal, onProgress });
+  // prefill='{' — LLM 응답을 무조건 JSON 객체로 시작하게 강제. 프롬프트 길어도
+  // 설명·머리말·코드펜스 못 붙임 → "did not return valid JSON" 에러 방지.
+  return callClaude(prompt, { maxTokens: 12000, model, signal, onProgress, prefill: '{' });
 }
 
 function arrayOfStrings(value) {
@@ -607,7 +609,8 @@ INPUT_JSON:
 ${JSON.stringify(input, null, 2)}`;
 
   // finalize 출력: 최대 40 카드 × script_excerpt 가 큼 — 7000 토큰으로 마진.
-  const finalResult = await callClaude(prompt, { maxTokens: 7000, model, signal, onProgress });
+  // prefill='{' — JSON 시작 강제 (extract single 과 동일).
+  const finalResult = await callClaude(prompt, { maxTokens: 7000, model, signal, onProgress, prefill: '{' });
   return {
     work: mergeWork(merged.work, finalResult?.work),
     cards: Array.isArray(finalResult?.cards) && finalResult.cards.length ? finalResult.cards : merged.cards,
