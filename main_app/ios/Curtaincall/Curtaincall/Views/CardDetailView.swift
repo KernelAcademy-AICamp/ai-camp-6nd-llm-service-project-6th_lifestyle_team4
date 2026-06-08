@@ -123,6 +123,10 @@ struct CardDetailView: View {
                     Spacer().frame(height: 24)
                 }
                 .padding(.horizontal, 20)
+                // Tap an empty area to dismiss the keyboard (buttons/links keep
+                // their own taps). Pairs with interactive scroll-dismiss below.
+                .contentShape(Rectangle())
+                .onTapGesture { composerFocused = false }
             }
             .scrollDismissesKeyboard(.interactively)
             // Docked composer: solid bar, scroll content inset by its height
