@@ -19,8 +19,11 @@ struct BrandWordmark: View {
 /// trailing "MY PAGE" link, fixed 64pt bar on paper with a hairline beneath —
 /// matching the Android shared `TopBar`.
 struct AppMasthead: View {
-    /// When provided, shows the trailing "MY PAGE" link that jumps to the My
-    /// tab. Omit it on the My tab itself.
+    @EnvironmentObject private var session: AuthSession
+
+    /// When provided, shows the auth-aware trailing link that jumps to the My
+    /// tab: "로그인" when signed out, "MY PAGE" when signed in. Omit it on the My
+    /// tab itself.
     var onMyPage: (() -> Void)? = nil
 
     var body: some View {
@@ -30,7 +33,7 @@ struct AppMasthead: View {
                 Spacer()
                 if let onMyPage {
                     Button(action: onMyPage) {
-                        Text("MY PAGE")
+                        Text(session.isAnonymous ? "로그인" : "MY PAGE")
                             .labelCaps()
                             .padding(.horizontal, 6)
                             .padding(.vertical, 4)
