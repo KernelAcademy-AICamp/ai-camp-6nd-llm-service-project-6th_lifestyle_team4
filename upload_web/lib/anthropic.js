@@ -1149,6 +1149,21 @@ export function validateAndFilterCards(cards, category, opts = {}) {
     }
   }
 
+  // ★ 안전망 — 모든 카드 drop 되면 (결과 0) identical 만 빼고 다 보존.
+  //   사용자 요구: "문장 완성하면서 카드는 반드시 추출. 다른 조건에 걸려서 아예 카드가
+  //   안 나오면 안 된다." 잘림/길이 미달 카드도 결과 0 이 되는 케이스는 살림.
+  if (survivors.length === 0 && cards.length > 0) {
+    console.warn(
+      `[extract] all cards dropped (in=${cards.length}) — SAFETY: keep all except identical (quote≈script)`
+    );
+    for (const { c, drop } of verdicts) {
+      if (drop !== 'identical') survivors.push(c);
+    }
+    // 보존된 카운트 보정 — drop 카운트는 그대로 두되 safety_fallback 표시
+    droppedIncomplete = 0;
+    droppedShort = 0;
+  }
+
   // 첫/끝 줄 잘린 문장 자동 복원 — survivors 의 script_excerpt 만 손봄.
   // 사용자 요구: 잘린 문장의 본문(fullScript)을 직접 가져와 채움.
   // fullScript 가 있으면 rescue 시도, 실패하면 자투리 제거 (LLM 보강 X).
