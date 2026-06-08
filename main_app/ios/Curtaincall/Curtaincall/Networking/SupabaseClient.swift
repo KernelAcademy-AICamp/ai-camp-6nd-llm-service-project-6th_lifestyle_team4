@@ -258,6 +258,14 @@ final class Supa {
         _ = try? await client.from("users").delete().eq("user_id", value: oldUserId).execute()
     }
 
+    /// Invokes the `delete-account` Edge Function, which deletes the caller's
+    /// rows in every user-scoped table and the Supabase Auth user (service_role,
+    /// server-side — RLS blocks doing this from the client). Auth is implicit:
+    /// the function reads the caller's JWT from the request Authorization header.
+    func deleteAccount() async throws {
+        try await client.functions.invoke("delete-account")
+    }
+
     // MARK: - Comments + likes
 
     func loadComments(cardId: Int) async throws -> [Comment] {
