@@ -313,6 +313,17 @@ export default async function handler(req, res) {
     if (/prompt is too long|tokens.*maximum|maximum.*tokens/i.test(msg)) {
       return sendErr(413, '대본 chunk가 모델 입력 한도를 넘었어요. 코드의 chunk 기준 글자 수를 더 작게 낮춰 다시 시도해주세요.');
     }
+    // 1.7) Anthropic content filtering policy — 일부 콘텐츠(폭력/성/혐오 등)가
+    //      LLM 출력에 포함되어 안전 정책에 의해 차단된 경우. 작품 자체보다는 LLM
+    //      응답 시 fragment 가 필터에 걸리는 게 흔함. 다른 모델로 시도하거나
+    //      문제 부분을 우회한 추출이 필요.
+    if (status === 400 && /content filtering|output blocked|content_filter/i.test(msg)) {
+      return sendErr(422,
+        `Anthropic 안전 정책으로 출력이 차단됐어요${modelTag}. ` +
+        `· 작품 안 일부 표현이 LLM 응답 단계에서 필터에 걸린 케이스 — 작품 자체 문제는 아닙니다. ` +
+        `· 대처: ① 다른 모델로 재시도 (Sonnet/Opus 가 같은 입력에서 통과되는 경우 있음) ② 본문 일부를 잘라 업로드`
+      );
+    }
     // 2) 모델이 존재하지 않거나 사용 권한 없음 (404 / 400 + not_found / 403)
     //    사용자 계정에 Sonnet/Opus 액세스가 없을 때 흔히 발생.
     if (status === 404 || status === 403 ||
