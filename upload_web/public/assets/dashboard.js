@@ -2119,7 +2119,13 @@ function gbCatIdOf(name) {
         '<div class="px-3 py-4 text-center text-sm text-on-surface-variant">이 카테고리 작품을 찾지 못했습니다.</div>';
       return;
     }
-    works.forEach((w) => {
+
+    // 페이지네이션 — 페이지당 30개. 200개면 7페이지.
+    const PAGE_SIZE = 30;
+    const totalPages = Math.max(1, Math.ceil(works.length / PAGE_SIZE));
+    let currentPage = 1;
+
+    function buildWorkRow(w) {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-primary/5 transition-colors';
@@ -2135,12 +2141,10 @@ function gbCatIdOf(name) {
         const bookIdInput = document.querySelector('#title-book-id');
         if (titleInput) titleInput.value = w.title || '';
         if (bookIdInput) bookIdInput.value = w.bookId ? String(w.bookId) : '';
-        // 시각 강조
-        worksList.querySelectorAll('button').forEach((b) => b.classList.remove('bg-primary/20'));
+        worksList.querySelectorAll('button.work-row').forEach((b) => b.classList.remove('bg-primary/20'));
         row.classList.add('bg-primary/20');
         pickedHint.textContent = `✓ 선택됨: ${w.title}${w.bookId ? ' · Gutenberg #' + w.bookId + ' · 검색 없이 바로 가져오기' : ''}`;
         pickedHint.classList.remove('hidden');
-        // 하단 Gutenberg 검색 버튼 깜빡 강조
         const gbBtn = document.getElementById('gb-search-btn');
         if (gbBtn) {
           gbBtn.classList.add('ring-2', 'ring-primary');
@@ -2148,8 +2152,55 @@ function gbCatIdOf(name) {
           gbBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
-      worksList.appendChild(row);
-    });
+      row.classList.add('work-row');
+      return row;
+    }
+
+    function buildPaginationNav() {
+      const nav = document.createElement('div');
+      nav.className = 'flex items-center justify-center gap-1 py-2 border-t border-outline-variant/30 flex-wrap';
+      // 이전 버튼
+      const prev = document.createElement('button');
+      prev.type = 'button';
+      prev.textContent = '‹';
+      prev.disabled = currentPage <= 1;
+      prev.className = 'px-2.5 py-1 text-xs rounded hover:bg-surface-container-low disabled:opacity-30 disabled:cursor-not-allowed';
+      prev.addEventListener('click', () => renderPage(currentPage - 1));
+      nav.appendChild(prev);
+      // 페이지 버튼들 — 한 화면에 모든 페이지 (7페이지 정도라 무리 없음)
+      for (let p = 1; p <= totalPages; p++) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = String(p);
+        btn.className = p === currentPage
+          ? 'px-2.5 py-1 text-xs rounded bg-primary text-on-primary font-semibold'
+          : 'px-2.5 py-1 text-xs rounded hover:bg-surface-container-low';
+        btn.addEventListener('click', () => renderPage(p));
+        nav.appendChild(btn);
+      }
+      // 다음 버튼
+      const next = document.createElement('button');
+      next.type = 'button';
+      next.textContent = '›';
+      next.disabled = currentPage >= totalPages;
+      next.className = 'px-2.5 py-1 text-xs rounded hover:bg-surface-container-low disabled:opacity-30 disabled:cursor-not-allowed';
+      next.addEventListener('click', () => renderPage(currentPage + 1));
+      nav.appendChild(next);
+      return nav;
+    }
+
+    function renderPage(page) {
+      currentPage = Math.max(1, Math.min(page, totalPages));
+      worksList.innerHTML = '';
+      const start = (currentPage - 1) * PAGE_SIZE;
+      works.slice(start, start + PAGE_SIZE).forEach((w) => worksList.appendChild(buildWorkRow(w)));
+      worksList.appendChild(buildPaginationNav());
+      worksCount.textContent = `${works.length} (${currentPage}/${totalPages}p)`;
+      // 페이지 변경 시 목록 최상단으로 스크롤
+      worksList.scrollTop = 0;
+    }
+
+    renderPage(1);
   });
 })();
 
