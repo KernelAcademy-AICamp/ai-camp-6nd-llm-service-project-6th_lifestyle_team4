@@ -922,6 +922,57 @@ function isIncompleteQuote(quote) {
   return false;
 }
 
+// script_excerpt 의 첫/끝 줄에서 잘린 자투리 자동 제거.
+// 사용자 요구: "앞 뒤로 잘린 문장 꼭 필요한 문장이면 완전하게 다 넣던지 불필요한 문장이면 삭제".
+// LLM 이 안 지키므로 후처리로 강제 — 자투리는 제거, 본문 중간은 그대로.
+function cleanScriptExcerptEdges(script) {
+  if (!script) return script;
+  const COMMON_SHORT_EN = new Set([
+    'a','an','i','is','it','in','on','of','to','or','no','so','we','me','my',
+    'be','by','at','as','if','do','go','up','us','he','am','oh','ah','ha',
+    'the','and','but','for','you','her','him','our','out','all','was','had',
+    'has','can','not','too','now','one','two','who','why','how','any','its',
+  ]);
+  const isLabelLine = (line) => {
+    if (line.length > 30) return false;
+    return /^\*+/.test(line)                    // ** 시작
+      || /:$/.test(line)                         // 콜론으로 끝
+      || /^\(.*\)$/.test(line)                   // 괄호 지문
+      || /^[A-Z][A-Z .'\-]*$/.test(line);        // ALL CAPS 라벨
+  };
+  const lines = script.split('\n');
+
+  // 첫 줄(들) 검사 — 잘린 단어로 시작하면 제거. 라벨/지문/한글 라인은 건드리지 않음.
+  while (lines.length > 1) {
+    const first = lines[0].trim();
+    if (!first) { lines.shift(); continue; }
+    if (isLabelLine(first)) break;
+    // 한글 라인은 검사 skip (한글 잘림 판별 어렵고 false positive 위험)
+    if (/[가-힯]/.test(first)) break;
+    const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
+    // 영문 소문자 1~3자 fragment + 일반 단어 아님 → 잘린 단어
+    if (/^[a-z]{1,3}$/.test(firstToken) && !COMMON_SHORT_EN.has(firstToken.toLowerCase())) {
+      lines.shift();
+      continue;
+    }
+    break;
+  }
+
+  // 끝 줄(들) 검사 — 종결자 없고 단어 잘림이면 제거.
+  while (lines.length > 1) {
+    const last = lines[lines.length - 1].trim();
+    if (!last) { lines.pop(); continue; }
+    // 종결자로 끝남 → OK, 유지
+    if (/[.!?"'”’…。！？\)\）\]\】]\s*$/.test(last)) break;
+    // 영문 + 하이픈/언더스코어 끝 → 단어 잘림 → 제거
+    if (/[a-zA-Z][-_]\s*$/.test(last)) { lines.pop(); continue; }
+    // 그 외 — 한글 줄, 또는 종결자 없는 긴 영문 문장 등은 유지
+    break;
+  }
+
+  return lines.join('\n').replace(/^\n+|\n+$/g, '');
+}
+
 // script_excerpt 잘림 검출 — 매우 보수적 (false positive 방지):
 //   "단어 중간이 명백히 잘린 경우만" drop. 그 외 (종결자 없음 등) 는 사용자가
 //   편집/rescue 로 보강 가능하므로 자동 drop 하지 않음.
@@ -1019,6 +1070,18 @@ export function validateAndFilterCards(cards, category, opts = {}) {
       }
     } else {
       survivors.push(c);
+    }
+  }
+
+  // 첫/끝 줄 잘린 자투리 자동 정리 — survivors 의 script_excerpt 만 손봄.
+  // 사용자 요구: 자투리면 삭제, 필요하면 LLM 이 맥락 보강. 코드는 자투리 제거만 담당.
+  for (const c of survivors) {
+    if (c?.script_excerpt) {
+      const before = c.script_excerpt.length;
+      c.script_excerpt = cleanScriptExcerptEdges(c.script_excerpt);
+      if (c.script_excerpt.length < before) {
+        // 정리로 길이가 줄어들었음 — 디버그 로그만, drop 하지 않음
+      }
     }
   }
 
