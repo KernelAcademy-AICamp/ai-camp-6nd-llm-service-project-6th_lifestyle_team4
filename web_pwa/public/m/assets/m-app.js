@@ -77,7 +77,6 @@ const viewSettings = $('#view-settings');
 const homeLoading = $('#home-loading');
 const homeContent = $('#home-content');
 const homeDate = $('#home-date');
-const homeRefresh = $('#home-refresh');
 const homeError = $('#home-error');
 const todayCard = $('#today-card');
 const todayChips = $('#today-chips');
@@ -101,6 +100,30 @@ const archiveCount = $('#archive-count');
 const archiveSearchInput = $('#archive-search-input');
 const archiveChips = $('#archive-chips');
 const archiveCat = $('#archive-cat');
+
+// MY>북마크 화면 (책꽂이 — 기존 archive UI 를 북마크 데이터로 재사용)
+const bookmarksScreen = $('#bookmarks-screen');
+const bookmarksBody = $('#bookmarks-body');
+const bookmarksBack = $('#bookmarks-back');
+const bmCount = $('#bm-count');
+const bmChips = $('#bm-chips');
+const bmSearchInput = $('#bm-search-input');
+const bmShelves = $('#bm-shelves');
+const bmEmpty = $('#bm-empty');
+const bmNoResult = $('#bm-no-result');
+const mypageBookmarksBlock = $('#mypage-bookmarks-block');
+const mypageBookmarksEntry = $('#mypage-bookmarks-entry');
+
+// 실타래(yarn)
+const yarnChip = $('#yarn-chip');
+const yarnScreen = $('#yarn-screen');
+const yarnBack = $('#yarn-back');
+const yarnTiersEl = $('#yarn-tiers');
+const yarnBalanceNum = $('#yarn-balance-num');
+const yarnTabCharge = $('#yarn-tab-charge');
+const yarnTabAbout = $('#yarn-tab-about');
+const yarnChargeTab = $('#yarn-charge-tab');
+const yarnAboutTab = $('#yarn-about-tab');
 const bookModal = $('#book-modal');
 const bookEyebrow = $('#book-eyebrow');
 const bookTitleEl = $('#book-title');
@@ -204,6 +227,25 @@ const feedQuoteModal = $('#feed-quote-modal');
 const fqQuote = $('#fq-quote');
 const fqSource = $('#fq-source');
 
+// 피드 글 상세 + 댓글 (FeedPostDetailSheet 미러)
+const feedpostScreen = $('#feedpost-screen');
+const feedpostBody = $('#feedpost-body');
+const feedpostBack = $('#feedpost-back');
+const fpQuote = $('#fp-quote');
+const fpSource = $('#fp-source');
+const fpOpenCard = $('#fp-open-card');
+const fpAuthor = $('#fp-author');
+const fpDate = $('#fp-date');
+const fpBody = $('#fp-body');
+const fpCommentsHeader = $('#fp-comments-header');
+const fpCommentLogin = $('#fp-comment-login');
+const fpCommentForm = $('#fp-comment-form');
+const fpCommentInput = $('#fp-comment-input');
+const fpCommentCounter = $('#fp-comment-counter');
+const fpCommentSubmit = $('#fp-comment-submit');
+const fpCommentsEmpty = $('#fp-comments-empty');
+const fpCommentsList = $('#fp-comments-list');
+
 const toastEl = $('#toast');
 
 // ---------- State ----------
@@ -229,8 +271,11 @@ const state = {
   detailCardId: null,
   pushEnabled: false,
   bookmarkActionInFlight: false,
-  archiveSearch: '',
+  yarnPurchased: 0,        // 충전(구매) 잔액 — 서버 users.yarn_balance 시드 (무료 5/일은 localStorage)
+  archiveSearch: '',       // LIBRARY 탭(전체 도서 카탈로그) 검색
   archiveGenre: '',        // '' = all, or 'movie'|'drama'|'musical'|'opera'|'play'
+  bmSearch: '',            // MY>북마크 화면 검색 (카탈로그와 독립)
+  bmGenre: '',             // MY>북마크 화면 장르 필터
   recentlyShownIds: [],    // 오늘의 명대사 셔플 시 최근 10개 제외용 큐
   detailComments: [],      // 현재 열린 카드의 댓글 목록 (top-level + 답글 섞임)
   detailLikes: new Map(),  // comment_id → Set<user_id>
@@ -246,6 +291,9 @@ const state = {
   feedLoaded: false,           // loadFeedPosts 1회 호출 여부
   composeCard: null,           // 오늘의 한줄 작성 모달 대상 카드
   feedSubmitting: false,
+  currentFeedPost: null,       // 피드 글 상세에 열린 post
+  feedPostComments: [],        // 현재 피드 글의 댓글 (feed_post_comments, 평면)
+  feedCommentSubmitting: false,
   draftHighlight: null,        // (하이라이트) { card, selectedText } — compose 화면 채움용
   highlights: [],              // (하이라이트) card_highlights 조회 rows (cards/works join)
   myfeedCategory: 'comment',   // MY FEED 내부 카테고리: 'comment' | 'highlight'
@@ -658,8 +706,20 @@ window.addEventListener('popstate', () => {
     closeChatsScreenInternal();
     return;
   }
+  if (feedpostScreen && feedpostScreen.classList.contains('open')) {
+    closeFeedPostDetailInternal();
+    return;
+  }
   if (bookModal && bookModal.classList.contains('open')) {
     closeBookModalInternal();
+    return;
+  }
+  if (bookmarksScreen && bookmarksScreen.classList.contains('open')) {
+    closeBookmarksScreenInternal();
+    return;
+  }
+  if (yarnScreen && yarnScreen.classList.contains('open')) {
+    closeYarnScreenInternal();
     return;
   }
   // 피드 모달들 (오늘의 한줄 카드 탭 / 작성 플로우 / 북마크 피커)
@@ -804,6 +864,11 @@ function rerenderActiveView() {
     renderHome();
   } else if (state.currentView === 'archive') {
     renderArchive();
+  }
+  // 북마크 오버레이가 열려 있으면 realtime/폴링 변경을 반영
+  if (bookmarksScreen && bookmarksScreen.classList.contains('open')) {
+    renderBookmarksChips();
+    renderBookmarksShelf();
   }
 }
 
@@ -964,7 +1029,7 @@ async function bootstrapAuth() {
   let existingUser = null;
   {
     const ext = await sb.from('users')
-      .select('user_id, nickname, login_id, gender, age_group, pref_genres, pref_themes, pref_any')
+      .select('user_id, nickname, login_id, gender, age_group, pref_genres, pref_themes, pref_any, yarn_balance')
       .eq('anonymous_id', state.authUid).maybeSingle();
     if (ext.error) {
       console.warn('[m] users extended select failed, fallback to basic:', ext.error.message);
@@ -982,9 +1047,11 @@ async function bootstrapAuth() {
     state.userLoginId = existingUser.login_id || '';
     state.userGender = existingUser.gender || '';
     state.userAgeGroup = existingUser.age_group || '';
+    state.yarnPurchased = existingUser.yarn_balance || 0;   // 충전 잔액 시드 (06_yarn.sql)
     syncPrefsFromDb(existingUser);  // DB 선호도 → localStorage (기기 간 동기화)
     return;
   }
+  state.yarnPurchased = 0;   // 신규 user — 충전 잔액 0
   // 신규 user — 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다.
   // 소셜 로그인이라도 제공자 이름을 쓰지 않고 ID/PW 가입과 동일하게 랜덤 닉네임을 부여한다.
   const startingNickname = state.isAnonymous ? '' : randomCuteNickname();
@@ -1459,9 +1526,10 @@ async function toggleBookmark(cardId) {
     toast('저장 실패');
   } finally {
     state.bookmarkActionInFlight = false;
-    if (state.currentView === 'archive') {
-      renderArchiveChips();
-      renderArchive();
+    // LIBRARY(카탈로그)는 북마크와 무관하지만, 열린 북마크 오버레이는 즉시 갱신
+    if (bookmarksScreen && bookmarksScreen.classList.contains('open')) {
+      renderBookmarksChips();
+      renderBookmarksShelf();
     }
     if (state.currentView === 'home') renderHomeBookmarks();
     if (state.currentView === 'settings') paintTasteProfile();
@@ -1770,6 +1838,16 @@ function renderCounts(card) {
     + `</span>`;
 }
 
+// 상세 메타의 댓글 수 칩 (· 💬 N) — CardCounts.kt 미러. 현재 열린 카드의 detailComments 길이.
+// renderCounts(공유 5곳)는 건드리지 않고 #detail-meta 에서만 별도 렌더.
+function renderDetailCommentCount() {
+  const el = document.getElementById('detail-comment-count');
+  if (!el) return;
+  const n = (state.detailComments && state.detailComments.length) || 0;
+  el.innerHTML = `<span>·</span>`
+    + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">chat_bubble</span>${formatCount(n)}</span>`;
+}
+
 function formatBookmarkDate(iso) {
   if (!iso) return '';
   try {
@@ -1830,7 +1908,8 @@ todayCompanion?.addEventListener('click', (e) => {
     },
   });
 });
-homeRefresh.addEventListener('click', () => {
+// '다른 명대사' 새로고침 — 카드 위 버튼을 제거하고 하단 HOME 탭 재탭으로 대체(BottomNavBar 미러).
+function refreshTodayCard() {
   if (state.isAnonymous) {
     if (getRefreshState().count >= REFRESH_LIMIT) {
       openPromptModal({
@@ -1844,7 +1923,7 @@ homeRefresh.addEventListener('click', () => {
   track('today_refreshed');
   applyTodayCard(pickRandomCard());
   renderHomeBookmarks();  // '지난 기록' 갱신 (직전 카드가 추가됨)
-});
+}
 
 // ---------- Archive ----------
 // ---------- Archive: bookshelf grouped by genre ----------
@@ -2024,91 +2103,106 @@ function triggerCatStruck() {
   }, 1400);
 }
 
-function renderArchive() {
-  archiveLoading.style.display = 'none';
-
-  // 북마크가 늘어난 순간(=새 카드 저장)에 잠깐 놀라는 반응
-  if (catPrevBookmarkLen >= 0 && state.bookmarks.length > catPrevBookmarkLen) {
-    triggerCatStruck();
+// 전체 도서 카탈로그 — LibraryViewModel.buildBooks 미러. state.allCards 를 work 단위로 묶음.
+// groupBookmarksByWork 와 동일한 work-shape 라 buildGenreShelf/openBookModal 을 그대로 재사용.
+function groupAllCardsByWork() {
+  const byWork = new Map();
+  for (const card of (state.allCards || [])) {
+    if (!card || !card.works) continue;   // 작품 없는 카드는 제외 (LibraryViewModel 미러)
+    const work = card.works;
+    const key = workGroupKey(work);
+    if (!byWork.has(key)) {
+      const { series, subtitle } = resolveSeriesSubtitle(work);
+      byWork.set(key, {
+        key,
+        series,
+        subtitle,
+        title: subtitle || series || displayTitle(work.title) || '제목 없음',
+        rawTitle: work.title || '',
+        format: (work.format || '').toLowerCase(),
+        author: work.author || null,
+        year: work.release_year || null,
+        cards: [],
+      });
+    }
+    byWork.get(key).cards.push(card);   // 카탈로그 카드엔 _bookmarkedAt 없음
   }
-  catPrevBookmarkLen = state.bookmarks.length;
+  return Array.from(byWork.values()).sort((a, b) => {
+    const s = a.series.localeCompare(b.series);
+    if (s !== 0) return s;
+    return a.subtitle.localeCompare(b.subtitle);
+  });
+}
 
-  if (state.bookmarks.length === 0) {
-    archiveShelves.style.display = 'none';
-    archiveNoResult.style.display = 'none';
-    archiveEmpty.style.display = 'block';
-    archiveCount.textContent = '';
-    if (archiveCat) archiveCat.style.display = '';
-    setCatBaseMood('empty');
-    return;
+// 공유 책꽂이 렌더 — LIBRARY(카탈로그)와 MY>북마크가 같은 UI(장르별 spine + openBookModal)를 공유.
+// ctx: { allWorks, totalCards, search, genre, els:{shelves,empty,noResult,count,loading}, countText(works) }
+function renderShelfView(ctx) {
+  const { els, allWorks } = ctx;
+  if (els.loading) els.loading.style.display = 'none';
+
+  if (allWorks.length === 0) {
+    els.shelves.style.display = 'none';
+    if (els.noResult) els.noResult.style.display = 'none';
+    if (els.empty) els.empty.style.display = 'block';
+    if (els.count) els.count.textContent = '';
+    return 'empty';
   }
+  if (els.empty) els.empty.style.display = 'none';
+  if (els.count) els.count.textContent = ctx.countText(allWorks);
 
-  archiveEmpty.style.display = 'none';
-  const allWorks = groupBookmarksByWork();
-  archiveCount.textContent = `소장 ${allWorks.length}권 · 명대사 ${state.bookmarks.length}편`;
-
-  const q = (state.archiveSearch || '').trim().toLowerCase();
-  const genre = state.archiveGenre || '';
+  const q = (ctx.search || '').trim().toLowerCase();
+  const genre = ctx.genre || '';
   const works = allWorks.filter((w) => {
     if (genre && w.format !== genre) return false;
     if (q) {
       const title = displayTitle(w.title).toLowerCase();
       const series = (w.series || '').toLowerCase();
       const sub = (w.subtitle || '').toLowerCase();
-      // 시리즈명, 부제, 합쳐진 title 어느 하나로도 검색 매칭
       if (!title.includes(q) && !series.includes(q) && !sub.includes(q)) return false;
     }
     return true;
   });
 
   if (works.length === 0) {
-    archiveShelves.style.display = 'none';
-    archiveNoResult.style.display = 'block';
-    if (archiveCat) archiveCat.style.display = '';
-    setCatBaseMood('confused');
-    return;
+    els.shelves.style.display = 'none';
+    if (els.noResult) els.noResult.style.display = 'block';
+    return 'no-result';
   }
-  archiveNoResult.style.display = 'none';
-  archiveShelves.style.display = 'block';
+  if (els.noResult) els.noResult.style.display = 'none';
+  els.shelves.style.display = 'block';
 
-  // 책 있을 때는 각 책장 안/위에 고양이가 분산 배치되므로 우상단 단일 고양이는 숨긴다
-  if (archiveCat) archiveCat.style.display = 'none';
-
-  // 사용자가 책꽂이를 옆으로 스크롤한 위치를 realtime/폴링 재렌더 후에도 유지하기 위해
-  // 장르별 shelf-row 의 scrollLeft 를 미리 저장 → 재구성 후 복원.
+  // 가로 스크롤 위치 보존 (realtime/폴링 재렌더 후 복원)
   const prevScrolls = new Map();
-  archiveShelves.querySelectorAll('.genre-section').forEach((sec) => {
-    const genre = sec.dataset.genre;
+  els.shelves.querySelectorAll('.genre-section').forEach((sec) => {
+    const g = sec.dataset.genre;
     const row = sec.querySelector('.shelf-row');
-    if (genre && row) prevScrolls.set(genre, row.scrollLeft);
+    if (g && row) prevScrolls.set(g, row.scrollLeft);
   });
 
-  archiveShelves.innerHTML = '';
-
-  for (const genre of GENRE_ORDER) {
-    const items = works.filter((w) => w.format === genre);
+  els.shelves.innerHTML = '';
+  const openFn = (w) => openBookModal(w, allWorks);
+  for (const g of GENRE_ORDER) {
+    const items = works.filter((w) => w.format === g);
     if (items.length === 0) continue;
-    archiveShelves.appendChild(buildGenreShelf(genre, items));
+    els.shelves.appendChild(buildGenreShelf(g, items, openFn));
   }
   const otherItems = works.filter((w) => !GENRE_ORDER.includes(w.format));
   if (otherItems.length > 0) {
-    archiveShelves.appendChild(buildGenreShelf('other', otherItems));
+    els.shelves.appendChild(buildGenreShelf('other', otherItems, openFn));
   }
 
-  // 저장된 scrollLeft 복원 — RAF 한 번 추가로 layout 완료 후 적용.
   if (prevScrolls.size > 0) {
     const restore = () => {
-      archiveShelves.querySelectorAll('.genre-section').forEach((sec) => {
+      els.shelves.querySelectorAll('.genre-section').forEach((sec) => {
         const g = sec.dataset.genre;
         const r = sec.querySelector('.shelf-row');
-        if (g && r && prevScrolls.has(g)) {
-          r.scrollLeft = prevScrolls.get(g);
-        }
+        if (g && r && prevScrolls.has(g)) r.scrollLeft = prevScrolls.get(g);
       });
     };
     restore();
     requestAnimationFrame(restore);
   }
+  return 'shelves';
 }
 
 // 책장 안/위에 고양이를 흩어 놓는다 — 현재 6종 포즈를 순환하고,
@@ -2144,7 +2238,49 @@ function decorateShelfWithCats(shelf, genre) {
   }
 }
 
-function buildGenreShelf(genre, items) {
+// LIBRARY 탭 = 전체 도서 카탈로그 (비회원 포함 누구나 열람)
+function renderArchive() {
+  if (!state.allCards || state.allCards.length === 0) {
+    if (archiveLoading) archiveLoading.style.display = 'block';
+    if (archiveShelves) archiveShelves.style.display = 'none';
+    if (archiveEmpty) archiveEmpty.style.display = 'none';
+    if (archiveNoResult) archiveNoResult.style.display = 'none';
+    if (archiveCat) archiveCat.style.display = '';
+    setCatBaseMood('idle');
+    loadAllCards().then(() => {
+      if (state.currentView === 'archive') { renderArchiveChips(); renderArchive(); }
+    }).catch(() => {});
+    return;
+  }
+  const allWorks = groupAllCardsByWork();
+  const totalCards = state.allCards.length;
+  const status = renderShelfView({
+    allWorks,
+    search: state.archiveSearch,
+    genre: state.archiveGenre,
+    els: { shelves: archiveShelves, empty: archiveEmpty, noResult: archiveNoResult, count: archiveCount, loading: archiveLoading },
+    countText: (w) => `전체 ${w.length}권 · 명대사 ${totalCards}편`,
+  });
+  // 코너 고양이 — 검색 결과 0이면 confused, 책장이 있으면(책장 위 고양이로 대체) 숨김
+  if (archiveCat) {
+    if (status === 'no-result') { archiveCat.style.display = ''; setCatBaseMood('confused'); }
+    else if (status === 'shelves') { archiveCat.style.display = 'none'; }
+    else { archiveCat.style.display = ''; setCatBaseMood('idle'); }
+  }
+}
+
+// MY>북마크 화면 = 사용자가 보관한 카드 책꽂이
+function renderBookmarksShelf() {
+  renderShelfView({
+    allWorks: groupBookmarksByWork(),
+    search: state.bmSearch,
+    genre: state.bmGenre,
+    els: { shelves: bmShelves, empty: bmEmpty, noResult: bmNoResult, count: bmCount, loading: null },
+    countText: (w) => `소장 ${w.length}권 · 명대사 ${state.bookmarks.length}편`,
+  });
+}
+
+function buildGenreShelf(genre, items, onOpen) {
   const section = document.createElement('section');
   section.className = 'genre-section';
   // realtime 재렌더 후 장르별 책꽂이 스크롤 위치를 복원하기 위한 키
@@ -2194,7 +2330,7 @@ function buildGenreShelf(genre, items) {
         <span class="spine-genre">${escapeHtml(label)}</span>
       </div>
     `;
-    spine.addEventListener('click', () => openBookModal(w));
+    spine.addEventListener('click', () => (onOpen ? onOpen(w) : openBookModal(w)));
     row.appendChild(spine);
   });
 
@@ -2205,9 +2341,9 @@ function buildGenreShelf(genre, items) {
 }
 
 // Book opening modal
-function openBookModal(work) {
+function openBookModal(work, worksList) {
   const label = GENRE_LABEL[work.format] || '기타';
-  const allWorks = groupBookmarksByWork();
+  const allWorks = worksList || groupBookmarksByWork();
   const idx = allWorks.findIndex((w) => w.key === work.key) + 1;
 
   bookEyebrow.textContent = work.subtitle
@@ -2288,38 +2424,84 @@ archiveSearchInput.addEventListener('input', (e) => {
 archiveCat?.addEventListener('click', () => triggerCatStruck());
 
 // ===== Genre chips =====
-function renderArchiveChips() {
-  if (!archiveChips) return;
-  const allWorks = groupBookmarksByWork();
-  // 사용자가 가진 장르만 표시 (사용 안 한 장르 칩 노출 안 함)
+// 공유 장르 칩 렌더 — LIBRARY(카탈로그)와 MY>북마크 공용
+function renderShelfChips(chipsEl, allWorks, currentGenre, onSelect) {
+  if (!chipsEl) return;
   const availableGenres = new Set(allWorks.map((w) => w.format).filter(Boolean));
-  archiveChips.innerHTML = '';
-  // All 칩
+  chipsEl.innerHTML = '';
   const allChip = document.createElement('button');
   allChip.type = 'button';
-  allChip.className = 'a-chip' + (state.archiveGenre === '' ? ' active' : '');
+  allChip.className = 'a-chip' + (currentGenre === '' ? ' active' : '');
   allChip.dataset.genre = '';
   allChip.textContent = `All · ${allWorks.length}`;
-  archiveChips.appendChild(allChip);
-  // 장르별
+  chipsEl.appendChild(allChip);
   for (const g of GENRE_ORDER) {
     if (!availableGenres.has(g)) continue;
     const count = allWorks.filter((w) => w.format === g).length;
     const chip = document.createElement('button');
     chip.type = 'button';
-    chip.className = 'a-chip' + (state.archiveGenre === g ? ' active' : '');
+    chip.className = 'a-chip' + (currentGenre === g ? ' active' : '');
     chip.dataset.genre = g;
     chip.textContent = `${GENRE_LABEL[g]} · ${count}`;
-    archiveChips.appendChild(chip);
+    chipsEl.appendChild(chip);
   }
-  // 클릭 위임
-  archiveChips.querySelectorAll('.a-chip').forEach((c) => {
-    c.addEventListener('click', () => {
-      state.archiveGenre = c.dataset.genre;
-      track('archive_genre_filtered', { genre: c.dataset.genre || 'all' });
-      renderArchiveChips();
-      renderArchive();
-    });
+  chipsEl.querySelectorAll('.a-chip').forEach((c) => {
+    c.addEventListener('click', () => onSelect(c.dataset.genre));
+  });
+}
+
+function renderArchiveChips() {
+  renderShelfChips(archiveChips, groupAllCardsByWork(), state.archiveGenre || '', (g) => {
+    state.archiveGenre = g;
+    track('library_genre_filtered', { genre: g || 'all' });
+    renderArchiveChips();
+    renderArchive();
+  });
+}
+
+function renderBookmarksChips() {
+  renderShelfChips(bmChips, groupBookmarksByWork(), state.bmGenre || '', (g) => {
+    state.bmGenre = g;
+    renderBookmarksChips();
+    renderBookmarksShelf();
+  });
+}
+
+// ── MY > 북마크 화면 (회원 전용 오버레이) ──
+function paintMyBookmarksEntry() {
+  if (!mypageBookmarksBlock) return;
+  mypageBookmarksBlock.style.display = state.userId ? 'block' : 'none';
+}
+function openBookmarksScreen() {
+  if (!bookmarksScreen) return;
+  if (!state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
+  history.pushState({ overlay: 'bookmarks' }, '');
+  bookmarksScreen.style.display = 'flex';
+  if (bookmarksBody) bookmarksBody.scrollTop = 0;
+  requestAnimationFrame(() => bookmarksScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+  renderBookmarksChips();
+  renderBookmarksShelf();
+  track('bookmarks_opened');
+}
+function closeBookmarksScreenInternal() {
+  if (!bookmarksScreen) return;
+  bookmarksScreen.classList.remove('open');
+  setTimeout(() => {
+    bookmarksScreen.style.display = 'none';
+    document.body.style.overflow = '';
+  }, 250);
+}
+function closeBookmarksScreen() {
+  if (history.state && history.state.overlay === 'bookmarks') history.back();
+  else closeBookmarksScreenInternal();
+}
+if (mypageBookmarksEntry) mypageBookmarksEntry.addEventListener('click', openBookmarksScreen);
+if (bookmarksBack) bookmarksBack.addEventListener('click', closeBookmarksScreen);
+if (bmSearchInput) {
+  bmSearchInput.addEventListener('input', (e) => {
+    state.bmSearch = e.target.value;
+    renderBookmarksShelf();
   });
 }
 
@@ -3272,6 +3454,188 @@ function bumpRefreshCount() {
   return next.count;
 }
 
+// ============================================================================
+// 실타래(yarn) — 카드 열람 게이트 (YarnViewModel/YarnGate/YarnPurchaseScreen 미러)
+//   - 무료 5개/일: localStorage (날짜 비교 리셋)
+//   - 충전 잔액: 서버 users.yarn_balance (consume_yarn/grant_yarn RPC)
+//   - 카드당 1회 unlock: 3일간 무료 재열람
+//   - 차감 우선순위: 무료분 → 충전 잔액
+//   - 투어 중에는 무료(차감/다이얼로그 없음)
+// ============================================================================
+const YARN_DAILY_GRANT = 5;
+const YARN_UNLOCK_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;  // 3일
+const YARN_DAILY_KEY = 'ds.yarnDaily';
+const YARN_UNLOCKED_KEY = 'ds.yarnUnlocked';
+const YARN_TIERS = [[1, 100], [10, 1000], [21, 2000], [32, 3000], [113, 10000]];
+
+function getYarnDaily() {
+  try {
+    const raw = JSON.parse(safeStorageGet(YARN_DAILY_KEY, 'null') || 'null');
+    if (raw && raw.date === todayStr() && Number.isInteger(raw.used)) return raw;
+  } catch {}
+  return { date: todayStr(), used: 0 };
+}
+function bumpYarnDaily() {
+  const next = { date: todayStr(), used: getYarnDaily().used + 1 };
+  safeStorageSet(YARN_DAILY_KEY, JSON.stringify(next));
+  return next.used;
+}
+function getUnlockedMap() {
+  try {
+    const raw = JSON.parse(safeStorageGet(YARN_UNLOCKED_KEY, 'null') || 'null');
+    if (raw && typeof raw === 'object') return raw;
+  } catch {}
+  return {};
+}
+function isCardUnlocked(cardId) {
+  const ts = getUnlockedMap()[String(cardId)];
+  return !!ts && (Date.now() - ts < YARN_UNLOCK_WINDOW_MS);
+}
+function markCardUnlocked(cardId) {
+  const map = getUnlockedMap();
+  const now = Date.now();
+  for (const k of Object.keys(map)) {        // 만료 항목 정리
+    if (now - map[k] >= YARN_UNLOCK_WINDOW_MS) delete map[k];
+  }
+  map[String(cardId)] = now;
+  safeStorageSet(YARN_UNLOCKED_KEY, JSON.stringify(map));
+}
+function yarnAvailable() {
+  const freeLeft = Math.max(0, YARN_DAILY_GRANT - getYarnDaily().used);
+  return freeLeft + (state.yarnPurchased || 0);
+}
+function isTourActive() {
+  return !!document.querySelector('#coachmark');
+}
+
+async function consumeYarnRpc() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('consume_yarn');
+  if (error) throw error;
+  return typeof data === 'number' ? data : parseInt(data, 10);
+}
+async function grantYarnRpc(n) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('grant_yarn', { p_n: n });
+  if (error) throw error;
+  return typeof data === 'number' ? data : parseInt(data, 10);
+}
+
+// 차감: 'alreadyUnlocked' | 'chargedDaily' | 'chargedPurchased' | 'insufficient' | 'error'
+async function spendYarn(cardId) {
+  if (isCardUnlocked(cardId)) return 'alreadyUnlocked';
+  const freeLeft = Math.max(0, YARN_DAILY_GRANT - getYarnDaily().used);
+  if (freeLeft > 0) {
+    bumpYarnDaily();
+    markCardUnlocked(cardId);
+    return 'chargedDaily';
+  }
+  try {
+    const balance = await consumeYarnRpc();
+    if (balance < 0) return 'insufficient';   // 잔액 부족(미차감)
+    state.yarnPurchased = balance;
+    markCardUnlocked(cardId);
+    return 'chargedPurchased';
+  } catch (e) {
+    console.warn('[m] consumeYarn failed:', e);
+    return 'error';
+  }
+}
+
+function renderYarnChip() {
+  if (!yarnChip) return;
+  const n = yarnAvailable();
+  const label = yarnChip.querySelector('.yarn-chip-count');
+  if (label) label.textContent = String(n);
+  if (yarnBalanceNum) yarnBalanceNum.textContent = String(n);
+}
+
+// 카드 열람 확인/부족 다이얼로그 (ConfirmSpendDialog / InsufficientDialog 미러)
+function showYarnConfirm(card) {
+  openPromptModal({
+    title: '실타래 사용',
+    message: '이 카드를 읽으면 실타래 1개가 사용됩니다.',
+    subNote: `보유 실타래 ${yarnAvailable()}개`,
+    confirmLabel: '사용하기',
+    dismissLabel: '취소',
+    openSigninOnConfirm: false,
+    onConfirm: async () => {
+      const r = await spendYarn(card.card_id);
+      if (r === 'insufficient') { showYarnInsufficient(); return; }
+      if (r === 'error') { toast('잠시 후 다시 시도해주세요.'); return; }
+      renderYarnChip();
+      openDetailApproved(card);
+    },
+  });
+}
+function showYarnInsufficient() {
+  openPromptModal({
+    title: '실타래가 부족해요',
+    message: '오늘의 무료 실타래를 모두 사용했어요. 충전하면 계속 읽을 수 있어요.',
+    confirmLabel: '충전하러 가기',
+    dismissLabel: '닫기',
+    openSigninOnConfirm: false,
+    onConfirm: () => openYarnScreen(),
+  });
+}
+
+// 충전 화면
+function renderYarnTiers() {
+  if (!yarnTiersEl) return;
+  yarnTiersEl.innerHTML = '';
+  YARN_TIERS.forEach(([count, price]) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:0.5px solid var(--latte);';
+    row.innerHTML =
+        `<span style="display:flex;align-items:center;gap:12px;"><span style="font-size:20px;line-height:1;">🧶</span>`
+      + `<span class="t-title-lg c-espresso">실타래 ${count}개</span></span>`
+      + `<span class="yarn-tier-buy" style="background:var(--cta);color:#fff;-webkit-text-fill-color:#fff;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;">₩${price.toLocaleString()}</span>`;
+    row.querySelector('.yarn-tier-buy').addEventListener('click', async () => {
+      // 결제는 '준비 중' — 현재는 즉시 충전(grant_yarn)으로 동작 (YarnPurchaseScreen 미러)
+      try {
+        const balance = await grantYarnRpc(count);
+        state.yarnPurchased = balance;
+        renderYarnChip();
+        toast(`실타래 ${count}개를 충전했어요.`);
+      } catch (e) {
+        console.warn('[m] grantYarn failed:', e);
+        toast('충전에 실패했어요. 잠시 후 다시 시도해주세요.');
+      }
+    });
+    yarnTiersEl.appendChild(row);
+  });
+}
+function setYarnTab(about) {
+  if (yarnChargeTab) yarnChargeTab.style.display = about ? 'none' : 'block';
+  if (yarnAboutTab) yarnAboutTab.style.display = about ? 'block' : 'none';
+  if (yarnTabCharge) { yarnTabCharge.style.fontWeight = about ? '400' : '700'; yarnTabCharge.style.color = about ? 'var(--walnut)' : 'var(--espresso)'; }
+  if (yarnTabAbout) { yarnTabAbout.style.fontWeight = about ? '700' : '400'; yarnTabAbout.style.color = about ? 'var(--espresso)' : 'var(--walnut)'; }
+}
+function openYarnScreen() {
+  if (!yarnScreen) return;
+  setYarnTab(false);
+  renderYarnTiers();
+  renderYarnChip();
+  history.pushState({ overlay: 'yarn' }, '');
+  yarnScreen.style.display = 'flex';
+  requestAnimationFrame(() => yarnScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+  track('yarn_screen_opened');
+}
+function closeYarnScreenInternal() {
+  if (!yarnScreen) return;
+  yarnScreen.classList.remove('open');
+  setTimeout(() => { yarnScreen.style.display = 'none'; document.body.style.overflow = ''; }, 250);
+}
+function closeYarnScreen() {
+  if (history.state && history.state.overlay === 'yarn') history.back();
+  else closeYarnScreenInternal();
+}
+if (yarnChip) yarnChip.addEventListener('click', openYarnScreen);
+if (yarnBack) yarnBack.addEventListener('click', closeYarnScreen);
+if (yarnTabCharge) yarnTabCharge.addEventListener('click', () => setYarnTab(false));
+if (yarnTabAbout) yarnTabAbout.addEventListener('click', () => setYarnTab(true));
+
 // ---------- 사용법 코치마크 투어 (첫 접속/첫 로그인 1회) ----------
 const GUIDE_SEEN_KEY = 'ds.guideSeen';
 
@@ -3741,7 +4105,15 @@ function paintAuthIdentity() {
 }
 
 // ---------- Detail (full-screen) ----------
+// 실타래 게이트 — 투어 중/이미 연 카드/충전 후에만 실제 상세를 연다.
 function openDetail(card) {
+  if (!card) return;
+  if (isTourActive() || isCardUnlocked(card.card_id)) { openDetailApproved(card); return; }
+  if (yarnAvailable() <= 0) { showYarnInsufficient(); return; }
+  showYarnConfirm(card);
+}
+
+function openDetailApproved(card) {
   if (!card) return;
   // 카드 열람 누적 카운트 — 임계치 도달 시, 카드를 가리지 않도록 '닫힐 때' 유도 팝업 예약
   if (bumpCardsViewed() >= FEEDBACK_NUDGE_THRESHOLD && !feedbackNudgeSeen()) {
@@ -3798,6 +4170,7 @@ function openDetail(card) {
     + `<div style="margin-top:6px;display:flex;gap:6px;justify-content:center;align-items:center;">`
     + yearHtml
     + renderCounts(card)
+    + `<span id="detail-comment-count" class="t-label-sm c-walnut" style="display:inline-flex;align-items:center;gap:6px;"></span>`
     + `</div>`;
 
   // 상세 ENG 토글 — 장면 설명 위 가로 행 (lang-segmented, 토글 안에 KR/ENG 라벨)
@@ -3886,6 +4259,7 @@ function openDetail(card) {
   detailCommentsEmpty.style.display = 'none';
   state.detailComments = [];
   state.detailLikes = new Map();
+  renderDetailCommentCount();   // 로드 전 0 표시 → 로드 후 renderComments 가 갱신
   loadCommentsForCard(card.card_id).catch((e) => console.warn('[m] loadComments failed:', e));
   subscribeToDetailComments(card.card_id);
 
@@ -3941,7 +4315,9 @@ function applyDetailLang(lang) {
     + `<div style="margin-top:6px;display:flex;gap:6px;justify-content:center;align-items:center;">`
     + yearHtml
     + renderCounts(card)
+    + `<span id="detail-comment-count" class="t-label-sm c-walnut" style="display:inline-flex;align-items:center;gap:6px;"></span>`
     + `</div>`;
+  renderDetailCommentCount();   // 언어 토글로 메타 재생성 후 댓글 수 복원
 
   // 발췌 (script_excerpt) 스왑
   {
@@ -4074,6 +4450,7 @@ async function loadCommentsForCard(cardId) {
 function renderComments() {
   if (state.detailCardId == null) return;
   const list = state.detailComments;
+  renderDetailCommentCount();
   if (!list || list.length === 0) {
     detailCommentsList.innerHTML = '';
     detailCommentsEmpty.style.display = 'block';
@@ -4546,8 +4923,8 @@ function buildFeedItem(post) {
       ${coverHtml}
     </div>
   `;
-  // 카드 탭 → 해당 명대사 한 줄 팝업 (홈 한 줄과 동일, 전문 아님)
-  wrap.addEventListener('click', () => openFeedQuote(card));
+  // 카드 탭 → 피드 글 상세(명대사 + 본문 + 댓글) — FeedPostDetailSheet 미러
+  wrap.addEventListener('click', () => openFeedPostDetail(post));
   return wrap;
 }
 
@@ -4761,6 +5138,181 @@ function closeFeedQuoteInternal() {
   document.body.style.overflow = '';
 }
 
+// ===== 피드 글 상세 + 댓글 (FeedPostDetailSheet / FeedPostDetailViewModel 미러) =====
+// 평면 댓글(답글·좋아요 없음). card_comments 와 동일 RLS 패턴이라 인증은 그대로 동작.
+function isRealFeedPost(post) {
+  // FEED_SAMPLES 의 post_id 는 's1' 등 비숫자 → 실제 글(숫자)만 댓글 가능
+  return !!post && /^\d+$/.test(String(post.post_id));
+}
+
+function paintFeedCommentForm() {
+  if (!fpCommentLogin || !fpCommentForm) return;
+  const anon = state.isAnonymous;
+  fpCommentLogin.style.display = anon ? 'block' : 'none';
+  fpCommentForm.style.display = anon ? 'none' : 'block';
+}
+
+function updateFpCounter() {
+  if (!fpCommentInput || !fpCommentCounter) return;
+  fpCommentCounter.textContent = `${(fpCommentInput.value || '').length} / 500`;
+}
+
+function openFeedPostDetail(post) {
+  if (!post || !feedpostScreen) return;
+  state.currentFeedPost = post;
+  const card = post.cards || {};
+  const w = card.works || {};
+  if (fpQuote) fpQuote.textContent = cleanQuote(card.quote) || '명대사 준비 중';
+  const src = [displayTitle(w.title), w.author].filter(Boolean).join(' · ');
+  if (fpSource) fpSource.textContent = src ? `— ${src}` : '';
+  if (fpAuthor) fpAuthor.textContent = post.author_nickname || '익명';
+  if (fpDate) fpDate.textContent = formatBookmarkDate(post.created_at) || formatRelativeTime(post.created_at);
+  if (fpBody) fpBody.textContent = post.body || '';
+  paintFeedCommentForm();
+  if (fpCommentInput) fpCommentInput.value = '';
+  updateFpCounter();
+  state.feedPostComments = [];
+  renderFeedComments();
+  history.pushState({ overlay: 'feedPost' }, '');
+  feedpostScreen.style.display = 'flex';
+  if (feedpostBody) feedpostBody.scrollTop = 0;
+  requestAnimationFrame(() => feedpostScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+  track('feed_post_opened', { post_id: post.post_id });
+  if (isRealFeedPost(post)) {
+    loadFeedComments(post.post_id).catch((e) => console.warn('[m] loadFeedComments failed:', e));
+  }
+}
+
+async function loadFeedComments(postId) {
+  const sb = await getSupabase();
+  const { data, error } = await sb
+    .from('feed_post_comments')
+    .select('comment_id, post_id, user_id, author_nickname, body, created_at')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true });
+  if (error) { console.warn('[m] feed comments load error:', error.message); return; }
+  // 로드 도중 다른 글로 이동했으면 무시
+  if (!state.currentFeedPost || String(state.currentFeedPost.post_id) !== String(postId)) return;
+  state.feedPostComments = data || [];
+  renderFeedComments();
+}
+
+function renderFeedComments() {
+  if (!fpCommentsList || !fpCommentsHeader) return;
+  const list = state.feedPostComments || [];
+  fpCommentsHeader.textContent = `댓글 ${list.length}`;
+  if (list.length === 0) {
+    fpCommentsList.innerHTML = '';
+    if (fpCommentsEmpty) fpCommentsEmpty.style.display = 'block';
+    return;
+  }
+  if (fpCommentsEmpty) fpCommentsEmpty.style.display = 'none';
+  const myUserId = state.userId;
+  fpCommentsList.innerHTML = list.map((c) => {
+    const isMine = myUserId != null && c.user_id === myUserId;
+    const nick = escapeHtml(c.author_nickname || '익명');
+    const when = escapeHtml(formatRelativeTime(c.created_at));
+    const body = escapeHtml(c.body || '');
+    const del = isMine
+      ? `<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button class="fp-comment-delete" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Delete</button></div>`
+      : '';
+    return `<div style="border:0.5px solid var(--latte);background:var(--paper);padding:12px 14px;">`
+      + `<div style="display:flex;justify-content:space-between;align-items:center;">`
+      + `<span class="t-body-md c-espresso" style="font-weight:600;">${nick}</span>`
+      + `<span class="t-label-sm c-walnut">${when}</span>`
+      + `</div>`
+      + `<p class="t-body-md c-espresso" style="margin-top:6px;white-space:pre-wrap;word-break:keep-all;">${body}</p>`
+      + del
+      + `</div>`;
+  }).join('');
+  fpCommentsList.querySelectorAll('.fp-comment-delete').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (!Number.isNaN(id)) deleteFeedComment(id);
+    });
+  });
+}
+
+async function submitFeedComment() {
+  if (state.feedCommentSubmitting) return;
+  if (state.isAnonymous) { toast('로그인이 필요합니다'); return; }
+  const post = state.currentFeedPost;
+  if (!post || !isRealFeedPost(post) || !state.userId) return;
+  const body = String(fpCommentInput.value || '').trim();
+  if (!body) { toast('내용을 입력해주세요'); return; }
+  state.feedCommentSubmitting = true;
+  if (fpCommentSubmit) fpCommentSubmit.disabled = true;
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('feed_post_comments')
+      .insert({ post_id: post.post_id, user_id: state.userId, author_nickname: state.userNickname || null, body })
+      .select('comment_id, post_id, user_id, author_nickname, body, created_at')
+      .single();
+    if (error) throw error;
+    track('feed_comment_submitted', { post_id: post.post_id });
+    fpCommentInput.value = '';
+    updateFpCounter();
+    if (data && !(state.feedPostComments || []).find((c) => c.comment_id === data.comment_id)) {
+      state.feedPostComments = [...(state.feedPostComments || []), data];
+      renderFeedComments();
+    }
+  } catch (err) {
+    console.warn('[m] submitFeedComment failed:', err);
+    toast('댓글 작성 실패: ' + (err.message || ''));
+  } finally {
+    state.feedCommentSubmitting = false;
+    if (fpCommentSubmit) fpCommentSubmit.disabled = false;
+  }
+}
+
+async function deleteFeedComment(commentId) {
+  if (state.isAnonymous || !state.userId) return;
+  if (!confirm('이 댓글을 삭제할까요?')) return;
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('feed_post_comments')
+      .delete().eq('comment_id', commentId).eq('user_id', state.userId);
+    if (error) throw error;
+    state.feedPostComments = (state.feedPostComments || []).filter((c) => c.comment_id !== commentId);
+    renderFeedComments();
+  } catch (err) {
+    console.warn('[m] deleteFeedComment failed:', err);
+    toast('삭제 실패: ' + (err.message || ''));
+  }
+}
+
+function closeFeedPostDetailInternal() {
+  if (!feedpostScreen) return;
+  feedpostScreen.classList.remove('open');
+  setTimeout(() => {
+    feedpostScreen.style.display = 'none';
+    document.body.style.overflow = '';
+  }, 250);
+  state.currentFeedPost = null;
+}
+function closeFeedPostDetail() {
+  if (history.state && history.state.overlay === 'feedPost') {
+    history.back();
+  } else {
+    closeFeedPostDetailInternal();
+  }
+}
+
+// "명대사 읽어보기" → 카드 상세 (오버레이 닫고 openDetail; picker→detail 핸드오프 패턴)
+function openCardFromFeedPost() {
+  const post = state.currentFeedPost;
+  if (!post) return;
+  const card = post.cards || {};
+  const full = (state.allCards || []).find((c) => c.card_id === post.card_id) || card;
+  closeFeedPostDetailInternal();
+  if (history.state?.overlay === 'feedPost') {
+    history.replaceState(null, '');
+  }
+  setTimeout(() => openDetail(full), 200);
+}
+
 if (feedFab) feedFab.addEventListener('click', openFeedPicker);
 if (feedPickerClose) feedPickerClose.addEventListener('click', closeFeedPicker);
 if (feedComposeClose) feedComposeClose.addEventListener('click', closeFeedCompose);
@@ -4769,6 +5321,12 @@ if (feedComposeModal) feedComposeModal.addEventListener('click', (e) => { if (e.
 if (feedQuoteModal) feedQuoteModal.addEventListener('click', closeFeedQuote);  // 아무 곳이나 탭하면 닫힘
 if (fcInput) fcInput.addEventListener('input', updateFcCounter);
 if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
+
+// 피드 글 상세 + 댓글 wiring
+if (feedpostBack) feedpostBack.addEventListener('click', closeFeedPostDetail);
+if (fpOpenCard) fpOpenCard.addEventListener('click', openCardFromFeedPost);
+if (fpCommentInput) fpCommentInput.addEventListener('input', updateFpCounter);
+if (fpCommentSubmit) fpCommentSubmit.addEventListener('click', submitFeedComment);
 
 // ============================================================================
 // HIGHLIGHT 기능
@@ -5331,14 +5889,7 @@ function renderNotice() {
 
 // ---------- View switching ----------
 function setView(view) {
-  // 익명 사용자는 보관함 진입 차단 — 안내 후 home으로 보정 (재귀 없이 1패스)
-  if (view === 'archive' && state.isAnonymous) {
-    openPromptModal({
-      title: '북마크 보관함은 회원 전용',
-      message: '보관한 명대사를 모아보려면 로그인이 필요해요.',
-    });
-    view = 'home';
-  }
+  // LIBRARY(archive) 탭은 전체 도서 카탈로그 — 누구나 열람(익명 게이트 제거).
   state.currentView = view;
   viewHome.style.display = (view === 'home') ? 'block' : 'none';
   viewArchive.style.display = (view === 'archive') ? 'block' : 'none';
@@ -5357,13 +5908,15 @@ function setView(view) {
     b.classList.toggle('active', b.dataset.nav === view);
   });
 
+  renderYarnChip();   // 상단바 실타래 칩 — 잔여 무료분+충전분 반영
+
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
   if (view === 'feed') {
     renderFeed();
     if (!state.feedLoaded) loadFeedPosts();  // 읽기는 공개 — 익명도 실제 피드 로드
   }
   if (view === 'notice') renderNotice();
-  if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); paintMyFeedEntry(); }
+  if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); paintMyFeedEntry(); paintMyBookmarksEntry(); }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
   if (!suppressPushState) {
@@ -5408,9 +5961,15 @@ function closeAllOpenOverlays() {
 
 $$('[data-nav]').forEach((btn) => {
   btn.addEventListener('click', () => {
-    track('nav', { to: btn.dataset.nav });
+    const nav = btn.dataset.nav;
+    track('nav', { to: nav });
+    // 이미 홈(오버레이 없음)에서 HOME 탭을 다시 누르면 새로고침 — 제거된 새로고침 버튼 대체.
+    if (nav === 'home' && state.currentView === 'home' && !document.querySelector('.detail-screen.open')) {
+      refreshTodayCard();
+      return;
+    }
     closeAllOpenOverlays();
-    setView(btn.dataset.nav);
+    setView(nav);
   });
 });
 

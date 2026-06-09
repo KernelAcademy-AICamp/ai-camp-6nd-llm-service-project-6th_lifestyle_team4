@@ -167,41 +167,6 @@
     border: 0.5px solid var(--espresso);
   }
 
-  /* Home: '다른 명대사' 랜덤 버튼 — 원형 양각 */
-  .home-random-btn {
-    width: 36px; height: 36px;
-    padding: 0;
-    display: inline-flex; align-items: center; justify-content: center;
-    background: var(--card-warm);
-    border: 0.5px solid rgba(0, 0, 0, 0.06);
-    border-radius: 50%;
-    cursor: pointer;
-    box-shadow:
-      0 2px 4px rgba(0, 0, 0, 0.10),
-      0 1px 1px rgba(0, 0, 0, 0.06),
-      inset 0 1px 0 rgba(255, 255, 255, 0.95),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.04);
-    transition: box-shadow 0.12s ease;
-  }
-  .home-random-btn:active {
-    box-shadow:
-      inset 0 1px 2px rgba(0, 0, 0, 0.16),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.4);
-  }
-  :root[data-theme="dark"] .home-random-btn {
-    background: var(--latte);
-    border-color: rgba(0, 0, 0, 0.5);
-    box-shadow:
-      0 2px 5px rgba(0, 0, 0, 0.55),
-      0 1px 2px rgba(0, 0, 0, 0.35),
-      inset 0 1px 0 rgba(255, 255, 255, 0.10),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.35);
-  }
-  :root[data-theme="dark"] .home-random-btn:active {
-    box-shadow:
-      inset 0 1px 2px rgba(0, 0, 0, 0.55),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.05);
-  }
 
   /* Custom select — 톤에 맞춘 드롭다운 (네이티브 <select> 대체) */
   .c-select { position: relative; width: 100%; }
@@ -287,6 +252,7 @@
     background: var(--paper);
     height: 64px;
     display: flex;
+    overflow: visible;   /* 가운데 돌출 원형 HOME 버튼이 바 위로 솟을 수 있게 */
   }
   .bottom-nav .nav-item {
     flex: 1;
@@ -309,6 +275,23 @@
   }
   .bottom-nav .nav-item.active { color: var(--espresso); }
   .bottom-nav .nav-item.active .nav-dot { background: var(--cta); }
+
+  /* 가운데 HOME — 바 위로 솟은 원형 버튼 (mirror BottomNavBar.HomeCenterButton) */
+  .bottom-nav .nav-item.nav-home-center { justify-content: flex-start; }
+  .bottom-nav .nav-item.nav-home-center .nav-icon {
+    width: 54px; height: 54px;
+    font-size: 28px !important;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-top: -22px; margin-bottom: 2px;   /* 바 상단 위로 돌출 */
+    background: var(--card-warm);
+    border: 2px solid transparent;
+    border-radius: 50%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    color: var(--espresso);
+  }
+  .bottom-nav .nav-item.nav-home-center.active { color: var(--espresso); }
+  .bottom-nav .nav-item.nav-home-center.active .nav-icon { border-color: var(--cta); }
+  .bottom-nav .nav-item.nav-home-center .nav-dot { display: none; }
 
   /* Main content padding */
   /* main 영역(home/library/feed/notice/settings) padding-bottom 으로 bottom-nav 가림 방지 */
@@ -1391,7 +1374,12 @@
   <div class="top-bar-brand">
     <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
   </div>
-  <div style="display:flex;align-items:center;gap:14px;">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button id="yarn-chip" aria-label="남은 실타래" title="남은 실타래"
+            style="display:inline-flex;align-items:center;gap:5px;background:transparent;border:0.5px solid var(--latte);border-radius:999px;padding:4px 10px;cursor:pointer;color:var(--walnut);">
+      <span style="font-size:13px;line-height:1;">🧶</span>
+      <span class="yarn-chip-count t-label-sm" style="font-weight:700;">5</span>
+    </button>
     <div title="실시간 동기화 상태" style="display:flex;align-items:center;gap:6px;">
       <span id="rt-status-dot" style="width:8px;height:8px;border-radius:50%;background:#C9B89A;display:inline-block;"></span>
       <span id="rt-status-label" class="t-label-sm c-walnut" style="font-size:10px;">⋯</span>
@@ -1427,11 +1415,8 @@
       <div style="padding-top:24px;"></div>
       <p class="t-label-sm c-walnut" id="home-date" style="text-align:center;">— · — · —</p>
       <div style="height:10px;"></div>
-      <div style="position:relative;text-align:center;">
+      <div style="text-align:center;">
         <h1 class="t-display-md c-espresso" style="font-size:28px;line-height:38px;">오늘<span style="font-size:0.7em;letter-spacing:-0.02em;">의</span> 명대사</h1>
-        <button id="home-refresh" aria-label="다른 명대사 보기" class="home-random-btn" style="position:absolute;right:0;top:50%;transform:translateY(-50%);">
-          <span class="material-symbols-outlined c-walnut" style="font-size:18px;">refresh</span>
-        </button>
       </div>
 
       <div style="height:20px;"></div>
@@ -1498,12 +1483,12 @@
     </div>
   </section>
 
-  <!-- ===== Archive view (bookshelf) ===== -->
+  <!-- ===== Library view (전체 도서 카탈로그) ===== -->
   <section id="view-archive" style="display:none;">
     <!-- library 고양이 마스코트 (유저 상황에 따라 자세/표정 변화) -->
     <img id="archive-cat" class="archive-cat" alt="" src="assets/cat/cat_idle.png" style="height:58px;" />
     <div style="height:24px;"></div>
-    <h1 class="t-display-md c-espresso">수집한 대본</h1>
+    <h1 class="t-display-md c-espresso">도서 카탈로그</h1>
     <p id="archive-count" class="t-label-sm c-walnut" style="margin-top:6px;"></p>
 
     <!-- Genre chips -->
@@ -1523,9 +1508,9 @@
     <div id="archive-shelves" style="display:none;"></div>
 
     <div id="archive-empty" style="display:none;padding:60px 0;text-align:center;">
-      <span class="material-symbols-outlined c-sand" style="font-size:64px;">bookmark_border</span>
-      <p class="t-headline-sm c-espresso" style="margin-top:16px;">아직 수집한 대본이 없습니다.</p>
-      <p class="t-body-md c-walnut" style="margin-top:8px;">오늘의 명대사를 북마크하면 여기에 모입니다.</p>
+      <span class="material-symbols-outlined c-sand" style="font-size:64px;">menu_book</span>
+      <p class="t-headline-sm c-espresso" style="margin-top:16px;">표시할 작품이 없습니다.</p>
+      <p class="t-body-md c-walnut" style="margin-top:8px;">잠시 후 다시 시도해주세요.</p>
     </div>
 
     <div id="archive-no-result" style="display:none;padding:60px 0;text-align:center;">
@@ -1657,6 +1642,19 @@
       <div class="hairline"></div>
     </div>
 
+    <!-- 북마크 entry — 클릭 시 풀스크린 bookmarks-screen 으로 이동 (LIBRARY에서 MY로 이동) -->
+    <div id="mypage-bookmarks-block" style="display:none;">
+      <button id="mypage-bookmarks-entry"
+              style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
+        <div style="flex:1;min-width:0;">
+          <p class="t-title-lg c-espresso" style="margin-bottom:4px;">북마크</p>
+          <p class="t-body-sm c-walnut">내가 보관한 명대사 보기</p>
+        </div>
+        <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+      </button>
+      <div class="hairline"></div>
+    </div>
+
     <div style="height:40px;"></div>
     <p class="t-label-sm c-walnut" style="margin-bottom:12px;font-weight:700;">일반 설정</p>
 
@@ -1742,7 +1740,18 @@
 <!-- ===== Bottom Nav ===== -->
 <div class="hairline" style="position:fixed;left:0;right:0;bottom:64px;z-index:31;"></div>
 <nav class="bottom-nav">
-  <button data-nav="home" class="nav-item active">
+  <button data-nav="notice" class="nav-item">
+    <span class="material-symbols-outlined nav-icon">campaign</span>
+    <span class="t-label-sm">NOTICE</span>
+    <span class="nav-dot"></span>
+    <span id="notice-unread-dot"></span>
+  </button>
+  <button data-nav="feed" class="nav-item">
+    <span class="material-symbols-outlined nav-icon">dynamic_feed</span>
+    <span class="t-label-sm">FEED</span>
+    <span class="nav-dot"></span>
+  </button>
+  <button data-nav="home" class="nav-item nav-home-center active">
     <span class="material-symbols-outlined nav-icon">home</span>
     <span class="t-label-sm">HOME</span>
     <span class="nav-dot"></span>
@@ -1757,17 +1766,6 @@
     </svg>
     <span class="t-label-sm">LIBRARY</span>
     <span class="nav-dot"></span>
-  </button>
-  <button data-nav="feed" class="nav-item">
-    <span class="material-symbols-outlined nav-icon">dynamic_feed</span>
-    <span class="t-label-sm">FEED</span>
-    <span class="nav-dot"></span>
-  </button>
-  <button data-nav="notice" class="nav-item">
-    <span class="material-symbols-outlined nav-icon">campaign</span>
-    <span class="t-label-sm">NOTICE</span>
-    <span class="nav-dot"></span>
-    <span id="notice-unread-dot"></span>
   </button>
   <button data-nav="settings" class="nav-item">
     <span class="material-symbols-outlined nav-icon">person</span>
@@ -1821,6 +1819,145 @@
       <span class="material-symbols-outlined c-sand" style="font-size:56px;">forum</span>
       <p class="t-headline-sm c-espresso" style="margin-top:14px;">아직 단 댓글이 없어요</p>
       <p class="t-body-md c-walnut" style="margin-top:6px;">명대사에 첫 댓글을 남겨보세요.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Feed Post Detail (오늘의 한줄 글 상세 + 댓글) — FeedPostDetailSheet 미러 ===== -->
+<div id="feedpost-screen" class="detail-screen">
+  <header class="top-bar">
+    <button id="feedpost-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
+    </button>
+    <div style="display:flex;flex-direction:column;align-items:center;">
+      <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">DAILY SCRIPT</span>
+    </div>
+    <span style="width:40px;"></span>
+  </header>
+  <div class="hairline"></div>
+  <div class="detail-body" id="feedpost-body" style="text-align:left;padding:24px 20px 104px;">
+    <!-- 명대사 카드 -->
+    <div style="background:var(--card-warm);border:0.5px solid var(--latte);padding:32px 24px;text-align:center;">
+      <p id="fp-quote" class="t-headline-md c-espresso" style="line-height:1.5;"></p>
+      <p id="fp-source" class="t-label-sm c-walnut" style="margin-top:16px;letter-spacing:0.1em;"></p>
+      <button id="fp-open-card" class="sharp-btn" style="width:100%;margin-top:24px;">명대사 읽어보기</button>
+    </div>
+
+    <!-- 작성자 -->
+    <div style="display:flex;align-items:center;gap:12px;margin-top:20px;">
+      <div style="width:44px;height:44px;border-radius:50%;background:var(--latte);display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+        <span class="material-symbols-outlined c-walnut" style="font-size:22px;">edit</span>
+      </div>
+      <div style="min-width:0;">
+        <p id="fp-author" class="t-body-lg c-espresso single-line" style="font-weight:600;"></p>
+        <p id="fp-date" class="t-label-sm c-walnut" style="margin-top:2px;"></p>
+      </div>
+    </div>
+
+    <!-- 본문 -->
+    <p id="fp-body" class="t-body-lg c-espresso" style="margin-top:16px;line-height:1.75;white-space:pre-wrap;word-break:keep-all;"></p>
+
+    <div style="height:24px;"></div>
+    <div class="hairline"></div>
+    <div style="height:20px;"></div>
+
+    <!-- 댓글 -->
+    <p id="fp-comments-header" class="t-title-lg c-espresso">댓글 0</p>
+    <div style="height:14px;"></div>
+
+    <p id="fp-comment-login" class="t-body-md c-walnut" style="display:none;text-align:center;padding:8px 0;">
+      로그인 후 댓글을 남길 수 있어요.
+    </p>
+
+    <div id="fp-comment-form" style="display:none;">
+      <textarea id="fp-comment-input" maxlength="500" rows="3"
+                placeholder="이 글에 대한 생각을 남겨주세요…"
+                style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:1.6;outline:none;resize:vertical;min-height:72px;box-sizing:border-box;"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <span id="fp-comment-counter" class="t-label-sm c-walnut">0 / 500</span>
+        <button id="fp-comment-submit" class="sharp-btn" style="padding:8px 18px;">등록</button>
+      </div>
+    </div>
+
+    <div style="height:20px;"></div>
+
+    <p id="fp-comments-empty" class="t-body-sm c-walnut" style="display:none;text-align:center;font-style:italic;padding:8px 0;">
+      아직 댓글이 없어요. 첫 생각을 남겨보세요.
+    </p>
+    <div id="fp-comments-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- ===== Bookmarks Screen (MY > 북마크) — 보관한 명대사 책꽂이 ===== -->
+<div id="bookmarks-screen" class="detail-screen">
+  <header class="top-bar">
+    <button id="bookmarks-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
+    </button>
+    <div style="display:flex;flex-direction:column;align-items:center;">
+      <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">북마크</span>
+    </div>
+    <span style="width:40px;"></span>
+  </header>
+  <div class="hairline"></div>
+  <div class="detail-body" id="bookmarks-body" style="text-align:left;padding:20px 20px 104px;">
+    <p id="bm-count" class="t-label-sm c-walnut"></p>
+    <div class="archive-chips" id="bm-chips" role="tablist" style="margin-top:12px;"></div>
+    <div class="archive-search">
+      <span class="material-symbols-outlined">search</span>
+      <input id="bm-search-input" type="search" placeholder="작품 제목으로 검색" />
+    </div>
+    <div id="bm-shelves" style="display:none;margin-top:8px;"></div>
+    <div id="bm-empty" style="display:none;padding:60px 0;text-align:center;">
+      <span class="material-symbols-outlined c-sand" style="font-size:64px;">bookmark_border</span>
+      <p class="t-headline-sm c-espresso" style="margin-top:16px;">아직 보관한 명대사가 없습니다.</p>
+      <p class="t-body-md c-walnut" style="margin-top:8px;">마음에 드는 명대사를 북마크하면 여기에 모입니다.</p>
+    </div>
+    <div id="bm-no-result" style="display:none;padding:60px 0;text-align:center;">
+      <span class="material-symbols-outlined c-sand" style="font-size:56px;">search_off</span>
+      <p class="t-headline-sm c-espresso" style="margin-top:14px;">검색 결과가 없습니다</p>
+      <p class="t-body-md c-walnut" style="margin-top:6px;">다른 단어로 시도해보세요</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Yarn (실타래) 충전 화면 — YarnPurchaseScreen 미러 (결제 준비중) ===== -->
+<div id="yarn-screen" class="detail-screen">
+  <header class="top-bar">
+    <button id="yarn-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
+    </button>
+    <span style="flex:1;"></span>
+    <div style="display:flex;gap:4px;">
+      <button id="yarn-tab-charge" class="t-label-sm" style="background:transparent;border:none;cursor:pointer;padding:6px 8px;font-weight:700;color:var(--espresso);">충전</button>
+      <button id="yarn-tab-about" class="t-label-sm" style="background:transparent;border:none;cursor:pointer;padding:6px 8px;color:var(--walnut);">ABOUT</button>
+    </div>
+  </header>
+  <div class="hairline"></div>
+  <div class="detail-body" id="yarn-body" style="text-align:left;padding:24px 20px 104px;">
+    <!-- 충전 탭 -->
+    <div id="yarn-charge-tab">
+      <h1 class="t-display-md c-espresso">실타래</h1>
+      <p class="t-body-sm c-walnut" style="margin-top:6px;">실타래로 명장면 전문을 열람하세요</p>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-top:18px;background:rgba(216,160,90,0.14);border-radius:10px;padding:16px;">
+        <span style="font-size:20px;line-height:1;">🧶</span>
+        <span class="t-title-lg c-espresso">보유 실타래 <span id="yarn-balance-num">5</span></span>
+      </div>
+      <p class="t-label-sm c-walnut" style="margin-top:8px;">매일 5개의 실타래가 무료로 채워져요.</p>
+
+      <div id="yarn-tiers" style="margin-top:20px;"></div>
+    </div>
+
+    <!-- ABOUT 탭 -->
+    <div id="yarn-about-tab" style="display:none;text-align:center;">
+      <h1 class="t-display-md c-espresso" style="margin-top:12px;">실타래</h1>
+      <p class="t-label-sm c-cta" style="margin-top:8px;letter-spacing:0.2em;font-weight:700;">DAILY SCRIPT의 화폐</p>
+      <p class="t-body-lg c-walnut" style="margin-top:20px;line-height:1.7;">실타래는 명대사가 포함된 명장면을 읽을 때 사용하는 한 올입니다.</p>
+      <div style="margin-top:20px;background:rgba(216,160,90,0.14);border-radius:10px;padding:18px;">
+        <p class="t-body-md c-espresso" style="line-height:1.7;">text(텍스트)의 어원은 라틴어 textere ‘짜다’. 문장은 한 올, 한 올을 엮은 것입니다.</p>
+      </div>
+      <p class="t-body-md c-walnut" style="margin-top:20px;">한 올의 실, 실타래로 문장을 열어보세요.</p>
     </div>
   </div>
 </div>
