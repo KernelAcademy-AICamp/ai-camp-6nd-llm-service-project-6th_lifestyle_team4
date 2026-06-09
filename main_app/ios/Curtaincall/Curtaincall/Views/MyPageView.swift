@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MyPageView: View {
     @Binding var selectedTab: Tab
@@ -100,9 +101,8 @@ struct MyPageView: View {
                         Task { await session.signOut() }
                     } label: {
                         Text(session.isAnonymous ? "Reset Anonymous" : "Sign Out")
-                            .editorialButton(style: .outlined)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(EditorialButtonStyle(.outlined))
 
                     // Account deletion (App Store Guideline 5.1.1(v)). Members
                     // only, and gated behind a flag that stays OFF until the
@@ -122,9 +122,19 @@ struct MyPageView: View {
                         .disabled(session.authInProgress)
                     }
                     Spacer().frame(height: 40)
+                    // Bottom room so the submit button can scroll clear of the
+                    // keyboard (keyboard avoidance insets the scroll content).
+                    Spacer().frame(height: 24)
                 }
                 .padding(.horizontal, 20)
+                // Dismiss the keyboard on tap WITHOUT consuming the tap — a
+                // simultaneousGesture fires alongside the button's own tap, so
+                // the 로그인/가입 button still triggers. (A plain .onTapGesture on
+                // this container swallowed the button's tap.)
+                .contentShape(Rectangle())
+                .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
@@ -154,6 +164,10 @@ struct MyPageView: View {
         }
     }
 
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
     private var tasteProfileText: String {
         guard let t = Recommend.computeTaste(bookmarks.bookmarkCards) else {
             return "아직 북마크가 없어요 — 카드를 수집하면 분석이 시작됩니다."
@@ -175,9 +189,8 @@ struct MyPageView: View {
                 Task { await session.signIn(id: loginId, password: loginPassword, signUp: signUpMode) }
             } label: {
                 Text(session.authInProgress ? "⋯" : (signUpMode ? "가입" : "로그인"))
-                    .editorialButton(style: .filled)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(EditorialButtonStyle(.filled))
             .disabled(session.authInProgress || loginId.isEmpty || loginPassword.isEmpty)
             Button { signUpMode.toggle() } label: {
                 Text(signUpMode ? "이미 계정이 있나요? 로그인" : "계정이 없으신가요? 회원가입")
@@ -398,15 +411,15 @@ struct ProfileEditor: View {
 
             HStack {
                 Button { onCancel() } label: {
-                    Text("취소").editorialButton(style: .outlined)
+                    Text("취소")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(EditorialButtonStyle(.outlined))
                 Button {
                     onSave(nickname, gender.isEmpty ? nil : gender, age.isEmpty ? nil : age)
                 } label: {
-                    Text("저장").editorialButton(style: .filled)
+                    Text("저장")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(EditorialButtonStyle(.filled))
             }
             Spacer()
         }

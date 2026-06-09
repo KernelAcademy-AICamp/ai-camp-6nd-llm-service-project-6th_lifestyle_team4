@@ -42,9 +42,8 @@ struct AccountRequiredPrompt: View {
                 Spacer().frame(height: 24)
                 Button(action: onLogin) {
                     Text("로그인 / 회원가입")
-                        .editorialButton(style: .filled)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(EditorialButtonStyle(.filled))
             }
             .padding(20)
             .frame(maxWidth: 340)

@@ -681,10 +681,9 @@ private struct FeedComposeSheet: View {
                     onSubmit(draft)
                 } label: {
                     Text(isSubmitting ? "등록 중⋯" : "등록 하기")
-                        .editorialButton(style: .filled)
                         .opacity(canSubmit ? 1 : 0.45)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(EditorialButtonStyle(.filled))
                 .disabled(!canSubmit)
             }
             .padding(20)
