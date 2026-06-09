@@ -178,6 +178,31 @@ final class AuthSession: ObservableObject {
         authMessage = nil
     }
 
+    /// Permanently deletes the signed-in member's account and all related data
+    /// (profile, bookmarks, comments, likes, highlights, feed posts) via the
+    /// `delete-account` Edge Function. The function runs with service_role so it
+    /// can also remove the Supabase Auth user — the client can't, and without it
+    /// the next launch would deterministically re-bootstrap the same account.
+    /// On success we drop the dead session and re-bootstrap a fresh anonymous
+    /// one. Members only (anonymous users have no account to delete).
+    @discardableResult
+    func deleteAccount() async -> Bool {
+        guard !authInProgress, !isAnonymous else { return false }
+        authInProgress = true
+        authMessage = nil
+        defer { authInProgress = false }
+        do {
+            try await Supa.shared.deleteAccount()
+            try? await auth.signOut()
+            await bootstrap()
+            authMessage = "계정이 삭제됐어요"
+            return true
+        } catch {
+            authMessage = "계정 삭제에 실패했어요: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     func updateNickname(_ newName: String) async {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let uid = userId else { return }

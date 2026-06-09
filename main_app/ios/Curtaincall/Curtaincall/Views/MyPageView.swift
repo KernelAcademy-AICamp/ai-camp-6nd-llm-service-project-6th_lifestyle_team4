@@ -10,6 +10,7 @@ struct MyPageView: View {
     @State private var loginPassword = ""
     @State private var signUpMode = false
     @State private var showNicknameSheet = false
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -102,6 +103,24 @@ struct MyPageView: View {
                             .editorialButton(style: .outlined)
                     }
                     .buttonStyle(.plain)
+
+                    // Account deletion (App Store Guideline 5.1.1(v)). Members
+                    // only, and gated behind a flag that stays OFF until the
+                    // delete-account Edge Function is deployed (no non-functional
+                    // control ships).
+                    if FeatureFlags.accountDeletionEnabled && !session.isAnonymous {
+                        Spacer().frame(height: 16)
+                        Button {
+                            showDeleteConfirm = true
+                        } label: {
+                            Text("회원 탈퇴")
+                                .labelCaps(color: .cta)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(session.authInProgress)
+                    }
                     Spacer().frame(height: 40)
                 }
                 .padding(.horizontal, 20)
@@ -124,6 +143,14 @@ struct MyPageView: View {
         .task { await bookmarks.load(userId: session.userId) }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
+        }
+        .alert("회원 탈퇴", isPresented: $showDeleteConfirm) {
+            Button("취소", role: .cancel) {}
+            Button("탈퇴하기", role: .destructive) {
+                Task { await session.deleteAccount() }
+            }
+        } message: {
+            Text("계정과 모든 데이터(북마크·댓글·하트·피드)가 영구 삭제되며 되돌릴 수 없습니다.")
         }
     }
 
