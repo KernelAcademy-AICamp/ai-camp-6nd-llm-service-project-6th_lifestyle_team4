@@ -23,6 +23,12 @@ object AppPreferences {
 
     private const val RECENT_CAP = 10
 
+    /** 매일 부여되는 무료 실타래 수 (단일 출처). */
+    const val DAILY_YARN_GRANT = 5
+
+    /** unlock(카드당 1회 무료 재열람) 유효 기간 — 이후엔 다시 실타래를 차감. */
+    private const val UNLOCK_WINDOW_MS = 3L * 24 * 60 * 60 * 1000 // 3일
+
     private val PUSH = booleanPreferencesKey("push_enabled")
     private val TASTE = booleanPreferencesKey("taste_enabled")
     private val DARK = booleanPreferencesKey("dark_theme")
@@ -32,6 +38,9 @@ object AppPreferences {
     private val NOTICE_LAST_SEEN = longPreferencesKey("notice_last_seen_id") // max notice_id the user has seen
     private val FEED_CATEGORY = stringPreferencesKey("feed_category") // "today" | "highlight"
     private val GUIDE_SEEN = booleanPreferencesKey("guide_seen")     // onboarding coachmark shown once
+    private val YARN_DAILY_DATE = stringPreferencesKey("yarn_daily_date") // yyyy-MM-dd of daily grant
+    private val YARN_DAILY_USED = intPreferencesKey("yarn_daily_used")    // daily yarns spent on YARN_DAILY_DATE
+    private val UNLOCKED = stringPreferencesKey("unlocked_card_ids")      // CSV of "cardId:epochMillis" (3일 무료 재열람)
 
     @Volatile
     private lateinit var store: DataStore<Preferences>
@@ -85,6 +94,49 @@ object AppPreferences {
         }
         return result
     }
+
+    // --- 실타래(yarn) 일일 무료분 + 카드 unlock (구매 잔액은 서버 users.yarn_balance) ---
+    // 매일 5개 무료분을 우선 소진. 새로고침 제한(refresh_count)과 동일하게 날짜 비교로 리셋.
+    suspend fun yarnUsedToday(today: String): Int {
+        val prefs = store.data.first()
+        return if (prefs[YARN_DAILY_DATE] == today) (prefs[YARN_DAILY_USED] ?: 0) else 0
+    }
+
+    /** 오늘 사용한 일일 실타래 +1 (새 날이면 리셋). 새 사용량 반환. */
+    suspend fun bumpYarnDaily(today: String): Int {
+        var result = 0
+        store.edit { p ->
+            val current = if (p[YARN_DAILY_DATE] == today) (p[YARN_DAILY_USED] ?: 0) else 0
+            result = current + 1
+            p[YARN_DAILY_DATE] = today
+            p[YARN_DAILY_USED] = result
+        }
+        return result
+    }
+
+    // 카드당 1회 차감(unlock). 읽은 카드는 3일간 무료 재열람, 이후 다시 차감.
+    suspend fun isUnlocked(cardId: Long): Boolean {
+        val ts = parseUnlocks(store.data.first()[UNLOCKED])[cardId] ?: return false
+        return System.currentTimeMillis() - ts < UNLOCK_WINDOW_MS
+    }
+
+    suspend fun markUnlocked(cardId: Long) {
+        val now = System.currentTimeMillis()
+        store.edit { p ->
+            val current = parseUnlocks(p[UNLOCKED]).toMutableMap()
+            current.entries.removeAll { now - it.value >= UNLOCK_WINDOW_MS } // 만료 항목 정리
+            current[cardId] = now
+            p[UNLOCKED] = current.entries.joinToString(",") { "${it.key}:${it.value}" }
+        }
+    }
+
+    private fun parseUnlocks(raw: String?): Map<Long, Long> =
+        raw?.split(",")?.mapNotNull { entry ->
+            val parts = entry.split(":")
+            val id = parts.getOrNull(0)?.trim()?.toLongOrNull()
+            val ts = parts.getOrNull(1)?.trim()?.toLongOrNull()
+            if (id != null && ts != null) id to ts else null
+        }?.toMap() ?: emptyMap()
 
     // --- Notice unread tracking ---
     val noticeLastSeenId: Flow<Long> get() = store.data.map { it[NOTICE_LAST_SEEN] ?: 0L }

@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,6 +63,7 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 @Composable
 fun SettingsScreen(
     session: UserSession,
+    yarn: Int,
     authMessage: String?,
     authInProgress: Boolean,
     onSignIn: (id: String, password: String, signUp: Boolean) -> Unit,
@@ -70,6 +73,7 @@ fun SettingsScreen(
     onUpdateProfile: (nickname: String, gender: String?, ageGroup: String?) -> Unit,
     onOpenMyComments: () -> Unit,
     onOpenMyFeed: () -> Unit,
+    onOpenYarnPurchase: () -> Unit,
     onOpenGuide: () -> Unit,
     onOpenTerms: () -> Unit,
     onOpenPrivacy: () -> Unit,
@@ -193,6 +197,38 @@ fun SettingsScreen(
                 trailingArrow = true,
             )
         }
+
+        // --- 실타래 ---
+        Box(modifier = Modifier.height(40.dp))
+        SectionLabel(text = "실타래")
+        SettingRow(
+            title = stringResource(R.string.yarn_charge),
+            subtitle = stringResource(R.string.yarn_charge_desc),
+            onClick = onOpenYarnPurchase,
+            trailing = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_yarn),
+                        contentDescription = null,
+                        tint = Cta,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = yarn.toString(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Espresso,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                        contentDescription = null,
+                        tint = Walnut,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            },
+        )
 
         // --- 일반 설정 ---
         Box(modifier = Modifier.height(40.dp))

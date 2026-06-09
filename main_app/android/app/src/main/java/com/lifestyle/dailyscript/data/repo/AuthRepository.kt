@@ -38,6 +38,8 @@ data class UserSession(
     val gender: String? = null,
     val ageGroup: String? = null,
     val loginId: String? = null,
+    /** 충전(구매) 실타래 잔액. 무료 5개/일은 클라이언트 로컬에서 별도 관리. */
+    val yarnBalance: Int = 0,
     /** 소셜 첫 가입 직후 1회 성별·나이 입력 프롬프트를 띄울지. */
     val needsProfileSetup: Boolean = false,
 )
@@ -88,6 +90,7 @@ class AuthRepository {
                 existing.gender,
                 existing.ageGroup,
                 existing.loginId,
+                existing.yarnBalance,
             )
         }
 

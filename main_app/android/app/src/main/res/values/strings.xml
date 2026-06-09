@@ -80,4 +80,25 @@
     <string name="edit_profile">프로필 편집</string>
     <string name="nickname_placeholder">표시할 이름</string>
     <string name="randomize">랜덤 이름 생성</string>
+
+    <!-- 실타래(yarn) -->
+    <string name="yarn_chip_cd">남은 실타래</string>
+    <string name="yarn_charge">실타래 충전</string>
+    <string name="yarn_charge_desc">실타래로 명장면 전문을 열람하세요</string>
+    <string name="yarn_my_balance">보유 실타래 %1$d</string>
+    <string name="yarn_tab_charge">충전</string>
+    <string name="yarn_tab_about">ABOUT</string>
+    <string name="yarn_about_lede">DAILY SCRIPT의 화폐</string>
+    <string name="yarn_about_title">실타래</string>
+    <string name="yarn_about_body">실타래는 명대사가 포함된 명장면을 읽을 때 사용하는 한 올입니다.</string>
+    <string name="yarn_about_note">text(텍스트)의 어원은 라틴어 textere ‘짜다’. 문장은 한 올, 한 올을 엮은 것입니다.</string>
+    <string name="yarn_about_outro">한 올의 실, 실타래로 문장을 열어보세요.</string>
+    <string name="yarn_daily_note">매일 5개의 실타래가 무료로 채워져요.</string>
+    <string name="yarn_confirm_title">실타래 사용</string>
+    <string name="yarn_confirm_body">이 카드를 읽으면 실타래 1개가 사용됩니다.</string>
+    <string name="yarn_confirm_use">사용하기</string>
+    <string name="yarn_insufficient_title">실타래가 부족해요</string>
+    <string name="yarn_insufficient_body">오늘의 무료 실타래를 모두 사용했어요. 충전하면 계속 읽을 수 있어요.</string>
+    <string name="yarn_go_charge">충전하러 가기</string>
+    <string name="yarn_not_ready">충전 기능은 준비 중입니다.</string>
 </resources>

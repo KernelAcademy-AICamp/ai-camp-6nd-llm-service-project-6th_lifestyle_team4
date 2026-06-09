@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Bookmark
@@ -23,10 +26,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -36,6 +41,7 @@ import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
+import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.theme.WordmarkSerif
 import com.lifestyle.dailyscript.ui.util.formatCount
@@ -85,16 +91,49 @@ fun BrandWordmark() {
 }
 
 @Composable
-fun HomeTopBar(onMyPageClick: () -> Unit) {
+fun HomeTopBar(yarn: Int, onYarnClick: () -> Unit, onMyPageClick: () -> Unit) {
     TopBarContainer {
         BrandWordmark()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            YarnChip(yarn = yarn, onClick = onYarnClick)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = stringResource(R.string.my_page),
+                style = MaterialTheme.typography.labelSmall,
+                color = Walnut,
+                modifier = Modifier
+                    .clickable(onClick = onMyPageClick)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+/** 로고 우측 실타래 칩 — 아이콘 + 남은 개수. 탭하면 충전 페이지로 이동. */
+@Composable
+fun YarnChip(yarn: Int, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier = Modifier
+            .background(Sand.copy(alpha = 0.35f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_yarn),
+            contentDescription = stringResource(R.string.yarn_chip_cd),
+            tint = Cta,
+            modifier = Modifier.size(15.dp),
+        )
+        Spacer(Modifier.width(5.dp))
         Text(
-            text = stringResource(R.string.my_page),
-            style = MaterialTheme.typography.labelSmall,
-            color = Walnut,
-            modifier = Modifier
-                .clickable(onClick = onMyPageClick)
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+            text = yarn.toString(),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            ),
+            color = Espresso,
         )
     }
 }

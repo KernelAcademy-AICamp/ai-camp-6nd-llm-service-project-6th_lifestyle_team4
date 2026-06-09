@@ -60,6 +60,9 @@ import com.lifestyle.dailyscript.ui.settings.ProfileDialog
 import com.lifestyle.dailyscript.ui.settings.SettingsScreen
 import com.lifestyle.dailyscript.ui.settings.privacyDoc
 import com.lifestyle.dailyscript.ui.settings.termsDoc
+import com.lifestyle.dailyscript.ui.yarn.YarnGate
+import com.lifestyle.dailyscript.ui.yarn.YarnPurchaseScreen
+import com.lifestyle.dailyscript.ui.yarn.YarnViewModel
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Walnut
 
@@ -117,6 +120,15 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val noticeVm: NoticeViewModel = viewModel()
     val noticeBadge by noticeVm.unread.collectAsState()
 
+    // 실타래 잔액 — 상단바 칩과 DETAIL 게이트가 공유하는 단일 소스. VM 은 액티비티
+    // 스코프라 세션이 바뀌면(로그인/로그아웃/탈퇴) 서버 잔액으로 다시 시드한다.
+    val yarnVm: YarnViewModel = viewModel()
+    val yarnAvailable by yarnVm.available.collectAsState()
+    LaunchedEffect(session.userId, session.yarnBalance) {
+        yarnVm.setPurchased(session.yarnBalance)
+        yarnVm.refreshDaily()
+    }
+
     // Interactive spotlight onboarding tour (앱 사용법 / 첫 실행). Starts only once HOME is shown.
     val coach = remember { CoachController() }
     LaunchedEffect(session.userId, session.isAnonymous, session.gender, session.ageGroup) {
@@ -154,7 +166,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
 
     val mainTabs = setOf(Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE, Routes.SETTINGS)
     val isDetail = currentRoute?.startsWith("detail/") == true || currentRoute == Routes.DETAIL
-    val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.TERMS, Routes.PRIVACY)
+    val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE)
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
     // 상세(전문 보기)에서도 하단 바 노출 — 상단 바는 DetailTopBar(뒤로가기·북마크)가 대체하므로 그대로 숨김 유지.
@@ -167,10 +179,17 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         Column(modifier = Modifier.fillMaxSize().imePadding()) {
         if (showTopBar) {
             when (currentRoute) {
-                Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(onMyPageClick = {
-                    AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.SETTINGS))
-                    navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
-                })
+                Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(
+                    yarn = yarnAvailable,
+                    onYarnClick = {
+                        AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
+                        navController.navigate(Routes.YARN_PURCHASE) { launchSingleTop = true }
+                    },
+                    onMyPageClick = {
+                        AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.SETTINGS))
+                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                    },
+                )
                 Routes.SETTINGS -> SettingsTopBar(onFeedback = {
                     AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.FEEDBACK))
                     navController.navigate(Routes.FEEDBACK)
@@ -207,6 +226,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
                         session = session,
+                        yarn = yarnAvailable,
                         authMessage = authMessage,
                         authInProgress = authInProgress,
                         onSignIn = { id, pw, signUp -> sessionVm.signIn(id, pw, signUp) },
@@ -221,6 +241,10 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onOpenMyFeed = {
                             AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.MY_FEED))
                             navController.navigate(Routes.MY_FEED)
+                        },
+                        onOpenYarnPurchase = {
+                            AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
+                            navController.navigate(Routes.YARN_PURCHASE)
                         },
                         onOpenGuide = {
                             AppAnalytics.track("onboarding_requested")
@@ -268,18 +292,35 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.PRIVACY) {
                     LegalScreen(doc = privacyDoc(), onBack = { navController.popBackStack() })
                 }
+                composable(Routes.YARN_PURCHASE) {
+                    YarnPurchaseScreen(
+                        yarnVm = yarnVm,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
                 composable(
                     route = Routes.DETAIL,
                     arguments = listOf(navArgument("cardId") { type = NavType.LongType }),
                 ) { entry ->
                     val cardId = entry.arguments?.getLong("cardId") ?: -1L
-                    DetailScreen(
+                    // 실타래 게이트 — 차감 승인 후에만 DetailScreen(=vm.load/incrementView) 컴포즈.
+                    YarnGate(
                         cardId = cardId,
-                        userId = session.userId,
-                        isAnonymous = session.isAnonymous,
-                        myNickname = session.nickname,
-                        onBack = { navController.popBackStack() },
-                    )
+                        yarnVm = yarnVm,
+                        onGoCharge = {
+                            navController.popBackStack(Routes.DETAIL, inclusive = true)
+                            navController.navigate(Routes.YARN_PURCHASE)
+                        },
+                        onCancel = { navController.popBackStack() },
+                    ) {
+                        DetailScreen(
+                            cardId = cardId,
+                            userId = session.userId,
+                            isAnonymous = session.isAnonymous,
+                            myNickname = session.nickname,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
                 }
             }
         }

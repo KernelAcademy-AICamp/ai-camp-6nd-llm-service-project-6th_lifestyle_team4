@@ -11,6 +11,7 @@ object Routes {
     const val MY_FEED = "my_feed"
     const val TERMS = "terms"
     const val PRIVACY = "privacy"
+    const val YARN_PURCHASE = "yarn_purchase"
     const val DETAIL = "detail/{cardId}"
     fun detail(cardId: Long) = "detail/$cardId"
 }

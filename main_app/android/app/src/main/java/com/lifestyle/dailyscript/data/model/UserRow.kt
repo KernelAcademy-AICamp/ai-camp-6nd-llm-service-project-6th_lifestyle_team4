@@ -11,6 +11,8 @@ data class UserRow(
     val gender: String? = null,
     @SerialName("age_group") val ageGroup: String? = null,
     @SerialName("login_id") val loginId: String? = null,
+    // 충전(구매) 실타래 잔액. 06_yarn.sql 적용 전/익명 신규 행을 위해 기본 0.
+    @SerialName("yarn_balance") val yarnBalance: Int = 0,
 )
 
 @Serializable
