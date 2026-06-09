@@ -1323,13 +1323,12 @@ export function validateAndFilterCards(cards, category, opts = {}) {
       if (c.quote) c.script_excerpt = String(c.quote);
     }
     if (!c.script_excerpt) continue;
-    if (fullScript) {
-      rescueScriptExcerptEdges(c, fullScript);          // 첫/끝 줄 잘림 fullScript 에서 복원
-      rescueMiddleParagraphStarts(c, fullScript);       // 중간 단락 시작 자투리 fullScript 에서 복원
-    }
-    // 첫/끝 자투리 cleanup (중간은 안 건드림 — 원문 보존)
+    // ★ 사용자 명시 원칙: 본문 텍스트는 절대 수정/변경 안 함.
+    //    띄어쓰기/줄바꿈만 정리. 첫/끝 자투리(잘린 토큰)는 잘라내기만 — 단어 prepend/append 안 함.
+    //    fullScript 에서 prepend 하는 rescueScriptExcerptEdges, rescueMiddleParagraphStarts 모두 사용 안 함.
+    // 1) 첫/끝 자투리 잘라내기 (중간은 안 건드림 — 원문 보존)
     c.script_excerpt = cleanScriptExcerptEdges(c.script_excerpt);
-    // PDF 페이지 폭 줄바꿈 정리 — 한 단락 안 부자연스러운 \n 은 공백으로 합침.
+    // 2) PDF 페이지 폭 줄바꿈 정리 — 한 단락 안 부자연스러운 \n 은 공백으로 합침.
     c.script_excerpt = collapsePdfLineWraps(c.script_excerpt);
   }
 
