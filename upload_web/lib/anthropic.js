@@ -517,7 +517,20 @@ export function splitScriptIntoChunks(
     const end = Math.max(start + 1, splitAt);
     chunks.push({ start, end, text: text.slice(start, end) });
 
-    const nextStart = Math.max(end - overlapChars, start + 1);
+    let nextStart = Math.max(end - overlapChars, start + 1);
+    // ★ 다음 청크의 시작 위치도 단어 중간이면 다음 단어 시작으로 이동.
+    //   이전 청크의 end 만 공백 위치였고, 다음 청크 start = end - overlap 은 임의 위치.
+    //   nextStart 가 단어 안이면 청크 2 시작이 'ready been walking...' 처럼 잘림.
+    if (nextStart > 0 && nextStart < text.length) {
+      const isWordChar = (ch) => /[\p{L}\p{N}'-]/u.test(ch);
+      if (isWordChar(text[nextStart - 1]) && isWordChar(text[nextStart])) {
+        // 단어 중간 — 가장 가까운 공백(앞)을 찾아 그 다음 단어 시작 위치로 이동
+        let back = nextStart - 1;
+        while (back > start && isWordChar(text[back])) back--;
+        // back 는 공백 위치 (또는 start). 단어 시작 = back + 1.
+        nextStart = back + 1;
+      }
+    }
     start = nextStart >= end ? end : nextStart;
   }
 
