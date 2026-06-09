@@ -15,7 +15,15 @@ final class Supa {
     private init() {
         client = SupabaseClient(
             supabaseURL: Config.supabaseURL,
-            supabaseKey: Config.supabaseAnonKey
+            supabaseKey: Config.supabaseAnonKey,
+            // Emit the locally stored session immediately as the initial session.
+            // The default (false) path runs `reportIssue()` inside
+            // `emitInitialSession`, which pauses under the debugger and freezes
+            // `AuthSession.bootstrap()` — deadlocking all auth. bootstrap() does a
+            // `session.isExpired` check to compensate for the un-refreshed emit.
+            options: SupabaseClientOptions(
+                auth: .init(emitLocalSessionAsInitialSession: true)
+            )
         )
     }
 

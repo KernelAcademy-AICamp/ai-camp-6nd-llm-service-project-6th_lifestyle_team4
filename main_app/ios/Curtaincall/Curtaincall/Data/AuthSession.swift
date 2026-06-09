@@ -58,6 +58,14 @@ final class AuthSession: ObservableObject {
         defer { bootstrapInProgress = false }
 
         do {
+            // With emitLocalSessionAsInitialSession the SDK surfaces the stored
+            // session even when its access token is expired, so don't treat an
+            // expired session as signed-in: refresh it first (preserves a member
+            // whose refresh token is still valid), then anon-bootstrap only if
+            // there's genuinely no session left.
+            if let session = auth.currentSession, session.isExpired {
+                _ = try? await auth.refreshSession()
+            }
             if auth.currentSession == nil {
                 _ = try await auth.signInAnonymously()
             }
@@ -102,7 +110,6 @@ final class AuthSession: ObservableObject {
                             // Upgrade succeeded; a merge failure is non-fatal but must not
                             // be invisible. Surface it without failing the whole bootstrap.
                             migrationWarning = error.localizedDescription
-                            print("[auth] bookmark migration failed: \(error)")
                         }
                     }
                 }

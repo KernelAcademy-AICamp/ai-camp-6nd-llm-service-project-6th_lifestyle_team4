@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import IssueReporting
 
 @main
 struct CurtaincallApp: App {
@@ -16,6 +17,13 @@ struct CurtaincallApp: App {
 
     init() {
         FontRegistration.register()
+        // supabase-swift's `emitInitialSession` calls `reportIssue()` (a benign
+        // dev advisory) from an unstructured Task. Under the debugger,
+        // swift-issue-reporting's default reporter TRAPS on it — pausing the auth
+        // bootstrap so signup/login appear to no-op. A scoped `withIssueReporters`
+        // can't cover the SDK's detached Task, so disable issue reporters
+        // app-wide at the entry point (the library's documented override).
+        IssueReporters.current = []
     }
 
     var body: some Scene {

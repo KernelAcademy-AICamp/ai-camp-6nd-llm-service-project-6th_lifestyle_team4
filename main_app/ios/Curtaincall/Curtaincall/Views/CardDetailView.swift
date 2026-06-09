@@ -102,9 +102,8 @@ struct CardDetailView: View {
                         toggleBookmark()
                     } label: {
                         Text(bookmarked ? "Collected" : "Collect Script Artifact")
-                            .editorialButton(style: .outlined)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(EditorialButtonStyle(.outlined))
 
                     Spacer().frame(height: 16)
                     Text("Limited Edition Digital Manuscript #\(String(format: "%04d", card.cardId))")
@@ -123,10 +122,11 @@ struct CardDetailView: View {
                     Spacer().frame(height: 24)
                 }
                 .padding(.horizontal, 20)
-                // Tap an empty area to dismiss the keyboard (buttons/links keep
-                // their own taps). Pairs with interactive scroll-dismiss below.
+                // Tap an empty area to dismiss the keyboard. simultaneousGesture
+                // (not onTapGesture) so it fires alongside child buttons/links
+                // instead of consuming their taps. Pairs with scroll-dismiss below.
                 .contentShape(Rectangle())
-                .onTapGesture { composerFocused = false }
+                .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
             }
             .scrollDismissesKeyboard(.interactively)
             // Docked composer: solid bar, scroll content inset by its height
