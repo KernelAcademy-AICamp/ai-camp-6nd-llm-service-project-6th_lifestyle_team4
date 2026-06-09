@@ -83,6 +83,7 @@ import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.MetaCaps
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.settings.ActivityTopBar
 import com.lifestyle.dailyscript.ui.util.GENRE_ORDER
 import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.genreLabel
@@ -183,6 +184,7 @@ private fun frameColorsFor(genre: String): BookshelfColors =
 fun ArchiveScreen(
     userId: Long,
     onOpenCard: (Long) -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
     val vm: ArchiveViewModel = viewModel()
     val state by vm.state.collectAsState()
@@ -223,13 +225,20 @@ fun ArchiveScreen(
             .background(Paper),
     ) {
         // --- Header (bookstore sign) ---
-        Box(modifier = Modifier.height(28.dp))
-        Text(
-            text = stringResource(R.string.archive_title),
-            style = MaterialTheme.typography.displayMedium,
-            color = Espresso,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
+        // As a MyPage sub-page (onBack != null) the back bar carries the title; as a tab
+        // the large display title sits at the top instead.
+        if (onBack != null) {
+            ActivityTopBar(title = stringResource(R.string.archive_title), onBack = onBack)
+            Box(modifier = Modifier.height(16.dp))
+        } else {
+            Box(modifier = Modifier.height(28.dp))
+            Text(
+                text = stringResource(R.string.archive_title),
+                style = MaterialTheme.typography.displayMedium,
+                color = Espresso,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+        }
         if (state.bookmarks.isNotEmpty()) {
             Box(modifier = Modifier.height(6.dp))
             Text(

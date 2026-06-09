@@ -47,11 +47,15 @@
     <string name="my_comments_desc">내가 남긴 댓글 보기</string>
     <string name="my_feed_entry">내 피드</string>
     <string name="my_feed_entry_desc">내가 공유한 한 줄과 하이라이트 보기</string>
+    <string name="bookmarks_entry">북마크</string>
+    <string name="bookmarks_entry_desc">수집한 명대사를 책으로 모아 봅니다</string>
     <string name="back">Back</string>
     <string name="bookmark">Bookmark</string>
     <string name="archive_title">수집한 대본</string>
     <string name="archive_volume_count">소장 %1$d권</string>
     <string name="archive_card_count">명대사 %1$d편</string>
+    <string name="library_title">서재</string>
+    <string name="library_work_count">작품 %1$d권</string>
     <string name="loading">Loading⋯</string>
     <string name="widget_label">Daily Script</string>
     <string name="widget_description">매일의 한 줄을 홈 화면에서</string>

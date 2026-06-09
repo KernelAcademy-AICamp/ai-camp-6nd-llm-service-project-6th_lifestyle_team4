@@ -73,6 +73,7 @@ fun SettingsScreen(
     onUpdateProfile: (nickname: String, gender: String?, ageGroup: String?) -> Unit,
     onOpenMyComments: () -> Unit,
     onOpenMyFeed: () -> Unit,
+    onOpenBookmarks: () -> Unit,
     onOpenYarnPurchase: () -> Unit,
     onOpenGuide: () -> Unit,
     onOpenTerms: () -> Unit,
@@ -197,6 +198,16 @@ fun SettingsScreen(
                 trailingArrow = true,
             )
         }
+
+        // --- 보관함 (북마크: 익명·로그인 모두 사용) ---
+        Box(modifier = Modifier.height(40.dp))
+        SectionLabel(text = "보관함")
+        SettingRow(
+            title = stringResource(R.string.bookmarks_entry),
+            subtitle = stringResource(R.string.bookmarks_entry_desc),
+            onClick = onOpenBookmarks,
+            trailingArrow = true,
+        )
 
         // --- 실타래 ---
         Box(modifier = Modifier.height(40.dp))

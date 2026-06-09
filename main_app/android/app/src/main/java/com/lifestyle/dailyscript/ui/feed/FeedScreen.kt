@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -46,8 +45,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,6 +58,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.data.model.Highlight
+import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.EditorialField
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.detail.relativeTime
@@ -80,7 +78,6 @@ import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.displayTitle
 import com.lifestyle.dailyscript.ui.util.formatBookmarkDate
 import com.lifestyle.dailyscript.ui.util.genreLabel
-import kotlin.math.absoluteValue
 
 @Composable
 fun FeedScreen(
@@ -442,19 +439,6 @@ private fun FeedComposeSheet(
     }
 }
 
-// --- Leather palette for the highlight book cover (fixed, theme-independent). ---
-private val BookCream = Color(0xFFFAF8F2)
-private val FeedLeathers = listOf(
-    Color(0xFF0E0C0A), Color(0xFF5A2A24), Color(0xFF2F3A30), Color(0xFF293541),
-    Color(0xFF6A4A30), Color(0xFF40303B), Color(0xFF3A463F), Color(0xFF1F2A3A),
-    Color(0xFF4A2B1A), Color(0xFF3D2E22), Color(0xFF26393B), Color(0xFF2E2538),
-)
-
-private fun leatherColorFor(title: String?): Color {
-    val key = (title ?: "").ifBlank { "?" }
-    return FeedLeathers[key.hashCode().absoluteValue % FeedLeathers.size]
-}
-
 @Composable
 private fun FeedChip(text: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(4.dp)
@@ -625,80 +609,7 @@ private fun HighlightCard(hl: Highlight) {
 /** Solid leather cover with an inset white-line rectangle + a left spine line (PWA .hl-bookcover). */
 @Composable
 private fun HlBookCover(w: com.lifestyle.dailyscript.data.model.WorkDto?) {
-    val shape = RoundedCornerShape(4.dp)
-    Box(
-        modifier = Modifier
-            .size(width = 132.dp, height = 188.dp)
-            .shadow(10.dp, shape)
-            .clip(shape)
-            .background(leatherColorFor(w?.title)),
-    ) {
-        // left spine shadow line
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(5.dp)
-                .align(Alignment.CenterStart)
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color(0x59000000),
-                        0.5f to Color(0x1A000000),
-                        1f to Color(0x59000000),
-                    )
-                ),
-        )
-        // inset white-line border rectangle
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .padding(7.dp)
-                .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(2.dp)),
-        )
-        // title / subtitle / author, centered
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = w?.title ?: "—",
-                style = TextStyle(
-                    fontFamily = EditorialSerif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    lineHeight = 22.sp,
-                ),
-                color = BookCream,
-                textAlign = TextAlign.Center,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val sub = w?.subtitle
-            if (!sub.isNullOrBlank()) {
-                Box(modifier = Modifier.height(10.dp))
-                Text(
-                    text = sub,
-                    style = TextStyle(fontFamily = EditorialSerif, fontSize = 12.sp, lineHeight = 17.sp),
-                    color = BookCream.copy(alpha = 0.90f),
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            val author = w?.author
-            if (!author.isNullOrBlank()) {
-                Box(modifier = Modifier.height(14.dp))
-                Text(
-                    text = author,
-                    style = TextStyle(fontFamily = EditorialSerif, fontSize = 10.sp, letterSpacing = 0.08.em),
-                    color = BookCream.copy(alpha = 0.78f),
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-    }
+    BookCover(work = w, modifier = Modifier.size(width = 132.dp, height = 188.dp))
 }
 
 /** Centered excerpt with wide serif quote marks at the corners (PWA .hl-quote). */

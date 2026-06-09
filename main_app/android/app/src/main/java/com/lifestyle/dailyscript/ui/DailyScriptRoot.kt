@@ -47,6 +47,7 @@ import com.lifestyle.dailyscript.ui.detail.DetailScreen
 import com.lifestyle.dailyscript.ui.feed.FeedScreen
 import com.lifestyle.dailyscript.ui.feedback.FeedbackScreen
 import com.lifestyle.dailyscript.ui.home.HomeScreen
+import com.lifestyle.dailyscript.ui.library.LibraryScreen
 import com.lifestyle.dailyscript.ui.nav.Routes
 import com.lifestyle.dailyscript.ui.notice.NoticeScreen
 import com.lifestyle.dailyscript.ui.notice.NoticeViewModel
@@ -166,7 +167,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
 
     val mainTabs = setOf(Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE, Routes.SETTINGS)
     val isDetail = currentRoute?.startsWith("detail/") == true || currentRoute == Routes.DETAIL
-    val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE)
+    val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.BOOKMARKS, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE)
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
     // 상세(전문 보기)에서도 하단 바 노출 — 상단 바는 DetailTopBar(뒤로가기·북마크)가 대체하므로 그대로 숨김 유지.
@@ -207,8 +208,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                     )
                 }
                 composable(Routes.ARCHIVE) {
-                    ArchiveScreen(
-                        userId = session.userId,
+                    LibraryScreen(
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
@@ -241,6 +241,10 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onOpenMyFeed = {
                             AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.MY_FEED))
                             navController.navigate(Routes.MY_FEED)
+                        },
+                        onOpenBookmarks = {
+                            AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.BOOKMARKS))
+                            navController.navigate(Routes.BOOKMARKS)
                         },
                         onOpenYarnPurchase = {
                             AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
@@ -281,6 +285,13 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 }
                 composable(Routes.MY_FEED) {
                     MyFeedScreen(
+                        userId = session.userId,
+                        onBack = { navController.popBackStack() },
+                        onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                    )
+                }
+                composable(Routes.BOOKMARKS) {
+                    ArchiveScreen(
                         userId = session.userId,
                         onBack = { navController.popBackStack() },
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },

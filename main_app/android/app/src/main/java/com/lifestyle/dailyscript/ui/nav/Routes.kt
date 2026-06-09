@@ -9,6 +9,7 @@ object Routes {
     const val FEEDBACK = "feedback"
     const val MY_COMMENTS = "my_comments"
     const val MY_FEED = "my_feed"
+    const val BOOKMARKS = "bookmarks"
     const val TERMS = "terms"
     const val PRIVACY = "privacy"
     const val YARN_PURCHASE = "yarn_purchase"
