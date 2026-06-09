@@ -1153,9 +1153,9 @@ function cleanScriptExcerptEdges(script) {
   };
   const lines = script.split('\n');
 
-  // 첫 줄 자투리만 처리 — 중간 단락은 절대 건드리지 않음 (원문 내용 보존).
-  //  사용자 요구: "첫문장이나 끝문장은 원문의 내용을 해치지 않으니까 삭제해도 되지만,
-  //   가운데에 있는 문장을 삭제하는건 내용을 없애 버리는거잖아".
+  // 첫 문장 자투리 처리 — 첫 문장만 자르고 두 번째 문장부터 시작 (원문 내용 보존).
+  //  사용자 요구: "첫문장이나 끝문장은 원문의 내용을 해치지 않으니까 삭제해도 된다".
+  //  첫 줄에 종결자 없어도 다음 줄 가로질러 첫 종결자 찾음.
   if (lines.length >= 1) {
     const first = (lines[0] || '').trim();
     if (first && !isLabelLine(first) && !/[가-힯]/.test(first)) {
@@ -1163,12 +1163,18 @@ function cleanScriptExcerptEdges(script) {
       const isProperStart = /^["'"'¡¿(\[【「『*]?[A-Z]/.test(first);
       const isJunkStart = !isProperStart && /^[a-z,;:.!?]/.test(firstChar);
       if (isJunkStart) {
-        const sentenceEnd = first.match(/[.!?…]["'”’]?\s+/);
+        // 전체 본문에서 첫 종결자(. ! ? …) 찾기 — 줄 가로질러
+        const fullText = lines.join('\n');
+        const sentenceEnd = fullText.match(/[.!?…]["'”’]?(?:\s|$)/);
         if (sentenceEnd) {
           const cutPos = sentenceEnd.index + sentenceEnd[0].length;
-          lines[0] = first.slice(cutPos);
+          const remaining = fullText.slice(cutPos).replace(/^\s+/, '');
+          if (remaining) {
+            lines.length = 0;
+            remaining.split('\n').forEach((l) => lines.push(l));
+          }
         } else {
-          // 종결자 없으면 fragment/구두점만 제거 (다음 줄 건드리지 않음)
+          // 종결자 없으면 fragment/구두점만 제거
           const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
           if (
             /^[a-z]{1,5}$/.test(firstToken)
@@ -1179,7 +1185,6 @@ function cleanScriptExcerptEdges(script) {
           } else if (/^[,;:.!?]/.test(firstChar)) {
             lines[0] = first.replace(/^[,;:.!?]\s*/, '');
           }
-          // 긴 잘린 단어는 그대로 (카드 보존 우선)
         }
       }
     }
