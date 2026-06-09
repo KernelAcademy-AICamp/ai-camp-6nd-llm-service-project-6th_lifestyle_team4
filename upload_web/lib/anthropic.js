@@ -1076,34 +1076,35 @@ function cleanScriptExcerptEdges(script) {
   const lines = script.split('\n');
 
   // 첫 줄 잘린 자투리 처리 — 카드 자체는 보존, 자투리만 제거.
-  //  · 문장 시작 형태(대문자/한글/따옴표/괄호) 가 아니면 → 자투리. 첫 종결자까지 제거.
-  //  · 5자 이하 영문 소문자 fragment 도 자투리.
-  //  · 콤마/세미콜론/소문자로 시작 → 자투리 (이전 문장의 끝부분이 끊긴 형태).
+  //  · 정상 영어 문장은 대문자/따옴표/괄호 시작. 영문 소문자/구두점 시작은 거의 항상 자투리.
+  //  · 한글 라인, 라벨 라인은 보호.
   if (lines.length >= 1) {
     const first = (lines[0] || '').trim();
     if (first && !isLabelLine(first) && !/[가-힯]/.test(first)) {
       const firstChar = first[0] || '';
-      const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
-      // 자투리 판정:
-      //  A) 콤마/세미콜론/구두점으로 시작 — 이전 문장 끝부분 ("., even him,...")
-      //  B) 첫 토큰이 1~5자 영문 소문자 fragment + 일반 단어 아님 ("hened", "y", "s")
-      const startsWithJunkPunct = /^[,;:.!?]/.test(firstChar);
-      const isFragment =
-        /^[a-z]{1,5}$/.test(firstToken)
-        && !COMMON_SHORT_EN.has(firstToken.toLowerCase())
-        && !COMMON_5LETTER.has(firstToken.toLowerCase());
-      if (startsWithJunkPunct || isFragment) {
-        // 첫 문장 종결자 찾아 그 뒤부터
+      // 정상 문장 시작: 영문 대문자, 한글, 따옴표/괄호로 시작
+      const isProperStart = /^["'"'¡¿(\[【「『*]?[A-Z]/.test(first);
+      // 자투리 시작: 영문 소문자, 콤마/세미콜론/구두점, 또는 fragment
+      const isJunkStart = !isProperStart && (/^[a-z,;:.!?]/.test(firstChar) || /[a-z]/.test(firstChar));
+      if (isJunkStart) {
+        // 첫 문장 종결자 찾아 그 뒤부터 시작
         const sentenceEnd = first.match(/[.!?…]["'”’]?\s+/);
         if (sentenceEnd) {
           const cutPos = sentenceEnd.index + sentenceEnd[0].length;
           lines[0] = first.slice(cutPos);
-        } else if (isFragment) {
-          // 종결자 없음 + 영문 fragment — 첫 토큰만 제거
-          lines[0] = first.replace(/^\W*\w{1,5}\W+/, '');
         } else {
-          // 종결자 없음 + 콤마 시작 — 콤마 직후부터
-          lines[0] = first.replace(/^[,;:.!?]\s*/, '');
+          // 종결자 못 찾음 — 5자 이하 fragment 만 토큰 제거. 그 외는 그대로 (카드 보존).
+          const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
+          if (
+            /^[a-z]{1,5}$/.test(firstToken)
+            && !COMMON_SHORT_EN.has(firstToken.toLowerCase())
+            && !COMMON_5LETTER.has(firstToken.toLowerCase())
+          ) {
+            lines[0] = first.replace(/^\W*\w{1,5}\W+/, '');
+          } else if (/^[,;:.!?]/.test(firstChar)) {
+            lines[0] = first.replace(/^[,;:.!?]\s*/, '');
+          }
+          // 그 외: 그대로 (긴 잘린 단어는 다음 번 검토에서 사용자가 편집)
         }
       }
     }
