@@ -495,7 +495,25 @@ export function splitScriptIntoChunks(
     const minSearchStart = start + Math.floor(targetChars * 0.55);
     const searchStart = Math.max(minSearchStart, desired - windowChars);
     const searchEnd = Math.min(text.length, desired + windowChars);
-    const splitAt = findBestSplit(text, start, desired, searchStart, searchEnd) || Math.min(text.length, desired);
+    let splitAt = findBestSplit(text, start, desired, searchStart, searchEnd) || Math.min(text.length, desired);
+    // ★ 청크 경계가 단어 중간이면 가장 가까운 공백/줄바꿈으로 이동 (단어 절대 안 자름).
+    //   사용자 요구: Gutenberg 원문 그대로 사용. 단어 중간 잘림 절대 안 됨.
+    if (splitAt > start && splitAt < text.length) {
+      // 경계 위치가 단어 안 (앞뒤가 모두 단어 문자) 이면 다음 공백/줄바꿈까지 이동
+      const isWordChar = (ch) => /[\p{L}\p{N}'-]/u.test(ch);
+      if (isWordChar(text[splitAt - 1]) && isWordChar(text[splitAt])) {
+        // 1) 앞쪽 공백 찾기 (역방향)
+        let back = splitAt - 1;
+        while (back > start && isWordChar(text[back])) back--;
+        // 2) 뒤쪽 공백 찾기 (정방향)
+        let fwd = splitAt;
+        while (fwd < text.length && isWordChar(text[fwd])) fwd++;
+        // 가까운 쪽 선택
+        const distBack = splitAt - back;
+        const distFwd = fwd - splitAt;
+        splitAt = distFwd <= distBack ? fwd : back + 1;
+      }
+    }
     const end = Math.max(start + 1, splitAt);
     chunks.push({ start, end, text: text.slice(start, end) });
 
