@@ -12,9 +12,9 @@
 
 const GENRES = [
   { ko: '소설',       en: 'Novel', format: 'novel', full: false },
-  { ko: '연극·희곡',  en: 'Play',  format: 'play',  full: false },
+  { ko: '연극(희곡)',  en: 'Play',  format: 'play',  full: false },
   { ko: '에세이',     en: 'Essay', format: 'essay', full: false },
-  { ko: '오페라·대본', en: 'Opera', format: 'opera', full: false },
+  { ko: '오페라(대본)', en: 'Opera', format: 'opera', full: false },
   { ko: '산문',       en: 'Prose', format: 'prose', full: true },
 ];
 
