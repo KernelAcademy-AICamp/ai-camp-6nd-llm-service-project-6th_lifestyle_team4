@@ -1075,54 +1075,37 @@ function cleanScriptExcerptEdges(script) {
   };
   const lines = script.split('\n');
 
-  // 단락별 시작 자투리 처리 — 첫 줄뿐 아니라 \n\n 뒤 모든 단락 시작에 적용.
-  //  · "t the wound burning..." 같이 중간 단락 시작이 잘린 케이스도 처리.
-  const cleanParaStart = (paraText) => {
-    if (!paraText) return paraText;
-    const paraLines = paraText.split('\n');
-    const first = (paraLines[0] || '').trim();
-    if (!first || isLabelLine(first) || /[가-힯]/.test(first)) return paraText;
-    const firstChar = first[0] || '';
-    const isProperStart = /^["'"'¡¿(\[【「『*]?[A-Z]/.test(first);
-    if (isProperStart) return paraText;
-    if (!/^[a-z,;:.!?]/.test(firstChar)) return paraText;
-    // 자투리 확정
-    const sentenceEnd = first.match(/[.!?…]["'”’]?\s+/);
-    if (sentenceEnd) {
-      const cutPos = sentenceEnd.index + sentenceEnd[0].length;
-      paraLines[0] = first.slice(cutPos);
-      return paraLines.join('\n');
-    }
-    // 종결자 없음 — 단락 전체 합쳐서 다시 종결자 찾기
-    if (paraLines.length > 1) {
-      const combined = paraLines.map((l) => l.trim()).filter(Boolean).join(' ');
-      const m = combined.match(/[.!?…]["'”’]?\s+/);
-      if (m) {
-        const cutPos = m.index + m[0].length;
-        return combined.slice(cutPos);
+  // 첫 줄 자투리만 처리 — 중간 단락은 절대 건드리지 않음 (원문 내용 보존).
+  //  사용자 요구: "첫문장이나 끝문장은 원문의 내용을 해치지 않으니까 삭제해도 되지만,
+  //   가운데에 있는 문장을 삭제하는건 내용을 없애 버리는거잖아".
+  if (lines.length >= 1) {
+    const first = (lines[0] || '').trim();
+    if (first && !isLabelLine(first) && !/[가-힯]/.test(first)) {
+      const firstChar = first[0] || '';
+      const isProperStart = /^["'"'¡¿(\[【「『*]?[A-Z]/.test(first);
+      const isJunkStart = !isProperStart && /^[a-z,;:.!?]/.test(firstChar);
+      if (isJunkStart) {
+        const sentenceEnd = first.match(/[.!?…]["'”’]?\s+/);
+        if (sentenceEnd) {
+          const cutPos = sentenceEnd.index + sentenceEnd[0].length;
+          lines[0] = first.slice(cutPos);
+        } else {
+          // 종결자 없으면 fragment/구두점만 제거 (다음 줄 건드리지 않음)
+          const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
+          if (
+            /^[a-z]{1,5}$/.test(firstToken)
+            && !COMMON_SHORT_EN.has(firstToken.toLowerCase())
+            && !COMMON_5LETTER.has(firstToken.toLowerCase())
+          ) {
+            lines[0] = first.replace(/^\W*\w{1,5}\W+/, '');
+          } else if (/^[,;:.!?]/.test(firstChar)) {
+            lines[0] = first.replace(/^[,;:.!?]\s*/, '');
+          }
+          // 긴 잘린 단어는 그대로 (카드 보존 우선)
+        }
       }
     }
-    // 그래도 종결자 없음 — fragment 만 제거
-    const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
-    if (
-      /^[a-z]{1,5}$/.test(firstToken)
-      && !COMMON_SHORT_EN.has(firstToken.toLowerCase())
-      && !COMMON_5LETTER.has(firstToken.toLowerCase())
-    ) {
-      paraLines[0] = first.replace(/^\W*\w{1,5}\W+/, '');
-    } else if (/^[,;:.!?]/.test(firstChar)) {
-      paraLines[0] = first.replace(/^[,;:.!?]\s*/, '');
-    }
-    return paraLines.join('\n');
-  };
-
-  // 단락 분리 → 각 단락 시작 정리 → 다시 합치기
-  const fullText = lines.join('\n');
-  const paragraphs = fullText.split(/\n\s*\n/);
-  const cleaned = paragraphs.map(cleanParaStart).filter((p) => p && p.trim());
-  const newText = cleaned.join('\n\n');
-  lines.length = 0;
-  newText.split('\n').forEach((l) => lines.push(l));
+  }
 
   // 끝 줄 잘린 자투리 처리 — 마지막 종결자까지만 남김.
   //  · 종결자(. ! ? …) 없이 끝나거나 콤마로 끝나는 영문 라인 → 마지막 종결자까지
