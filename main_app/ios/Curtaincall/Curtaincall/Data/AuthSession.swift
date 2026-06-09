@@ -110,7 +110,6 @@ final class AuthSession: ObservableObject {
                             // Upgrade succeeded; a merge failure is non-fatal but must not
                             // be invisible. Surface it without failing the whole bootstrap.
                             migrationWarning = error.localizedDescription
-                            print("[auth] bookmark migration failed: \(error)")
                         }
                     }
                 }
