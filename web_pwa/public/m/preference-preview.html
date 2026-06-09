@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>선호도 온보딩 미리보기 — Daily Script</title>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --espresso:#0E0C0A; --roast:#2C2620; --walnut:#6B5D4F; --sand:#C9B89A;
+    --latte:#E8E1D3; --paper:#FAF8F2; --card-warm:#FFFDF7; --feed-card:#E6E1D7;
+    --highlight:#F4C20D; --cta:#D85A30;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:'Noto Sans KR',system-ui,sans-serif;
+    background:repeating-linear-gradient(135deg,#E7E0D2,#E7E0D2 22px,#EDE7DA 22px,#EDE7DA 44px);
+    color:var(--espresso);min-height:100vh;
+    display:flex;flex-direction:column;align-items:center;gap:18px;padding:34px 16px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .serif{font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;}
+  .pagehead{text-align:center;max-width:430px;}
+  .pagehead .eyebrow{font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--walnut);font-weight:700;}
+  .pagehead h1{font-family:'Nanum Myeongjo',serif;font-size:22px;margin:8px 0 6px;}
+  .pagehead p{font-size:12.5px;color:var(--walnut);line-height:1.6;}
+
+  /* ── phone frame ── */
+  .phone{
+    width:392px;max-width:100%;height:812px;background:var(--paper);
+    border-radius:42px;border:9px solid #15110C;position:relative;overflow:hidden;
+    box-shadow:0 30px 70px rgba(20,14,8,.34),0 4px 12px rgba(0,0,0,.2);
+    display:flex;flex-direction:column;
+  }
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:150px;height:26px;
+    background:#15110C;border-radius:0 0 16px 16px;z-index:40;}
+
+  /* ── top progress ── */
+  .topbar{padding:30px 24px 10px;flex:0 0 auto;background:var(--paper);z-index:20;}
+  .brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .brand .wm{font-family:'Nanum Myeongjo',serif;font-size:15px;letter-spacing:.02em;}
+  .brand .wm .dot{color:var(--cta);}
+  .brand .skip{font-size:12px;color:var(--walnut);background:none;border:none;cursor:pointer;letter-spacing:.02em;}
+  .steps{display:flex;gap:6px;}
+  .steps .seg{height:3px;flex:1;border-radius:3px;background:var(--latte);overflow:hidden;}
+  .steps .seg i{display:block;height:100%;width:0;background:var(--cta);transition:width .45s cubic-bezier(.4,0,.2,1);}
+
+  /* ── scroll body ── */
+  .scroll{flex:1 1 auto;overflow-y:auto;padding:6px 24px 184px;scroll-behavior:smooth;}
+  .scroll::-webkit-scrollbar{width:0;}
+
+  .step{display:none;animation:fade .42s ease both;}
+  .step.on{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+
+  .qhead{margin:14px 0 4px;}
+  .qhead .num{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--cta);font-weight:700;}
+  .qhead h2{font-family:'Nanum Myeongjo',serif;font-size:25px;line-height:1.35;margin:8px 0 8px;word-break:keep-all;}
+  .qhead p{font-size:13px;color:var(--walnut);line-height:1.6;}
+  .qhead .hint{font-size:11.5px;color:var(--sand);margin-top:8px;letter-spacing:.02em;}
+
+  /* ── genre cards ── */
+  .genres{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:20px;}
+  .genre{
+    position:relative;background:var(--card-warm);border:1px solid var(--latte);border-radius:16px;
+    padding:16px 15px;cursor:pointer;text-align:left;transition:.18s;user-select:none;
+  }
+  .genre .ko{font-family:'Nanum Myeongjo',serif;font-size:18px;}
+  .genre .en{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--sand);margin-top:3px;}
+  .genre .cnt{font-size:11.5px;color:var(--walnut);margin-top:11px;}
+  .genre .tick{position:absolute;top:12px;right:12px;width:21px;height:21px;border-radius:50%;
+    border:1.5px solid var(--sand);display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:12px;transition:.18s;}
+  .genre.sel{border-color:var(--cta);background:#FBEFE7;box-shadow:0 4px 14px rgba(216,90,48,.14);}
+  .genre.sel .tick{background:var(--cta);border-color:var(--cta);}
+  .genre.full{grid-column:1 / -1;}
+
+  /* ── theme chips ── */
+  .themes{display:flex;flex-direction:column;gap:9px;margin-top:20px;}
+  .theme{
+    display:flex;align-items:center;gap:13px;background:var(--card-warm);
+    border:1px solid var(--latte);border-radius:14px;padding:13px 15px;cursor:pointer;transition:.18s;user-select:none;
+  }
+  .theme .swatch{width:9px;height:42px;border-radius:5px;flex:0 0 auto;background:var(--sand);transition:.18s;}
+  .theme .txt{flex:1;min-width:0;}
+  .theme .txt .ko{display:block;font-family:'Nanum Myeongjo',serif;font-size:16.5px;}
+  .theme .txt .kw{display:block;font-size:11.5px;color:var(--walnut);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .theme .tick{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--sand);flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;transition:.18s;}
+  .theme.sel{border-color:var(--cta);background:#FBEFE7;}
+  .theme.sel .tick{background:var(--cta);border-color:var(--cta);}
+  .theme.sel .swatch{filter:saturate(1.2) brightness(.95);}
+
+  .anybox{margin-top:14px;padding-top:14px;border-top:1px dashed var(--latte);}
+  .any{
+    width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:none;border:1.5px solid var(--latte);border-radius:14px;padding:13px 16px;cursor:pointer;transition:.18s;
+  }
+  .any .l{text-align:left;}
+  .any .l b{font-size:14px;font-weight:500;}
+  .any .l span{display:block;font-size:11.5px;color:var(--walnut);margin-top:2px;}
+  .any .tick{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--sand);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;transition:.18s;}
+  .any.sel{border-color:var(--espresso);background:var(--espresso);color:var(--paper);}
+  .any.sel .l span{color:var(--sand);}
+  .any.sel .tick{background:var(--highlight);border-color:var(--highlight);color:var(--espresso);}
+  .themes.muted{opacity:.4;pointer-events:none;filter:grayscale(.3);}
+
+  /* ── result ── */
+  .res-hero{text-align:center;padding:8px 0 6px;}
+  .res-hero .eyebrow{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--cta);font-weight:700;}
+  .res-hero h2{font-family:'Nanum Myeongjo',serif;font-size:26px;margin:10px 0 8px;}
+  .res-hero p{font-size:12.5px;color:var(--walnut);line-height:1.6;}
+  .res-pills{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:14px 0 6px;}
+  .pill{font-size:11px;padding:5px 11px;border-radius:20px;background:var(--latte);color:var(--roast);letter-spacing:.02em;}
+  .pill.g{background:#EFE7D7;}
+  .pill.t{background:#FBEFE7;color:var(--cta);}
+  .res-divider{display:flex;align-items:center;gap:10px;color:var(--sand);font-size:10.5px;letter-spacing:.22em;
+    text-transform:uppercase;margin:20px 0 14px;}
+  .res-divider::before,.res-divider::after{content:"";flex:1;height:1px;background:var(--latte);}
+
+  .feed{display:flex;flex-direction:column;gap:14px;}
+  .fcard{background:var(--card-warm);border:1px solid var(--latte);border-radius:18px;padding:18px 18px 15px;
+    box-shadow:0 2px 10px rgba(20,14,8,.04);animation:fade .5s ease both;}
+  .fcard .meta{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--walnut);}
+  .fcard .meta .gtag{color:var(--cta);font-weight:700;}
+  .fcard blockquote{font-family:'Nanum Myeongjo',serif;font-size:18px;line-height:1.62;margin:11px 0 13px;word-break:keep-all;}
+  .fcard .src{font-size:12px;color:var(--walnut);}
+  .fcard .src b{color:var(--roast);font-weight:500;}
+  .fcard .foot{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:14px;
+    padding-top:13px;border-top:1px solid var(--latte);}
+  .ti{display:flex;gap:16px;}
+  .ti .grp{display:flex;align-items:center;gap:6px;}
+  .ti .grp .lab{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--sand);}
+  .meter{display:flex;gap:2px;}
+  .meter i{width:6px;height:6px;border-radius:50%;background:var(--latte);}
+  .meter.t i.on{background:var(--cta);}
+  .meter.i i.on{background:var(--walnut);}
+  .fcard .kw{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px;}
+  .fcard .kw span{font-size:10.5px;color:var(--walnut);background:var(--paper);border:1px solid var(--latte);
+    padding:3px 8px;border-radius:12px;}
+
+  /* ── footer cta ── */
+  .footer{position:absolute;left:0;right:0;bottom:0;padding:16px 24px 26px;
+    background:var(--paper);z-index:30;}
+  .footer::before{content:"";position:absolute;left:0;right:0;top:-26px;height:26px;
+    background:linear-gradient(to top,var(--paper),rgba(250,248,242,0));pointer-events:none;}
+  .selinfo{font-size:11.5px;color:var(--walnut);text-align:center;margin-bottom:10px;min-height:15px;}
+  .cta-btn{width:100%;border:none;border-radius:14px;background:var(--cta);color:#fff;
+    font-family:'Noto Sans KR',sans-serif;font-size:14.5px;font-weight:700;letter-spacing:.06em;
+    padding:16px;cursor:pointer;transition:.18s;box-shadow:0 6px 18px rgba(216,90,48,.28);}
+  .cta-btn:disabled{background:var(--sand);box-shadow:none;cursor:not-allowed;opacity:.7;}
+  .cta-btn.ghost{background:none;color:var(--walnut);box-shadow:none;font-weight:500;padding:12px;font-size:13px;}
+  .footer .pair{display:flex;flex-direction:column;gap:2px;}
+
+  .note{max-width:430px;font-size:11.5px;color:var(--walnut);line-height:1.7;text-align:center;}
+  .note code{background:#fff;border:1px solid var(--latte);border-radius:4px;padding:1px 5px;font-size:10.5px;color:var(--roast);}
+</style>
+</head>
+<body>
+
+<div class="pagehead">
+  <div class="eyebrow">Onboarding Preview · 06.08</div>
+  <h1 class="serif">시작 전, 취향을 묻는 흐름</h1>
+  <p>① 장르 선택 → ② 주제 선택 → ③ 맞춤 추천. 실제 서비스 팔레트·서체로 구성한 미리보기입니다.</p>
+</div>
+
+<div class="phone" id="phone">
+  <div class="notch"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="wm serif">Daily Scr<span class="dot">ı</span>pt<span class="dot">.</span></span>
+      <button class="skip" id="skip">건너뛰기</button>
+    </div>
+    <div class="steps">
+      <div class="seg"><i id="seg1"></i></div>
+      <div class="seg"><i id="seg2"></i></div>
+    </div>
+  </div>
+
+  <div class="scroll" id="scroll">
+
+    <!-- STEP 1 · 장르 -->
+    <section class="step on" data-step="1">
+      <div class="qhead">
+        <div class="num">STEP 1 / 2</div>
+        <h2 class="serif">어떤 글을 즐겨 읽으세요?</h2>
+        <p>읽고 싶은 장르를 골라주세요. 선택한 장르의 명대사를 더 자주 만나게 돼요.</p>
+        <div class="hint">복수 선택 가능</div>
+      </div>
+      <div class="genres" id="genres"></div>
+    </section>
+
+    <!-- STEP 2 · 주제 -->
+    <section class="step" data-step="2">
+      <div class="qhead">
+        <div class="num">STEP 2 / 2</div>
+        <h2 class="serif">어떤 이야기에 마음이 가나요?</h2>
+        <p>관심 가는 주제를 골라주세요.</p>
+        <div class="hint">복수 선택 가능</div>
+      </div>
+      <div class="themes" id="themes"></div>
+      <div class="anybox">
+        <button class="any" id="anyBtn">
+          <span class="l"><b>아직 잘 모르겠어요</b><span>모든 주제에서 폭넓게 추천받기</span></span>
+          <span class="tick">✓</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- STEP 3 · 결과 -->
+    <section class="step" data-step="3">
+      <div class="res-hero">
+        <div class="eyebrow">For You</div>
+        <h2 class="serif" id="resTitle">취향에 맞춰 골라봤어요</h2>
+        <p id="resSub">선택을 바탕으로 명대사를 추천드려요.</p>
+        <div class="res-pills" id="resPills"></div>
+      </div>
+      <div class="res-divider">추천 명대사</div>
+      <div class="feed" id="feed"></div>
+    </section>
+
+  </div>
+
+  <div class="footer">
+    <div class="selinfo" id="selinfo"></div>
+    <div class="pair">
+      <button class="cta-btn" id="nextBtn" disabled>다음</button>
+      <button class="cta-btn ghost" id="backBtn" style="display:none;">← 이전</button>
+    </div>
+  </div>
+</div>
+
+<p class="note">
+  ※ 추천 로직은 현재 앱의 <code>온도·강도 취향 벡터(2D 거리 가중)</code>에 <b>장르·주제 필터</b>를 더한 형태로 확장 가능합니다.
+  결과 카드는 실제 DB 카드에서 가져왔습니다.
+</p>
+
+<script>
+// ── 데이터 ──────────────────────────────────────────────
+const GENRES = [
+  { ko:'소설',  en:'Novel',  cnt:'159편 · 23작품', full:false },
+  { ko:'연극·희곡', en:'Play', cnt:'120편 · 16작품', full:false },
+  { ko:'에세이', en:'Essay', cnt:'19편 · 2작품', full:false },
+  { ko:'오페라·대본', en:'Opera', cnt:'14편 · 2작품', full:false },
+  { ko:'산문',  en:'Prose', cnt:'10편 · 1작품', full:true },
+];
+const THEMES = [
+  { ko:'관계·사랑',   kw:'사랑 · 연애 · 가족 · 우정', c:'#C75D4A' },
+  { ko:'상실·애도',   kw:'죽음 · 이별 · 그리움 · 애도', c:'#5E6B7A' },
+  { ko:'자기·정체성', kw:'자아 · 성장 · 자존 · 양심', c:'#B98A3E' },
+  { ko:'결단·행동',   kw:'결심 · 선택 · 복수 · 저항', c:'#A64238' },
+  { ko:'세계관·환멸', kw:'권력 · 사회 · 운명 · 진실', c:'#4A5240' },
+  { ko:'욕망·집착',   kw:'욕망 · 유혹 · 소유 · 야망', c:'#8E3B52' },
+  { ko:'시간·기억',   kw:'시간 · 기억 · 추억 · 회상', c:'#6E7B86' },
+  { ko:'희망·구원',   kw:'희망 · 구원 · 믿음 · 치유', c:'#C99A2E' },
+  { ko:'삶·일상',     kw:'삶 · 노동 · 생계 · 생존', c:'#7A6A52' },
+  { ko:'정서 상태',   kw:'불안 · 분노 · 공허 · 권태', c:'#88736B' },
+];
+const CARDS = [
+  {quote:'유혹을 없애는 유일한 방법은 그것에 항복하는 것이다.', title:'킹 아서', author:'토마스 말로리', genre:'소설', t:2, i:4, kw:['유혹','쾌락','영혼'], theme:'욕망·집착'},
+  {quote:'이제 그녀는 더 이상 아무것도 두려워하지 않아도 되었다.', title:'푸른 성', author:'루시 모드 몽고메리', genre:'소설', t:2, i:4, kw:['죽음','해방','수용'], theme:'상실·애도'},
+  {quote:'나사로의 부활을 찾아서 읽어 주오.', title:'죄와 벌', author:'표도르 도스토옙스키', genre:'소설', t:4, i:4, kw:['부활','믿음','영혼의 구원'], theme:'희망·구원'},
+  {quote:'그분이 간직하고 싶어 하실지 모를 사진 한 장을 남겨둡니다.', title:'셜록 홈즈', author:'아서 코난 도일', genre:'소설', t:3, i:3, kw:['자기보호','대등성','윤리적 선택'], theme:'결단·행동'},
+  {quote:'모든 한계는 끝남과 동시에 시작이기도 하다.', title:'미들마치', author:'조지 엘리엇', genre:'소설', t:3, i:2, kw:['종결','지속','역설'], theme:'시간·기억'},
+  {quote:'그대는 처녀이면서 또한 사내인 자와 혼약을 맺으신 것이니까요.', title:'십이야', author:'윌리엄 셰익스피어', genre:'연극', t:3, i:2, kw:['정체성','우연','자연'], theme:'자기·정체성'},
+  {quote:'나는 그의 방에 들어가기도 전에 이런 결론들에 이르러 있었어.', title:'셜록 홈즈', author:'아서 코난 도일', genre:'소설', t:2, i:2, kw:['추리','오류','수정'], theme:'세계관·환멸'},
+  {quote:'제 주인이 있는 곳을 알리느니 차라리 괴로움을 감수하겠습니다.', title:'스카펭의 간계', author:'몰리에르', genre:'연극', t:1, i:5, kw:['충성','희생','관계'], theme:'관계·사랑'},
+  {quote:'나는 평온함과 안락함보다 호기심과 모험을 더욱 소중히 여겼다.', title:'걸리버 여행기', author:'조너선 스위프트', genre:'소설', t:2, i:3, kw:['호기심','모험','갈등'], theme:'정서 상태'},
+];
+
+// ── 상태 ────────────────────────────────────────────────
+const state = { step:1, genres:new Set(), themes:new Set(), any:false };
+
+// ── 렌더 ────────────────────────────────────────────────
+const $ = s => document.querySelector(s);
+const scroll = $('#scroll');
+
+function renderGenres(){
+  $('#genres').innerHTML = GENRES.map((g,idx)=>`
+    <button class="genre${g.full?' full':''}" data-i="${idx}">
+      <span class="tick">✓</span>
+      <div class="ko serif">${g.ko}</div>
+      <div class="en">${g.en}</div>
+    </button>`).join('');
+  $('#genres').querySelectorAll('.genre').forEach(el=>{
+    el.onclick = ()=>{
+      const i = +el.dataset.i, ko = GENRES[i].ko;
+      if(state.genres.has(ko)){ state.genres.delete(ko); el.classList.remove('sel'); }
+      else { state.genres.add(ko); el.classList.add('sel'); }
+      updateFooter();
+    };
+  });
+}
+
+function renderThemes(){
+  $('#themes').innerHTML = THEMES.map((t,idx)=>`
+    <button class="theme" data-i="${idx}">
+      <span class="swatch" style="background:${t.c};"></span>
+      <span class="txt"><span class="ko serif">${t.ko}</span><span class="kw">${t.kw}</span></span>
+      <span class="tick">✓</span>
+    </button>`).join('');
+  $('#themes').querySelectorAll('.theme').forEach(el=>{
+    el.onclick = ()=>{
+      if(state.any){ state.any=false; $('#anyBtn').classList.remove('sel'); $('#themes').classList.remove('muted'); }
+      const i = +el.dataset.i, ko = THEMES[i].ko;
+      if(state.themes.has(ko)){ state.themes.delete(ko); el.classList.remove('sel'); }
+      else { state.themes.add(ko); el.classList.add('sel'); }
+      updateFooter();
+    };
+  });
+  $('#anyBtn').onclick = ()=>{
+    state.any = !state.any;
+    $('#anyBtn').classList.toggle('sel', state.any);
+    $('#themes').classList.toggle('muted', state.any);
+    if(state.any){ state.themes.clear(); $('#themes').querySelectorAll('.sel').forEach(e=>e.classList.remove('sel')); }
+    updateFooter();
+  };
+}
+
+function meter(val, cls){
+  let h='';
+  for(let k=1;k<=5;k++) h+=`<i class="${k<=val?'on':''}"></i>`;
+  return `<span class="meter ${cls}">${h}</span>`;
+}
+
+function renderResult(){
+  // 주제 우선 필터, 같은 장르를 상단 가중(추천 랭킹 흉내)
+  const themeSel = state.any || state.themes.size===0 ? null : state.themes;
+  let pool = CARDS.filter(c => !themeSel || themeSel.has(c.theme));
+  if(pool.length===0) pool = CARDS.slice();      // 안전망
+  const gsel = state.genres;
+  pool.sort((a,b)=> (gsel.has(b.genre)?1:0) - (gsel.has(a.genre)?1:0));
+  const list = pool.slice(0,6);
+
+  // 헤더
+  $('#resTitle').textContent = state.any ? '폭넓게 골라봤어요' : '취향에 맞춰 골라봤어요';
+  $('#resSub').textContent = `${list.length}개의 명대사를 추천드려요.`;
+  const pills = [...gsel].map(g=>`<span class="pill g">${g}</span>`)
+    .concat(state.any ? ['<span class="pill t">주제 · 상관없음</span>']
+                      : [...state.themes].map(t=>`<span class="pill t">${t}</span>`));
+  $('#resPills').innerHTML = pills.join('') || '<span class="pill">전체</span>';
+
+  // 피드
+  $('#feed').innerHTML = list.map((c,n)=>`
+    <article class="fcard" style="animation-delay:${n*60}ms">
+      <div class="meta"><span class="gtag">${c.genre}</span><span>·</span><span>${c.theme}</span></div>
+      <blockquote>“${c.quote}”</blockquote>
+      <div class="src"><b>${c.title}</b> · ${c.author}</div>
+      <div class="foot">
+        <div class="ti">
+          <span class="grp"><span class="lab">온도</span>${meter(c.t,'t')}</span>
+          <span class="grp"><span class="lab">강도</span>${meter(c.i,'i')}</span>
+        </div>
+      </div>
+      <div class="kw">${c.kw.map(k=>`<span>${k}</span>`).join('')}</div>
+    </article>`).join('');
+}
+
+// ── 단계 전환 ───────────────────────────────────────────
+function show(step){
+  state.step = step;
+  document.querySelectorAll('.step').forEach(s=>s.classList.toggle('on', +s.dataset.step===step));
+  $('#seg1').style.width = step>=1 ? '100%' : '0';
+  $('#seg2').style.width = step>=2 ? '100%' : '0';
+  scroll.scrollTop = 0;
+  if(step===3) renderResult();
+  updateFooter();
+}
+
+function updateFooter(){
+  const next = $('#nextBtn'), back = $('#backBtn'), info = $('#selinfo');
+  back.style.display = state.step===1 ? 'none' : 'block';
+  if(state.step===1){
+    const n = state.genres.size;
+    next.disabled = n===0;
+    next.textContent = '다음';
+    info.textContent = n ? `${n}개 장르 선택됨` : '장르를 1개 이상 골라주세요';
+  } else if(state.step===2){
+    const n = state.themes.size;
+    next.disabled = !(n>0 || state.any);
+    next.textContent = '내 추천 보기';
+    info.textContent = state.any ? '모든 주제에서 추천받아요'
+                     : (n ? `${n}개 주제 선택됨` : '주제를 고르거나 ‘상관없음’을 눌러주세요');
+  } else {
+    next.disabled = false;
+    next.textContent = '다른 명대사 읽으러 가기';
+    info.textContent = '';
+    back.textContent = '← 선택 다시하기';
+  }
+}
+
+$('#nextBtn').onclick = ()=>{
+  if(state.step===1) show(2);
+  else if(state.step===2) show(3);
+  else { // 결과 → 데모 재시작
+    alert('실제 서비스에서는 홈(오늘의 명대사)으로 이동합니다.');
+  }
+};
+$('#backBtn').onclick = ()=> show(state.step===3 ? 1 : state.step-1);
+$('#skip').onclick = ()=>{ state.any=true; state.genres=new Set(GENRES.map(g=>g.ko)); show(3); };
+
+// init
+renderGenres(); renderThemes(); show(1);
+</script>
+</body>
+</html>
