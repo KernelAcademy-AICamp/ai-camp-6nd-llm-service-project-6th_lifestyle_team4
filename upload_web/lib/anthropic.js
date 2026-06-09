@@ -1075,52 +1075,61 @@ function cleanScriptExcerptEdges(script) {
   };
   const lines = script.split('\n');
 
-  // 첫 줄 잘린 토큰 처리 — 카드 자체는 보존, 잘린 부분만 제거.
-  //  · 첫 문장 종결자(. ! ? …) 다음부터 시작 (그 앞 잘린 fragment 제거)
-  //  · 종결자 못 찾으면 잘린 토큰만 제거하고 줄 유지
-  //  · 줄 자체는 절대 제거 안 함 (카드 내용 손실 방지)
+  // 첫 줄 잘린 자투리 처리 — 카드 자체는 보존, 자투리만 제거.
+  //  · 문장 시작 형태(대문자/한글/따옴표/괄호) 가 아니면 → 자투리. 첫 종결자까지 제거.
+  //  · 5자 이하 영문 소문자 fragment 도 자투리.
+  //  · 콤마/세미콜론/소문자로 시작 → 자투리 (이전 문장의 끝부분이 끊긴 형태).
   if (lines.length >= 1) {
     const first = (lines[0] || '').trim();
     if (first && !isLabelLine(first) && !/[가-힯]/.test(first)) {
+      const firstChar = first[0] || '';
       const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
-      // fragment 검사 1~5자 (이전 1~3자) — "hened", "ened" 같은 4-5자 잘림도 잡음.
-      // 일반 영어 단어 (COMMON_SHORT_EN_LONG) 는 제외하여 false positive 방지.
+      // 자투리 판정:
+      //  A) 콤마/세미콜론/구두점으로 시작 — 이전 문장 끝부분 ("., even him,...")
+      //  B) 첫 토큰이 1~5자 영문 소문자 fragment + 일반 단어 아님 ("hened", "y", "s")
+      const startsWithJunkPunct = /^[,;:.!?]/.test(firstChar);
       const isFragment =
         /^[a-z]{1,5}$/.test(firstToken)
         && !COMMON_SHORT_EN.has(firstToken.toLowerCase())
         && !COMMON_5LETTER.has(firstToken.toLowerCase());
-      if (isFragment) {
-        // ① 첫 문장 종결자 찾아 그 뒤부터
+      if (startsWithJunkPunct || isFragment) {
+        // 첫 문장 종결자 찾아 그 뒤부터
         const sentenceEnd = first.match(/[.!?…]["'”’]?\s+/);
         if (sentenceEnd) {
           const cutPos = sentenceEnd.index + sentenceEnd[0].length;
           lines[0] = first.slice(cutPos);
-        } else {
-          // ② 종결자 못 찾음 — 잘린 첫 토큰만 제거
+        } else if (isFragment) {
+          // 종결자 없음 + 영문 fragment — 첫 토큰만 제거
           lines[0] = first.replace(/^\W*\w{1,5}\W+/, '');
+        } else {
+          // 종결자 없음 + 콤마 시작 — 콤마 직후부터
+          lines[0] = first.replace(/^[,;:.!?]\s*/, '');
         }
       }
     }
   }
 
-  // 끝 줄 잘린 토큰 처리 — 카드 자체는 보존, 잘린 부분만 제거.
-  //  · 마지막 종결자 이후 잘린 텍스트만 잘라냄
-  //  · 종결자 없으면 그대로 둠 (한글 종결자 없는 라인 많아 false positive 위험)
+  // 끝 줄 잘린 자투리 처리 — 마지막 종결자까지만 남김.
+  //  · 종결자(. ! ? …) 없이 끝나거나 콤마로 끝나는 영문 라인 → 마지막 종결자까지
+  //  · 영문 + 하이픈/언더스코어 잘림 → 마지막 종결자까지
+  //  · 한글로 끝나는 라인은 그대로 (한국어는 종결자 없는 라인 많음)
   if (lines.length >= 1) {
     const lastIdx = lines.length - 1;
     const last = (lines[lastIdx] || '').trim();
     if (last && !isLabelLine(last) && !/[가-힯]\s*$/.test(last)) {
       const endsClean = /[.!?"'”’…。！？\)\）\]\】]\s*$/.test(last);
+      // 콤마/세미콜론으로 끝 → 잘린 형태
+      const endsWithComma = /[,;]\s*$/.test(last);
       const hyphenCut = /[a-zA-Z][-_]\s*$/.test(last);
-      // 영문 + 종결자 없음 또는 하이픈 잘림 → 마지막 종결자까지만 남김
-      if (!endsClean || hyphenCut) {
-        const sentenceMatches = [...last.matchAll(/[.!?…]["'”’]?\s/g)];
+      if (!endsClean || hyphenCut || endsWithComma) {
+        // 마지막 종결자 위치 찾기
+        const sentenceMatches = [...last.matchAll(/[.!?…]["'”’]?(?=\s|$)/g)];
         if (sentenceMatches.length > 0) {
           const m = sentenceMatches[sentenceMatches.length - 1];
-          const cutEnd = m.index + m[0].trimEnd().length;
+          const cutEnd = m.index + m[0].length;
           lines[lastIdx] = last.slice(0, cutEnd);
         }
-        // 종결자 못 찾으면 — 라인 그대로 (카드 보존 우선, 자투리 잠깐 유지)
+        // 종결자 못 찾으면 라인 그대로 (카드 보존 우선)
       }
     }
   }
@@ -1249,7 +1258,13 @@ export function validateAndFilterCards(cards, category, opts = {}) {
   // 사용자 요구: 잘린 문장의 본문(fullScript)을 직접 가져와 채움.
   // fullScript 가 있으면 rescue 시도, 실패하면 자투리 제거 (LLM 보강 X).
   for (const c of survivors) {
-    if (!c?.script_excerpt) continue;
+    if (!c) continue;
+    // 빈 script_excerpt 인 경우 — quote 라도 채움 (빈 박스 표시 방지).
+    // 사용자가 검토에서 본문 직접 편집 가능.
+    if (!c.script_excerpt || !String(c.script_excerpt).trim()) {
+      if (c.quote) c.script_excerpt = String(c.quote);
+    }
+    if (!c.script_excerpt) continue;
     if (fullScript) rescueScriptExcerptEdges(c, fullScript);
     // rescue 후에도 자투리 남아있으면 그것만 마지막 정리
     c.script_excerpt = cleanScriptExcerptEdges(c.script_excerpt);
