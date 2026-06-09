@@ -346,6 +346,16 @@
           <span class="material-symbols-outlined text-base">select_all</span>
           <span id="select-all-label">전체 선택</span>
         </button>
+        <!-- 번역 모델 선택 — 전체 번역하기 직전에 (결과 화면) -->
+        <div class="flex items-center gap-1 ml-2">
+          <span class="text-xs text-on-surface-variant whitespace-nowrap">번역 모델:</span>
+          <select id="translate-model-select"
+                  class="px-2 py-1 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-sm font-semibold hover:border-primary">
+            <option value="haiku">Haiku (빠름)</option>
+            <option value="sonnet">Sonnet (균형)</option>
+            <option value="opus">Opus (최고 품질)</option>
+          </select>
+        </div>
         <button type="button" id="translate-all-btn"
                 class="px-3 py-2 rounded-lg border-2 border-outline-variant text-sm font-semibold hover:border-primary transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed">
           <span class="material-symbols-outlined text-base">translate</span>

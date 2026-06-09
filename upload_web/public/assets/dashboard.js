@@ -205,8 +205,19 @@ $$('#translate-model-toggle .translate-model-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     state.translateModel = btn.dataset.translateModel;
     paintTranslateModel();
+    const sel = $('#translate-model-select');
+    if (sel) sel.value = state.translateModel;
   });
 });
+// 결과 화면 (#translate-model-select) ↔ state.translateModel 동기화
+const translateModelSelect = $('#translate-model-select');
+if (translateModelSelect) {
+  translateModelSelect.value = state.translateModel || 'haiku';
+  translateModelSelect.addEventListener('change', () => {
+    state.translateModel = translateModelSelect.value;
+    paintTranslateModel();
+  });
+}
 paintTranslateModel();
 
 // ---------------------------------------------------------------------------
