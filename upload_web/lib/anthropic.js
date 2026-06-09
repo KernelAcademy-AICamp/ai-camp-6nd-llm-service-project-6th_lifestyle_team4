@@ -260,7 +260,7 @@ function parseJson(text) {
 // 청크 수가 좀 늘어도 병렬(동시 3) 처리로 wall-clock 영향 작음.
 const EXTRACT_CHUNK_TARGET_CHARS = 50000;
 const EXTRACT_CHUNK_WINDOW_CHARS = 10000;
-const EXTRACT_CHUNK_OVERLAP_CHARS = 3000;
+const EXTRACT_CHUNK_OVERLAP_CHARS = 6000;
 const EXTRACT_FINAL_INPUT_CARDS = 80;
 const EXTRACT_FINAL_OUTPUT_CARDS = 40;
 

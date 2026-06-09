@@ -61,11 +61,13 @@ const EXTRACT_PROMPT_SCREEN = `[01 ROLE]
 - characters: 작품의 등장인물(대사를 말하는 인물) 이름 목록. 한국어 이름만(역할 설명·괄호 제외). 화자로 등장하는 인물을 빠짐없이.
 - quote: 작품 원문에서 한 글자도 바꾸지 않고 발췌. 200자 이내.
 - script_excerpt: quote 앞뒤 맥락 포함, 인물명과 지문 그대로.
-  · ⚠️ **단어 중간에서 시작하거나 끝나면 안 된다** — 발췌의 첫 문자와 마지막 문자는 반드시 완전한 단어의 시작/끝이어야 한다. 입력 본문이 청크 경계로 잘려 들어왔어도, 발췌는 첫 완전한 단어부터 시작하고 마지막 완전한 단어/문장종결자에서 끝낼 것.
-    · ✗ "ready been walking through the forest..." (← "already" 의 일부 "al" 잘림)
-    · ✗ "...the times were long past when he had bee" (← "been" 잘림)
+  · ⚠️ **단어 중간/문장 중간에서 시작하거나 끝나면 안 된다** — 발췌의 첫 문자/마지막 문자는 반드시 완전한 단어. 그리고 발췌의 첫 문장은 완전한 문장으로 시작(대문자/따옴표/괄호), 마지막 문장은 완전한 문장으로 끝(. ! ?). 입력 본문이 청크 경계로 잘려 들어왔어도, 발췌는 첫 완전한 문장부터 시작하고 마지막 완전한 문장에서 끝낼 것.
+    · ✗ "ready been walking through the forest..." (← "already" 단어 일부 잘림)
+    · ✗ "meaningless. He only knew that his previous life..." (← 문장 중간 시작)
+    · ✗ "...he ran without stopping" (← 종결자 없이 끝)
     · ✓ "He had already been walking through the forest..."
-    · ✓ "...the times were long past when he had been tough against hunger."
+    · ✓ "His search was meaningless. He only knew that his previous life..."
+    · ✓ "...he ran without stopping, no longer to save him."
   · **❌ quote 와 동일한 문자열을 그대로 복사해 넣지 말 것 — 그 카드는 서버에서 자동 삭제됨.** quote 는 발췌 안의 짧은 한 부분일 뿐이고, script_excerpt 는 quote 의 앞뒤 turn 까지 포함한 훨씬 긴 발췌.
   · 길이는 **최소 2000자 권장** (공백·줄바꿈 포함, 상한 없음). 자연스러운 단락/turn 경계까지 가져오는 게 우선. **글자수 채우려고 어색하게 늘리지 말 것** — 발췌가 자연스러운 흐름으로 끝나면 거기서 마무리. 2000자 안 되더라도 깔끔한 발췌가 더 중요하다.
   · 단순히 글자 수만 채우지 말고, 그 명대사가 **왜 나왔는지·무엇을 향한 말인지** 이해되도록 명대사 이해에 도움이 되는 앞뒤 대사·지문·맥락을 최대한 끌어올 것.
