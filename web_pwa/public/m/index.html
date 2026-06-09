@@ -1062,17 +1062,29 @@
     font-size: 18px; line-height: 30px; color: var(--espresso);
     text-align: center; white-space: pre-wrap; word-break: keep-all;
   }
-  /* 책 줄 — 제목 + 저자 */
+  /* 책 줄 — 제목 + 저자 (+ 오른쪽 아래 빼꼼 표지) */
   .feed-book-line {
+    position: relative;            /* 빼꼼 표지의 기준 */
     background: var(--paper);
     padding: 16px 20px;
   }
   .feed-book-line .fb-title {
     font-size: 15px; color: var(--espresso);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding-right: 96px;           /* 표지에 제목이 안 가리게 */
   }
   .feed-book-line .fb-author {
     font-size: 14px; color: var(--walnut); margin-top: 4px;
+    padding-right: 96px;
+  }
+  /* 초판 표지 — 책 줄 오른쪽 아래에서 카드 모서리에 20px 잘려 빼꼼 */
+  .feed-book-line .fb-cover {
+    position: absolute;
+    right: 44px; bottom: -20px;
+    width: 60px; height: 86px;
+    object-fit: cover;
+    border-radius: 3px 3px 0 0;
+    box-shadow: 0 3px 8px rgba(14,12,10,0.22);
   }
   #feed-fab {
     position: fixed; right: 20px; bottom: 80px; z-index: 29;

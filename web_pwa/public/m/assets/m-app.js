@@ -4426,6 +4426,55 @@ function renderFeedList() {
   list.forEach((post) => feedList.appendChild(buildFeedItem(post)));
 }
 
+// ── 책 표지 매핑 (정규화 제목 키 → covers/ 파일명). 자동 생성, 수동 편집 가능 ──
+//   같은 책의 띄어쓰기 변형(셜록홈즈/셜록 홈즈)은 정규화로 한 파일이 커버한다.
+const COVER_SLUGS = {
+  '리골레토': 'rigoletto.jpg',
+  '카르멘': 'carmen.jpeg',
+  '로미오와줄리엣': 'romeo-and-juliet.jpg',
+  '맥베스': 'macbeth.jpg',
+  '햄릿': 'hamlet.jpg',
+  '셜록홈즈': 'sherlock-holmes.jpg',
+  '셜록홈즈보헤미아왕국의스캔들': 'sherlock-holmes.jpg',
+  '바냐아저씨': 'uncle-vanya.jpg',
+  '인형의집': 'a-dolls-house.jpg',
+  '프랑켄슈타인': 'frankenstein.jpg',
+  '킹아서': 'king-arthur.jpeg',
+  '피터팬': 'peter-pan.png',
+  '위대한개츠비': 'great-gatsby.jpg',
+  '80일간의세계일주': 'around-the-world-in-80-days.jpeg',
+  '이상한나라의앨리스': 'alice-in-wonderland.jpg',
+  '걸리버여행기': 'gullivers-travels.jpg',
+  '보물섬': 'treasure-island.webp',
+  '파우스트': 'faust.jpg',
+  '한여름밤의꿈': 'midsummer-nights-dream.jpg',
+  '십이야': 'twelfth-night.jpg',
+  '오셀로': 'othello.jpg',
+  '베니스의상인': 'merchant-of-venice.jpg',
+  '말괄량이길들이기': 'taming-of-the-shrew.webp',
+  '리어왕': 'king-lear.jpg',
+  '뜻대로하세요': 'as-you-like-it.jpg',
+  '안티고네': 'antigone.jpg',
+  '스카펭의간계': 'scapin.jpg',
+  '진지함의중요성': 'importance-of-being-earnest.jpeg',
+  '모비딕': 'moby-dick.jpg',
+  '오만과편견': 'pride-and-prejudice.jpg',
+  '죄와벌': 'crime-and-punishment.webp',
+  '푸른성': 'blue-castle.jpeg',
+  '심연으로부터': 'de-profundis.webp',
+  '내가전쟁을촬영한방법': 'how-i-filmed-the-war.jpg',
+  '차라투스트라는이렇게말했다': 'thus-spoke-zarathustra.jpg',
+  '허클베리핀의모험': 'huckleberry-finn.jpeg',
+  '미들마치': 'middlemarch.jpg',
+  '돈키호테': 'don-quixote.jpeg',
+};
+// 원제(works.title) → 표지 경로. 없으면 null (표지 미표시).
+function coverUrlFor(title) {
+  const key = String(title || '').normalize('NFC').toLowerCase().replace(/[^0-9a-z가-힣]/gu, '');
+  const file = key && COVER_SLUGS[key];
+  return file ? `/m/covers/${file}` : null;
+}
+
 function buildFeedItem(post) {
   const card = post.cards || {};
   const w = card.works || {};
@@ -4433,6 +4482,12 @@ function buildFeedItem(post) {
   wrap.className = 'feed-item';
   const title = displayTitle(w.title) || '—';
   const author = w.author || '';
+  // 표지는 원제(w.title)로 매칭 — displayTitle 별칭 변환 전 값
+  const cover = coverUrlFor(w.title);
+  const coverHtml = cover
+    ? `<img class="fb-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
+         onerror="this.remove()" />`
+    : '';
   wrap.innerHTML = `
     <div class="feed-item-head">
       <div class="feed-avatar"><span class="material-symbols-outlined">edit</span></div>
@@ -4445,6 +4500,7 @@ function buildFeedItem(post) {
     <div class="feed-book-line">
       <p class="fb-title">${escapeHtml(title)}</p>
       ${author ? `<p class="fb-author">${escapeHtml(author)}</p>` : ''}
+      ${coverHtml}
     </div>
   `;
   // 카드 탭 → 해당 명대사 한 줄 팝업 (홈 한 줄과 동일, 전문 아님)
