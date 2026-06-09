@@ -1012,9 +1012,6 @@ function rescueMiddleParagraphStarts(card, fullScript) {
   const paragraphs = text.split(/\n\s*\n/);
   if (paragraphs.length <= 1) return;
 
-  // 첫 단락과 마지막 단락은 rescueScriptExcerptEdges 가 처리 (가능하면).
-  // 여기서는 가운데 단락 (index 1 ~ length-2) 의 시작만 처리.
-  // 다만 마지막 단락이 가운데에도 해당될 수 있어 둘 다 처리.
   for (let i = 1; i < paragraphs.length; i++) {
     const para = paragraphs[i];
     const paraLines = para.split('\n');
@@ -1028,6 +1025,14 @@ function rescueMiddleParagraphStarts(card, fullScript) {
     if (isProperStart) continue;
     if (!/^[a-z,;:.!?]/.test(firstChar)) continue;
 
+    // ★ 자투리 vs 정상 단어 구분 — 첫 토큰이 fullScript 에 단독 단어로 존재하면 정상 단어로 판정 (안 건드림).
+    //   "stood alone like a star..." 의 "stood" 가 fullScript 에 " stood " 형태로 있으면 자투리 아님.
+    const firstTokenLower = (first.match(/^[a-z]+/i)?.[0] || '').toLowerCase();
+    if (firstTokenLower && firstTokenLower.length >= 4) {
+      const wordPattern = new RegExp(`(?:^|[\\s\\n\\.\\!\\?"'])${firstTokenLower}\\b`, 'i');
+      if (wordPattern.test(fullScript)) continue; // 정상 단어 — 안 건드림
+    }
+
     // 자투리 토큰 제외한 나머지로 fullScript 검색
     const restMatch = first.match(/^[a-z,;:.!?]+\W*(.*)$/i);
     const restAfterFragment = (restMatch?.[1] || '').trim();
@@ -1037,9 +1042,8 @@ function rescueMiddleParagraphStarts(card, fullScript) {
     if (probe.length < 8) continue;
 
     const pos = fullScript.indexOf(probe);
-    if (pos < 0) continue; // 못 찾음 — 그대로 (원문 손실 방지)
+    if (pos < 0) continue;
 
-    // probe 앞쪽 500자 안에서 마지막 종결자 찾기
     const window = fullScript.slice(Math.max(0, pos - 500), pos);
     const lastEnd = Math.max(
       window.lastIndexOf('. '), window.lastIndexOf('! '), window.lastIndexOf('? '),
