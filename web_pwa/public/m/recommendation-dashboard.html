@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>추천 시스템 진단 대시보드 — Daily Script</title>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --espresso:#0E0C0A; --roast:#2C2620; --walnut:#6B5D4F; --sand:#C9B89A;
+    --latte:#E8E1D3; --paper:#FAF8F2; --card:#FFFDF7;
+    --highlight:#F4C20D; --cta:#D85A30; --ok:#4A7A52; --warn:#C8881E; --bad:#B23B2E;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Noto Sans KR',system-ui,sans-serif;background:var(--paper);color:var(--espresso);
+    -webkit-font-smoothing:antialiased;line-height:1.5;padding:30px 22px 60px;}
+  .serif{font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;}
+  .wrap{max-width:1080px;margin:0 auto;}
+
+  header{margin-bottom:22px;}
+  header .eyebrow{font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--walnut);font-weight:700;}
+  header h1{font-family:'Nanum Myeongjo',serif;font-size:30px;margin:8px 0 6px;}
+  header p{font-size:13px;color:var(--walnut);}
+  header .wm{float:right;font-family:'Nanum Myeongjo',serif;font-size:15px;color:var(--roast);}
+  header .wm .dot{color:var(--cta);}
+
+  /* verdict banner */
+  .verdict{background:linear-gradient(100deg,#FBEDE7,#FCF4E6);border:1px solid #E9C9B8;border-radius:18px;
+    padding:20px 24px;margin-bottom:22px;display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
+  .verdict .badge{flex:0 0 auto;width:90px;height:90px;border-radius:50%;background:#fff;border:3px solid var(--bad);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .verdict .badge b{font-family:'Nanum Myeongjo',serif;font-size:30px;color:var(--bad);line-height:1;}
+  .verdict .badge span{font-size:10px;color:var(--walnut);margin-top:3px;letter-spacing:.1em;}
+  .verdict .txt{flex:1;min-width:240px;}
+  .verdict .txt h2{font-family:'Nanum Myeongjo',serif;font-size:21px;margin-bottom:6px;}
+  .verdict .txt p{font-size:13px;color:var(--roast);}
+  .verdict .txt b{color:var(--bad);}
+  .kpis{display:flex;gap:10px;flex-wrap:wrap;}
+  .kpi{background:#fff;border:1px solid var(--latte);border-radius:12px;padding:10px 14px;min-width:120px;}
+  .kpi .v{font-family:'Nanum Myeongjo',serif;font-size:22px;}
+  .kpi .v small{font-size:12px;color:var(--walnut);}
+  .kpi .l{font-size:11px;color:var(--walnut);margin-top:2px;}
+  .kpi.warn .v{color:var(--warn);} .kpi.bad .v{color:var(--bad);} .kpi.ok .v{color:var(--ok);}
+
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;}
+  .panel{background:var(--card);border:1px solid var(--latte);border-radius:16px;padding:20px;
+    box-shadow:0 2px 10px rgba(20,14,8,.03);}
+  .col6{grid-column:span 6;} .col4{grid-column:span 4;} .col8{grid-column:span 8;} .col12{grid-column:span 12;}
+  @media(max-width:760px){.col6,.col4,.col8{grid-column:span 12;}}
+  .panel h3{font-family:'Nanum Myeongjo',serif;font-size:17px;margin-bottom:4px;}
+  .panel .desc{font-size:11.5px;color:var(--walnut);margin-bottom:14px;}
+  .tag{display:inline-block;font-size:10px;letter-spacing:.06em;padding:2px 8px;border-radius:20px;margin-left:6px;vertical-align:middle;}
+  .tag.now{background:#F2E3DB;color:var(--cta);} .tag.new{background:#E7EFE3;color:var(--ok);}
+
+  /* flow */
+  .flow{display:flex;flex-direction:column;gap:8px;}
+  .frow{display:flex;align-items:center;gap:10px;font-size:13px;}
+  .frow .node{background:var(--paper);border:1px solid var(--latte);border-radius:10px;padding:9px 12px;flex:1;}
+  .frow .node b{font-weight:500;}
+  .frow .node small{display:block;color:var(--walnut);font-size:11px;}
+  .frow .arm{color:var(--sand);font-size:18px;}
+  .frow.off .node{border-style:dashed;}
+  .frow .pct{flex:0 0 46px;text-align:right;font-family:'Nanum Myeongjo',serif;color:var(--walnut);font-size:13px;}
+  .deflt{font-size:11px;color:#fff;background:var(--bad);border-radius:6px;padding:2px 7px;margin-left:6px;}
+
+  table.kv{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.kv td{padding:8px 4px;border-bottom:1px solid var(--latte);vertical-align:top;}
+  table.kv td:first-child{color:var(--walnut);width:46%;}
+  table.kv td b{font-family:'Nanum Myeongjo',serif;font-weight:400;font-size:14px;}
+  .flag{font-size:11px;padding:1px 7px;border-radius:5px;}
+  .flag.bad{background:#F6E1DD;color:var(--bad);} .flag.warn{background:#F8EED7;color:var(--warn);} .flag.ok{background:#E3EFE0;color:var(--ok);}
+
+  /* heatmap */
+  .heat{display:grid;grid-template-columns:30px repeat(5,1fr);gap:4px;font-size:11px;}
+  .heat .hd{display:flex;align-items:center;justify-content:center;color:var(--walnut);font-size:10px;}
+  .heat .cell{aspect-ratio:1.3/1;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-family:'Nanum Myeongjo',serif;font-size:13px;color:var(--espresso);}
+  .heat .axis{writing-mode:vertical-rl;transform:rotate(180deg);}
+  .legend{font-size:11px;color:var(--walnut);margin-top:10px;display:flex;align-items:center;gap:8px;}
+  .legend i{display:inline-block;width:46px;height:9px;border-radius:4px;
+    background:linear-gradient(90deg,#F3EEE4,#E8A887,#C8501F);}
+
+  /* curve svg */
+  svg{width:100%;height:auto;display:block;}
+  .cap{font-size:11px;color:var(--walnut);margin-top:8px;}
+  .cap b{color:var(--roast);font-weight:500;}
+
+  /* formula */
+  .formula{background:var(--paper);border:1px dashed var(--sand);border-radius:12px;padding:14px;
+    font-family:'Nanum Myeongjo',serif;font-size:15px;line-height:1.8;}
+  .formula .w{color:var(--cta);}
+  .wtable{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px;}
+  .wtable th,.wtable td{border:1px solid var(--latte);padding:7px 9px;text-align:left;}
+  .wtable th{background:var(--paper);font-weight:500;color:var(--roast);font-size:11px;}
+  .wtable td:first-child{color:var(--walnut);}
+
+  ul.road{list-style:none;font-size:12.5px;}
+  ul.road li{padding:9px 0 9px 30px;position:relative;border-bottom:1px solid var(--latte);}
+  ul.road li:last-child{border:none;}
+  ul.road li .p{position:absolute;left:0;top:8px;font-size:10px;font-weight:700;color:#fff;background:var(--roast);
+    border-radius:6px;padding:2px 6px;}
+  ul.road li b{font-weight:500;}
+  .foot{font-size:11px;color:var(--walnut);margin-top:24px;text-align:center;}
+  .foot code{background:#fff;border:1px solid var(--latte);border-radius:4px;padding:1px 5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="wm">Daily Scr<span class="dot">ı</span>pt<span class="dot">.</span></span>
+    <div class="eyebrow">Recommendation · Diagnostic Dashboard · 06.08</div>
+    <h1 class="serif">추천, 지금 어떻게 돌아가고 있나</h1>
+    <p>실서비스 코드(<code>m-app.js</code>)와 DB 322장 실데이터 기준 진단 + 개선 설계</p>
+  </header>
+
+  <!-- VERDICT -->
+  <div class="verdict">
+    <div class="badge"><b>C−</b><span>현재 상태</span></div>
+    <div class="txt">
+      <h2 class="serif">결론: 지금은 “개인화”라기보다 <b>사실상 랜덤</b>입니다</h2>
+      <p>개인화 기능은 <b>기본 꺼짐</b>이고, 켜도 북마크 10개가 모여야 작동하며, 신호는 온도·강도 2개뿐 — 가장 강한 <b>장르·주제는 아예 안 씁니다.</b></p>
+    </div>
+    <div class="kpis">
+      <div class="kpi bad"><div class="v">OFF</div><div class="l">기본 활성 상태</div></div>
+      <div class="kpi warn"><div class="v">10<small>개</small></div><div class="l">개인화 시작 북마크</div></div>
+      <div class="kpi bad"><div class="v">2.2<small>×</small></div><div class="l">랜덤 대비 개인화 강도</div></div>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- 현재 파이프라인 -->
+    <section class="panel col6">
+      <h3>① 현재 파이프라인 <span class="tag now">AS-IS</span></h3>
+      <div class="desc">홈 진입·새로고침마다 <code>pickRandomCard()</code> 1개 호출</div>
+      <div class="flow">
+        <div class="frow off">
+          <span class="pct">기본</span>
+          <div class="node"><b>ds.taste 꺼짐</b><small>순수 랜덤 · 최근10 + 북마크 제외</small></div>
+          <span class="deflt">DEFAULT</span>
+        </div>
+        <div class="frow"><span class="pct"></span><span class="arm">▼ 사용자가 토글 ON 시</span></div>
+        <div class="frow">
+          <span class="pct">cold</span>
+          <div class="node"><b>북마크 &lt; 10</b><small>→ 순수 랜덤으로 폴백</small></div>
+        </div>
+        <div class="frow">
+          <span class="pct">10%</span>
+          <div class="node"><b>variety</b><small>순수 랜덤</small></div>
+        </div>
+        <div class="frow">
+          <span class="pct">90%</span>
+          <div class="node"><b>취향 가중 랜덤</b><small>가중 = 1 / (1 + 온도·강도 유클리드 거리)</small></div>
+        </div>
+      </div>
+      <div class="cap" style="margin-top:14px;">취향 벡터 = <b>북마크 카드들의 (온도, 강도) 평균</b>. 후보 풀 최신 500장.</div>
+    </section>
+
+    <!-- 핵심 진단 -->
+    <section class="panel col6">
+      <h3>② 핵심 진단 <span class="tag now">322장 실데이터</span></h3>
+      <div class="desc">신호가 약하고 좁다 — 변별력이 떨어지는 구조</div>
+      <table class="kv">
+        <tr><td>온도·강도 결측</td><td><b>0 / 322</b> <span class="flag ok">양호</span></td></tr>
+        <tr><td>온도 평균 ± 표준편차</td><td><b>2.52 ± 1.22</b> · 차가운 쪽 쏠림</td></tr>
+        <tr><td>강도 평균 ± 표준편차</td><td><b>3.51 ± 1.05</b> · 센 쪽 쏠림</td></tr>
+        <tr><td>사용된 (온도,강도) 셀</td><td><b>20 / 25</b> <span class="flag warn">좁음</span></td></tr>
+        <tr><td>평균벡터 거리 1 이내</td><td><b>32%</b> 밀집 <span class="flag warn">군집</span></td></tr>
+        <tr><td>가중 차별력 범위</td><td><b>0.15 ~ 1.0</b> <span class="flag bad">약함</span></td></tr>
+        <tr><td>장르·주제 반영</td><td><b>없음</b> <span class="flag bad">미사용</span></td></tr>
+      </table>
+    </section>
+
+    <!-- 히트맵 -->
+    <section class="panel col4">
+      <h3>③ 온도 × 강도 분포</h3>
+      <div class="desc">25칸 중 20칸만 사용 · 최다 = 차갑고 격렬(45장)</div>
+      <div class="heat" id="heat"></div>
+      <div class="legend"><span>적음</span><i></i><span>많음</span><span style="margin-left:auto;">행=온도 · 열=강도</span></div>
+    </section>
+
+    <!-- 가중 곡선 -->
+    <section class="panel col8">
+      <h3>④ 왜 약한가 — 가중 곡선 <code>1/(1+d)</code></h3>
+      <div class="desc">거리가 멀어져도 가중치가 충분히 안 떨어진다. 최악 매칭 카드도 최선의 15% 확률 → 추천이 거의 평평</div>
+      <svg id="curve" viewBox="0 0 640 220" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="cap"><b>개인화 강도 측정:</b> 취향과 가장 가까운 상위 10% 카드가 가져가는 선택 확률이 <b>22%</b>에 불과(균등이면 10%) → 랜덤 대비 약 <b>2.2배</b>. 제안의 softmax(τ=0.5)로 바꾸면 이 집중도를 원하는 만큼 키울 수 있다.</div>
+    </section>
+
+    <!-- 제안 점수식 -->
+    <section class="panel col6">
+      <h3>⑤ 제안 점수식 <span class="tag new">TO-BE</span></h3>
+      <div class="desc">온보딩(장르·주제) + 행동(온도·강도) + 인기 가중 합 → softmax 샘플링</div>
+      <div class="formula">
+        score(c) =<br>
+        &nbsp;&nbsp;<span class="w">w<sub>g</sub></span>·genreMatch +
+        <span class="w">w<sub>t</sub></span>·themeMatch<br>
+        &nbsp;&nbsp;+ <span class="w">w<sub>b</sub></span>·tasteSim +
+        <span class="w">w<sub>p</sub></span>·popularity<br>
+        P(c) ∝ exp( score(c) / <span class="w">τ</span> )
+      </div>
+      <table class="wtable">
+        <tr><th>신호</th><th>정의</th><th>floor</th></tr>
+        <tr><td>genreMatch</td><td>선택 장르면 1</td><td>0.15</td></tr>
+        <tr><td>themeMatch</td><td>선택 주제면 1 / "상관없음"=1</td><td>0.2</td></tr>
+        <tr><td>tasteSim</td><td>1 − d/√32 (북마크≥10)</td><td>0</td></tr>
+        <tr><td>popularity</td><td>북마크수 log 정규화</td><td>—</td></tr>
+      </table>
+    </section>
+
+    <!-- blend 곡선 -->
+    <section class="panel col6">
+      <h3>⑥ 콜드스타트 → 행동 전환 <span class="tag new">TO-BE</span></h3>
+      <div class="desc">α = min(북마크/10, 1). 가입 직후엔 온보딩 100%, 쌓일수록 행동 비중 ↑</div>
+      <svg id="blend" viewBox="0 0 640 230" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="cap">가입 직후(α=0): <b>장르·주제만으로 추천</b> → 신규 유저 콜드스타트 해결. 북마크 10개(α=1): 온보딩 60% + 행동 35% + 인기 5%.</div>
+    </section>
+
+    <!-- 로드맵 -->
+    <section class="panel col12">
+      <h3>⑦ 적용 로드맵</h3>
+      <ul class="road">
+        <li><span class="p">P0</span> <b>온보딩 선호 수집</b>(장르·주제) 저장 + <b>카드 테마 컬럼화</b>(키워드→10범주 배치). <span class="flag warn">선결</span></li>
+        <li><span class="p">P1</span> <b>genreMatch+themeMatch</b> 점수 추가, blend(α) 도입, <b>기본 ON</b>. → 콜드스타트 해결·체감 큰 변화</li>
+        <li><span class="p">P2</span> <b>softmax(τ)</b> 샘플링, 인기도 약가중, 새로고침=부정신호(세션 감점)</li>
+        <li><span class="p">P3</span> KPI 측정·튜닝: 추천 클릭률·북마크 전환율·세션당 새로고침수·테마 커버리지 / A·B 테스트</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <div class="foot">
+    상세 설계: <code>web_pwa/docs/recommendation-design.md</code> · 온보딩 미리보기: <code>preference-preview.html</code><br>
+    수치는 2026-06-08 DB(322장) 및 <code>m-app.js</code> 코드 기준.
+  </div>
+</div>
+
+<script>
+// ── 히트맵 (온도 행1~5, 강도 열1~5) ──
+const M = [
+  [0,2,7,26,45],   // 온1
+  [0,20,24,35,13], // 온2
+  [1,27,31,14,0],  // 온3
+  [0,14,23,15,4],  // 온4
+  [0,4,3,8,6],     // 온5
+];
+const max = Math.max(...M.flat());
+function heatColor(v){
+  if(v===0) return '#F6F3EC';
+  const t = v/max; // 0..1
+  // F3EEE4 → C8501F
+  const lerp=(a,b)=>Math.round(a+(b-a)*t);
+  const r=lerp(0xF3,0xC8),g=lerp(0xEE,0x50),b=lerp(0xE4,0x1F);
+  return `rgb(${r},${g},${b})`;
+}
+let h='<div class="hd"></div>';
+for(let i=1;i<=5;i++) h+=`<div class="hd">강${i}</div>`;
+for(let t=0;t<5;t++){
+  h+=`<div class="hd axis">온${t+1}</div>`;
+  for(let i=0;i<5;i++){
+    const v=M[t][i];
+    h+=`<div class="cell" style="background:${heatColor(v)};color:${v/max>0.55?'#fff':'#0E0C0A'};">${v||''}</div>`;
+  }
+}
+document.getElementById('heat').innerHTML=h;
+
+// ── 가중 곡선 1/(1+d) vs softmax ──
+(function(){
+  const W=640,H=220,pl=44,pr=14,pt=14,pb=34;
+  const x0=pl,x1=W-pr,y0=H-pb,y1=pt;
+  const dmax=Math.sqrt(32);
+  const X=d=>x0+(d/dmax)*(x1-x0);
+  const Y=w=>y0+(w-0)*(y1-y0); // w 0..1
+  let s=`<rect x="0" y="0" width="${W}" height="${H}" fill="none"/>`;
+  // axes
+  s+=`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke="#C9B89A" stroke-width="1"/>`;
+  s+=`<line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="#C9B89A" stroke-width="1"/>`;
+  // gridlines y
+  [0,0.25,0.5,0.75,1].forEach(w=>{s+=`<line x1="${x0}" y1="${Y(w)}" x2="${x1}" y2="${Y(w)}" stroke="#EFE9DD" stroke-width="1"/><text x="${x0-6}" y="${Y(w)+3}" font-size="10" fill="#6B5D4F" text-anchor="end">${w}</text>`;});
+  // current curve 1/(1+d)
+  let p='';
+  for(let d=0;d<=dmax+0.01;d+=0.1){const w=1/(1+d); p+=(p?'L':'M')+X(d)+','+Y(w)+' ';}
+  s+=`<path d="${p}" fill="none" stroke="#D85A30" stroke-width="2.5"/>`;
+  // floor marker
+  s+=`<line x1="${x0}" y1="${Y(0.15)}" x2="${x1}" y2="${Y(0.15)}" stroke="#B23B2E" stroke-width="1" stroke-dasharray="4 3"/>`;
+  s+=`<text x="${x1-4}" y="${Y(0.15)-5}" font-size="10" fill="#B23B2E" text-anchor="end">최악 매칭도 0.15 — 거의 안 떨어짐</text>`;
+  // softmax-ish proposed (steeper) for comparison: exp(-d/0.8 scaled)
+  let p2='';
+  for(let d=0;d<=dmax+0.01;d+=0.1){const w=Math.exp(-d/1.1); p2+=(p2?'L':'M')+X(d)+','+Y(w)+' ';}
+  s+=`<path d="${p2}" fill="none" stroke="#4A7A52" stroke-width="2" stroke-dasharray="5 4"/>`;
+  // labels
+  s+=`<text x="${X(2.2)}" y="${Y(1/(1+2.2))-8}" font-size="11" fill="#D85A30">현재 1/(1+d)</text>`;
+  s+=`<text x="${X(2.2)}" y="${Y(Math.exp(-2.2/1.1))+16}" font-size="11" fill="#4A7A52">제안 softmax(τ작게)</text>`;
+  s+=`<text x="${(x0+x1)/2}" y="${H-6}" font-size="10" fill="#6B5D4F" text-anchor="middle">취향과의 거리 d (0 = 똑같음 → ${dmax.toFixed(1)} = 정반대)</text>`;
+  document.getElementById('curve').innerHTML=s;
+})();
+
+// ── blend 곡선 ──
+(function(){
+  const W=640,H=230,pl=44,pr=14,pt=16,pb=40;
+  const x0=pl,x1=W-pr,y0=H-pb,y1=pt;
+  const X=a=>x0+a*(x1-x0);          // α 0..1 (bookmarks/10)
+  const Y=w=>y0+(w)*(y1-y0);        // weight 0..1
+  const wg=a=>(1-a)*0.55+a*0.30, wt=a=>(1-a)*0.45+a*0.30, wb=a=>a*0.35, wp=()=>0.05;
+  let s='';
+  s+=`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke="#C9B89A"/>`;
+  s+=`<line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="#C9B89A"/>`;
+  [0,0.25,0.5,0.75,1].forEach(w=>{s+=`<line x1="${x0}" y1="${Y(w)}" x2="${x1}" y2="${Y(w)}" stroke="#EFE9DD"/><text x="${x0-6}" y="${Y(w)+3}" font-size="10" fill="#6B5D4F" text-anchor="end">${w}</text>`;});
+  function line(fn,color,dash,label,lx){
+    let p='';for(let a=0;a<=1.001;a+=0.05){p+=(p?'L':'M')+X(a)+','+Y(fn(a))+' ';}
+    s+=`<path d="${p}" fill="none" stroke="${color}" stroke-width="2.5" ${dash?`stroke-dasharray="${dash}"`:''}/>`;
+    s+=`<text x="${X(lx)}" y="${Y(fn(lx))-7}" font-size="11" fill="${color}">${label}</text>`;
+  }
+  line(wg,'#D85A30','', 'w_g 장르',0.12);
+  line(wt,'#8E3B52','', 'w_t 주제',0.12);
+  line(wb,'#4A7A52','', 'w_b 행동(온도·강도)',0.5);
+  line(wp,'#6B5D4F','4 3','w_p 인기',0.7);
+  // x ticks
+  [[0,'가입직후'],[0.5,'북마크5'],[1,'북마크10+']].forEach(([a,t])=>{s+=`<text x="${X(a)}" y="${H-20}" font-size="10" fill="#6B5D4F" text-anchor="middle">${t}</text>`;});
+  s+=`<text x="${(x0+x1)/2}" y="${H-4}" font-size="10" fill="#6B5D4F" text-anchor="middle">α = min(북마크수 / 10, 1)</text>`;
+  document.getElementById('blend').innerHTML=s;
+})();
+</script>
+</body>
+</html>

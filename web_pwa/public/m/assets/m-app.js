@@ -10,6 +10,30 @@ const onboardingReady = import('./onboarding.js')
   .then((m) => { if (m && typeof m.startCoachmarkTour === 'function') startCoachmarkTour = m.startCoachmarkTour; })
   .catch((e) => console.warn('[m] onboarding 모듈 없음 — 코치마크 투어 비활성:', e));
 
+// preferences.js — 선호도 온보딩(사용법 투어 직전 1회). onboarding 과 같은 동적 import 패턴.
+let startPreferenceFlow = () => Promise.resolve(null);
+const preferencesReady = import('./preferences.js')
+  .then((m) => { if (m && typeof m.startPreferenceFlow === 'function') startPreferenceFlow = m.startPreferenceFlow; })
+  .catch((e) => console.warn('[m] preferences 모듈 없음 — 선호도 온보딩 비활성:', e));
+
+// card-theme.js — 키워드→주제 분류기. 추천 themeMatch 가중에 사용(없으면 주제 가중만 중립).
+let cardThemeSet = null;
+import('./card-theme.js')
+  .then((m) => { if (m && typeof m.cardThemeSet === 'function') cardThemeSet = m.cardThemeSet; })
+  .catch((e) => console.warn('[m] card-theme 모듈 없음 — 주제 가중 비활성:', e));
+
+// companion.js — 명대사 동무(대화 동무 + 큐레이션 챗봇). 동적 import 라 파일 누락 시에도 부팅 안전.
+let openCompanion = () => {};
+let isCompanionOpen = () => false;
+let closeCompanionInternal = () => {};
+import('./companion.js')
+  .then((m) => {
+    if (m && typeof m.openCompanion === 'function') openCompanion = m.openCompanion;
+    if (m && typeof m.isCompanionOpen === 'function') isCompanionOpen = m.isCompanionOpen;
+    if (m && typeof m.closeCompanionInternal === 'function') closeCompanionInternal = m.closeCompanionInternal;
+  })
+  .catch((e) => console.warn('[m] companion 모듈 없음 — 명대사 동무 비활성:', e));
+
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 
@@ -66,6 +90,7 @@ const todayKeywords = $('#today-keywords');
 const todayBookmark = $('#today-bookmark');
 const todayLangToggle = $('#today-lang-toggle');
 const todayRead = $('#today-read');
+const todayCompanion = $('#today-companion');
 const homeBookmarksList = $('#home-bookmarks-list');
 
 const archiveLoading = $('#archive-loading');
@@ -370,7 +395,10 @@ function extractSpeaker(scriptExcerpt, characters, quote, opts = {}) {
       if (dm) {
         const nm = dm[1].trim();
         const rest = (dm[2] || '').trim();
-        if (nm.length >= 2) {
+        // nm 이 너무 짧거나 dialogue 안의 em-dash 인 경우 제외 — nm 에 알파벳/한글이 있어야
+        // + 화자 라벨엔 절/문장 구두점(쉼표·느낌표·물음표·말줄임표)이 없다. 줄표를 극적
+        //   호흡으로 쓰는 대사("아니, 나는 알아—끝났어")를 화자명으로 오인하지 않게 차단.
+        if (nm.length >= 2 && /[A-Za-z가-힯]/.test(nm) && !/[,，!！?？…‥。]/.test(nm)) {
           return { name: nm, rest };
         }
       }
@@ -569,6 +597,8 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
     setView(getInitialView());
     suppressPushState = false;
     history.replaceState({ tab: state.currentView }, '', '#' + state.currentView);
+    // 사용법 투어보다 먼저, 선호도(장르·주제) 1회 확인 — 신규/기존 공통.
+    await maybeShowPreferences();
     // 첫 접속/첫 로그인 시 사용법 안내 1회. 안내가 떴으면 로그인 유도는 다음 기회로 미룬다.
     if (!(await maybeShowGuide())) maybeShowLanding();
     // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(프로필 편집기, 건너뛰기 가능)
@@ -603,6 +633,10 @@ window.addEventListener('hashchange', () => setView(getInitialView()));
 // 우선순위: 가장 안쪽(스택 최상단) 오버레이부터 닫고, 아무것도 없으면 tab 이동.
 // feed 모달(quote/compose/picker) 도 포함해야 feed 탭에서 back 시 메인 화면이 뒤로 가는 버그 방지.
 window.addEventListener('popstate', () => {
+  if (isCompanionOpen()) {
+    closeCompanionInternal();
+    return;
+  }
   if (hlComposeScreen && hlComposeScreen.classList.contains('open')) {
     closeHlComposeInternal();
     return;
@@ -929,7 +963,7 @@ async function bootstrapAuth() {
   let existingUser = null;
   {
     const ext = await sb.from('users')
-      .select('user_id, nickname, login_id, gender, age_group')
+      .select('user_id, nickname, login_id, gender, age_group, pref_genres, pref_themes, pref_any')
       .eq('anonymous_id', state.authUid).maybeSingle();
     if (ext.error) {
       console.warn('[m] users extended select failed, fallback to basic:', ext.error.message);
@@ -947,6 +981,7 @@ async function bootstrapAuth() {
     state.userLoginId = existingUser.login_id || '';
     state.userGender = existingUser.gender || '';
     state.userAgeGroup = existingUser.age_group || '';
+    syncPrefsFromDb(existingUser);  // DB 선호도 → localStorage (기기 간 동기화)
     return;
   }
   // 신규 user — 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다.
@@ -1167,61 +1202,127 @@ function tasteDistance(card, taste) {
   return Math.sqrt(sum);
 }
 
-/**
- * refresh / 진입 — 매번 다른 카드를 보여주되 taste 가중.
- *  - 10% 확률로 pure random (variety)
- *  - 그 외 90%는 거리 역수로 가중 랜덤
- */
-function pickByTasteRandom() {
+// ---------- 온보딩 선호(장르·주제) + 행동(온도·강도) 통합 추천 (설계문서 P1) ----------
+// 저장된 선호도 읽기. { genres:[format..], themes:[ko..], any:bool } | null
+function getPrefs() {
+  try { return JSON.parse(safeStorageGet('ds.pref', 'null') || 'null'); } catch { return null; }
+}
+// 실제로 추천을 좁히는 선호가 있나? (장르 선택 or "상관없음" 아닌 주제 선택)
+function hasActivePrefs(p) {
+  if (!p) return false;
+  const g = Array.isArray(p.genres) ? p.genres.length : 0;
+  const t = (!p.any && Array.isArray(p.themes)) ? p.themes.length : 0;
+  return g > 0 || t > 0;
+}
+// DB users 행의 선호도 → localStorage. 기기 간 동기화 + 온보딩 재노출 방지.
+function syncPrefsFromDb(u) {
+  if (!u) return;
+  const hasPref = Array.isArray(u.pref_genres) || Array.isArray(u.pref_themes) || typeof u.pref_any === 'boolean';
+  if (!hasPref) return;
+  try {
+    safeStorageSet('ds.pref', JSON.stringify({
+      genres: u.pref_genres || [], themes: u.pref_themes || [], any: !!u.pref_any, ts: Date.now(),
+    }));
+    safeStorageSet('ds.prefSelected', '1');
+  } catch (e) { console.warn('[m] pref sync failed:', e); }
+}
+// 선호도를 DB users 행에 저장(기기 간 동기화·서버측 활용). 실패해도 로컬은 이미 저장됨.
+async function savePreferencesToDb(pref) {
+  if (!state.userId) return;
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('users').update({
+      pref_genres: pref.genres || [], pref_themes: pref.themes || [],
+      pref_any: !!pref.any, pref_updated_at: new Date().toISOString(),
+    }).eq('user_id', state.userId);
+    if (error) console.warn('[m] pref DB save failed:', error.message);
+  } catch (e) { console.warn('[m] pref DB save error:', e); }
+}
+function cardThemesOf(card) {
+  try { return cardThemeSet ? cardThemeSet(card.keywords || []) : null; } catch { return null; }
+}
+// KPI용 — 이 카드가 사용자의 선호(장르/주제)와 맞는지. 선호 없으면 빈 객체.
+function cardMatchProps(card) {
+  const p = getPrefs();
+  if (!card || !hasActivePrefs(p)) return {};
+  const out = {};
+  const genres = new Set(p.genres || []);
+  if (genres.size) out.prefGenreMatch = genres.has(card.works && card.works.format);
+  const themes = new Set(p.themes || []);
+  if (!p.any && themes.size) {
+    const set = cardThemesOf(card);
+    if (set) out.prefThemeMatch = [...set].some((t) => themes.has(t));
+  }
+  return out;
+}
+
+const TASTE_DMAX = Math.sqrt(32);   // 2D(1~5) 최대 거리
+const SCORE_TAU = 0.5;              // softmax 탐험온도 (작을수록 정확↑)
+
+// score(c) = w_g·장르 + w_t·주제 + w_b·온도강도 + w_p·인기  →  P(c) ∝ exp(score/τ)
+//  - α = min(북마크/10, 1): 가입 직후 온보딩 100%, 쌓일수록 행동 비중 ↑
+function pickByScore() {
   if (state.allCards.length === 0) return null;
-  const taste = computeTasteProfile();
   const exclude = new Set(state.recentlyShownIds);
-
-  // taste 프로파일 없을 때 — 단순 랜덤 + 최근 제외
-  if (!taste) {
-    const pool = candidatesExcludingRecent();
-    const p = pool[Math.floor(Math.random() * pool.length)];
-    rememberShown(p?.card_id);
-    return p;
-  }
-
-  // 10% variety — pure random (단, 최근 제외)
-  if (Math.random() < 0.1) {
-    const pool = candidatesExcludingRecent();
-    const p = pool[Math.floor(Math.random() * pool.length)];
-    rememberShown(p?.card_id);
-    return p;
-  }
-
-  // 거리 역수 가중 — 최근 + 북마크 제외
   const bookmarked = state.bookmarkedIds || new Set();
-  let candidates = state.allCards.filter(
-    (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number')
-        && !exclude.has(c.card_id)
-        && !bookmarked.has(c.card_id)
-  );
-  if (candidates.length === 0) {
-    // 폴백 — 북마크는 계속 제외, 최근만 허용
-    candidates = state.allCards.filter(
-      (c) => (typeof c.temperature === 'number' || typeof c.intensity === 'number')
-          && !bookmarked.has(c.card_id)
-    );
-  }
-  if (candidates.length === 0) {
+
+  // 8% variety — pure random (최근 제외)
+  if (Math.random() < 0.08) {
     const pool = candidatesExcludingRecent();
     const p = pool[Math.floor(Math.random() * pool.length)];
+    state.lastPickSource = 'random';
     rememberShown(p?.card_id);
     return p;
   }
 
-  const weights = candidates.map((c) => 1 / (1 + tasteDistance(c, taste)));
-  const total = weights.reduce((a, b) => a + b, 0);
+  let candidates = state.allCards.filter((c) => !exclude.has(c.card_id) && !bookmarked.has(c.card_id));
+  if (candidates.length === 0) candidates = state.allCards.filter((c) => !bookmarked.has(c.card_id));
+  if (candidates.length === 0) {
+    const pool = candidatesExcludingRecent();
+    const p = pool[Math.floor(Math.random() * pool.length)];
+    state.lastPickSource = 'random';
+    rememberShown(p?.card_id);
+    return p;
+  }
+
+  const prefs = getPrefs();
+  const genreSet = new Set((prefs && prefs.genres) || []);
+  const themeSet = new Set((prefs && prefs.themes) || []);
+  const anyTheme = !prefs || prefs.any || themeSet.size === 0;
+  const taste = computeTasteProfile();          // 북마크 10개 이상일 때만 non-null
+  const bm = (state.bookmarks || []).length;
+  const a = Math.min(bm / MIN_BOOKMARKS_FOR_TASTE, 1);
+  const wg = 0.55 + (0.30 - 0.55) * a;          // lerp(0.55→0.30)
+  const wt = 0.45 + (0.30 - 0.45) * a;          // lerp(0.45→0.30)
+  const wb = taste ? 0.35 * a : 0;
+  const wp = 0.05;
+
+  let maxBm = 1;
+  if (state.bookmarkCounts) for (const c of candidates) maxBm = Math.max(maxBm, state.bookmarkCounts.get(c.card_id) || 0);
+  const logMax = Math.log1p(maxBm);
+
+  const scores = candidates.map((c) => {
+    const gm = genreSet.size === 0 ? 1 : (genreSet.has(c.works && c.works.format) ? 1 : 0.15);
+    let tm = 1;
+    if (!anyTheme) {
+      const set = cardThemesOf(c);
+      // 분류기 미로딩(set=null)이면 중립(1) — 상수라 상대확률에 영향 없음
+      tm = set ? ([...set].some((t) => themeSet.has(t)) ? 1 : 0.2) : 1;
+    }
+    const ts = taste ? Math.max(0, 1 - tasteDistance(c, taste) / TASTE_DMAX) : 0;
+    const pop = logMax > 0 ? Math.log1p((state.bookmarkCounts && state.bookmarkCounts.get(c.card_id)) || 0) / logMax : 0;
+    return wg * gm + wt * tm + wb * ts + wp * pop;
+  });
+
+  const exps = scores.map((s) => Math.exp(s / SCORE_TAU));
+  const total = exps.reduce((acc, v) => acc + v, 0);
   let r = Math.random() * total;
   let picked = candidates[candidates.length - 1];
   for (let i = 0; i < candidates.length; i++) {
-    r -= weights[i];
+    r -= exps[i];
     if (r <= 0) { picked = candidates[i]; break; }
   }
+  state.lastPickSource = 'score';
   rememberShown(picked?.card_id);
   return picked;
 }
@@ -1285,7 +1386,7 @@ function restoreLastShownCard() {
   // 가장 최근부터 거꾸로 — 북마크된 카드는 새로고침 시 부활시키지 않음
   for (let i = ids.length - 1; i >= 0; i--) {
     const card = state.allCards.find((c) => c.card_id === ids[i]);
-    if (card && !bookmarked.has(card.card_id)) return card;
+    if (card && !bookmarked.has(card.card_id)) { state.lastPickSource = 'restore'; return card; }
   }
   return null;
 }
@@ -1304,9 +1405,11 @@ function rememberShown(cardId) {
 
 function pickRandomCard() {
   if (state.allCards.length === 0) return null;
-  if (isTasteEnabled()) return pickByTasteRandom();
+  // 온보딩 선호(장르·주제)가 있거나 취향 토글이 켜져 있으면 통합 점수 추천.
+  if (hasActivePrefs(getPrefs()) || isTasteEnabled()) return pickByScore();
   const pool = candidatesExcludingRecent();
   const picked = pool[Math.floor(Math.random() * pool.length)];
+  state.lastPickSource = 'random';
   rememberShown(picked?.card_id);
   return picked;
 }
@@ -1343,7 +1446,7 @@ async function toggleBookmark(cardId) {
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
-      track('bookmark_added', { card_id: cardId, work_title: data?.cards?.works?.title || null, format: data?.cards?.works?.format || null });
+      track('bookmark_added', { card_id: cardId, work_title: data?.cards?.works?.title || null, format: data?.cards?.works?.format || null, ...cardMatchProps(data?.cards) });
       toast('수집됨');
     }
   } catch (err) {
@@ -1436,6 +1539,11 @@ function applyTodayCard(card) {
 
   // EN 토글 — 새 카드일 때만 한국어로 리셋. 같은 카드 재렌더는 lang 유지.
   if (isNewCard) state.todayLang = 'ko';
+
+  // KPI — 새 카드가 홈에 노출된 순간. (코치마크 투어 중 데모 카드는 제외)
+  if (isNewCard && !state.suppressShownTrack) {
+    track('card_shown', { card_id: card.card_id, source: state.lastPickSource || 'unknown', ...cardMatchProps(card) });
+  }
 
   // Quote with curly quotes (mirror Android: "“$it”").
   // 관리자가 ** 로 굵게 표시한 부분도 함께 렌더.
@@ -1697,6 +1805,29 @@ todayCard.addEventListener('click', () => {
 todayRead.addEventListener('click', (e) => {
   e.stopPropagation();
   if (state.todayCard) openDetail(state.todayCard);
+});
+todayCompanion?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const card = state.todayCard;
+  if (!card) return;
+  // 백엔드(/api/chat)가 기대하는 카드 맥락 형태로 정리해 넘긴다 (work 단수, speaker 포함).
+  openCompanion({
+    card_id: card.card_id,
+    quote: card.quote,
+    script_excerpt: card.script_excerpt,
+    keywords: card.keywords,
+    speaker: isProseFormat(card.works?.format)
+      ? ''
+      : extractSpeaker(card.script_excerpt, card.works?.characters, card.quote),
+    work: {
+      title: card.works?.title,
+      subtitle: card.works?.subtitle,
+      author: card.works?.author,
+      format: card.works?.format,
+      release_year: card.works?.release_year,
+      characters: card.works?.characters,
+    },
+  });
 });
 homeRefresh.addEventListener('click', () => {
   if (state.isAnonymous) {
@@ -3094,6 +3225,7 @@ const ONBOARDING_CARD_ID = 141;
 // 홈 → 전문 → 피드를 넘나드는 투어. 각 전환은 실제 화면을 열고 레이아웃이 준비되면 resolve.
 function launchTour() {
   const savedFeedCat = state.feedCategory;
+  state.suppressShownTrack = true;  // 투어 데모 카드 전환은 card_shown 집계에서 제외
   // 온보딩 동안 홈·전문·피드 데모를 모두 141번 카드로 고정 (없으면 현재 카드 유지)
   const tourCard = (state.allCards || []).find((c) => Number(c.card_id) === ONBOARDING_CARD_ID);
   const prevCard = state.todayCard;
@@ -3128,9 +3260,37 @@ function launchTour() {
       if (detailScreen.classList.contains('open')) closeDetailInternal();
       state.feedCategory = savedFeedCat;
       if (tourCard && prevCard && prevCard !== tourCard) { state.todayCard = prevCard; applyTodayCard(prevCard); }
+      state.suppressShownTrack = false;  // 투어 종료 — 집계 재개 (원복 카드는 집계 제외)
       setView('home');
     },
   });
+}
+
+// ---------- 선호도 온보딩 (사용법 투어 직전 1회) ----------
+// 신규/기존 공통으로 1회 노출. 코치마크(ds.guideSeen)는 신규만 뜨므로 흐름이 자연히 갈린다:
+//   신규(guideSeen 없음): 선호도 → 홈 + 코치마크
+//   기존(guideSeen='1') : 선호도 → 홈
+const PREF_SELECTED_KEY = 'ds.prefSelected';
+const PREF_DATA_KEY = 'ds.pref';
+async function maybeShowPreferences() {
+  if (safeStorageGet(PREF_SELECTED_KEY) === '1') return false;
+  if (!document.getElementById('pref-screen')) return false;
+  if (state.currentView !== 'home' || !state.todayCard) return false;  // 홈·오늘 카드 준비됐을 때만
+  await preferencesReady;
+  const result = await startPreferenceFlow();
+  if (!result) return false;  // 모듈/화면 없음 — 마킹하지 않고 다음 기회로
+  const pref = { genres: result.genres || [], themes: result.themes || [], any: !!result.any };
+  try { safeStorageSet(PREF_DATA_KEY, JSON.stringify({ ...pref, ts: Date.now() })); }
+  catch (e) { console.warn('[m] pref save failed:', e); }
+  safeStorageSet(PREF_SELECTED_KEY, '1');
+  savePreferencesToDb(pref);  // 서버에도 저장(fire-and-forget) — 기기 간 동기화
+  track('preferences_set', {
+    genreCount: pref.genres.length,
+    themeCount: pref.themes.length,
+    any: pref.any,
+    skipped: !!result.skipped,
+  });
+  return true;
 }
 
 // 첫 진입 시 1회 자동 노출. 띄웠으면 true 반환 → 같은 부팅에서 랜딩 로그인 유도는 미룬다.
@@ -3645,7 +3805,7 @@ function openDetail(card) {
   requestAnimationFrame(() => detailScreen.classList.add('open'));
   document.body.style.overflow = 'hidden';
 
-  track('script_opened', { card_id: card.card_id, work_title: w.title || null, format: w.format || null });
+  track('script_opened', { card_id: card.card_id, work_title: w.title || null, format: w.format || null, fromHome: card.card_id === (state.todayCard && state.todayCard.card_id), ...cardMatchProps(card) });
 }
 
 // 상세 화면 EN 토글 — 5필드(제목·부제·작가·명대사·발췌) 한 번에 스왑.
