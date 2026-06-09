@@ -1003,6 +1003,45 @@ function rescueScriptExcerptEdges(card, fullScript) {
   card.script_excerpt = lines.join('\n').replace(/^\n+|\n+$/g, '');
 }
 
+// PDF 페이지 폭에 의해 강제로 들어간 줄바꿈 정리.
+// 사용자 요구: "한 문장 한 단락인데 폭 충분한데 단어가 아래줄로 내려갔다".
+// 한 단락 안에서 알파벳/한글/콤마/숫자 다음 \n + 다음 줄 시작이 본문 문자면 → 공백.
+// 단락 구분 \n\n, 화자 라벨 라인, 종결자(. ! ? …) 다음 \n 은 보존.
+function collapsePdfLineWraps(script) {
+  if (!script) return script;
+  let s = String(script);
+  // 1) \r\n → \n 정규화
+  s = s.replace(/\r\n?/g, '\n');
+  // 2) 라인별로 처리 — 종결자(. ! ? …) 로 끝나지 않은 줄 다음 줄과 합치기.
+  //    단, 빈 줄 (단락 구분), 라벨 라인, 한글 라벨, 콜론 끝 라인 등은 보존.
+  const lines = s.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    out.push(line);
+    if (!trimmed) continue;                            // 빈 줄 (단락 구분) 보존
+    if (i === lines.length - 1) continue;              // 마지막 줄
+    const next = lines[i + 1];
+    const nextTrim = next.trim();
+    if (!nextTrim) continue;                           // 다음 빈 줄이면 단락 끝
+    // 현재 줄이 라벨/지문 라인이면 다음 줄과 합치지 말 것
+    const isLabel = /^\*+/.test(trimmed) || /:$/.test(trimmed)
+      || /^\(.*\)$/.test(trimmed) || /^[A-Z][A-Z .'\-]*$/.test(trimmed);
+    if (isLabel) continue;
+    // 종결자(. ! ? … " '" 닫힘) 로 끝남 → 자연스러운 줄바꿈, 보존
+    if (/[.!?…"'”’]\s*$/.test(trimmed)) continue;
+    // 다음 줄이 라벨 라인으로 시작 → 보존
+    const nextIsLabel = /^\*+/.test(nextTrim) || /:$/.test(nextTrim)
+      || /^\(.*\)$/.test(nextTrim) || /^[A-Z][A-Z .'\-]*$/.test(nextTrim);
+    if (nextIsLabel) continue;
+    // 부자연스러운 줄바꿈 — 합치기. 현재 줄 끝에 공백 + 다음 줄 prepend, 다음 줄 skip.
+    out.pop();
+    lines[i + 1] = trimmed + ' ' + nextTrim;
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // 자투리 단순 제거 (fullScript 가 없는 케이스/복원 실패 시 fallback).
 function cleanScriptExcerptEdges(script) {
   if (!script) return script;
@@ -1214,6 +1253,9 @@ export function validateAndFilterCards(cards, category, opts = {}) {
     if (fullScript) rescueScriptExcerptEdges(c, fullScript);
     // rescue 후에도 자투리 남아있으면 그것만 마지막 정리
     c.script_excerpt = cleanScriptExcerptEdges(c.script_excerpt);
+    // PDF 페이지 폭 줄바꿈 정리 — 한 단락 안 부자연스러운 \n 은 공백으로 합침.
+    // (단락 구분 \n\n 은 보존, 화자 라벨 라인도 보존)
+    c.script_excerpt = collapsePdfLineWraps(c.script_excerpt);
   }
 
   console.log(
