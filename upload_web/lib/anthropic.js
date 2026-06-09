@@ -703,7 +703,6 @@ function rescueIdenticalAndShort(cards, fullScript, category) {
     if (!match) {
       // 못 찾았어도 카드를 살린다. 본문에서 카드 인덱스 기준 위치의 청크를 떼어
       // quote 뒤에 붙여 script_excerpt 로 사용 → 검증 통과 + 어드민이 검토에서 편집 가능.
-      // (0장 결과 < N장 비완벽 카드 — 사용자가 원본 보고 발췌 위치 수정 가능)
       unrescuable++;
       console.warn(
         `[extract] rescue: quote not in source — fallback to positional chunk. ` +
@@ -716,7 +715,9 @@ function rescueIdenticalAndShort(cards, fullScript, category) {
       const chunk = fullScript.slice(chunkStart, chunkEnd);
       // quote 가 chunk 안에 우연히 포함되지 않게 quote + 구분 + chunk 형태로
       const fallback = `${quoteStr}\n\n${chunk}`;
-      if (fallback.length >= minChars) {
+      // 빈/짧은 본문 카드는 무조건 채움 — 길이 조건 제거.
+      // 길이 미달이어도 빈 채로 표시되는 것보다 가능한 본문 채워두고 검토에서 편집.
+      if (fallback.trim().length > quoteStr.length) {
         rescuedCount++;
         return { ...card, script_excerpt: fallback, __rescued: true, __fallback: true };
       }
