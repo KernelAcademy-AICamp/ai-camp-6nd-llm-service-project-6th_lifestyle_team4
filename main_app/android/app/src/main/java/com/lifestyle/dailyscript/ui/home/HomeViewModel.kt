@@ -23,15 +23,21 @@ class HomeViewModel : ViewModel() {
     private var allCards: List<CardDto> = emptyList()
     private var bookmarkCards: List<CardDto> = emptyList()
 
+    // 활성 세션 식별 — VM이 액티비티 스코프라 로그아웃/로그인 도중 떠 있던 load()가
+    // 늦게 끝나며 다른 사용자의 데이터로 state를 덮어쓰는 레이스를 막는다.
+    private var activeUserId: Long? = null
+
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
     /** Initial load / screen entry — restore the last-shown card (PWA renderHome). */
     fun load(userId: Long) {
+        activeUserId = userId
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
             val cardsResult = runCatching { cardRepo.fetchAllCards() }
             val bookmarksResult = runCatching { bookmarkRepo.list(userId) }
+            if (activeUserId != userId) return@launch // 더 최신 세션의 load가 시작됨 — 이 결과는 폐기
             allCards = cardsResult.getOrDefault(emptyList())
             bookmarkCards = bookmarksResult.getOrNull()?.mapNotNull { it.cards } ?: emptyList()
 
@@ -68,6 +74,7 @@ class HomeViewModel : ViewModel() {
 
     /** Refresh — non-deterministic pick excluding recently shown. Non-members are capped at 3/day. */
     fun refresh(userId: Long, isAnonymous: Boolean) {
+        if (_state.value.loading) return // 진행 중이면 무시 — 연타로 중복 새로고침/카운트 차감 방지
         if (allCards.isEmpty()) { load(userId); return }
         viewModelScope.launch {
             if (isAnonymous) {

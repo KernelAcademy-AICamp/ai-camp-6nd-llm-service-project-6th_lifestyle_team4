@@ -91,8 +91,7 @@ data class CoachStep(
 
 val TOUR_STEPS: List<CoachStep> = listOf(
     // ── 홈 ──
-    CoachStep("nav_home", "홈", 1, 5, "HOME", "여기가 홈이에요. 매일 새로운 고전 명대사 한 장이 도착해요."),
-    CoachStep("home_refresh", "홈", 2, 5, "다른 명대사 보기", "지금 카드가 안 끌리면, 이 버튼을 누를 때마다 다른 명대사로 바뀌어요."),
+    CoachStep("nav_home", "홈", 1, 5, "HOME", "여기가 홈이에요. 매일 새로운 고전 명대사 한 장이 도착해요. 홈 탭을 다시 누르면 다른 명대사로 바뀌어요."),
     CoachStep("today_bookmark", "홈", 3, 5, "북마크해 두기", "마음에 들었다면 이 책갈피를 탭하세요. 나중에 다시 꺼내볼 수 있어요."),
     CoachStep("nav_archive", "홈", 4, 5, "내 서재(LIBRARY)", "북마크한 명대사는 여기 LIBRARY에 작품별 책으로 모여요."),
     CoachStep("today_read", "홈", 5, 5, "전문 읽으러 가기", "한 줄만으론 아쉽죠. 이 버튼을 누르면 그 장면 전체가 펼쳐져요.", action = "openDetail"),

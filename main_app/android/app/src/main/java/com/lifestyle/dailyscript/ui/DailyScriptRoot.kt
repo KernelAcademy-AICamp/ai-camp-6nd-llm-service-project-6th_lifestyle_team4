@@ -47,6 +47,7 @@ import com.lifestyle.dailyscript.ui.detail.DetailScreen
 import com.lifestyle.dailyscript.ui.feed.FeedScreen
 import com.lifestyle.dailyscript.ui.feedback.FeedbackScreen
 import com.lifestyle.dailyscript.ui.home.HomeScreen
+import com.lifestyle.dailyscript.ui.home.HomeViewModel
 import com.lifestyle.dailyscript.ui.library.LibraryScreen
 import com.lifestyle.dailyscript.ui.nav.Routes
 import com.lifestyle.dailyscript.ui.notice.NoticeScreen
@@ -120,6 +121,9 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
 
     val noticeVm: NoticeViewModel = viewModel()
     val noticeBadge by noticeVm.unread.collectAsState()
+
+    // 홈 카드 VM — 하단 '홈' 탭 재탭 시 새로고침을 위해 루트에서 호이스팅(액티비티 스코프).
+    val homeVm: HomeViewModel = viewModel()
 
     // 실타래 잔액 — 상단바 칩과 DETAIL 게이트가 공유하는 단일 소스. VM 은 액티비티
     // 스코프라 세션이 바뀌면(로그인/로그아웃/탈퇴) 서버 잔액으로 다시 시드한다.
@@ -203,7 +207,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.HOME) {
                     HomeScreen(
                         userId = session.userId,
-                        isAnonymous = session.isAnonymous,
+                        vm = homeVm,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
@@ -346,6 +350,9 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                             popUpTo(Routes.HOME) { inclusive = false }
                             launchSingleTop = true
                         }
+                    } else if (route == Routes.HOME) {
+                        // 이미 홈일 때 홈 탭을 다시 누르면 새로고침 — 제거된 새로고침 버튼을 대체.
+                        homeVm.refresh(session.userId, session.isAnonymous)
                     }
                 },
             )

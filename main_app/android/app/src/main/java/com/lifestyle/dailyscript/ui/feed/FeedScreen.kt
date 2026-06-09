@@ -3,7 +3,6 @@ package com.lifestyle.dailyscript.ui.feed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -52,8 +50,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.FeedPost
@@ -91,8 +87,8 @@ fun FeedScreen(
     val coach = LocalCoachController.current
     LaunchedEffect(userId) { vm.load(userId) }
 
-    // Tapping a "오늘의 한줄" card pops up just the card's quote (not the full detail).
-    var quotePopup by remember { mutableStateOf<CardDto?>(null) }
+    // Tapping a "오늘의 한줄" card opens its detail in a bottom sheet.
+    var detailPost by remember { mutableStateOf<FeedPost?>(null) }
     // Bookmark pickers: today → compose a one-liner; highlight → open that card's detail.
     var todayPickerOpen by remember { mutableStateOf(false) }
     var hlPickerOpen by remember { mutableStateOf(false) }
@@ -172,7 +168,7 @@ fun FeedScreen(
                         // Type-prefixed keys so a highlight_id never collides with a post_id
                         // (a raw-id collision made the LazyColumn jump to the wrong card on tab switch).
                         items(state.posts, key = { "post-${it.postId}" }) { post ->
-                            FeedPostCard(post, onClick = { post.cards?.let { quotePopup = it } })
+                            FeedPostCard(post, onClick = { detailPost = post })
                         }
                     } else {
                         items(state.highlights, key = { "hl-${it.highlightId}" }) { hl ->
@@ -203,10 +199,6 @@ fun FeedScreen(
         }
     }
 
-    quotePopup?.let { card ->
-        QuotePopup(card = card, onDismiss = { quotePopup = null })
-    }
-
     if (todayPickerOpen) {
         BookmarkPickerSheet(
             title = "어떤 명대사에 한줄을 남길까요?",
@@ -234,47 +226,16 @@ fun FeedScreen(
             onSubmit = { body -> vm.submitPost(userId, myNickname, card.cardId, body) },
         )
     }
-}
 
-/** Tapping a feed one-liner pops up just the card's quote (mirrors openFeedQuote). */
-@Composable
-private fun QuotePopup(card: CardDto, onDismiss: () -> Unit) {
-    val source = listOfNotNull(card.works.displayTitle().ifBlank { null }, card.works?.author)
-        .joinToString(" · ")
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
-                .padding(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(
-                modifier = Modifier
-                    .widthIn(max = 420.dp)
-                    .fillMaxWidth()
-                    .background(Paper)
-                    .border(0.5.dp, Latte)
-                    .padding(horizontal = 28.dp, vertical = 34.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = Markdown.quote(card.quote),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Espresso,
-                    textAlign = TextAlign.Center,
-                )
-                if (source.isNotBlank()) {
-                    Box(modifier = Modifier.height(18.dp))
-                    Text(
-                        text = "— $source",
-                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.1.em),
-                        color = Walnut,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-        }
+    detailPost?.let { post ->
+        FeedPostDetailSheet(
+            post = post,
+            userId = userId,
+            isAnonymous = isAnonymous,
+            myNickname = myNickname,
+            onDismiss = { detailPost = null },
+            onOpenCard = { cardId -> detailPost = null; onOpenCard(cardId) },
+        )
     }
 }
 

@@ -145,9 +145,11 @@ fun LibraryScreen(onOpenCard: (Long) -> Unit) {
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
             if (books.isNotEmpty()) {
+                val cardCount = remember(books) { books.sumOf { it.cards.size } }
                 Box(modifier = Modifier.height(6.dp))
                 Text(
-                    text = stringResource(R.string.library_work_count, books.size),
+                    text = stringResource(R.string.library_work_count, books.size) +
+                        "  ·  " + stringResource(R.string.archive_card_count, cardCount),
                     style = MetaCaps,
                     color = Walnut,
                     modifier = Modifier.padding(horizontal = 20.dp),

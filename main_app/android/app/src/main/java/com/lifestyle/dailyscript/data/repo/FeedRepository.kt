@@ -1,6 +1,8 @@
 package com.lifestyle.dailyscript.data.repo
 
 import com.lifestyle.dailyscript.data.SupabaseProvider
+import com.lifestyle.dailyscript.data.model.FeedComment
+import com.lifestyle.dailyscript.data.model.FeedCommentInsert
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.data.model.FeedPostInsert
 import com.lifestyle.dailyscript.data.model.Highlight
@@ -22,6 +24,8 @@ class FeedRepository {
         Columns.raw("post_id, card_id, user_id, author_nickname, body, created_at, $nestedCard")
     private val highlightSelect =
         Columns.raw("highlight_id, card_id, user_id, author_nickname, selected_text, user_note, created_at, $nestedCard")
+    private val feedCommentSelect =
+        Columns.raw("comment_id, post_id, user_id, author_nickname, body, created_at")
 
     suspend fun loadPosts(): List<FeedPost> =
         client.postgrest["feed_posts"]
@@ -98,5 +102,41 @@ class FeedRepository {
                 userNote = note?.takeIf { it.isNotBlank() },
             )
         )
+    }
+
+    // ---- feed_post_comments — 피드 글 상세의 댓글 (좋아요/답글 없는 평면 목록) ----
+
+    suspend fun loadComments(postId: Long): List<FeedComment> =
+        client.postgrest["feed_post_comments"]
+            .select(feedCommentSelect) {
+                filter { eq("post_id", postId) }
+                order("created_at", Order.ASCENDING)
+            }
+            .decodeList()
+
+    suspend fun addComment(
+        postId: Long,
+        userId: Long,
+        body: String,
+        authorNickname: String?,
+    ): FeedComment =
+        client.postgrest["feed_post_comments"]
+            .insert(
+                FeedCommentInsert(
+                    postId = postId,
+                    userId = userId,
+                    authorNickname = authorNickname,
+                    body = body,
+                )
+            ) { select(feedCommentSelect) }
+            .decodeSingle()
+
+    suspend fun deleteComment(commentId: Long, userId: Long) {
+        client.postgrest["feed_post_comments"].delete {
+            filter {
+                eq("comment_id", commentId)
+                eq("user_id", userId)
+            }
+        }
     }
 }

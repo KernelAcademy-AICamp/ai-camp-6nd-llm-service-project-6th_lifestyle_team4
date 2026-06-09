@@ -16,14 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +36,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -51,7 +48,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.model.CardDto
@@ -62,7 +58,6 @@ import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
 import kotlinx.coroutines.launch
-import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
@@ -85,10 +80,9 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     userId: Long,
-    isAnonymous: Boolean,
+    vm: HomeViewModel,
     onOpenCard: (Long) -> Unit,
 ) {
-    val vm: HomeViewModel = viewModel()
     val state by vm.state.collectAsState()
 
     LaunchedEffect(userId) { vm.load(userId) }
@@ -126,20 +120,13 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Box(modifier = Modifier.height(10.dp))
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = todayTitleAnnotated(),
-                style = MaterialTheme.typography.displayMedium.copy(fontSize = 28.sp, lineHeight = 38.sp),
-                color = Espresso,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().align(Alignment.Center),
-            )
-            RefreshButton(
-                enabled = !state.loading,
-                onClick = { vm.refresh(userId, isAnonymous) },
-                modifier = Modifier.align(Alignment.CenterEnd).coachAnchor(coach, "home_refresh"),
-            )
-        }
+        Text(
+            text = todayTitleAnnotated(),
+            style = MaterialTheme.typography.displayMedium.copy(fontSize = 28.sp, lineHeight = 38.sp),
+            color = Espresso,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Box(modifier = Modifier.height(20.dp))
 
         TodayCard(
@@ -424,27 +411,6 @@ private fun todayTitleAnnotated(): AnnotatedString = buildAnnotatedString {
     append("오늘")
     withStyle(SpanStyle(fontSize = 20.sp, letterSpacing = (-0.02).em)) { append("의") }
     append(" 명대사")
-}
-
-/** Circular, raised "다른 명대사" refresh button (mirrors the PWA .home-random-btn). */
-@Composable
-private fun RefreshButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .size(36.dp)
-            .shadow(2.dp, CircleShape)
-            .background(CardWarm, CircleShape)
-            .border(0.5.dp, Color(0x0F000000), CircleShape)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Refresh,
-            contentDescription = "다른 명대사 보기",
-            tint = Walnut,
-            modifier = Modifier.size(18.dp),
-        )
-    }
 }
 
 /** "— 장르 <제목> 부제" line under the quote (mirrors the PWA's todayWork, applyTodayLang). */
