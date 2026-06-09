@@ -36,13 +36,43 @@ export function detectKind(filename, mimetype = '') {
 
 export const SUPPORTED_EXTENSIONS = ['pdf', 'txt', 'docx', 'hwp', 'hwpx'];
 
+// PDF 페이지 인쇄 시 들어가는 헤더/푸터 보일러플레이트 자동 제거.
+//  · URL (http(s)://...)
+//  · 날짜시간 ("26. 5. 28. 오후 12:31" / "5/28/26, 12:31 PM" 등)
+//  · 페이지번호 (단독 "133/340", "Page 133", "- 133 -")
+// 본문 내용은 절대 안 건드림 — 명백한 보일러플레이트 패턴 라인만.
+function stripPdfBoilerplate(text) {
+  if (!text) return text;
+  const lines = String(text).split('\n');
+  const URL_RE = /^https?:\/\/\S+\s*$/i;
+  const URL_TAIL_RE = /https?:\/\/\S+/g; // 라인 안에 URL 섞임
+  // "YY. M. D. 오전/오후 H:MM" / "YY-MM-DD HH:MM" / "M/D/YY, HH:MM" 등
+  const DATETIME_RE = /^\s*\d{1,4}[.\-\/]\s*\d{1,2}[.\-\/]\s*\d{1,2}[.,]?\s*(?:오전|오후|AM|PM)?\s*\d{1,2}:\d{2}\s*$/i;
+  // 단독 페이지번호 "133/340" 또는 "Page 133" 또는 "- 133 -"
+  const PAGE_NUM_RE = /^\s*(?:(?:Page|페이지)\s*)?\d{1,4}(?:\s*\/\s*\d{1,4})?\s*$/i;
+  const PAGE_DASH_RE = /^\s*[-–—]\s*\d{1,4}\s*[-–—]\s*$/;
+  const cleaned = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { cleaned.push(raw); continue; }
+    if (URL_RE.test(line)) continue;       // URL 단독 라인
+    if (DATETIME_RE.test(line)) continue;  // 날짜시간
+    if (PAGE_NUM_RE.test(line) && line.length <= 12) continue; // 단독 페이지번호
+    if (PAGE_DASH_RE.test(line)) continue;
+    // 라인 안에 URL 섞임 — URL 부분만 제거 (본문은 보존)
+    const stripped = raw.replace(URL_TAIL_RE, '').replace(/\s+$/, '');
+    cleaned.push(stripped);
+  }
+  return cleaned.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
 // buffer(파일 내용)에서 텍스트를 추출한다. 실패/미지원 시 throw.
 export async function extractText(buffer, filename, mimetype) {
   const kind = detectKind(filename, mimetype);
   switch (kind) {
     case 'pdf': {
       const parsed = await pdfParse(buffer);
-      return parsed.text || '';
+      return stripPdfBoilerplate(parsed.text || '');
     }
     case 'txt':
       return decodeTextFile(buffer);
