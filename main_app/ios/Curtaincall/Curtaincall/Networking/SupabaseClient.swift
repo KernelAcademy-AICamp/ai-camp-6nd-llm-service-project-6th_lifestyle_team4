@@ -258,12 +258,12 @@ final class Supa {
         _ = try? await client.from("users").delete().eq("user_id", value: oldUserId).execute()
     }
 
-    /// Invokes the `delete-account` Edge Function, which deletes the caller's
-    /// rows in every user-scoped table and the Supabase Auth user (service_role,
-    /// server-side — RLS blocks doing this from the client). Auth is implicit:
-    /// the function reads the caller's JWT from the request Authorization header.
+    /// Deletes the signed-in member's account via the existing `delete_account()`
+    /// Postgres RPC (SECURITY DEFINER, shared with Android). Zero args — it reads
+    /// `auth.uid()` internally and raises "not authenticated" if called without a
+    /// session. The caller's JWT is attached automatically by the client.
     func deleteAccount() async throws {
-        try await client.functions.invoke("delete-account")
+        try await client.rpc("delete_account").execute()
     }
 
     // MARK: - Comments + likes

@@ -178,13 +178,11 @@ final class AuthSession: ObservableObject {
         authMessage = nil
     }
 
-    /// Permanently deletes the signed-in member's account and all related data
-    /// (profile, bookmarks, comments, likes, highlights, feed posts) via the
-    /// `delete-account` Edge Function. The function runs with service_role so it
-    /// can also remove the Supabase Auth user — the client can't, and without it
-    /// the next launch would deterministically re-bootstrap the same account.
-    /// On success we drop the dead session and re-bootstrap a fresh anonymous
-    /// one. Members only (anonymous users have no account to delete).
+    /// Permanently deletes the signed-in member's account via the existing
+    /// `delete_account()` Postgres RPC (SECURITY DEFINER, shared with Android).
+    /// On success we drop the session and re-bootstrap a fresh anonymous one —
+    /// which works whether the RPC also removes the auth user or only the data
+    /// rows. Members only (anonymous users have no account to delete).
     @discardableResult
     func deleteAccount() async -> Bool {
         guard !authInProgress, !isAnonymous else { return false }
