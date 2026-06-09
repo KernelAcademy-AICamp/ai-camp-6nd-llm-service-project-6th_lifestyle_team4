@@ -1534,7 +1534,7 @@ export async function runKoreanizeAuthor(rawAuthor) {
   return out || s;
 }
 
-export async function runTranslate(work, card) {
+export async function runTranslate(work, card, { model = 'haiku' } = {}) {
   // TRANSLATE_PROMPT 는 {work, card} 봉투를 받아 quote / script_excerpt 두 필드 번역.
   // 출력 형식: 이전엔 JSON 이었지만 번역문 안의 따옴표·줄바꿈 escape 실수가 누적되어
   // parseJson 실패가 잦았다 → 마커 기반 plain text 로 전환. 절대 깨지지 않음.
@@ -1583,7 +1583,7 @@ export async function runTranslate(work, card) {
     system: TRANSLATE_SYSTEM,
     temperature: 0.3,
     rawText: true,
-    model: 'haiku',
+    model,
   });
 
   const text = String(result || '');
@@ -1626,7 +1626,7 @@ export async function runTranslate(work, card) {
 //  direction='en2ko' (기본): 편집 화면의 영문 원본 칸 "↻ KO" 버튼
 //  direction='ko2en'        : 보기 토글에서 영문 원본이 비어 있는 필드를 즉시 영문 변환
 // 지원 필드: title / subtitle / author / quote / script_excerpt / excerpt_description / significance
-export async function runTranslateField({ text, field, work, direction = 'en2ko' }) {
+export async function runTranslateField({ text, field, work, direction = 'en2ko', model = 'haiku' }) {
   const src = String(text ?? '').trim();
   if (!src) throw new Error('text is required');
 
@@ -1716,7 +1716,7 @@ ${src}
     system,
     temperature: 0.3,
     rawText: true,
-    model: 'haiku',
+    model,
   });
   let out = String(result || '').trim();
   // LLM 이 가끔 따라오는 흔한 잡음 제거
@@ -1743,7 +1743,7 @@ ${src}
 //   미지정시 일반 산문 취급.
 // direction: 'en2ko' | 'ko2en'
 // 응답: { [name]: translated_text } — 입력 fields 의 name 그대로. 누락 필드는 빈 문자열.
-export async function runTranslateFields({ fields, direction = 'en2ko', work }) {
+export async function runTranslateFields({ fields, direction = 'en2ko', work, model = 'haiku' }) {
   const valid = (Array.isArray(fields) ? fields : [])
     .filter((f) => f && f.name && f.text != null && String(f.text).trim());
   if (!valid.length) return {};
@@ -1754,7 +1754,7 @@ export async function runTranslateFields({ fields, direction = 'en2ko', work }) 
     const out = await runTranslateField({
       text: String(f.text),
       field: f.kind || 'excerpt_description',
-      work, direction,
+      work, direction, model,
     });
     return { [f.name]: out };
   }
@@ -1871,7 +1871,7 @@ ${requiredNames}
     system,
     temperature: 0.3,
     rawText: true,
-    model: 'haiku',
+    model,
   });
 
   const raw = String(text || '');
@@ -1907,7 +1907,7 @@ function detectCardSourceLang(card) {
   return koreanChars > latinChars ? 'ko' : 'en';
 }
 
-export async function runTranslateCardBatch({ cards, work }) {
+export async function runTranslateCardBatch({ cards, work, model = 'haiku' }) {
   const items = Array.isArray(cards) ? cards : [];
   if (!items.length) return [];
 
@@ -2049,7 +2049,7 @@ ${workNeedsTranslate.length > 0 ? '4. Emit <<<WORK_RESULT>>> block first if work
     system,
     temperature: 0.3,
     rawText: true,
-    model: 'haiku',
+    model,
   });
   const llmMs = Date.now() - startedAt;
 
@@ -2175,7 +2175,7 @@ ${workNeedsTranslate.length > 0 ? '4. Emit <<<WORK_RESULT>>> block first if work
 // 입력 cards = [{ id, description?, significance?, keywords?: string[] }, ...]
 // 응답: [{ id, description_en?, significance_en?, keywords_en?: string[] }, ...]
 // 비용 절감 — 카드당 3회 호출(60회) → 1회로 축소. 입력은 짧으니 한 prompt 에 안전하게 들어감.
-export async function runTranslateCommentaryBatch({ cards, work }) {
+export async function runTranslateCommentaryBatch({ cards, work, model = 'haiku' }) {
   const items = Array.isArray(cards) ? cards : [];
   if (!items.length) return [];
 
@@ -2251,7 +2251,7 @@ Rules:
     system,
     temperature: 0.3,
     rawText: true,
-    model: 'haiku',
+    model,
   });
 
   // 카드 블록 파싱

@@ -56,7 +56,8 @@ export default async function handler(req, res) {
     });
     const work = body?.work && typeof body.work === 'object' ? body.work : null;
 
-    const translations = await runTranslateFields({ fields, direction, work });
+    const model = String(body?.model || 'haiku');
+    const translations = await runTranslateFields({ fields, direction, work, model });
     return res.status(200).json({ translations });
   } catch (err) {
     if (err instanceof AuthError) {

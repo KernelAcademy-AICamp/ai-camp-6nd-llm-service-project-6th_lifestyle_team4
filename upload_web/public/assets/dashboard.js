@@ -178,6 +178,37 @@ $$('#model-toggle .model-btn').forEach((btn) => {
 });
 paintModel();
 
+// 번역 모델 토글 (Haiku / Sonnet / Opus) — 추출 모델과 별개
+state.translateModel = state.translateModel || 'haiku';
+function paintTranslateModel() {
+  $$('#translate-model-toggle .translate-model-btn').forEach((btn) => {
+    const active = btn.dataset.translateModel === state.translateModel;
+    btn.classList.toggle('bg-primary', active);
+    btn.classList.toggle('text-on-primary', active);
+    btn.classList.toggle('border-primary', active);
+    btn.classList.toggle('shadow-md', active);
+    btn.classList.toggle('bg-surface-container-lowest', !active);
+    btn.classList.toggle('text-on-surface', !active);
+    btn.classList.toggle('border-outline-variant', !active);
+  });
+  const hintEl = $('#translate-model-hint');
+  if (hintEl) {
+    const hints = {
+      haiku:  'Haiku — 빠른 번역. 대부분의 카드에 충분.',
+      sonnet: 'Sonnet — 정교한 문체·뉘앙스 보존.',
+      opus:   'Opus — 가장 깔끔한 번역. 느리고 비용 큼.',
+    };
+    hintEl.textContent = hints[state.translateModel] || '';
+  }
+}
+$$('#translate-model-toggle .translate-model-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.translateModel = btn.dataset.translateModel;
+    paintTranslateModel();
+  });
+});
+paintTranslateModel();
+
 // ---------------------------------------------------------------------------
 // Upload flow
 // ---------------------------------------------------------------------------
@@ -1606,6 +1637,7 @@ async function requestTranslation(token, card) {
     },
     body: JSON.stringify({
       work: state.work || null,
+      model: state.translateModel || 'haiku',
       cards: [{
         id: 0,
         quote: card.quote || '',
@@ -1706,7 +1738,7 @@ async function onTranslateAll() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ cards: cardsPayload, work: state.work || null }),
+        body: JSON.stringify({ cards: cardsPayload, work: state.work || null, model: state.translateModel || 'haiku' }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {

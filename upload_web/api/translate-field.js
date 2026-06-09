@@ -35,7 +35,8 @@ export default async function handler(req, res) {
     // 작품 메타는 톤 추론 컨텍스트로만 사용 (선택)
     const work = body?.work && typeof body.work === 'object' ? body.work : null;
 
-    const translated = await runTranslateField({ text, field, work, direction });
+    const model = String(body?.model || 'haiku');
+    const translated = await runTranslateField({ text, field, work, direction, model });
     return res.status(200).json({ translated });
   } catch (err) {
     if (err instanceof AuthError) {

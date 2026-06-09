@@ -145,9 +145,9 @@
         <span id="category-hint" class="basis-full mt-1 text-xs text-on-surface-variant"></span>
       </div>
 
-      <!-- AI 모델 선택 — 작품 유형 아래, 작품명 위 -->
+      <!-- AI 모델 선택 — 추출 모델 + 번역 모델 따로 -->
       <div class="flex items-center gap-3 flex-wrap">
-        <span class="text-sm font-semibold text-on-surface-variant whitespace-nowrap">AI 성능:</span>
+        <span class="text-sm font-semibold text-on-surface-variant whitespace-nowrap">추출 모델:</span>
         <div id="model-toggle" class="flex gap-2 flex-wrap">
           <button type="button" data-model="haiku"
                   class="model-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
@@ -163,6 +163,26 @@
           </button>
         </div>
         <span id="model-hint" class="text-xs text-on-surface-variant"></span>
+      </div>
+
+      <!-- 번역 모델 선택 — 추출 후 한국어 번역 단계용 -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-semibold text-on-surface-variant whitespace-nowrap">번역 모델:</span>
+        <div id="translate-model-toggle" class="flex gap-2 flex-wrap">
+          <button type="button" data-translate-model="haiku"
+                  class="translate-model-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
+            Haiku <span class="text-xs font-normal opacity-70">(빠름 · 기본)</span>
+          </button>
+          <button type="button" data-translate-model="sonnet"
+                  class="translate-model-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
+            Sonnet <span class="text-xs font-normal opacity-70">(균형)</span>
+          </button>
+          <button type="button" data-translate-model="opus"
+                  class="translate-model-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
+            Opus <span class="text-xs font-normal opacity-70">(최고 품질 · 느림)</span>
+          </button>
+        </div>
+        <span id="translate-model-hint" class="text-xs text-on-surface-variant"></span>
       </div>
 
       <!-- Title hint (선택) — 입력하면 웹 명대사 데이터를 시드로 사용 -->
