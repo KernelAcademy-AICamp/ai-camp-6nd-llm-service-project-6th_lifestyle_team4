@@ -1075,40 +1075,54 @@ function cleanScriptExcerptEdges(script) {
   };
   const lines = script.split('\n');
 
-  // 첫 줄 잘린 자투리 처리 — 카드 자체는 보존, 자투리만 제거.
-  //  · 정상 영어 문장은 대문자/따옴표/괄호 시작. 영문 소문자/구두점 시작은 거의 항상 자투리.
-  //  · 한글 라인, 라벨 라인은 보호.
-  if (lines.length >= 1) {
-    const first = (lines[0] || '').trim();
-    if (first && !isLabelLine(first) && !/[가-힯]/.test(first)) {
-      const firstChar = first[0] || '';
-      // 정상 문장 시작: 영문 대문자, 한글, 따옴표/괄호로 시작
-      const isProperStart = /^["'"'¡¿(\[【「『*]?[A-Z]/.test(first);
-      // 자투리 시작: 영문 소문자, 콤마/세미콜론/구두점, 또는 fragment
-      const isJunkStart = !isProperStart && (/^[a-z,;:.!?]/.test(firstChar) || /[a-z]/.test(firstChar));
-      if (isJunkStart) {
-        // 첫 문장 종결자 찾아 그 뒤부터 시작
-        const sentenceEnd = first.match(/[.!?…]["'”’]?\s+/);
-        if (sentenceEnd) {
-          const cutPos = sentenceEnd.index + sentenceEnd[0].length;
-          lines[0] = first.slice(cutPos);
-        } else {
-          // 종결자 못 찾음 — 5자 이하 fragment 만 토큰 제거. 그 외는 그대로 (카드 보존).
-          const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
-          if (
-            /^[a-z]{1,5}$/.test(firstToken)
-            && !COMMON_SHORT_EN.has(firstToken.toLowerCase())
-            && !COMMON_5LETTER.has(firstToken.toLowerCase())
-          ) {
-            lines[0] = first.replace(/^\W*\w{1,5}\W+/, '');
-          } else if (/^[,;:.!?]/.test(firstChar)) {
-            lines[0] = first.replace(/^[,;:.!?]\s*/, '');
-          }
-          // 그 외: 그대로 (긴 잘린 단어는 다음 번 검토에서 사용자가 편집)
-        }
+  // 단락별 시작 자투리 처리 — 첫 줄뿐 아니라 \n\n 뒤 모든 단락 시작에 적용.
+  //  · "t the wound burning..." 같이 중간 단락 시작이 잘린 케이스도 처리.
+  const cleanParaStart = (paraText) => {
+    if (!paraText) return paraText;
+    const paraLines = paraText.split('\n');
+    const first = (paraLines[0] || '').trim();
+    if (!first || isLabelLine(first) || /[가-힯]/.test(first)) return paraText;
+    const firstChar = first[0] || '';
+    const isProperStart = /^["'"'¡¿(\[【「『*]?[A-Z]/.test(first);
+    if (isProperStart) return paraText;
+    if (!/^[a-z,;:.!?]/.test(firstChar)) return paraText;
+    // 자투리 확정
+    const sentenceEnd = first.match(/[.!?…]["'”’]?\s+/);
+    if (sentenceEnd) {
+      const cutPos = sentenceEnd.index + sentenceEnd[0].length;
+      paraLines[0] = first.slice(cutPos);
+      return paraLines.join('\n');
+    }
+    // 종결자 없음 — 단락 전체 합쳐서 다시 종결자 찾기
+    if (paraLines.length > 1) {
+      const combined = paraLines.map((l) => l.trim()).filter(Boolean).join(' ');
+      const m = combined.match(/[.!?…]["'”’]?\s+/);
+      if (m) {
+        const cutPos = m.index + m[0].length;
+        return combined.slice(cutPos);
       }
     }
-  }
+    // 그래도 종결자 없음 — fragment 만 제거
+    const firstToken = (first.split(/\s+/)[0] || '').replace(/^[^\w]+/, '');
+    if (
+      /^[a-z]{1,5}$/.test(firstToken)
+      && !COMMON_SHORT_EN.has(firstToken.toLowerCase())
+      && !COMMON_5LETTER.has(firstToken.toLowerCase())
+    ) {
+      paraLines[0] = first.replace(/^\W*\w{1,5}\W+/, '');
+    } else if (/^[,;:.!?]/.test(firstChar)) {
+      paraLines[0] = first.replace(/^[,;:.!?]\s*/, '');
+    }
+    return paraLines.join('\n');
+  };
+
+  // 단락 분리 → 각 단락 시작 정리 → 다시 합치기
+  const fullText = lines.join('\n');
+  const paragraphs = fullText.split(/\n\s*\n/);
+  const cleaned = paragraphs.map(cleanParaStart).filter((p) => p && p.trim());
+  const newText = cleaned.join('\n\n');
+  lines.length = 0;
+  newText.split('\n').forEach((l) => lines.push(l));
 
   // 끝 줄 잘린 자투리 처리 — 마지막 종결자까지만 남김.
   //  · 종결자(. ! ? …) 없이 끝나거나 콤마로 끝나는 영문 라인 → 마지막 종결자까지
