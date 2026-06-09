@@ -34,6 +34,9 @@
     <string name="privacy_policy">개인정보 처리방침</string>
     <string name="version_info">버전 정보</string>
     <string name="sign_out">로그아웃</string>
+    <string name="delete_account">계정 삭제</string>
+    <string name="delete_account_confirm">삭제</string>
+    <string name="delete_account_warning">계정을 삭제하면 내 댓글·좋아요·피드·하이라이트·북마크와 모든 활동 기록이 영구히 삭제되며 복구할 수 없습니다.</string>
     <!-- MY: account + activity -->
     <string name="account">ACCOUNT</string>
     <string name="account_desc">아이디와 비밀번호로 로그인하면 다른 기기에서도 북마크가 동기화됩니다.</string>

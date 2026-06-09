@@ -62,6 +62,29 @@ class AppSessionViewModel : ViewModel() {
         }
     }
 
+    /**
+     * 회원 탈퇴 + 재인증. 성공 시 새 익명 사용자로 복귀. 실패해도 dead-end Error 화면
+     * 대신 토스트만 띄우고 기존 세션으로 복귀한다 — delete_account 는 단일 트랜잭션이라
+     * 실패 시 auth.users 가 삭제되지 않아 기존 JWT 가 그대로 유효하기 때문.
+     */
+    fun deleteAccountAndReauth() {
+        if (_authInProgress.value) return
+        _authInProgress.value = true
+        _state.value = SessionState.Loading
+        viewModelScope.launch {
+            runCatching { authRepo.deleteAccount() }
+                .onSuccess {
+                    AppAnalytics.track("account_deleted")
+                    AppAnalytics.resetUser()
+                }
+                .onFailure {
+                    _authMessage.value = "탈퇴에 실패했어요. 잠시 후 다시 시도해주세요."
+                }
+            bootstrapIntoState()
+            _authInProgress.value = false
+        }
+    }
+
     fun signIn(id: String, password: String, signUp: Boolean) {
         if (_authInProgress.value) return
         val current = (_state.value as? SessionState.Ready)?.session

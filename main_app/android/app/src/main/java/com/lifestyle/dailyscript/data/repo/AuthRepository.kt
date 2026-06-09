@@ -13,6 +13,7 @@ import com.lifestyle.dailyscript.data.model.BookmarkInsert
 import com.lifestyle.dailyscript.data.model.CardIdRow
 import com.lifestyle.dailyscript.data.model.UserInsert
 import com.lifestyle.dailyscript.data.model.UserRow
+import io.github.jan.supabase.auth.SignOutScope
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.Kakao
@@ -241,6 +242,18 @@ class AuthRepository {
 
     suspend fun signOut() {
         auth.signOut()
+        clearPending()
+    }
+
+    /**
+     * 회원 탈퇴 — 본인 데이터와 auth 계정을 서버측 RPC(delete_account)로 일괄 삭제한다.
+     * RPC는 무인자이며 내부적으로 auth.uid()만 신뢰하므로 호출자는 자기 자신만 지운다.
+     * 삭제 후 토큰은 사라진 사용자를 가리키므로 로컬 스코프로만 로그아웃한다
+     * (GoTrue /logout 미호출 → 실패 불가). signOut 실패가 삭제 성공을 가리지 않게 방어한다.
+     */
+    suspend fun deleteAccount() {
+        client.postgrest.rpc("delete_account")
+        runCatching { auth.signOut(SignOutScope.LOCAL) }
         clearPending()
     }
 

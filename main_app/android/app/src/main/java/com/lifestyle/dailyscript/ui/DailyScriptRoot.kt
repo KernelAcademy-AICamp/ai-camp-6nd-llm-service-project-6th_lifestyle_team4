@@ -212,6 +212,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onSignIn = { id, pw, signUp -> sessionVm.signIn(id, pw, signUp) },
                         onSocialSignIn = { provider -> sessionVm.signInWithProvider(provider, activity) },
                         onSignOut = sessionVm::signOutAndReauth,
+                        onDeleteAccount = sessionVm::deleteAccountAndReauth,
                         onUpdateProfile = sessionVm::updateProfile,
                         onOpenMyComments = {
                             AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.MY_COMMENTS))

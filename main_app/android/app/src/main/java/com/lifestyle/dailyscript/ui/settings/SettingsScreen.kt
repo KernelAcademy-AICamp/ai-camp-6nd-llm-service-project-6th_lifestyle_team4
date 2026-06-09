@@ -66,6 +66,7 @@ fun SettingsScreen(
     onSignIn: (id: String, password: String, signUp: Boolean) -> Unit,
     onSocialSignIn: (provider: SocialProvider) -> Unit,
     onSignOut: () -> Unit,
+    onDeleteAccount: () -> Unit,
     onUpdateProfile: (nickname: String, gender: String?, ageGroup: String?) -> Unit,
     onOpenMyComments: () -> Unit,
     onOpenMyFeed: () -> Unit,
@@ -84,6 +85,7 @@ fun SettingsScreen(
 
     var showProfileDialog by remember { mutableStateOf(false) }
     var showSignInDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     // Once login succeeds the account is no longer anonymous → close the dialog.
     LaunchedEffect(session.isAnonymous) { if (!session.isAnonymous) showSignInDialog = false }
 
@@ -229,6 +231,18 @@ fun SettingsScreen(
             variant = SharpButtonVariant.Outline,
             modifier = Modifier.fillMaxWidth(),
         )
+        if (!session.isAnonymous) {
+            Box(modifier = Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.delete_account),
+                style = MaterialTheme.typography.labelSmall,
+                color = Cta,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .clickable { showDeleteDialog = true }
+                    .padding(vertical = 8.dp),
+            )
+        }
         Box(modifier = Modifier.height(40.dp))
     }
 
@@ -252,6 +266,29 @@ fun SettingsScreen(
             onSignIn = onSignIn,
             onSocialSignIn = onSocialSignIn,
             onDismiss = { showSignInDialog = false },
+        )
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            confirmButton = {
+                TextButton(onClick = { showDeleteDialog = false; onDeleteAccount() }) {
+                    Text(stringResource(R.string.delete_account_confirm), color = Cta)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("취소", color = Walnut) }
+            },
+            title = { Text(stringResource(R.string.delete_account), color = Espresso) },
+            text = {
+                Text(
+                    text = stringResource(R.string.delete_account_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Walnut,
+                )
+            },
+            containerColor = Paper,
         )
     }
 }
