@@ -1003,6 +1003,62 @@ function rescueScriptExcerptEdges(card, fullScript) {
   card.script_excerpt = lines.join('\n').replace(/^\n+|\n+$/g, '');
 }
 
+// 중간 단락 시작 자투리 — fullScript(Gutenberg 원문)에서 본문 가져와 복원.
+// 사용자 요구: "원문 보고 채워 넣으면 되는거 아니야? 중간 자투리는?"
+// 잘라내지 않고 채우기만 — 매칭 실패 시 자투리 그대로 (원문 손실 방지).
+function rescueMiddleParagraphStarts(card, fullScript) {
+  if (!card?.script_excerpt || !fullScript) return;
+  const text = card.script_excerpt;
+  const paragraphs = text.split(/\n\s*\n/);
+  if (paragraphs.length <= 1) return;
+
+  // 첫 단락과 마지막 단락은 rescueScriptExcerptEdges 가 처리 (가능하면).
+  // 여기서는 가운데 단락 (index 1 ~ length-2) 의 시작만 처리.
+  // 다만 마지막 단락이 가운데에도 해당될 수 있어 둘 다 처리.
+  for (let i = 1; i < paragraphs.length; i++) {
+    const para = paragraphs[i];
+    const paraLines = para.split('\n');
+    const first = (paraLines[0] || '').trim();
+    if (!first) continue;
+    if (/^\*+|:$|^\(.*\)$|^[A-Z][A-Z .'\-]*$/.test(first)) continue;
+    if (/[가-힯]/.test(first)) continue;
+
+    const firstChar = first[0] || '';
+    const isProperStart = /^["'"'¡¿(\[【「『*]?[A-Z]/.test(first);
+    if (isProperStart) continue;
+    if (!/^[a-z,;:.!?]/.test(firstChar)) continue;
+
+    // 자투리 토큰 제외한 나머지로 fullScript 검색
+    const restMatch = first.match(/^[a-z,;:.!?]+\W*(.*)$/i);
+    const restAfterFragment = (restMatch?.[1] || '').trim();
+    if (!restAfterFragment) continue;
+
+    const probe = restAfterFragment.split(/\s+/).slice(0, 5).join(' ');
+    if (probe.length < 8) continue;
+
+    const pos = fullScript.indexOf(probe);
+    if (pos < 0) continue; // 못 찾음 — 그대로 (원문 손실 방지)
+
+    // probe 앞쪽 500자 안에서 마지막 종결자 찾기
+    const window = fullScript.slice(Math.max(0, pos - 500), pos);
+    const lastEnd = Math.max(
+      window.lastIndexOf('. '), window.lastIndexOf('! '), window.lastIndexOf('? '),
+      window.lastIndexOf('."'), window.lastIndexOf('!"'), window.lastIndexOf('?"'),
+      window.lastIndexOf('\n')
+    );
+    if (lastEnd < 0) continue;
+
+    const sentenceStart = Math.max(0, pos - 500) + lastEnd + 1;
+    const replacement = fullScript.slice(sentenceStart, pos).replace(/^\s+/, '');
+    if (!replacement) continue;
+
+    paraLines[0] = (replacement + restAfterFragment).trim();
+    paragraphs[i] = paraLines.join('\n');
+  }
+
+  card.script_excerpt = paragraphs.join('\n\n');
+}
+
 // PDF 페이지 폭에 의해 강제로 들어간 줄바꿈 정리.
 // 사용자 요구: "한 문장 한 단락인데 폭 충분한데 단어가 아래줄로 내려갔다".
 // 한 단락 안에서 알파벳/한글/콤마/숫자 다음 \n + 다음 줄 시작이 본문 문자면 → 공백.
@@ -1263,11 +1319,13 @@ export function validateAndFilterCards(cards, category, opts = {}) {
       if (c.quote) c.script_excerpt = String(c.quote);
     }
     if (!c.script_excerpt) continue;
-    if (fullScript) rescueScriptExcerptEdges(c, fullScript);
-    // rescue 후에도 자투리 남아있으면 그것만 마지막 정리
+    if (fullScript) {
+      rescueScriptExcerptEdges(c, fullScript);          // 첫/끝 줄 잘림 fullScript 에서 복원
+      rescueMiddleParagraphStarts(c, fullScript);       // 중간 단락 시작 자투리 fullScript 에서 복원
+    }
+    // 첫/끝 자투리 cleanup (중간은 안 건드림 — 원문 보존)
     c.script_excerpt = cleanScriptExcerptEdges(c.script_excerpt);
     // PDF 페이지 폭 줄바꿈 정리 — 한 단락 안 부자연스러운 \n 은 공백으로 합침.
-    // (단락 구분 \n\n 은 보존, 화자 라벨 라인도 보존)
     c.script_excerpt = collapsePdfLineWraps(c.script_excerpt);
   }
 
