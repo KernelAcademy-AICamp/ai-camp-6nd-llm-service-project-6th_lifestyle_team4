@@ -639,7 +639,7 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
       userPk: state.userId != null ? String(state.userId) : null,
     });
     paintAuthIdentity();
-    await Promise.all([loadAllCards(), loadBookmarks(), loadBookmarkCounts()]);
+    await Promise.all([loadAllCards(), loadBookmarks(), loadBookmarkCounts(), loadCommentCounts()]);
     paintTasteProfile();
     renderHome();
     // 초기 setView — history에 중복 entry 안 쌓이게 suppress 후 replaceState로 마무리
@@ -1181,7 +1181,7 @@ function loadAllCards() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original, cover_url)')
       .order('card_id', { ascending: false }).limit(500);
     if (error) throw error;
     state.allCards = Array.isArray(data) ? data : [];
@@ -1198,7 +1198,7 @@ function loadBookmarks() {
     // ★ *_original 컬럼 포함 — 영문 토글 동작에 필요. loadAllCards SELECT 와 동일.
     const { data, error } = await sb
       .from('user_bookmarks')
-      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original))')
+      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original, cover_url))')
       .eq('user_id', state.userId)
       .order('created_at', { ascending: false });
     if (error) { console.warn('[m] bookmarks load failed:', error); return; }
@@ -1219,6 +1219,22 @@ async function loadBookmarkCounts() {
     (data || []).forEach((r) => state.bookmarkCounts.set(r.card_id, r.bookmark_count));
   } catch (e) {
     console.warn('[m] loadBookmarkCounts error:', e);
+  }
+}
+
+// 카드별 댓글 수 — card_comments 전체 fetch 후 JS 에서 집계.
+// 인기 대사 점수 + 카드 메타(댓글 수) 표시에 사용.
+async function loadCommentCounts() {
+  state.commentCounts = new Map();
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb.from('card_comments').select('card_id');
+    if (error) { console.warn('[m] comment counts load failed:', error.message); return; }
+    for (const c of (data || [])) {
+      state.commentCounts.set(c.card_id, (state.commentCounts.get(c.card_id) || 0) + 1);
+    }
+  } catch (e) {
+    console.warn('[m] loadCommentCounts error:', e);
   }
 }
 
@@ -1511,7 +1527,7 @@ async function toggleBookmark(cardId) {
     } else {
       const { data, error } = await sb.from('user_bookmarks')
         .insert({ user_id: state.userId, card_id: cardId })
-        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters))')
+        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters, cover_url))')
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
@@ -1628,7 +1644,11 @@ function applyTodayCard(card) {
     chip.textContent = format;
     todayChips.appendChild(chip);
   }
-  todayChips.insertAdjacentHTML('beforeend', `<span style="margin-left:10px;">${renderCounts(card)}</span>`);
+  // TODAY 카드 메타 — 사용자 명세: 북마크 위치(우상단)는 댓글 수, 북마크 수는 북마크 아이콘 아래.
+  todayChips.insertAdjacentHTML('beforeend', `<span style="margin-left:10px;">${renderCountsForToday(card)}</span>`);
+  // 북마크 버튼 아래 카운트 갱신
+  const bmCountEl = document.getElementById('today-bookmark-count');
+  if (bmCountEl) bmCountEl.textContent = formatCount(state.bookmarkCounts?.get(card?.card_id) || 0);
   const kws = Array.isArray(card.keywords) ? card.keywords : [];
 
   // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
@@ -1836,6 +1856,17 @@ function renderCounts(card) {
     + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">visibility</span>${views}</span>`
     + `<span>·</span>`
     + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">bookmark</span>${bookmarks}</span>`
+    + `</span>`;
+}
+
+// TODAY 카드 전용 — 북마크 수 자리에 댓글 수 (북마크 수는 우상단 북마크 아이콘 아래로 이동, 사용자 명세).
+function renderCountsForToday(card) {
+  const views = formatCount(card?.view_count || 0);
+  const comments = formatCount(state.commentCounts?.get(card?.card_id) || 0);
+  return `<span class="t-label-sm c-walnut" style="display:inline-flex;align-items:center;gap:6px;">`
+    + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">visibility</span>${views}</span>`
+    + `<span>·</span>`
+    + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">chat_bubble</span>${comments}</span>`
     + `</span>`;
 }
 
@@ -2295,7 +2326,15 @@ function renderArchive() {
   gridEl.style.display = 'grid';
   gridEl.innerHTML = '';
 
-  for (const w of works) {
+  // 페이지네이션 — 4열 × 3행 = 12권/페이지
+  const PAGE_SIZE = 12;
+  const totalPages = Math.max(1, Math.ceil(works.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, state.archivePage || 1), totalPages);
+  state.archivePage = safePage;
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pageWorks = works.slice(pageStart, pageStart + PAGE_SIZE);
+
+  for (const w of pageWorks) {
     const work = (w.cards || [])[0]?.works || { title: w.title, cover_url: null };
     const displayName = displayTitle(w.title);
     const label = GENRE_LABEL[w.format] || '기타';
@@ -2308,7 +2347,7 @@ function renderArchive() {
       ? `<div class="lib-cover" style="background:${leatherColorFor(w.title)};">
           <img class="lib-cover-img" src="${escapeHtml(work.cover_url)}" alt="${escapeHtml(displayName)}" loading="lazy" />
         </div>
-        <span class="lib-count">명대사 ${w.cards.length}</span>`
+        <span class="lib-count">${escapeHtml(displayName)}</span>`
       : `<div class="lib-cover" style="background:${leatherColorFor(w.title)};">
           <div class="lib-cover-fallback">
             <span class="lib-cover-meta">${escapeHtml(label)}</span>
@@ -2316,12 +2355,43 @@ function renderArchive() {
             <span class="lib-cover-meta">${escapeHtml((w.author || '').toUpperCase())}</span>
           </div>
         </div>
-        <span class="lib-count">명대사 ${w.cards.length}</span>`;
+        <span class="lib-count">${escapeHtml(displayName)}</span>`;
     btn.addEventListener('click', () => {
       track('library_book_opened', { work_key: w.key });
       openBookModal(w, allWorks);
     });
     gridEl.appendChild(btn);
+  }
+
+  // 페이지 버튼 — 그리드 바로 아래 한 줄
+  let pagesEl = document.getElementById('archive-pages');
+  if (!pagesEl) {
+    pagesEl = document.createElement('div');
+    pagesEl.id = 'archive-pages';
+    pagesEl.style.cssText = 'display:flex;justify-content:center;gap:8px;margin:24px 0 40px;flex-wrap:wrap;';
+    gridEl.parentNode.insertBefore(pagesEl, gridEl.nextSibling);
+  }
+  if (totalPages <= 1) {
+    pagesEl.style.display = 'none';
+  } else {
+    pagesEl.style.display = 'flex';
+    const btns = [];
+    if (safePage > 1) btns.push(`<button data-page="${safePage - 1}" class="lib-page-btn">‹</button>`);
+    for (let p = 1; p <= totalPages; p++) {
+      btns.push(`<button data-page="${p}" class="lib-page-btn${p === safePage ? ' active' : ''}">${p}</button>`);
+    }
+    if (safePage < totalPages) btns.push(`<button data-page="${safePage + 1}" class="lib-page-btn">›</button>`);
+    pagesEl.innerHTML = btns.join('');
+    pagesEl.querySelectorAll('[data-page]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const p = Number(b.dataset.page);
+        if (!Number.isNaN(p)) {
+          state.archivePage = p;
+          renderArchive();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      });
+    });
   }
 }
 
@@ -2391,7 +2461,7 @@ function buildGenreShelf(genre, items, onOpen) {
   });
 
   shelf.appendChild(row);
-  decorateShelfWithCats(shelf, genre); // 책장 안/위에 고양이 분산
+  // decorateShelfWithCats 제거 — 사용자 명세: 북마크 책장 고정 고양이 X (랜덤 mascot 으로만)
   section.appendChild(shelf);
   return section;
 }
@@ -2467,6 +2537,7 @@ document.addEventListener('keydown', (e) => {
 let archiveSearchTrackTimer = null;
 archiveSearchInput.addEventListener('input', (e) => {
   state.archiveSearch = e.target.value;
+  state.archivePage = 1;  // 검색 변경 시 페이지 1로
   renderArchive();
   // 디바운스 — 입력이 멎고 700ms 뒤 비어있지 않은 질의만 1회 전송
   clearTimeout(archiveSearchTrackTimer);
@@ -2509,6 +2580,7 @@ function renderShelfChips(chipsEl, allWorks, currentGenre, onSelect) {
 function renderArchiveChips() {
   renderShelfChips(archiveChips, groupAllCardsByWork(), state.archiveGenre || '', (g) => {
     state.archiveGenre = g;
+    state.archivePage = 1;  // 장르 변경 시 페이지 1로
     track('library_genre_filtered', { genre: g || 'all' });
     renderArchiveChips();
     renderArchive();
@@ -2537,7 +2609,9 @@ function paintMyNoticeEntry() {
 }
 
 // ===== DAILY 6 섹션 헬퍼 =====
-// 책표지 — works.cover_url 있으면 이미지, 없으면 가죽색 + 제목 폴백.
+// 책표지 — LIBRARY (#archive-grid .lib-cover) 와 동일 구조. cover_url 있으면 이미지, 없으면 가죽색 + 제목 폴백.
+//  · 박스 크기는 opts.width 로 지정 (132:188 비율)
+//  · 이미지 로드 실패 시 onerror 로 .lib-cover-fallback 표시
 function dailyBookCoverHTML(work, opts = {}) {
   const w = opts.width || 80;
   const h = opts.height || Math.round(w * 188 / 132);
@@ -2545,29 +2619,61 @@ function dailyBookCoverHTML(work, opts = {}) {
   const title = displayTitle(work?.title || '');
   const cover = work?.cover_url || '';
   const fontSize = Math.max(8, Math.round(w / 8));
+  const fallback = `<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:6px 4px;">
+    <span style="font-size:8px;color:var(--paper);opacity:0.85;text-align:center;letter-spacing:0.05em;text-transform:uppercase;">${escapeHtml(GENRE_LABEL[work?.format] || '기타')}</span>
+    <span style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:${fontSize}px;color:var(--paper);font-weight:600;text-align:center;line-height:1.2;word-break:keep-all;text-shadow:0 1px 2px rgba(0,0,0,0.25);overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;">${escapeHtml(title)}</span>
+    <span style="font-size:8px;color:var(--paper);opacity:0.85;text-align:center;letter-spacing:0.05em;text-transform:uppercase;">${escapeHtml((work?.author || '').toUpperCase())}</span>
+  </div>`;
   if (cover) {
-    return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};box-shadow:0 1px 4px rgba(60,40,20,0.18);overflow:hidden;border-radius:${radius}px;">
+    return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};box-shadow:0 1px 4px rgba(60,40,20,0.18);overflow:hidden;border-radius:${radius}px;position:relative;">
       <img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" loading="lazy"
+        onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', this.dataset.fallback);"
+        data-fallback="${escapeHtml(fallback)}"
         style="width:100%;height:100%;object-fit:cover;display:block;" />
     </div>`;
   }
-  return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};display:flex;align-items:center;justify-content:center;padding:6px;box-shadow:0 1px 4px rgba(60,40,20,0.18);border-radius:${radius}px;">
-    <span style="font-size:${fontSize}px;color:var(--paper);text-align:center;line-height:1.2;font-weight:600;">${escapeHtml(title)}</span>
+  return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};box-shadow:0 1px 4px rgba(60,40,20,0.18);border-radius:${radius}px;position:relative;overflow:hidden;">
+    ${fallback}
   </div>`;
 }
 
-// 온도/강도 → 한국어 정서 라벨 (사용자 명시: 온도/감도/여운)
+// 온도/강도 → 한국어 정서 라벨. 데이터 범위 자동 정규화 (0~1 / 0~10 / 0~100 어느 것이든).
+// 카드별로 다양한 라벨이 나오게 5단계 매핑.
+function _normTone(n) {
+  if (!Number.isFinite(n)) return null;
+  // 0~1, 0~10, 0~100 자동 추정
+  if (n > 10) return Math.min(1, n / 100);
+  if (n > 1)  return Math.min(1, n / 10);
+  return Math.max(0, Math.min(1, n));
+}
 function toneLabels(card) {
   if (!card) return null;
-  const t = Number(card.temperature);
-  const i = Number(card.intensity);
-  const tempLabel = !Number.isFinite(t) ? null
-    : t < 0.34 ? '차분함' : t < 0.67 ? '따스함' : '뜨거움';
-  const intensityLabel = !Number.isFinite(i) ? null
-    : i < 0.34 ? '잔잔' : i < 0.67 ? '적당' : '강렬';
-  // aftertaste 데이터 없으니 significance 길이로 짧은/긴 추정 (있으면 표시).
-  const sig = String(card.significance || '');
-  const aftertasteLabel = sig ? (sig.length > 120 ? '길음' : sig.length > 60 ? '보통' : '짧음') : null;
+  const t = _normTone(Number(card.temperature));
+  const i = _normTone(Number(card.intensity));
+  // 온도 — 차가움/차분함/따스함/뜨거움/뜨거움
+  const tempLabel = t == null ? null
+    : t < 0.2 ? '차가움'
+    : t < 0.4 ? '차분함'
+    : t < 0.6 ? '미지근'
+    : t < 0.8 ? '따스함'
+    : '뜨거움';
+  // 감도 — 잔잔/조용/적당/짙음/강렬
+  const intensityLabel = i == null ? null
+    : i < 0.2 ? '잔잔'
+    : i < 0.4 ? '조용'
+    : i < 0.6 ? '적당'
+    : i < 0.8 ? '짙음'
+    : '강렬';
+  // 여운 — significance 길이 기반. 데이터 없으면 카드 본문 길이 fallback.
+  const sigLen = String(card.significance || '').length;
+  const excerptLen = String(card.script_excerpt || '').length;
+  const baseLen = sigLen || Math.floor(excerptLen / 8);
+  const aftertasteLabel = baseLen <= 0 ? null
+    : baseLen < 40  ? '짧음'
+    : baseLen < 80  ? '담백'
+    : baseLen < 140 ? '보통'
+    : baseLen < 220 ? '깊음'
+    : '길음';
   return { tempLabel, intensityLabel, aftertasteLabel };
 }
 
@@ -2693,10 +2799,42 @@ function renderDailyNewBooks() {
 
 // 섹션 3: 이럴 땐, 이런 문장
 const CONTEXT_CATEGORIES = [
-  { id: 'comfort', label: '위로가 필요할 때', keywords: ['위로', '슬픔', '아픔', '눈물', '치유'] },
-  { id: 'flutter', label: '설레는 날',        keywords: ['사랑', '설렘', '첫', '두근'] },
-  { id: 'lonely',  label: '먹먹한 밤',        keywords: ['외로움', '그리움', '밤', '고독'] },
-  { id: 'resolve', label: '결심이 필요할 때', keywords: ['결심', '의지', '도전', '용기', '운명'] },
+  { id: 'comfort', label: '위로가 필요할 때',
+    keywords: ['위로', '슬픔', '아픔', '눈물', '치유', '회복', '안식', '평온', '포근', '따뜻', '따스', '기댐', '감싸', '쓰다듬', '받아들', '용서', '슬퍼', '아파'],
+    // 차분~따스 + 강도 낮~중 (감정 짙으면 위로보다 절망)
+    toneScore: (t, i) => {
+      let s = 0;
+      if (t != null) s += (t < 0.6 ? 2 : t < 0.8 ? 1 : 0);
+      if (i != null) s += (i < 0.7 ? 1 : 0);
+      return s;
+    } },
+  { id: 'flutter', label: '설레는 날',
+    keywords: ['사랑', '설렘', '첫사랑', '두근', '떨림', '봄', '꽃', '만남', '청춘', '달콤', '가슴', '설레', '연인', '키스', '입맞춤', '미소', '눈빛', '입술'],
+    // 따스~뜨거움 + 강도 중~높
+    toneScore: (t, i) => {
+      let s = 0;
+      if (t != null) s += (t > 0.5 ? 2 : t > 0.3 ? 1 : 0);
+      if (i != null) s += (i > 0.4 ? 1 : 0);
+      return s;
+    } },
+  { id: 'lonely',  label: '먹먹한 밤',
+    keywords: ['외로움', '그리움', '고독', '적막', '침묵', '회상', '공허', '먹먹', '쓸쓸', '낙엽', '회한', '밤하늘', '혼자', '홀로', '잊혀', '그립', '추억', '낙심', '비'],
+    // 차분 + 잔잔 (낮은 온도 + 낮은 강도)
+    toneScore: (t, i) => {
+      let s = 0;
+      if (t != null) s += (t < 0.5 ? 2 : 0);
+      if (i != null) s += (i < 0.5 ? 2 : i < 0.7 ? 1 : 0);
+      return s;
+    } },
+  { id: 'resolve', label: '결심이 필요할 때',
+    keywords: ['결심', '의지', '도전', '용기', '운명', '신념', '다짐', '각오', '맞서', '투지', '이겨', '포기하지', '나아', '극복', '굳건', '강인', '싸움', '꿈', '희망', '믿음'],
+    // 강도 높음 (뜨거움 + 강렬)
+    toneScore: (t, i) => {
+      let s = 0;
+      if (i != null) s += (i > 0.6 ? 2 : i > 0.4 ? 1 : 0);
+      if (t != null) s += (t > 0.5 ? 1 : 0);
+      return s;
+    } },
 ];
 let _contextualTimer = null;
 let _contextualCatId = null;
@@ -2704,12 +2842,27 @@ let _contextualCardIdx = 0;
 function stopContextualCarousel() {
   if (_contextualTimer) { clearInterval(_contextualTimer); _contextualTimer = null; }
 }
+// 카드의 키워드 + 본문(quote/excerpt/significance) 에서 카테고리 키워드 매칭.
+// 매칭된 키워드 수 + tone 점수 합산 → 높은 점수 카드 우선.
 function filterContextualCards(catId) {
   const cat = CONTEXT_CATEGORIES.find((c) => c.id === catId) || CONTEXT_CATEGORIES[0];
-  return (state.allCards || []).filter((card) => {
+  const cards = state.allCards || [];
+  const scored = [];
+  for (const card of cards) {
     const kws = Array.isArray(card.keywords) ? card.keywords : [];
-    return kws.some((k) => cat.keywords.some((t) => String(k).includes(t)));
-  }).slice(0, 12);
+    const haystack = (kws.join(' ') + ' ' + (card.quote || '') + ' ' + (card.script_excerpt || '') + ' ' + (card.significance || '')).toLowerCase();
+    // 키워드 매칭 점수 — 매칭된 카테고리 키워드 수
+    let kwHits = 0;
+    for (const t of cat.keywords) { if (haystack.includes(t.toLowerCase())) kwHits++; }
+    if (kwHits === 0) continue;
+    // tone 점수 — temperature/intensity 가 카테고리에 맞는지
+    const t = _normTone(Number(card.temperature));
+    const i = _normTone(Number(card.intensity));
+    const toneS = typeof cat.toneScore === 'function' ? cat.toneScore(t, i) : 0;
+    scored.push({ card, score: kwHits * 3 + toneS });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 12).map((x) => x.card);
 }
 function renderDailyContextual() {
   const sec = document.getElementById('daily-section-contextual');
@@ -2717,8 +2870,8 @@ function renderDailyContextual() {
   stopContextualCarousel();
   sec.style.display = 'block';
   sec.innerHTML = `
-    <p class="daily-section-label">이럴 땐, 이런 문장</p>
-    <p class="t-body-sm c-walnut" style="margin-bottom:14px;">지금 마음에 맞춰 한 문장을 골라드려요</p>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 4px;">이럴 땐, 이런 문장</h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 14px;">지금 마음에 맞춰 한 문장을 골라드려요</p>
     <div class="archive-chips" id="daily-context-chips" style="margin-bottom:16px;">
       ${CONTEXT_CATEGORIES.map((c, i) => `<button class="a-chip ${i === 0 ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
@@ -2763,32 +2916,39 @@ function renderDailyContextual() {
   // 자동 회전 비활성 — 사용자가 칩을 직접 누를 때만 카드 변경 (사용자 명시).
 }
 
-// 섹션 4: 인기 대사 top 3
+// 섹션 4: 인기 대사 top 3 — 인기 = 북마크 + 조회수 + 댓글 수 (모두 가중치).
 function renderDailyTrending() {
   const sec = document.getElementById('daily-section-trending');
   if (!sec) return;
-  const cards = (state.allCards || [])
+  const bookmarkMap = state.bookmarkCounts || new Map();
+  const commentMap = state.commentCounts || new Map();
+  const scored = (state.allCards || [])
     .filter((c) => c?.quote)
-    .map((c) => ({ c, score: (c.bookmark_count || 0) * 10 + (c.view_count || 0) }))
+    .map((c) => {
+      const bm = bookmarkMap.get(c.card_id) || 0;
+      const cm = commentMap.get(c.card_id) || 0;
+      const vw = c.view_count || 0;
+      return { c, bm, cm, vw, score: bm * 10 + cm * 5 + vw };
+    })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map((x) => x.c);
-  if (cards.length === 0) { sec.style.display = 'none'; return; }
+    .slice(0, 3);
+  if (scored.length === 0) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
   sec.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
       <h2 class="t-headline-md c-espresso">이번 주 인기 대사</h2>
       <button id="daily-trending-all" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;">전체 ›</button>
     </div>
-    ${cards.map((c, i) => `
+    ${scored.map(({ c, bm, cm, vw }, i) => `
       <button type="button" data-card-id="${c.card_id}"
         style="display:flex;align-items:flex-start;gap:14px;width:100%;background:transparent;border:none;border-bottom:0.5px solid var(--latte);cursor:pointer;padding:14px 0;text-align:left;">
         <span style="font-family:'Noto Serif KR',serif;font-size:22px;color:var(--espresso);flex-shrink:0;width:20px;">${i + 1}</span>
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);line-height:1.5;">"${escapeHtml((c.quote || '').slice(0, 80))}"</p>
           <div style="margin-top:8px;display:flex;gap:14px;font-size:11px;color:var(--walnut);">
-            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">bookmark</span>${c.bookmark_count || 0}</span>
-            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">visibility</span>${c.view_count || 0}</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">bookmark</span>${formatCount(bm)}</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">visibility</span>${formatCount(vw)}</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">chat_bubble</span>${formatCount(cm)}</span>
           </div>
         </div>
       </button>
@@ -2818,47 +2978,118 @@ function renderDailyOzPick() {
   }
   const allCards = state.allCards || [];
   if (allCards.length === 0) { sec.style.display = 'none'; return; }
-  const matched = allCards.filter((card) => {
-    const kws = Array.isArray(card.keywords) ? card.keywords : [];
-    return kws.some((k) => taste.has(k));
-  });
-  const pool = matched.length > 0 ? matched : allCards;
-  const pick = pool[Math.floor(Math.random() * pool.length)];
+
+  // 하루 1개 — localStorage 에 date+card_id 캐시. 같은 날짜면 같은 카드, 0시에 갱신.
+  const OZ_DAILY_KEY = 'ds.oz.daily';
+  const todayKey = todayStr();
+  let pick = null;
+  try {
+    const raw = JSON.parse(safeStorageGet(OZ_DAILY_KEY, 'null') || 'null');
+    if (raw && raw.date === todayKey && raw.cardId) {
+      pick = allCards.find((c) => c && c.card_id === raw.cardId);
+    }
+  } catch { /* ignore */ }
+
+  if (!pick) {
+    const matched = allCards.filter((card) => {
+      const kws = Array.isArray(card.keywords) ? card.keywords : [];
+      return kws.some((k) => taste.has(k));
+    });
+    const pool = matched.length > 0 ? matched : allCards;
+    pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pick) safeStorageSet(OZ_DAILY_KEY, JSON.stringify({ date: todayKey, cardId: pick.card_id }));
+  }
   if (!pick) { sec.style.display = 'none'; return; }
   const matchedKw = (pick.keywords || []).find((k) => taste.has(k));
   const reason = matchedKw
     ? `'${matchedKw}'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
     : '오즈가 오늘 골라드린 한 문장이에요.';
   const work = pick.works || {};
+  // 사용자 선호 메타 — "당신의 취향 · 비극 · 운명" 형식
+  const tasteMeta = [];
+  tasteMeta.push('당신의 취향');
+  const formatLabel = GENRE_LABEL[work.format];
+  if (formatLabel) tasteMeta.push(formatLabel);
+  if (matchedKw) tasteMeta.push(matchedKw);
+  const metaText = tasteMeta.join(' · ');
+
   sec.style.display = 'block';
   sec.innerHTML = `
-    <p class="daily-section-label">오즈의 오늘의 추천</p>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">오즈의 오늘의 추천</h2>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
-      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">
-        <span style="width:38px;height:38px;border-radius:50%;background:var(--cta);display:inline-flex;align-items:center;justify-content:center;color:var(--paper);font-weight:700;font-size:13px;flex-shrink:0;font-family:'Noto Serif KR',serif;">오즈</span>
+      <!-- 오즈 헤더 — 책 위 고양이 + 이름 + 메타 -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <img src="assets/cat/cat_shelf_few.png" alt="오즈"
+          style="width:72px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">오즈</p>
-          <p style="margin:3px 0 0;font-size:12px;color:var(--walnut);line-height:1.5;">${escapeHtml(reason)}</p>
+          <p style="margin:2px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(metaText)}</p>
         </div>
       </div>
-      <div class="hairline"></div>
-      <div style="height:16px;"></div>
-      <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:16px;color:var(--espresso);line-height:1.6;text-align:center;font-weight:500;">"${escapeHtml((pick.quote || '').slice(0, 100))}"</p>
-      <div style="height:16px;"></div>
-      <div style="display:flex;align-items:center;gap:14px;justify-content:center;">
+      <!-- 추천 한마디 박스 (별도) -->
+      <div style="background:var(--latte);border:0.5px solid var(--sand);padding:14px 16px;margin-bottom:14px;border-radius:8px;">
+        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.6;">${escapeHtml(reason)}</p>
+      </div>
+      <!-- 책표지(좌측) + 제목/작가/연도(우측) -->
+      <div style="display:flex;align-items:center;gap:12px;">
         ${dailyBookCoverHTML(work, { width: 56 })}
-        <div style="text-align:left;">
-          <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);font-weight:600;line-height:1.3;">${escapeHtml(work.title || '')}</p>
-          <p style="margin:3px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(work.author || '')} · ${work.release_year || ''}</p>
+        <div style="flex:1;min-width:0;">
+          <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:15px;color:var(--espresso);font-weight:700;line-height:1.3;">${escapeHtml(work.title || '')}</p>
+          <p style="margin:4px 0 0;font-size:12px;color:var(--walnut);">${escapeHtml(work.author || '')}${work.release_year ? ' · ' + work.release_year : ''}</p>
         </div>
       </div>
     </article>
     <div style="height:36px;"></div>
   `;
-  sec.querySelector('.daily-oz-card')?.addEventListener('click', () => {
-    track('daily_oz_clicked', { card_id: pick.card_id });
-    openDetail(pick);
-  });
+  // 사용자 명세: 오즈 카드 클릭 → daily 탭에 랜덤 고양이 spawn (카드 상세 이동 X).
+  const ozCard = sec.querySelector('.daily-oz-card');
+  if (ozCard) {
+    ozCard.style.cursor = 'pointer';
+    ozCard.addEventListener('click', () => {
+      track('daily_oz_clicked', { card_id: pick.card_id });
+      spawnRandomCat();
+    });
+  }
+}
+
+// 랜덤 고양이 spawn — 오즈 카드 클릭 시 view-daily 안 랜덤 위치에 생성, 10초 후 페이드아웃.
+const RANDOM_CAT_FILES = ['cat_confused.png', 'cat_empty.png', 'cat_idle.png', 'cat_shelf_few.png', 'cat_shelf_many.png', 'cat_struck.png'];
+function spawnRandomCat() {
+  const file = RANDOM_CAT_FILES[Math.floor(Math.random() * RANDOM_CAT_FILES.length)];
+  const img = document.createElement('img');
+  img.src = `assets/cat/${file}`;
+  img.className = 'daily-random-cat';
+  img.alt = '';
+  img.setAttribute('aria-hidden', 'true');
+  const w = 60 + Math.floor(Math.random() * 50);  // 60~110px
+
+  // DAILY 탭 viewport 영역 아무 위치나 — 단 마지막 컨텐츠 박스 아래(빈 공간)는 회피.
+  const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  const TOP_MARGIN = 70;   // 상단바
+  // 마지막 컨텐츠 박스의 bottom 찾기 (viewport 좌표). 그 아래는 빈 공간.
+  let maxContentBottom = 0;
+  document.querySelectorAll('#view-daily .sharp-card, #view-daily .daily-notice-row, #view-daily .daily-newbook-main')
+    .forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.bottom > maxContentBottom) maxContentBottom = r.bottom;
+    });
+  const yMax = Math.min(vh - 80, Math.max(TOP_MARGIN + w + 20, maxContentBottom));
+  const top = TOP_MARGIN + Math.random() * Math.max(0, yMax - TOP_MARGIN - w);
+  const left = 12 + Math.random() * Math.max(0, vw - w - 24);
+
+  const rotate = Math.floor(Math.random() * 30) - 15;
+  img.style.cssText = `position:fixed;width:${w}px;height:auto;top:${Math.floor(top)}px;left:${Math.floor(left)}px;z-index:90;pointer-events:none;user-select:none;-webkit-user-drag:none;opacity:0;transform:rotate(${rotate}deg);transition:opacity 500ms;`;
+  document.body.appendChild(img);
+  requestAnimationFrame(() => { img.style.opacity = '1'; });
+  setTimeout(() => {
+    img.style.opacity = '0';
+    setTimeout(() => { if (img.parentNode) img.parentNode.removeChild(img); }, 600);
+  }, 10000);
+}
+
+function clearRandomCats() {
+  document.querySelectorAll('.daily-random-cat').forEach((el) => el.remove());
 }
 
 // 섹션 6: 다시 만나기 — 최근 북마크
@@ -2902,14 +3133,41 @@ function openBookmarksScreen() {
   document.body.style.overflow = 'hidden';
   renderBookmarksChips();
   renderBookmarksShelf();
+  spawnBookmarksMascot();   // 매번 진입 시 랜덤 자세 + 위치 (사용자 명세)
   track('bookmarks_opened');
 }
+
+// MY > 북마크 화면 진입 시 오즈 고양이 spawn — 매번 자세/위치 랜덤.
+function spawnBookmarksMascot() {
+  // 기존 mascot 제거 (재진입 시 새로 spawn)
+  document.querySelectorAll('.bm-random-mascot').forEach((el) => el.remove());
+  if (!bookmarksScreen) return;
+  const file = RANDOM_CAT_FILES[Math.floor(Math.random() * RANDOM_CAT_FILES.length)];
+  const img = document.createElement('img');
+  img.src = `assets/cat/${file}`;
+  img.className = 'bm-random-mascot';
+  img.alt = '';
+  img.setAttribute('aria-hidden', 'true');
+  const w = 70 + Math.floor(Math.random() * 40);  // 70~110px
+  const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  // 상단 헤더 70px + 검색/칩 영역 (~140px) 아래에 spawn — 상단 컨텐츠 가리지 않음.
+  const top = 200 + Math.random() * Math.max(0, vh * 0.5 - w);
+  const left = 12 + Math.random() * Math.max(0, vw - w - 24);
+  const rotate = Math.floor(Math.random() * 30) - 15;
+  img.style.cssText = `position:fixed;width:${w}px;height:auto;top:${Math.floor(top)}px;left:${Math.floor(left)}px;z-index:80;pointer-events:none;user-select:none;-webkit-user-drag:none;opacity:0;transform:rotate(${rotate}deg);transition:opacity 400ms;`;
+  bookmarksScreen.appendChild(img);
+  requestAnimationFrame(() => { img.style.opacity = '1'; });
+}
+
 function closeBookmarksScreenInternal() {
   if (!bookmarksScreen) return;
   bookmarksScreen.classList.remove('open');
   setTimeout(() => {
     bookmarksScreen.style.display = 'none';
     document.body.style.overflow = '';
+    // 닫을 때 mascot 제거 — 다음 진입 시 새로 spawn
+    document.querySelectorAll('.bm-random-mascot').forEach((el) => el.remove());
   }, 250);
 }
 function closeBookmarksScreen() {
@@ -3358,7 +3616,7 @@ async function renderMyComments() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('feed_posts')
-    .select('post_id, card_id, user_id, body, created_at, cards(card_id, quote, works(title, subtitle, format, author, release_year))')
+    .select('post_id, card_id, user_id, body, created_at, cards(card_id, quote, works(title, subtitle, format, author, release_year, cover_url))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false })
     .limit(50);
@@ -3458,7 +3716,7 @@ async function renderMyHighlights() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('card_highlights')
-    .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
+    .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year, cover_url))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false })
     .limit(50);
@@ -4011,7 +4269,7 @@ function renderYarnTiers() {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:0.5px solid var(--latte);';
     row.innerHTML =
-        `<span style="display:flex;align-items:center;gap:12px;"><span style="font-size:20px;line-height:1;">🧶</span>`
+        `<span style="display:flex;align-items:center;gap:12px;"><img src="assets/daily-script-bar.png" alt="실타래" style="width:28px;height:28px;display:block;object-fit:cover;border-radius:50%;" /></span>`
       + `<span class="t-title-lg c-espresso">실타래 ${count}개</span></span>`
       + `<span class="yarn-tier-buy" style="background:var(--cta);color:#fff;-webkit-text-fill-color:#fff;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;">₩${price.toLocaleString()}</span>`;
     row.querySelector('.yarn-tier-buy').addEventListener('click', async () => {
@@ -5614,13 +5872,29 @@ async function loadFeedComments(postId) {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('feed_post_comments')
-    .select('comment_id, post_id, user_id, author_nickname, body, created_at')
+    .select('comment_id, post_id, user_id, parent_comment_id, author_nickname, body, created_at')
     .eq('post_id', postId)
     .order('created_at', { ascending: true });
   if (error) { console.warn('[m] feed comments load error:', error.message); return; }
-  // 로드 도중 다른 글로 이동했으면 무시
   if (!state.currentFeedPost || String(state.currentFeedPost.post_id) !== String(postId)) return;
   state.feedPostComments = data || [];
+
+  // 좋아요 — 댓글별 카운트 + 내가 누른 목록
+  const commentIds = (data || []).map((c) => c.comment_id);
+  state.feedPostCommentLikes = new Map();
+  state.feedPostCommentLikedByMe = new Set();
+  if (commentIds.length > 0) {
+    try {
+      const { data: likes } = await sb
+        .from('feed_post_comment_likes')
+        .select('comment_id, user_id')
+        .in('comment_id', commentIds);
+      for (const l of (likes || [])) {
+        state.feedPostCommentLikes.set(l.comment_id, (state.feedPostCommentLikes.get(l.comment_id) || 0) + 1);
+        if (state.userId && l.user_id === state.userId) state.feedPostCommentLikedByMe.add(l.comment_id);
+      }
+    } catch (e) { console.warn('[m] feed comment likes load failed:', e); }
+  }
   renderFeedComments();
 }
 
@@ -5634,30 +5908,113 @@ function renderFeedComments() {
     return;
   }
   if (fpCommentsEmpty) fpCommentsEmpty.style.display = 'none';
+
+  // 트리 구성 — top-level은 parent_comment_id == null. 답글은 부모 아래 평면(2단 깊이 제한).
+  const topLevel = list.filter((c) => c.parent_comment_id == null);
+  const childrenOf = new Map();
+  for (const c of list) {
+    if (c.parent_comment_id == null) continue;
+    let parentKey = c.parent_comment_id;
+    // 답글의 답글은 최상위 부모 아래로 합침 (2단 깊이 제한)
+    const parent = list.find((x) => x.comment_id === parentKey);
+    if (parent && parent.parent_comment_id != null) parentKey = parent.parent_comment_id;
+    if (!childrenOf.has(parentKey)) childrenOf.set(parentKey, []);
+    childrenOf.get(parentKey).push(c);
+  }
+
   const myUserId = state.userId;
-  fpCommentsList.innerHTML = list.map((c) => {
+  const renderOne = (c, isReply) => {
     const isMine = myUserId != null && c.user_id === myUserId;
     const nick = escapeHtml(c.author_nickname || '익명');
     const when = escapeHtml(formatRelativeTime(c.created_at));
     const body = escapeHtml(c.body || '');
-    const del = isMine
-      ? `<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button class="fp-comment-delete" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Delete</button></div>`
+    const likes = state.feedPostCommentLikes?.get(c.comment_id) || 0;
+    const liked = state.feedPostCommentLikedByMe?.has(c.comment_id);
+    const heart = `<button class="fp-like" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 6px;color:${liked ? 'var(--cta)' : 'var(--walnut)'};">
+      <span class="material-symbols-outlined" style="font-size:16px;${liked ? 'font-variation-settings:\'FILL\' 1;' : ''}">favorite</span>
+      <span style="font-size:11px;">${likes}</span>
+    </button>`;
+    const replyBtn = !isReply
+      ? `<button class="fp-reply" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;color:var(--walnut);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;padding:4px 6px;">답글</button>`
       : '';
-    return `<div style="border:0.5px solid var(--latte);background:var(--paper);padding:12px 14px;">`
+    const del = isMine
+      ? `<button class="fp-comment-delete" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;padding:4px 6px;">삭제</button>`
+      : '';
+    const indent = isReply ? 'margin-left:28px;border-left:2px solid var(--latte);padding-left:12px;' : '';
+    return `<div style="border:0.5px solid var(--latte);background:var(--paper);padding:12px 14px;${indent}">`
       + `<div style="display:flex;justify-content:space-between;align-items:center;">`
-      + `<span class="t-body-md c-espresso" style="font-weight:600;">${nick}</span>`
+      + `<span class="t-body-md c-espresso" style="font-weight:600;">${isReply ? '↳ ' : ''}${nick}</span>`
       + `<span class="t-label-sm c-walnut">${when}</span>`
       + `</div>`
-      + `<p class="t-body-md c-espresso" style="margin-top:6px;white-space:pre-wrap;word-break:keep-all;">${body}</p>`
-      + del
+      + `<p class="t-body-md c-espresso" style="margin:6px 0 8px;white-space:pre-wrap;word-break:keep-all;">${body}</p>`
+      + `<div style="display:flex;justify-content:space-between;align-items:center;">`
+      + `<div style="display:flex;gap:4px;">${heart}${replyBtn}</div>`
+      + `<div>${del}</div>`
+      + `</div>`
       + `</div>`;
-  }).join('');
+  };
+
+  const blocks = [];
+  for (const c of topLevel) {
+    blocks.push(renderOne(c, false));
+    const replies = childrenOf.get(c.comment_id) || [];
+    for (const r of replies) blocks.push(renderOne(r, true));
+  }
+  fpCommentsList.innerHTML = blocks.join('');
+
   fpCommentsList.querySelectorAll('.fp-comment-delete').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = parseInt(btn.dataset.commentId, 10);
       if (!Number.isNaN(id)) deleteFeedComment(id);
     });
   });
+  fpCommentsList.querySelectorAll('.fp-like').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (!Number.isNaN(id)) toggleFeedCommentLike(id);
+    });
+  });
+  fpCommentsList.querySelectorAll('.fp-reply').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (!Number.isNaN(id)) startFeedReply(id);
+    });
+  });
+}
+
+function startFeedReply(commentId) {
+  state.replyingToFeedCommentId = commentId;
+  const target = (state.feedPostComments || []).find((c) => c.comment_id === commentId);
+  const nick = target?.author_nickname || '익명';
+  if (fpCommentInput) {
+    fpCommentInput.placeholder = `@${nick} 에게 답글⋯`;
+    fpCommentInput.focus();
+  }
+}
+
+async function toggleFeedCommentLike(commentId) {
+  if (state.isAnonymous || !state.userId) { toast('로그인이 필요합니다'); return; }
+  const liked = state.feedPostCommentLikedByMe?.has(commentId);
+  try {
+    const sb = await getSupabase();
+    if (liked) {
+      const { error } = await sb.from('feed_post_comment_likes')
+        .delete().eq('comment_id', commentId).eq('user_id', state.userId);
+      if (error) throw error;
+      state.feedPostCommentLikedByMe.delete(commentId);
+      state.feedPostCommentLikes.set(commentId, Math.max(0, (state.feedPostCommentLikes.get(commentId) || 1) - 1));
+    } else {
+      const { error } = await sb.from('feed_post_comment_likes')
+        .insert({ comment_id: commentId, user_id: state.userId });
+      if (error) throw error;
+      state.feedPostCommentLikedByMe.add(commentId);
+      state.feedPostCommentLikes.set(commentId, (state.feedPostCommentLikes.get(commentId) || 0) + 1);
+    }
+    renderFeedComments();
+  } catch (err) {
+    console.warn('[m] toggleFeedCommentLike failed:', err);
+    toast('좋아요 처리 실패');
+  }
 }
 
 async function submitFeedComment() {
@@ -5671,14 +6028,18 @@ async function submitFeedComment() {
   if (fpCommentSubmit) fpCommentSubmit.disabled = true;
   try {
     const sb = await getSupabase();
+    const payload = { post_id: post.post_id, user_id: state.userId, author_nickname: state.userNickname || null, body };
+    if (state.replyingToFeedCommentId) payload.parent_comment_id = state.replyingToFeedCommentId;
     const { data, error } = await sb
       .from('feed_post_comments')
-      .insert({ post_id: post.post_id, user_id: state.userId, author_nickname: state.userNickname || null, body })
-      .select('comment_id, post_id, user_id, author_nickname, body, created_at')
+      .insert(payload)
+      .select('comment_id, post_id, user_id, parent_comment_id, author_nickname, body, created_at')
       .single();
     if (error) throw error;
-    track('feed_comment_submitted', { post_id: post.post_id });
+    track('feed_comment_submitted', { post_id: post.post_id, is_reply: !!payload.parent_comment_id });
     fpCommentInput.value = '';
+    fpCommentInput.placeholder = '댓글을 남겨주세요';
+    state.replyingToFeedCommentId = null;
     updateFpCounter();
     if (data && !(state.feedPostComments || []).find((c) => c.comment_id === data.comment_id)) {
       state.feedPostComments = [...(state.feedPostComments || []), data];
@@ -6154,7 +6515,7 @@ async function loadAndRenderHighlights() {
     const sb = await getSupabase();
     let { data, error } = await sb
       .from('card_highlights')
-      .select('highlight_id, card_id, user_id, selected_text, author_nickname, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
+      .select('highlight_id, card_id, user_id, selected_text, author_nickname, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year, cover_url))')
       .order('created_at', { ascending: false })
       .limit(50);
     // 018 마이그레이션 안 돌아간 경우 author_nickname 빼고 재시도
@@ -6162,7 +6523,7 @@ async function loadAndRenderHighlights() {
       console.warn('[hl] author_nickname column missing, falling back select');
       const retry = await sb
         .from('card_highlights')
-        .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
+        .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year, cover_url))')
         .order('created_at', { ascending: false })
         .limit(50);
       data = retry.data; error = retry.error;
@@ -6199,6 +6560,7 @@ function renderHighlights() {
     const metaLine = [formatLabel, when].filter(Boolean).join(' · ');
     const coverColor = leatherColorFor(w.title || title);
 
+    const cover = w.cover_url || '';
     const item = document.createElement('div');
     item.className = 'hl-card';
     item.innerHTML = `
@@ -6206,10 +6568,19 @@ function renderHighlights() {
         <p class="nickname">${escapeHtml(nickname)}</p>
         ${metaLine ? `<p class="meta">${escapeHtml(metaLine)}</p>` : ''}
       </div>
-      <div class="hl-bookcover" style="background:${coverColor};">
-        <p class="bc-title">${escapeHtml(title)}</p>
-        ${subtitle ? `<p class="bc-subtitle">${escapeHtml(subtitle)}</p>` : ''}
-        ${author ? `<p class="bc-author">${escapeHtml(author)}</p>` : ''}
+      <div class="hl-bookcover" style="background:${coverColor};overflow:hidden;position:relative;">
+        ${cover
+          ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" loading="lazy"
+              style="width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0;" />`
+          : `<p class="bc-title">${escapeHtml(title)}</p>
+            ${subtitle ? `<p class="bc-subtitle">${escapeHtml(subtitle)}</p>` : ''}
+            ${author ? `<p class="bc-author">${escapeHtml(author)}</p>` : ''}`
+        }
+      </div>
+      <!-- 책표지 바로 아래 — 제목 + 작가 (사용자 명세) -->
+      <div class="hl-book-info" style="text-align:center;margin-top:10px;">
+        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);font-weight:600;line-height:1.3;">${escapeHtml(title)}</p>
+        ${author ? `<p style="margin:3px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(author)}${year ? ' · ' + escapeHtml(String(year)) : ''}</p>` : ''}
       </div>
       <div class="hl-quote">
         <span class="open-q">“</span>
@@ -6345,16 +6716,45 @@ function setView(view) {
   if (view === 'notice') renderNotice();
   if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); paintMyFeedEntry(); paintMyBookmarksEntry(); paintMyNoticeEntry(); }
   if (view === 'daily') {
-    renderDailyDate();
-    renderDailyNotice();
-    renderDailyNewBooks();
-    renderDailyContextual();
-    renderDailyTrending();
-    renderDailyOzPick();
-    renderDailyRecent();
+    // 캐시된 state.allCards 에 cover_url 키가 없으면 (이전 SELECT 결과) 강제 reload — 한 번만.
+    const sample = (state.allCards || [])[0];
+    const needsReload = sample?.works && !('cover_url' in sample.works);
+    if (needsReload) {
+      state.allCards = null;
+      loadAllCards().then(() => {
+        if (state.currentView === 'daily') {
+          renderDailyDate();
+          renderDailyNotice();
+          renderDailyNewBooks();
+          renderDailyContextual();
+          renderDailyTrending();
+          renderDailyOzPick();
+          renderDailyRecent();
+        }
+      });
+    } else {
+      renderDailyDate();
+      renderDailyNotice();
+      renderDailyNewBooks();
+      renderDailyContextual();
+      renderDailyTrending();
+      renderDailyOzPick();
+      renderDailyRecent();
+    }
   } else {
     stopNoticeCarousel?.();
     stopContextualCarousel?.();
+    clearRandomCats?.();   // 다른 페이지 이동 시 랜덤 고양이 모두 제거 (사용자 명세)
+  }
+  // LIBRARY 도 동일 — cover_url 누락 시 reload
+  if (view === 'archive') {
+    const sample = (state.allCards || [])[0];
+    if (sample?.works && !('cover_url' in sample.works)) {
+      state.allCards = null;
+      loadAllCards().then(() => {
+        if (state.currentView === 'archive') { renderArchiveChips(); renderArchive(); }
+      });
+    }
   }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)

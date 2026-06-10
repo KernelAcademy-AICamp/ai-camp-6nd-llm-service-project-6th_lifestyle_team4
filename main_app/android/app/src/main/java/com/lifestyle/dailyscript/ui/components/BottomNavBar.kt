@@ -200,7 +200,7 @@ private fun HomeCenterButton(
                 Image(
                     bitmap = yarnBitmap,
                     contentDescription = stringResource(R.string.nav_home_label),
-                    contentScale = ContentScale.Crop, // 원을 꽉 채우고 위 clip(CircleShape)로 둥글게 잘림
+                    contentScale = ContentScale.Fit, // 비율 보존 — 가로 직사각형 PNG 가 원 안에 잘리지 않게
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
