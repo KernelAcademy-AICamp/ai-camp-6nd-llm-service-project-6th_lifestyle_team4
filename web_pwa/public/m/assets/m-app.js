@@ -2938,18 +2938,15 @@ function renderDailyOzPick() {
   sec.innerHTML = `
     <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">오즈의 오늘의 추천</h2>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
-      <!-- 오즈 헤더 — 책 위 고양이 + 이름 + 메타 (원 안에 가두지 않음, 더 크게) -->
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <!-- 오즈 헤더 — 책 위 고양이 + 이름 + 메타 + 한마디 (한 그룹) -->
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">
         <img src="assets/cat/cat_shelf_many.png" alt="오즈"
           style="width:72px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">오즈</p>
-          <p style="margin:2px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(metaText)}</p>
+          <p style="margin:2px 0 6px;font-size:11px;color:var(--walnut);">${escapeHtml(metaText)}</p>
+          <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.55;">${escapeHtml(reason)}</p>
         </div>
-      </div>
-      <!-- 추천 메시지 박스 -->
-      <div style="background:var(--latte);border:0.5px solid var(--sand);padding:14px 16px;margin-bottom:14px;">
-        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.6;">${escapeHtml(reason)}</p>
       </div>
       <!-- 책표지(좌측) + 제목/작가/연도(우측) -->
       <div style="display:flex;align-items:center;gap:12px;">
