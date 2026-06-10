@@ -677,6 +677,48 @@
     pointer-events: none;
   }
 
+  /* ===== DAILY 6 섹션 ===== */
+  .daily-section-label {
+    font-size: 11px; letter-spacing: 0.18em;
+    color: var(--walnut); font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .daily-notice-card {
+    width: 100%; background: var(--latte);
+    border: 0.5px solid var(--sand); padding: 16px 18px;
+    cursor: pointer; text-align: left; display: block;
+    transition: opacity 200ms;
+  }
+  .daily-notice-card:active { opacity: 0.7; }
+  .daily-notice-tag {
+    display: inline-block; font-size: 10px;
+    letter-spacing: 0.18em; color: var(--cta);
+    font-weight: 700; margin-bottom: 8px;
+  }
+  .daily-notice-title {
+    font-family: 'Noto Serif KR', serif; font-size: 15px;
+    color: var(--espresso); margin: 0;
+    line-height: 1.4; font-weight: 700;
+  }
+  .daily-notice-body {
+    font-size: 12px; color: var(--walnut);
+    margin: 6px 0 0; line-height: 1.5;
+    overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .daily-notice-dots {
+    display: flex; justify-content: center; gap: 6px; margin-top: 10px;
+  }
+  .daily-notice-dots .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--sand);
+    transition: background 200ms, width 200ms;
+  }
+  .daily-notice-dots .dot.active {
+    background: var(--cta); width: 16px; border-radius: 3px;
+  }
+
   /* ===== library 고양이 마스코트 ===== */
   #view-archive { position: relative; }
   .archive-cat {
@@ -1404,8 +1446,24 @@
 
 <main>
 
-  <!-- ===== Home view ===== -->
-  <section id="view-home">
+  <!-- ===== DAILY view — 6 섹션 (사용자 명세) ===== -->
+  <section id="view-daily">
+    <div style="padding-top:24px;"></div>
+    <p id="daily-date" class="t-label-sm c-walnut" style="text-align:center;">— · — · —</p>
+    <div style="height:10px;"></div>
+    <h1 class="t-display-md c-espresso" style="text-align:center;font-size:28px;line-height:38px;">디스커버리</h1>
+    <div style="height:32px;"></div>
+    <div id="daily-section-notice" style="display:none;"></div>
+    <div id="daily-section-new-books" style="display:none;"></div>
+    <div id="daily-section-contextual" style="display:none;"></div>
+    <div id="daily-section-trending" style="display:none;"></div>
+    <div id="daily-section-oz" style="display:none;"></div>
+    <div id="daily-section-recent" style="display:none;"></div>
+    <div style="height:40px;"></div>
+  </section>
+
+  <!-- ===== TODAY view (기존 view-home, 라벨만 TODAY) ===== -->
+  <section id="view-home" style="display:none;">
     <div id="home-loading" style="display:flex;flex-direction:column;align-items:center;padding:80px 0;">
       <div class="spinner"></div>
       <p class="t-label-sm c-walnut" style="margin-top:16px;">Loading⋯</p>
@@ -1655,6 +1713,20 @@
       <div class="hairline"></div>
     </div>
 
+    <!-- NOTICE entry — DAILY 공지와 동일한 view-notice 진입 -->
+    <div id="mypage-notice-block">
+      <button id="mypage-notice-entry"
+              style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
+        <div style="flex:1;min-width:0;">
+          <p class="t-title-lg c-espresso" style="margin-bottom:4px;">공지사항</p>
+          <p class="t-body-sm c-walnut">업데이트와 소식</p>
+        </div>
+        <span id="mypage-notice-dot" style="display:none;width:7px;height:7px;background:var(--cta);border-radius:50%;margin-right:8px;"></span>
+        <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+      </button>
+      <div class="hairline"></div>
+    </div>
+
     <div style="height:40px;"></div>
     <p class="t-label-sm c-walnut" style="margin-bottom:12px;font-weight:700;">일반 설정</p>
 
@@ -1739,21 +1811,28 @@
 
 <!-- ===== Bottom Nav ===== -->
 <div class="hairline" style="position:fixed;left:0;right:0;bottom:64px;z-index:31;"></div>
+<!-- 순서: DAILY / FEED / TODAY(가운데 실타래 돌출) / LIBRARY / MY  (사용자 명세) -->
 <nav class="bottom-nav">
-  <button data-nav="notice" class="nav-item">
-    <span class="material-symbols-outlined nav-icon">campaign</span>
-    <span class="t-label-sm">NOTICE</span>
+  <button data-nav="daily" class="nav-item active">
+    <span class="material-symbols-outlined nav-icon">explore</span>
+    <span class="t-label-sm">DAILY</span>
     <span class="nav-dot"></span>
-    <span id="notice-unread-dot"></span>
   </button>
   <button data-nav="feed" class="nav-item">
     <span class="material-symbols-outlined nav-icon">dynamic_feed</span>
     <span class="t-label-sm">FEED</span>
     <span class="nav-dot"></span>
   </button>
-  <button data-nav="home" class="nav-item nav-home-center active">
-    <span class="material-symbols-outlined nav-icon">home</span>
-    <span class="t-label-sm">HOME</span>
+  <!-- 가운데 — 실타래 돌출 원형 (안드 ic_yarn.xml SVG 매칭) -->
+  <button data-nav="home" class="nav-item nav-home-center">
+    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-label="yarn" style="width:24px;height:24px;">
+      <path stroke-width="1.5" d="M12 3 A9 9 0 0 1 12 21 A9 9 0 0 1 12 3 Z"/>
+      <path stroke-width="1.3" d="M4.6 9.5 A9 9 0 0 1 14.5 3.6"/>
+      <path stroke-width="1.3" d="M3.5 14.5 A9 9 0 0 1 9.6 20.5"/>
+      <path stroke-width="1.3" d="M6 18.2 A13 13 0 0 1 18.4 6.2"/>
+      <path stroke-width="1.3" d="M10 20.6 A13 13 0 0 1 20.7 10.3"/>
+    </svg>
+    <span class="t-label-sm">TODAY</span>
     <span class="nav-dot"></span>
   </button>
   <button data-nav="archive" class="nav-item">
@@ -1771,6 +1850,7 @@
     <span class="material-symbols-outlined nav-icon">person</span>
     <span class="t-label-sm">MY</span>
     <span class="nav-dot"></span>
+    <span id="notice-unread-dot"></span>
   </button>
 </nav>
 
