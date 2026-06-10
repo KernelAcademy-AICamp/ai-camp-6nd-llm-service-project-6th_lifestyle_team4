@@ -1181,7 +1181,7 @@ function loadAllCards() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original, cover_url)')
       .order('card_id', { ascending: false }).limit(500);
     if (error) throw error;
     state.allCards = Array.isArray(data) ? data : [];
@@ -1198,7 +1198,7 @@ function loadBookmarks() {
     // ★ *_original 컬럼 포함 — 영문 토글 동작에 필요. loadAllCards SELECT 와 동일.
     const { data, error } = await sb
       .from('user_bookmarks')
-      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original))')
+      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original, cover_url))')
       .eq('user_id', state.userId)
       .order('created_at', { ascending: false });
     if (error) { console.warn('[m] bookmarks load failed:', error); return; }
@@ -2556,18 +2556,43 @@ function dailyBookCoverHTML(work, opts = {}) {
   </div>`;
 }
 
-// 온도/강도 → 한국어 정서 라벨 (사용자 명시: 온도/감도/여운)
+// 온도/강도 → 한국어 정서 라벨. 데이터 범위 자동 정규화 (0~1 / 0~10 / 0~100 어느 것이든).
+// 카드별로 다양한 라벨이 나오게 5단계 매핑.
+function _normTone(n) {
+  if (!Number.isFinite(n)) return null;
+  // 0~1, 0~10, 0~100 자동 추정
+  if (n > 10) return Math.min(1, n / 100);
+  if (n > 1)  return Math.min(1, n / 10);
+  return Math.max(0, Math.min(1, n));
+}
 function toneLabels(card) {
   if (!card) return null;
-  const t = Number(card.temperature);
-  const i = Number(card.intensity);
-  const tempLabel = !Number.isFinite(t) ? null
-    : t < 0.34 ? '차분함' : t < 0.67 ? '따스함' : '뜨거움';
-  const intensityLabel = !Number.isFinite(i) ? null
-    : i < 0.34 ? '잔잔' : i < 0.67 ? '적당' : '강렬';
-  // aftertaste 데이터 없으니 significance 길이로 짧은/긴 추정 (있으면 표시).
-  const sig = String(card.significance || '');
-  const aftertasteLabel = sig ? (sig.length > 120 ? '길음' : sig.length > 60 ? '보통' : '짧음') : null;
+  const t = _normTone(Number(card.temperature));
+  const i = _normTone(Number(card.intensity));
+  // 온도 — 차가움/차분함/따스함/뜨거움/뜨거움
+  const tempLabel = t == null ? null
+    : t < 0.2 ? '차가움'
+    : t < 0.4 ? '차분함'
+    : t < 0.6 ? '미지근'
+    : t < 0.8 ? '따스함'
+    : '뜨거움';
+  // 감도 — 잔잔/조용/적당/짙음/강렬
+  const intensityLabel = i == null ? null
+    : i < 0.2 ? '잔잔'
+    : i < 0.4 ? '조용'
+    : i < 0.6 ? '적당'
+    : i < 0.8 ? '짙음'
+    : '강렬';
+  // 여운 — significance 길이 기반. 데이터 없으면 카드 본문 길이 fallback.
+  const sigLen = String(card.significance || '').length;
+  const excerptLen = String(card.script_excerpt || '').length;
+  const baseLen = sigLen || Math.floor(excerptLen / 8);
+  const aftertasteLabel = baseLen <= 0 ? null
+    : baseLen < 40  ? '짧음'
+    : baseLen < 80  ? '담백'
+    : baseLen < 140 ? '보통'
+    : baseLen < 220 ? '깊음'
+    : '길음';
   return { tempLabel, intensityLabel, aftertasteLabel };
 }
 
@@ -2717,8 +2742,8 @@ function renderDailyContextual() {
   stopContextualCarousel();
   sec.style.display = 'block';
   sec.innerHTML = `
-    <p class="daily-section-label">이럴 땐, 이런 문장</p>
-    <p class="t-body-sm c-walnut" style="margin-bottom:14px;">지금 마음에 맞춰 한 문장을 골라드려요</p>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 4px;">이럴 땐, 이런 문장</h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 14px;">지금 마음에 맞춰 한 문장을 골라드려요</p>
     <div class="archive-chips" id="daily-context-chips" style="margin-bottom:16px;">
       ${CONTEXT_CATEGORIES.map((c, i) => `<button class="a-chip ${i === 0 ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
@@ -2830,26 +2855,38 @@ function renderDailyOzPick() {
     ? `'${matchedKw}'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
     : '오즈가 오늘 골라드린 한 문장이에요.';
   const work = pick.works || {};
+  // 사용자 선호 메타 — "당신의 취향 · 비극 · 운명" 형식
+  const tasteMeta = [];
+  tasteMeta.push('당신의 취향');
+  const formatLabel = GENRE_LABEL[work.format];
+  if (formatLabel) tasteMeta.push(formatLabel);
+  if (matchedKw) tasteMeta.push(matchedKw);
+  const metaText = tasteMeta.join(' · ');
+
   sec.style.display = 'block';
   sec.innerHTML = `
-    <p class="daily-section-label">오즈의 오늘의 추천</p>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">오즈의 오늘의 추천</h2>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
-      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">
-        <span style="width:38px;height:38px;border-radius:50%;background:var(--cta);display:inline-flex;align-items:center;justify-content:center;color:var(--paper);font-weight:700;font-size:13px;flex-shrink:0;font-family:'Noto Serif KR',serif;">오즈</span>
+      <!-- 오즈 헤더 — 아바타 + 이름 + 메타 -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <span style="width:36px;height:36px;border-radius:50%;background:var(--latte);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <span class="material-symbols-outlined" style="font-size:20px;color:var(--cta);">auto_awesome</span>
+        </span>
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">오즈</p>
-          <p style="margin:3px 0 0;font-size:12px;color:var(--walnut);line-height:1.5;">${escapeHtml(reason)}</p>
+          <p style="margin:2px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(metaText)}</p>
         </div>
       </div>
-      <div class="hairline"></div>
-      <div style="height:16px;"></div>
-      <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:16px;color:var(--espresso);line-height:1.6;text-align:center;font-weight:500;">"${escapeHtml((pick.quote || '').slice(0, 100))}"</p>
-      <div style="height:16px;"></div>
-      <div style="display:flex;align-items:center;gap:14px;justify-content:center;">
+      <!-- 추천 메시지 박스 -->
+      <div style="background:var(--latte);border:0.5px solid var(--sand);padding:14px 16px;margin-bottom:14px;">
+        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.6;">${escapeHtml(reason)}</p>
+      </div>
+      <!-- 책표지(좌측) + 제목/작가/연도(우측) -->
+      <div style="display:flex;align-items:center;gap:12px;">
         ${dailyBookCoverHTML(work, { width: 56 })}
-        <div style="text-align:left;">
-          <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);font-weight:600;line-height:1.3;">${escapeHtml(work.title || '')}</p>
-          <p style="margin:3px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(work.author || '')} · ${work.release_year || ''}</p>
+        <div style="flex:1;min-width:0;">
+          <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:15px;color:var(--espresso);font-weight:700;line-height:1.3;">${escapeHtml(work.title || '')}</p>
+          <p style="margin:4px 0 0;font-size:12px;color:var(--walnut);">${escapeHtml(work.author || '')}${work.release_year ? ' · ' + work.release_year : ''}</p>
         </div>
       </div>
     </article>
@@ -2857,7 +2894,11 @@ function renderDailyOzPick() {
   `;
   sec.querySelector('.daily-oz-card')?.addEventListener('click', () => {
     track('daily_oz_clicked', { card_id: pick.card_id });
-    openDetail(pick);
+    // 사용자 명세: 카드 상세 X → LIBRARY 로 이동 + 추천 책 펼침.
+    const allWorks = groupAllCardsByWork();
+    const targetWork = allWorks.find((w) => (w.cards || []).some((c) => c.card_id === pick.card_id));
+    setView('archive');
+    setTimeout(() => { if (targetWork && typeof openBookModal === 'function') openBookModal(targetWork, allWorks); }, 80);
   });
 }
 

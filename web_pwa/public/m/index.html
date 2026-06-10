@@ -365,11 +365,13 @@
     min-height: 14px;               /* 카운트 줄 높이 고정 */
   }
 
-  /* 장식용 고양이 (안드 BottomNavBar.cat_empty 매칭) — 바 우상단에 걸쳐 위로 솟음. 클릭 통과. */
+  /* 장식용 고양이 (안드 BottomNavBar.cat_empty 매칭) — 바 우상단에 걸쳐 위로 솟음. 클릭 통과.
+     bottom: 40px = bar 높이 64px - (52*0.54) — PNG ledge 선(위→아래 46%) 이 바 윗면에 정확히 닿음.
+     앞다리는 바 안쪽으로 늘어지고 몸통은 바 위로 솟음. */
   .bottom-nav .bottom-nav-cat {
     position: absolute;
     right: 8px;
-    bottom: 44px;             /* 바 상단(64px) 가까이 — 몸통 위로, 앞다리는 바 윗면에 늘어짐 */
+    bottom: 32px;
     height: 52px;
     width: auto;              /* 원본 1143x497 ≈ 2.3:1 비율 유지 */
     pointer-events: none;
@@ -760,6 +762,40 @@
     transform: translateY(-50%);
     color: var(--walnut); font-size: 18px !important;
     pointer-events: none;
+  }
+
+  /* ===== DAILY — 둥근 모서리 + 두꺼운 보더 + 입체 그림자 (다크 테마 가독성) ===== */
+  #view-daily .sharp-card,
+  #view-daily .daily-notice-row,
+  #view-daily .daily-newbook-main {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1.5px solid rgba(60, 40, 20, 0.18);
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.12),
+      0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+  #view-daily .daily-notice-row {
+    border-radius: 12px;
+  }
+  /* 다크 테마 — 보더 살짝 밝게, 그림자 더 깊게 */
+  @media (prefers-color-scheme: dark) {
+    #view-daily .sharp-card,
+    #view-daily .daily-notice-row,
+    #view-daily .daily-newbook-main {
+      border-color: rgba(255, 255, 255, 0.22);
+      box-shadow:
+        0 4px 18px rgba(0, 0, 0, 0.5),
+        0 1px 4px rgba(0, 0, 0, 0.3);
+    }
+  }
+  [data-theme="dark"] #view-daily .sharp-card,
+  [data-theme="dark"] #view-daily .daily-notice-row,
+  [data-theme="dark"] #view-daily .daily-newbook-main {
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 4px 18px rgba(0, 0, 0, 0.5),
+      0 1px 4px rgba(0, 0, 0, 0.3);
   }
 
   /* ===== DAILY 6 섹션 ===== */
@@ -1507,10 +1543,9 @@
       <span style="font-size:13px;line-height:1;">🧶</span>
       <span class="yarn-chip-count t-label-sm" style="font-weight:700;">5</span>
     </button>
-    <div title="실시간 동기화 상태" style="display:flex;align-items:center;gap:6px;">
-      <span id="rt-status-dot" style="width:8px;height:8px;border-radius:50%;background:#C9B89A;display:inline-block;"></span>
-      <span id="rt-status-label" class="t-label-sm c-walnut" style="font-size:10px;">⋯</span>
-    </div>
+    <!-- LIVE 표시 제거됨 (사용자 명시) — 실시간 상태는 백그라운드에서만 동작 -->
+    <span id="rt-status-dot" style="display:none;"></span>
+    <span id="rt-status-label" style="display:none;"></span>
     <button id="my-page-btn" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;padding:4px 6px;">
       MY PAGE
     </button>
