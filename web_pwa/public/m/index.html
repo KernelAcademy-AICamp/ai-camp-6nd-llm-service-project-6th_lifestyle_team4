@@ -283,20 +283,22 @@
        · HomeProtrusion = 16dp → margin-top: -16px (위로 솟음) */
   .bottom-nav .nav-item.nav-home-center { justify-content: flex-start; }
   .bottom-nav .nav-item.nav-home-center .nav-home-circle {
-    width: 56px; height: 56px;
+    width: 60px; height: 60px;
     background: transparent;
     border: 2px solid transparent;
     border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
-    margin-top: -18px;
+    margin-top: -22px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
     transition: border-color 120ms;
-    overflow: visible;
+    overflow: hidden;
     padding: 0;
   }
+  /* PNG 가 677x369 (가로 직사각형) — cover 로 가운데 실타래만 보이게 + 동그란 원형으로 잘림 */
   .bottom-nav .nav-item.nav-home-center .nav-home-yarn {
-    width: 56px; height: 56px;        /* 원 안에 정확히 fit */
-    object-fit: contain;                /* 비율 보존 — 찌그러짐 방지 */
+    width: 60px; height: 60px;
+    object-fit: cover;
+    object-position: center;
     border-radius: 50%;
     display: block;
     pointer-events: none;
@@ -1539,7 +1541,7 @@
   <div style="display:flex;align-items:center;gap:12px;">
     <button id="yarn-chip" aria-label="남은 실타래" title="남은 실타래"
             style="display:inline-flex;align-items:center;gap:5px;background:transparent;border:0.5px solid var(--latte);border-radius:999px;padding:3px 10px 3px 4px;cursor:pointer;color:var(--walnut);">
-      <img src="assets/daily-script-bar.png" alt="실타래" style="width:20px;height:20px;display:block;pointer-events:none;" />
+      <img src="assets/daily-script-bar.png" alt="실타래" style="width:22px;height:22px;display:block;object-fit:cover;border-radius:50%;pointer-events:none;" />
       <span class="yarn-chip-count t-label-sm" style="font-weight:700;">5</span>
     </button>
     <!-- LIVE 표시 제거됨 (사용자 명시) — 실시간 상태는 백그라운드에서만 동작 -->
@@ -2141,7 +2143,7 @@
       <p class="t-body-sm c-walnut" style="margin-top:6px;">실타래로 명장면 전문을 열람하세요</p>
 
       <div style="display:flex;align-items:center;gap:10px;margin-top:18px;background:rgba(216,160,90,0.14);border-radius:10px;padding:16px;">
-        <img src="assets/daily-script-bar.png" alt="실타래" style="width:24px;height:24px;display:block;" />
+        <img src="assets/daily-script-bar.png" alt="실타래" style="width:28px;height:28px;display:block;object-fit:cover;border-radius:50%;" />
         <span class="t-title-lg c-espresso">보유 실타래 <span id="yarn-balance-num">5</span></span>
       </div>
       <p class="t-label-sm c-walnut" style="margin-top:8px;">매일 5개의 실타래가 무료로 채워져요.</p>

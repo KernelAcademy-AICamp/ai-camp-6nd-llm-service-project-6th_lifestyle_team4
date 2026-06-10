@@ -3000,11 +3000,9 @@ function renderDailyOzPick() {
     </article>
     <div style="height:36px;"></div>
   `;
-  sec.querySelector('.daily-oz-card')?.addEventListener('click', () => {
-    track('daily_oz_clicked', { card_id: pick.card_id });
-    // 사용자 명세: daily 탭에 머물러 — 카드 상세만 (LIBRARY 이동 X).
-    openDetail(pick);
-  });
+  // 사용자 명세: 오즈 카드는 클릭 반응 없음 (카드 상세 이동 X, daily 그대로).
+  const ozCard = sec.querySelector('.daily-oz-card');
+  if (ozCard) { ozCard.style.cursor = 'default'; }
 }
 
 // 섹션 6: 다시 만나기 — 최근 북마크
@@ -4157,7 +4155,7 @@ function renderYarnTiers() {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:0.5px solid var(--latte);';
     row.innerHTML =
-        `<span style="display:flex;align-items:center;gap:12px;"><img src="assets/daily-script-bar.png" alt="실타래" style="width:24px;height:24px;display:block;" /></span>`
+        `<span style="display:flex;align-items:center;gap:12px;"><img src="assets/daily-script-bar.png" alt="실타래" style="width:28px;height:28px;display:block;object-fit:cover;border-radius:50%;" /></span>`
       + `<span class="t-title-lg c-espresso">실타래 ${count}개</span></span>`
       + `<span class="yarn-tier-buy" style="background:var(--cta);color:#fff;-webkit-text-fill-color:#fff;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;">₩${price.toLocaleString()}</span>`;
     row.querySelector('.yarn-tier-buy').addEventListener('click', async () => {
