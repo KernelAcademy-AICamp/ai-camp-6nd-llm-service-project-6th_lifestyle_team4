@@ -66,12 +66,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.model.CardDto
+import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.DetailTopBar
 import com.lifestyle.dailyscript.ui.components.EditorialField
 import com.lifestyle.dailyscript.ui.components.LangSegmented
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
+import com.lifestyle.dailyscript.ui.feed.FeedComposeSheet
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -98,6 +100,8 @@ fun DetailScreen(
     isAnonymous: Boolean,
     myNickname: String,
     onBack: () -> Unit,
+    onGoLibrary: () -> Unit,
+    onGoFeed: () -> Unit,
 ) {
     val vm: DetailViewModel = viewModel()
     val state by vm.state.collectAsState()
@@ -145,6 +149,7 @@ fun DetailScreen(
     val scriptSel = scriptTfv.selection
     val scriptSelected = if (!scriptSel.collapsed) scriptTfv.text.substring(scriptSel.min, scriptSel.max).trim() else ""
     var hlComposeText by remember(cardId) { mutableStateOf<String?>(null) }
+    var feedComposeOpen by remember(cardId) { mutableStateOf(false) }
     val selectedForTour by rememberUpdatedState(scriptSelected)
     val userIdForTour by rememberUpdatedState(userId)
     val nicknameForTour by rememberUpdatedState(myNickname)
@@ -319,13 +324,29 @@ fun DetailScreen(
                 Box(modifier = Modifier.height(32.dp))
 
                 SharpButton(
-                    label = if (state.bookmarked)
-                        stringResource(R.string.collected_artifact)
-                    else
-                        stringResource(R.string.collect_artifact),
-                    onClick = { vm.toggleBookmark(userId) },
+                    label = stringResource(R.string.detail_post_one_liner),
+                    onClick = {
+                        // 북마크 보장 — toggle 은 in-flight 자체 가드(fire-and-forget).
+                        if (!state.bookmarked) vm.toggleBookmark(userId)
+                        if (isAnonymous) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "로그인 후 오늘의 한줄을 남길 수 있어요.",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        } else {
+                            vm.clearFeedError()
+                            feedComposeOpen = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Box(modifier = Modifier.height(10.dp))
+                SharpButton(
+                    label = stringResource(R.string.detail_go_library),
+                    onClick = onGoLibrary,
                     variant = SharpButtonVariant.Outline,
-                    enabled = !state.bookmarkActionInFlight,
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 state.error?.let { error ->
@@ -366,7 +387,8 @@ fun DetailScreen(
                     onCancelReply = { vm.setReplyTarget(null) },
                 )
 
-                Box(modifier = Modifier.height(24.dp))
+                // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
+                Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
             }
         }
       }
@@ -376,7 +398,8 @@ fun DetailScreen(
           HlFloatingButton(
               modifier = Modifier
                   .align(Alignment.BottomEnd)
-                  .padding(end = 18.dp, bottom = 24.dp)
+                  // 떠 있는 하단 바 위로 — 카드 높이만큼 올려 가리지 않게.
+                  .padding(end = 18.dp, bottom = BottomBarContentInset + 24.dp)
                   .coachAnchor(coach, "detail_hl_button"),
               onClick = {
                   if (isAnonymous) {
@@ -401,6 +424,28 @@ fun DetailScreen(
                   scriptTfv = scriptTfv.copy(selection = TextRange(scriptTfv.selection.end))
               },
           )
+      }
+      // 오늘의 한줄 작성 시트 — 피드 탭과 같은 FeedComposeSheet, 이 카드로 고정.
+      if (feedComposeOpen) {
+          state.card?.let { card ->
+              FeedComposeSheet(
+                  card = card,
+                  submitting = state.feedSubmitting,
+                  error = state.feedError,
+                  onDismiss = { feedComposeOpen = false },
+                  onSubmit = { body ->
+                      vm.submitFeedPost(userId, myNickname, body) {
+                          feedComposeOpen = false
+                          android.widget.Toast.makeText(
+                              context,
+                              "오늘의 한줄을 피드에 남겼어요.",
+                              android.widget.Toast.LENGTH_SHORT,
+                          ).show()
+                          onGoFeed()
+                      }
+                  },
+              )
+          }
       }
     }
 }

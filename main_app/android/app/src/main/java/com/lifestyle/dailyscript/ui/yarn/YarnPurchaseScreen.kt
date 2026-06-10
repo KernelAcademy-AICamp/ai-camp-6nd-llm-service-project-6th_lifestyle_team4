@@ -33,13 +33,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.lifestyle.dailyscript.R
+import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
+import com.lifestyle.dailyscript.ui.components.YarnIcon
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -100,7 +101,8 @@ fun YarnPurchaseScreen(yarnVm: YarnViewModel, onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 24.dp),
+                // 떠 있는 하단 바에 가리지 않도록 아래 여백을 카드 높이만큼 더 준다.
+                .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = BottomBarContentInset + 24.dp),
         ) {
             if (aboutTab) {
                 AboutContent()
@@ -147,12 +149,7 @@ private fun ChargeContent(available: Int, onTier: (Int) -> Unit) {
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_yarn),
-            contentDescription = null,
-            tint = Cta,
-            modifier = Modifier.size(20.dp),
-        )
+        YarnIcon(modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
         Text(
             text = stringResource(R.string.yarn_my_balance, available),
@@ -186,12 +183,7 @@ private fun TierRow(count: Int, price: Int, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            Icon(
-                painter = painterResource(R.drawable.ic_yarn),
-                contentDescription = null,
-                tint = Cta,
-                modifier = Modifier.size(22.dp),
-            )
+            YarnIcon(modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(14.dp))
             Text(
                 text = "실타래 ${count}개",

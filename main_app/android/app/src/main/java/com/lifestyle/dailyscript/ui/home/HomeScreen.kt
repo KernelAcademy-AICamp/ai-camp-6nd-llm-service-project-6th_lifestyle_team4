@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.model.CardDto
+import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.ChipTag
 import com.lifestyle.dailyscript.ui.components.LangSegmented
@@ -185,7 +186,8 @@ fun HomeScreen(
                 RecentRowItem(card = card, onClick = { onOpenCard(card.cardId) })
             }
         }
-        Box(modifier = Modifier.height(40.dp))
+        // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
+        Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
       }
     }
 }

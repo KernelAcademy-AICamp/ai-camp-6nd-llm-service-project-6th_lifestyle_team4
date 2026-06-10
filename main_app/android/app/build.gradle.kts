@@ -139,4 +139,8 @@ dependencies {
 
     implementation(libs.amplitude.analytics.android)
     implementation(libs.microsoft.clarity.compose)
+
+    // 네트워크 이미지 (피드 책 표지 works.cover_url)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 }

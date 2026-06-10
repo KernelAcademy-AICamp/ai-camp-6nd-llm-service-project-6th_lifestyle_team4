@@ -3,12 +3,14 @@ package com.lifestyle.dailyscript.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifestyle.dailyscript.data.AppAnalytics
+import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.Comment
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
 import com.lifestyle.dailyscript.data.repo.CommentRepository
 import com.lifestyle.dailyscript.data.repo.FeedRepository
+import com.lifestyle.dailyscript.ui.feed.FEED_TODAY
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -187,6 +189,36 @@ class DetailViewModel : ViewModel() {
 
     fun consumeHighlightMessage() { _state.value = _state.value.copy(highlightMessage = null) }
 
+    // ---------- 오늘의 한줄 (feed post from detail) ----------
+    fun clearFeedError() { _state.value = _state.value.copy(feedError = null) }
+
+    /** 이 카드에 대한 오늘의 한줄 등록. 성공 시 [onPosted] (호출부에서 피드 탭 이동). */
+    fun submitFeedPost(userId: Long, nickname: String, body: String, onPosted: () -> Unit) {
+        if (_state.value.feedSubmitting) return
+        val text = body.trim()
+        if (text.isEmpty() || currentCardId <= 0L) return
+        _state.value = _state.value.copy(feedSubmitting = true, feedError = null)
+        viewModelScope.launch {
+            runCatching { feedRepo.addPost(currentCardId, userId, text, nickname.ifBlank { null }) }
+                .onSuccess {
+                    // 피드 탭이 '오늘의 한줄' 카테고리로 열리게 — onPosted(탭 이동) 전에 기록.
+                    AppPreferences.setFeedCategory(FEED_TODAY)
+                    AppAnalytics.track(
+                        "feed_post_submitted",
+                        mapOf("card_id" to currentCardId, "source" to "detail"),
+                    )
+                    _state.value = _state.value.copy(feedSubmitting = false)
+                    onPosted()
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        feedSubmitting = false,
+                        feedError = "등록 실패: ${it.message ?: ""}",
+                    )
+                }
+        }
+    }
+
     fun deleteComment(userId: Long, commentId: Long) {
         viewModelScope.launch {
             runCatching { commentRepo.deleteComment(commentId, userId) }
@@ -221,4 +253,6 @@ data class DetailState(
     val replyingTo: Comment? = null,
     val highlightSaving: Boolean = false,
     val highlightMessage: String? = null,
+    val feedSubmitting: Boolean = false,
+    val feedError: String? = null,
 )

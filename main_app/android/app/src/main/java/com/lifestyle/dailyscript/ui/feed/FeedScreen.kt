@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,17 +51,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil3.compose.AsyncImage
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.data.model.Highlight
 import com.lifestyle.dailyscript.ui.components.BookCover
-import com.lifestyle.dailyscript.ui.components.EditorialField
-import com.lifestyle.dailyscript.ui.components.SharpButton
+import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.detail.relativeTime
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
 import com.lifestyle.dailyscript.ui.theme.CardWarm
-import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSans
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -89,6 +88,8 @@ fun FeedScreen(
 
     // Tapping a "오늘의 한줄" card opens its detail in a bottom sheet.
     var detailPost by remember { mutableStateOf<FeedPost?>(null) }
+    // Tapping a 하이라이트 card opens its detail (명대사 발췌 + 댓글) in a bottom sheet.
+    var detailHighlight by remember { mutableStateOf<Highlight?>(null) }
     // Bookmark pickers: today → compose a one-liner; highlight → open that card's detail.
     var todayPickerOpen by remember { mutableStateOf(false) }
     var hlPickerOpen by remember { mutableStateOf(false) }
@@ -172,7 +173,7 @@ fun FeedScreen(
                         }
                     } else {
                         items(state.highlights, key = { "hl-${it.highlightId}" }) { hl ->
-                            HighlightCard(hl)
+                            HighlightCard(hl, onClick = { detailHighlight = hl })
                         }
                     }
                     item(key = "tail-spacer") { Box(modifier = Modifier.height(72.dp)) }
@@ -185,7 +186,8 @@ fun FeedScreen(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(20.dp)
+                    // 떠 있는 하단 바 위로 — 카드 높이만큼 올려 가리지 않게.
+                    .padding(end = 20.dp, bottom = BottomBarContentInset + 20.dp)
                     .size(56.dp)
                     .coachAnchor(coach, "feed_fab")
                     .background(Espresso, RoundedCornerShape(28.dp))
@@ -235,6 +237,17 @@ fun FeedScreen(
             myNickname = myNickname,
             onDismiss = { detailPost = null },
             onOpenCard = { cardId -> detailPost = null; onOpenCard(cardId) },
+        )
+    }
+
+    detailHighlight?.let { hl ->
+        HighlightDetailSheet(
+            highlight = hl,
+            userId = userId,
+            isAnonymous = isAnonymous,
+            myNickname = myNickname,
+            onDismiss = { detailHighlight = null },
+            onOpenCard = { cardId -> detailHighlight = null; onOpenCard(cardId) },
         )
     }
 }
@@ -320,83 +333,6 @@ private fun PickRow(card: CardDto, onClick: () -> Unit) {
             tint = Sand,
             modifier = Modifier.size(14.dp),
         )
-    }
-}
-
-/** Compose step for a one-liner on the picked card (mirrors the PWA feed-compose modal). */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FeedComposeSheet(
-    card: CardDto,
-    submitting: Boolean,
-    error: String?,
-    onDismiss: () -> Unit,
-    onSubmit: (String) -> Unit,
-) {
-    var body by remember(card.cardId) { mutableStateOf("") }
-    val w = card.works
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Paper) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
-                .imePadding(),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = w.displayTitle().ifBlank { "—" },
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Espresso,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                Text("#${card.cardId}", style = MaterialTheme.typography.labelSmall, color = Walnut)
-            }
-            val meta = listOfNotNull(
-                w?.format?.let { genreLabel(it) },
-                w?.author,
-                w?.releaseYear?.toString(),
-            ).joinToString(" · ").uppercase()
-            if (meta.isNotBlank()) {
-                Box(modifier = Modifier.height(6.dp))
-                Text(meta, style = MaterialTheme.typography.labelSmall, color = Walnut)
-            }
-            Box(modifier = Modifier.height(14.dp))
-            Box(Modifier.fillMaxWidth().height(0.5.dp).background(Latte))
-            Box(modifier = Modifier.height(14.dp))
-            EditorialField(
-                value = body,
-                onValueChange = { body = it },
-                placeholder = "이 명대사에 대한 한줄을 남겨보세요…",
-                minHeight = 120.dp,
-                maxLength = 300,
-            )
-            Box(modifier = Modifier.height(6.dp))
-            Text(
-                text = "${body.length}/300자",
-                style = MaterialTheme.typography.bodySmall,
-                color = Walnut,
-                textAlign = TextAlign.End,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            error?.let {
-                Box(modifier = Modifier.height(8.dp))
-                Text(text = it, color = Cta, style = MaterialTheme.typography.bodySmall)
-            }
-            Box(modifier = Modifier.height(14.dp))
-            SharpButton(
-                label = if (submitting) "등록 중⋯" else "등록 하기",
-                onClick = { if (!submitting && body.isNotBlank()) onSubmit(body) },
-                enabled = !submitting && body.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
     }
 }
 
@@ -489,47 +425,84 @@ private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        // Book line — title + author
-        Column(
+        // Book line — title + author (+ 초판 표지가 오른쪽 아래 카드 모서리에 살짝 걸침, PWA .fb-cover)
+        val coverUrl = w?.coverUrl?.takeIf { it.startsWith("http") } // 상대경로 등은 해석 불가 → 미표시
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Paper)
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .background(Paper),
         ) {
-            Text(
-                text = w.displayTitle().ifBlank { "—" },
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontFamily = EditorialSans,
-                    fontWeight = FontWeight.Normal,
-                ),
-                color = Espresso,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            w?.author?.ifBlank { null }?.let {
-                Box(modifier = Modifier.height(4.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
+                    // 표지(폭 60 + 우측 20)에 제목이 안 가리게 (PWA padding-right: 96px)
+                    .padding(end = if (coverUrl != null) 68.dp else 0.dp),
+            ) {
                 Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium.copy(
+                    text = w.displayTitle().ifBlank { "—" },
+                    style = MaterialTheme.typography.titleMedium.copy(
                         fontFamily = EditorialSans,
                         fontWeight = FontWeight.Normal,
                     ),
-                    color = Walnut,
+                    color = Espresso,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                w?.author?.ifBlank { null }?.let {
+                    Box(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = EditorialSans,
+                            fontWeight = FontWeight.Normal,
+                        ),
+                        color = Walnut,
+                    )
+                }
+            }
+            if (coverUrl != null) {
+                FeedBookCover(
+                    url = coverUrl,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 20.dp)
+                        // 아래로 20dp 밀어 카드의 clip(shape)에 잘리며 '빼꼼' 나온 모양 (PWA bottom:-20px)
+                        .offset(y = 20.dp),
                 )
             }
         }
     }
 }
 
-/** "하이라이트" — matches the PWA .hl-card: head(닉네임·장르·날짜) → 책표지 → 발췌 → 일련번호. */
+/** 책 줄 우측의 실제 초판 표지 (works.cover_url). 로드 실패 시 표시하지 않음 (PWA onerror→remove). */
 @Composable
-private fun HighlightCard(hl: Highlight) {
+private fun FeedBookCover(url: String, modifier: Modifier = Modifier) {
+    var failed by remember(url) { mutableStateOf(false) }
+    if (failed) return
+    val shape = RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)
+    AsyncImage(
+        model = url,
+        contentDescription = null, // 장식 — 제목/저자 텍스트가 이미 있음
+        contentScale = ContentScale.Crop,
+        onError = { failed = true },
+        modifier = modifier
+            .size(width = 60.dp, height = 86.dp)
+            .shadow(4.dp, shape)
+            .clip(shape),
+    )
+}
+
+/** "하이라이트" — matches the PWA .hl-card: head(닉네임·장르·날짜) → 책표지 → 발췌 → 일련번호. 탭하면 상세(댓글) 시트. */
+@Composable
+private fun HighlightCard(hl: Highlight, onClick: () -> Unit) {
     val w = hl.cards?.works
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .border(0.5.dp, Latte)
             .background(CardWarm)
+            .clickable(onClick = onClick)
             .padding(start = 18.dp, top = 28.dp, end = 18.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

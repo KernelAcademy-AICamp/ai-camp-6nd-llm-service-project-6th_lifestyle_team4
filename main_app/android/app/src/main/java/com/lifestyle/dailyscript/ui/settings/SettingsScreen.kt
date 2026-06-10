@@ -52,8 +52,10 @@ import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.repo.AuthRepository
 import com.lifestyle.dailyscript.data.repo.SocialProvider
 import com.lifestyle.dailyscript.data.repo.UserSession
+import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
+import com.lifestyle.dailyscript.ui.components.YarnIcon
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
@@ -218,12 +220,7 @@ fun SettingsScreen(
             onClick = onOpenYarnPurchase,
             trailing = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_yarn),
-                        contentDescription = null,
-                        tint = Cta,
-                        modifier = Modifier.size(15.dp),
-                    )
+                    YarnIcon(modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(5.dp))
                     Text(
                         text = yarn.toString(),
@@ -290,7 +287,8 @@ fun SettingsScreen(
                     .padding(vertical = 8.dp),
             )
         }
-        Box(modifier = Modifier.height(40.dp))
+        // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
+        Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
     }
 
     if (showProfileDialog) {

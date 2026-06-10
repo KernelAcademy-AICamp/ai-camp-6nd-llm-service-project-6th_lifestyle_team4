@@ -6,6 +6,8 @@ import com.lifestyle.dailyscript.data.model.FeedCommentInsert
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.data.model.FeedPostInsert
 import com.lifestyle.dailyscript.data.model.Highlight
+import com.lifestyle.dailyscript.data.model.HighlightComment
+import com.lifestyle.dailyscript.data.model.HighlightCommentInsert
 import com.lifestyle.dailyscript.data.model.HighlightInsert
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -18,7 +20,7 @@ class FeedRepository {
     // Nested card columns required to decode CardDto (keywords/temperature/intensity are non-optional).
     private val nestedCard =
         "cards ( card_id, work_id, quote, script_excerpt, keywords, temperature, intensity, " +
-            "works ( work_id, title, subtitle, format, author, release_year ) )"
+            "works ( work_id, title, subtitle, format, author, release_year, cover_url ) )"
 
     private val postSelect =
         Columns.raw("post_id, card_id, user_id, author_nickname, body, created_at, $nestedCard")
@@ -26,6 +28,8 @@ class FeedRepository {
         Columns.raw("highlight_id, card_id, user_id, author_nickname, selected_text, user_note, created_at, $nestedCard")
     private val feedCommentSelect =
         Columns.raw("comment_id, post_id, user_id, author_nickname, body, created_at")
+    private val highlightCommentSelect =
+        Columns.raw("comment_id, highlight_id, user_id, author_nickname, body, created_at")
 
     suspend fun loadPosts(): List<FeedPost> =
         client.postgrest["feed_posts"]
@@ -133,6 +137,42 @@ class FeedRepository {
 
     suspend fun deleteComment(commentId: Long, userId: Long) {
         client.postgrest["feed_post_comments"].delete {
+            filter {
+                eq("comment_id", commentId)
+                eq("user_id", userId)
+            }
+        }
+    }
+
+    // ---- card_highlight_comments — 하이라이트 카드 상세의 댓글 (feed_post_comments 미러) ----
+
+    suspend fun loadHighlightComments(highlightId: Long): List<HighlightComment> =
+        client.postgrest["card_highlight_comments"]
+            .select(highlightCommentSelect) {
+                filter { eq("highlight_id", highlightId) }
+                order("created_at", Order.ASCENDING)
+            }
+            .decodeList()
+
+    suspend fun addHighlightComment(
+        highlightId: Long,
+        userId: Long,
+        body: String,
+        authorNickname: String?,
+    ): HighlightComment =
+        client.postgrest["card_highlight_comments"]
+            .insert(
+                HighlightCommentInsert(
+                    highlightId = highlightId,
+                    userId = userId,
+                    authorNickname = authorNickname,
+                    body = body,
+                )
+            ) { select(highlightCommentSelect) }
+            .decodeSingle()
+
+    suspend fun deleteHighlightComment(commentId: Long, userId: Long) {
+        client.postgrest["card_highlight_comments"].delete {
             filter {
                 eq("comment_id", commentId)
                 eq("user_id", userId)

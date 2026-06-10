@@ -18,6 +18,7 @@ credentials = "1.3.0"
 googleid = "1.1.1"
 amplitude = "1.28.2"
 clarity = "3.8.2"
+coil = "3.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -57,6 +58,11 @@ androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx"
 
 amplitude-analytics-android = { group = "com.amplitude", name = "analytics-android", version.ref = "amplitude" }
 microsoft-clarity-compose = { group = "com.microsoft.clarity", name = "clarity-compose", version.ref = "clarity" }
+
+# 네트워크 이미지 로딩 (피드 책 표지 works.cover_url). okhttp fetcher는 의존성만 추가하면
+# ServiceLoader로 자동 등록된다.
+coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -163,21 +163,21 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         // 마침/건너뛰기 → 홈으로 복귀(상세에서 시작했다면 닫고 돌아옴).
         coach.onEnd = {
             navController.navigate(Routes.HOME) {
-                popUpTo(Routes.HOME) { inclusive = false }
+                popUpTo(Routes.NOTICE) { inclusive = false }
                 launchSingleTop = true
             }
         }
     }
 
-    val mainTabs = setOf(Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE, Routes.SETTINGS)
     val isDetail = currentRoute?.startsWith("detail/") == true || currentRoute == Routes.DETAIL
     val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.BOOKMARKS, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE)
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
-    // 상세(전문 보기)에서도 하단 바 노출 — 상단 바는 DetailTopBar(뒤로가기·북마크)가 대체하므로 그대로 숨김 유지.
-    // 단, 키보드(IME)가 떠 있으면 숨김 — 댓글 컴포저가 키보드 바로 위에 붙도록.
+    // 하단 바는 모든 화면에서 노출 — 메인 탭·상세는 물론 마이 하위 페이지(내 댓글/내 피드/보관함/
+    // 약관/개인정보/실타래 충전/의견)까지. 풀스크린 화면은 각자 자체 상단 바(뒤로가기)를 둔다.
+    // 단, 키보드(IME)가 떠 있으면 숨김 — 입력 컴포저가 키보드 바로 위에 붙도록.
     val imeVisible = WindowInsets.isImeVisible
-    val showBottomBar = (currentRoute in mainTabs || isDetail) && !imeVisible
+    val showBottomBar = currentRoute != null && !imeVisible
 
     CompositionLocalProvider(LocalCoachController provides coach) {
       Box(modifier = Modifier.fillMaxSize()) {
@@ -202,8 +202,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 else -> Unit
             }
         }
+        // 본문은 화면 전체를 채운다 — 떠 있는 하단 바가 본문 위에 overlay 되어 좌우/아래 여백까지
+        // 본문이 비쳐 보인다. 각 화면이 스크롤 끝/떠있는 요소를 BottomBarContentInset 만큼 띄워
+        // 카드에 가려지지 않게 처리한다.
         Box(modifier = Modifier.weight(1f)) {
-            NavHost(navController = navController, startDestination = Routes.HOME) {
+            NavHost(navController = navController, startDestination = Routes.NOTICE) {
                 composable(Routes.HOME) {
                     HomeScreen(
                         userId = session.userId,
@@ -258,7 +261,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                             AppAnalytics.track("onboarding_requested")
                             coach.requestStart()
                             navController.navigate(Routes.HOME) {
-                                popUpTo(Routes.HOME) { inclusive = false }
+                                popUpTo(Routes.NOTICE) { inclusive = false }
                                 launchSingleTop = true
                             }
                         },
@@ -334,11 +337,22 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                             isAnonymous = session.isAnonymous,
                             myNickname = session.nickname,
                             onBack = { navController.popBackStack() },
+                            // 하단바 탭 전환과 같은 패턴 — 방문 순서대로 쌓아 뒤로가기가 직전 화면으로 가게 한다.
+                            onGoLibrary = {
+                                AppAnalytics.track("nav", mapOf("from" to Routes.DETAIL, "to" to Routes.ARCHIVE))
+                                navController.navigate(Routes.ARCHIVE) { launchSingleTop = true }
+                            },
+                            onGoFeed = {
+                                navController.navigate(Routes.FEED) { launchSingleTop = true }
+                            },
                         )
                     }
                 }
             }
         }
+        }
+        // 하단 바 — Column 형제가 아니라 inner Box 에 overlay. 본문 위에 떠 있어 고양이/홈버튼 솟음
+        // 영역만큼 본문이 비는 '박스'가 생기지 않는다. (본문은 위에서 BottomBarContentInset 만큼만 패딩)
         if (showBottomBar) {
             BottomNavBar(
                 currentRoute = currentRoute,
@@ -346,17 +360,16 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 onSelect = { route ->
                     if (currentRoute != route) {
                         AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to route))
-                        navController.navigate(route) {
-                            popUpTo(Routes.HOME) { inclusive = false }
-                            launchSingleTop = true
-                        }
+                        // 앵커로 collapse하지 않고 방문 순서대로 쌓는다 → 뒤로가기가 직전에 보던 탭으로.
+                        // (같은 탭 재탭은 위 currentRoute != route 가드로 중복 push 방지)
+                        navController.navigate(route) { launchSingleTop = true }
                     } else if (route == Routes.HOME) {
                         // 이미 홈일 때 홈 탭을 다시 누르면 새로고침 — 제거된 새로고침 버튼을 대체.
                         homeVm.refresh(session.userId, session.isAnonymous)
                     }
                 },
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
-        }
         }
         CoachTourOverlay(coach)
         // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(기존 프로필 다이얼로그 재사용, 건너뛰기 가능).

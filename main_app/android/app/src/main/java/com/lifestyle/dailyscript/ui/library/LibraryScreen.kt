@@ -26,11 +26,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
+import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
@@ -68,6 +71,7 @@ import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.BookCover
+import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.leatherColorFor
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -85,6 +89,9 @@ import kotlinx.coroutines.delay
 
 // The cover swings open with a slight overshoot — matches the archive/PWA .book transition.
 private val BookCoverEasing = CubicBezierEasing(0.34f, 1.2f, 0.64f, 1f)
+
+// 한 페이지에 4열 × 3줄 = 12권 (무한스크롤 대신 페이지 단위).
+private const val LibraryPageSize = 12
 
 /**
  * Library catalog: every work we have, shown four-per-row as the same leather "book shape"
@@ -130,11 +137,21 @@ fun LibraryScreen(onOpenCard: (Long) -> Unit) {
         }
     }
 
+    // 페이지네이션 — 필터/검색이 바뀌면(=filtered 재계산) 1페이지로 리셋.
+    var page by remember(filtered) { mutableStateOf(0) }
+    val pageCount = (filtered.size + LibraryPageSize - 1) / LibraryPageSize
+    val pageBooks = remember(filtered, page) {
+        filtered.drop(page * LibraryPageSize).take(LibraryPageSize)
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Paper),
+                .background(Paper)
+                // 떠 있는 하단 바(페이지 바·그리드 마지막 줄)가 가리지 않도록 카드 높이만큼 아래 여백.
+                // 배경(Paper)은 패딩 앞이라 카드 뒤까지 꽉 차 본문이 카드 아래로 이어져 보인다.
+                .padding(bottom = BottomBarContentInset),
         ) {
             // --- Header ---
             Box(modifier = Modifier.height(28.dp))
@@ -203,7 +220,23 @@ fun LibraryScreen(onOpenCard: (Long) -> Unit) {
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
                     )
                 }
-                else -> BookGrid(books = filtered, onOpen = { openWorkId = it })
+                else -> {
+                    BookGrid(
+                        books = pageBooks,
+                        onOpen = { openWorkId = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (pageCount > 1) {
+                        PageBar(
+                            page = page,
+                            pageCount = pageCount,
+                            onSelect = {
+                                page = it
+                                AppAnalytics.track("library_page_changed", mapOf("page" to it + 1))
+                            },
+                        )
+                    }
+                }
             }
         }
 
@@ -220,20 +253,24 @@ fun LibraryScreen(onOpenCard: (Long) -> Unit) {
 }
 
 @Composable
-private fun BookGrid(books: List<LibraryBook>, onOpen: (Long) -> Unit) {
+private fun BookGrid(books: List<LibraryBook>, onOpen: (Long) -> Unit, modifier: Modifier = Modifier) {
     if (books.isEmpty()) {
         Text(
             text = "검색 결과가 없습니다.",
             style = MaterialTheme.typography.bodyMedium,
             color = Walnut,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+            modifier = modifier.padding(horizontal = 20.dp, vertical = 24.dp),
         )
         return
     }
+    // 화면이 낮아 3줄이 다 안 보일 때만 페이지 안에서 스크롤 — 페이지가 바뀌면 맨 위로.
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(books) { gridState.scrollToItem(0) }
     LazyVerticalGrid(
         columns = GridCells.Fixed(4),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 56.dp),
+        state = gridState,
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -259,6 +296,49 @@ private fun BookGrid(books: List<LibraryBook>, onOpen: (Long) -> Unit) {
                 )
             }
         }
+    }
+}
+
+/** 페이지 이동 바 — ◀ 1 2 3 ▶. 페이지가 많으면 현재 페이지 주변 5개만 보여준다. */
+@Composable
+private fun PageBar(page: Int, pageCount: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PageArrow(forward = false, enabled = page > 0) { onSelect(page - 1) }
+        pageWindow(page, pageCount).forEach { p ->
+            Chip(text = "${p + 1}", active = p == page) { if (p != page) onSelect(p) }
+        }
+        PageArrow(forward = true, enabled = page < pageCount - 1) { onSelect(page + 1) }
+    }
+}
+
+/** 페이지 번호 노출 범위 — 최대 [max]개, 현재 페이지를 가운데 두고 양 끝에서 클램프. */
+private fun pageWindow(page: Int, pageCount: Int, max: Int = 5): IntRange {
+    if (pageCount <= max) return 0 until pageCount
+    val start = (page - max / 2).coerceIn(0, pageCount - max)
+    return start until start + max
+}
+
+@Composable
+private fun PageArrow(forward: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (forward) Icons.AutoMirrored.Outlined.ArrowForwardIos
+            else Icons.AutoMirrored.Outlined.ArrowBackIos,
+            contentDescription = if (forward) "다음 페이지" else "이전 페이지",
+            tint = if (enabled) Espresso else Latte,
+            modifier = Modifier.size(14.dp),
+        )
     }
 }
 

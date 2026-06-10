@@ -26,7 +26,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -120,10 +119,8 @@ fun YarnChip(yarn: Int, onClick: () -> Unit) {
             .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_yarn),
+        YarnIcon(
             contentDescription = stringResource(R.string.yarn_chip_cd),
-            tint = Cta,
             modifier = Modifier.size(15.dp),
         )
         Spacer(Modifier.width(5.dp))

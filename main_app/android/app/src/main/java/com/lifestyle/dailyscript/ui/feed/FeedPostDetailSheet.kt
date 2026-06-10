@@ -57,7 +57,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.data.model.CardDto
-import com.lifestyle.dailyscript.data.model.FeedComment
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.detail.relativeTime
@@ -175,7 +174,9 @@ fun FeedPostDetailSheet(
             } else {
                 items(state.comments, key = { "c-${it.commentId}" }) { c ->
                     CommentRow(
-                        comment = c,
+                        authorNickname = c.authorNickname,
+                        body = c.body,
+                        createdAt = c.createdAt,
                         isMine = c.userId == userId,
                         onDelete = { vm.deleteComment(userId, c.commentId) },
                     )
@@ -187,9 +188,9 @@ fun FeedPostDetailSheet(
     }
 }
 
-/** Sheet header — "DAILY SCRIPT" label + close(X). */
+/** Sheet header — "DAILY SCRIPT" label + close(X). 피드 글·하이라이트 상세 공용. */
 @Composable
-private fun HeaderRow(onClose: () -> Unit) {
+internal fun HeaderRow(onClose: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -251,9 +252,9 @@ private fun QuoteCard(card: CardDto?, onOpenCard: () -> Unit) {
     }
 }
 
-/** 작성자 줄 — 아바타 + 닉네임 + 작성일. (♡ 좋아요는 없음) */
+/** 작성자 줄 — 아바타 + 닉네임 + 작성일. (♡ 좋아요는 없음) 피드 글·하이라이트 상세 공용. */
 @Composable
-private fun AuthorRow(nickname: String?, createdAt: String) {
+internal fun AuthorRow(nickname: String?, createdAt: String) {
     val nick = nickname?.ifBlank { null } ?: "익명"
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
@@ -292,10 +293,13 @@ private fun AuthorRow(nickname: String?, createdAt: String) {
     }
 }
 
-/** 댓글 입력 — CommentsSection.CommentComposer 의 IME bring-into-view 패턴 미러(답글 없음). */
+/**
+ * 댓글 입력 — CommentsSection.CommentComposer 의 IME bring-into-view 패턴 미러(답글 없음).
+ * 피드 글·하이라이트 상세 공용.
+ */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun CommentComposer(submitting: Boolean, onSubmit: (String) -> Unit) {
+internal fun CommentComposer(submitting: Boolean, onSubmit: (String) -> Unit) {
     var text by remember { mutableStateOf("") }
     var focused by remember { mutableStateOf(false) }
     val bringReq = remember { BringIntoViewRequester() }
@@ -360,9 +364,18 @@ private fun CommentComposer(submitting: Boolean, onSubmit: (String) -> Unit) {
     }
 }
 
-/** 평면 댓글 행 — 닉네임 + 상대시간 + 본문 + (본인 글이면) DELETE. 좋아요·답글 없음. */
+/**
+ * 평면 댓글 행 — 닉네임 + 상대시간 + 본문 + (본인 글이면) DELETE. 좋아요·답글 없음.
+ * 피드 글·하이라이트 상세 공용 — FeedComment/HighlightComment 어느 쪽이든 원시값으로 받는다.
+ */
 @Composable
-private fun CommentRow(comment: FeedComment, isMine: Boolean, onDelete: () -> Unit) {
+internal fun CommentRow(
+    authorNickname: String?,
+    body: String,
+    createdAt: String,
+    isMine: Boolean,
+    onDelete: () -> Unit,
+) {
     val shape = RoundedCornerShape(6.dp)
     Column(
         modifier = Modifier
@@ -378,19 +391,19 @@ private fun CommentRow(comment: FeedComment, isMine: Boolean, onDelete: () -> Un
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = comment.authorNickname ?: "익명",
+                text = authorNickname ?: "익명",
                 style = MaterialTheme.typography.titleMedium,
                 color = Espresso,
             )
             Text(
-                text = relativeTime(comment.createdAt),
+                text = relativeTime(createdAt),
                 style = MaterialTheme.typography.labelSmall,
                 color = Walnut,
             )
         }
         Box(modifier = Modifier.height(6.dp))
         Text(
-            text = comment.body,
+            text = body,
             style = MaterialTheme.typography.bodyMedium,
             color = Espresso,
         )

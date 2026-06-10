@@ -40,6 +40,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.data.model.MyComment
 import com.lifestyle.dailyscript.data.repo.CommentRepository
+import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.EditorialField
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -144,7 +145,8 @@ fun MyCommentsScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Uni
                         onOpen = { onOpenCard(c.cardId) },
                     )
                 }
-                item { Box(modifier = Modifier.height(40.dp)) }
+                // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
+                item { Box(modifier = Modifier.height(BottomBarContentInset + 24.dp)) }
             }
         }
     }

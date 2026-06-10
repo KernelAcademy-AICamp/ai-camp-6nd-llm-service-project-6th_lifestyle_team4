@@ -74,6 +74,7 @@ import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
+import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
@@ -380,7 +381,8 @@ private fun Bookcase(
                         )
                     }
                 }
-                item { Box(modifier = Modifier.height(56.dp)) }
+                // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
+                item { Box(modifier = Modifier.height(BottomBarContentInset + 24.dp)) }
             }
         }
 

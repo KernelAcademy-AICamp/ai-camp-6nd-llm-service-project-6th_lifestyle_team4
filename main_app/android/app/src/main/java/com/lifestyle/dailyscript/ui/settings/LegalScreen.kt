@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
@@ -82,7 +83,8 @@ fun LegalScreen(doc: LegalDoc, onBack: () -> Unit) {
             ActivityHairline()
             Box(modifier = Modifier.height(16.dp))
             Text(text = doc.footer, style = MaterialTheme.typography.bodySmall, color = Walnut)
-            Box(modifier = Modifier.height(48.dp))
+            // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
+            Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
         }
     }
 }

@@ -15,6 +15,8 @@ data class WorkDto(
     val format: String,
     val author: String? = null,
     @SerialName("release_year") val releaseYear: Int? = null,
+    // 책 표지 이미지 (Supabase Storage 공개 URL). 표지 없는 책은 null → 미표시.
+    @SerialName("cover_url") val coverUrl: String? = null,
     // jsonb array of character names — used for speaker bolding in the detail view.
     val characters: JsonElement? = null,
     // --- Bilingual originals (English). ---
