@@ -2484,6 +2484,8 @@ function openBookModal(work, worksList) {
   book.style.borderLeftColor = leatherColorFor(work.title);
 
   bookList.innerHTML = '';
+  // 북마크된 card_id 집합 (체크 빠르게)
+  const bookmarkedIds = new Set((state.bookmarks || []).map((b) => b?.card_id).filter((x) => x != null));
   work.cards.forEach((card) => {
     const item = document.createElement('div');
     item.className = 'book-quote-item';
@@ -2491,7 +2493,16 @@ function openBookModal(work, worksList) {
       ? truncateText(cleanQuote(card.excerpt_description), 60)
       : '';
     const bookmarkedAt = formatBookmarkDate(card._bookmarkedAt);
+    const isBookmarked = bookmarkedIds.has(card.card_id);
+    // 북마크 표시 — 사용자 명세: 책 펼침 모달 안 카드 목록에서 북마크 한 카드 구별
+    const bookmarkBadge = isBookmarked
+      ? `<span class="book-quote-bookmark" style="position:absolute;top:8px;right:10px;display:inline-flex;align-items:center;gap:3px;color:var(--cta);">
+          <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 1;">bookmark</span>
+        </span>`
+      : '';
+    item.style.position = 'relative';
     item.innerHTML = `
+      ${bookmarkBadge}
       ${bookmarkedAt ? `<span class="book-quote-date">${escapeHtml(bookmarkedAt)}</span>` : ''}
       <p class="book-quote-text">"${escapeHtml(cleanQuote(card.quote))}"</p>
       ${meta ? `<p class="book-quote-meta">${escapeHtml(meta)}</p>` : ''}
@@ -3096,13 +3107,37 @@ function clearRandomCats() {
 function renderDailyRecent() {
   const sec = document.getElementById('daily-section-recent');
   if (!sec) return;
-  const bookmarks = state.bookmarks || [];
-  if (bookmarks.length === 0) { sec.style.display = 'none'; return; }
-  const recent = [...bookmarks].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0];
-  const card = recent?.cards;
-  if (!card) { sec.style.display = 'none'; return; }
-  const days = Math.floor((Date.now() - new Date(recent.created_at || 0).getTime()) / (24 * 60 * 60 * 1000));
-  const ago = days <= 0 ? '오늘' : days === 1 ? '어제' : `${days}일 전`;
+  // 사용자 명세: unlocked 카드(실타래 사용 후 3일 이내) 우선, 없으면 최근 북마크.
+  //   1) getUnlockedMap 의 ts 가 가장 큰 카드 (가장 최근 unlock)
+  //   2) state.allCards 에서 그 card 찾음
+  //   3) 없거나 unlocked 카드가 없으면 → 최근 북마크 폴백
+  let card = null;
+  let ago = '';
+  const unlockMap = getUnlockedMap();
+  const unlockedEntries = Object.entries(unlockMap)
+    .filter(([, ts]) => ts && (Date.now() - ts < YARN_UNLOCK_WINDOW_MS))
+    .sort((a, b) => b[1] - a[1]);
+  for (const [cidStr, ts] of unlockedEntries) {
+    const cid = Number(cidStr);
+    const c = (state.allCards || []).find((x) => x && x.card_id === cid);
+    if (c) {
+      card = c;
+      const d = Math.floor((Date.now() - ts) / (24 * 60 * 60 * 1000));
+      ago = d <= 0 ? '오늘' : d === 1 ? '어제' : `${d}일 전`;
+      ago += ' 열람';
+      break;
+    }
+  }
+  if (!card) {
+    const bookmarks = state.bookmarks || [];
+    if (bookmarks.length === 0) { sec.style.display = 'none'; return; }
+    const recent = [...bookmarks].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0];
+    card = recent?.cards;
+    if (!card) { sec.style.display = 'none'; return; }
+    const days = Math.floor((Date.now() - new Date(recent.created_at || 0).getTime()) / (24 * 60 * 60 * 1000));
+    ago = days <= 0 ? '오늘' : days === 1 ? '어제' : `${days}일 전`;
+    ago += ' 북마크';
+  }
   const work = card.works || {};
   sec.style.display = 'block';
   sec.innerHTML = `
@@ -3113,7 +3148,7 @@ function renderDailyRecent() {
       ${dailyBookCoverHTML(work, { width: 64 })}
       <div style="flex:1;min-width:0;">
         <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);line-height:1.6;word-break:keep-all;overflow-wrap:break-word;">"${escapeHtml(card.quote || '')}"</p>
-        <p class="t-label-sm c-walnut" style="margin:8px 0 0;">${escapeHtml(work.title || '')} · ${ago} 북마크</p>
+        <p class="t-label-sm c-walnut" style="margin:8px 0 0;">${escapeHtml(work.title || '')} · ${escapeHtml(ago)}</p>
       </div>
     </button>
     <div style="height:36px;"></div>
@@ -3178,6 +3213,10 @@ if (mypageBookmarksEntry) mypageBookmarksEntry.addEventListener('click', openBoo
 $('#mypage-notice-entry')?.addEventListener('click', () => {
   track('nav_my_notice');
   setView('notice');
+});
+$('#mypage-yarn-entry')?.addEventListener('click', () => {
+  track('nav_my_yarn');
+  openYarnScreen();
 });
 if (bookmarksBack) bookmarksBack.addEventListener('click', closeBookmarksScreen);
 if (bmSearchInput) {
@@ -5045,6 +5084,10 @@ function closeDetailInternal() {
     if (state._feedbackNudgePending) {
       state._feedbackNudgePending = false;
       maybeShowFeedbackNudge();
+    }
+    // DAILY 탭에 있으면 인기 대사 + 다시 만나기 즉시 갱신 (북마크/조회/댓글/unlock 변화 반영)
+    if (state.currentView === 'daily') {
+      try { renderDailyTrending(); renderDailyRecent(); } catch {}
     }
   }, 250);
 }
