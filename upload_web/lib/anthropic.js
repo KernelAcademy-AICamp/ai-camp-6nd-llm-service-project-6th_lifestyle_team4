@@ -1166,9 +1166,10 @@ function cleanScriptExcerptEdges(script) {
   };
   const lines = script.split('\n');
 
-  // 첫 문장 자투리 처리 — 첫 문장만 자르고 두 번째 문장부터 시작 (원문 내용 보존).
-  //  사용자 요구: "첫문장이나 끝문장은 원문의 내용을 해치지 않으니까 삭제해도 된다".
-  //  첫 줄에 종결자 없어도 다음 줄 가로질러 첫 종결자 찾음.
+  // 첫 줄 자투리 처리 — 사용자 정책:
+  //  · 시작은 반드시 문장 시작 (종결자 직후) 이어야 함. 문장 중간 시작 안 됨.
+  //  · fullScript 매칭으로 거슬러 보강하는 건 extendLeadingSentence 가 담당.
+  //  · 여기는 폴백 — 시작이 명백히 잘린 형태(소문자/구두점) 면 첫 종결자까지 자름.
   if (lines.length >= 1) {
     const first = (lines[0] || '').trim();
     if (first && !isLabelLine(first) && !/[가-힯]/.test(first)) {
@@ -1229,6 +1230,84 @@ function cleanScriptExcerptEdges(script) {
   }
 
   return lines.join('\n').replace(/^\n+|\n+$/g, '');
+}
+
+// 첫문장 보강 — script_excerpt 가 문장 중간/단어 중간에서 시작하면
+//  fullScript 에서 같은 위치를 찾아 그 앞 종결자(. ! ? …) 직후까지 거슬러 prepend.
+//  ★ 본문 수정/창작 아님 — 원본에서 그대로 가져와 prepend 만 (안전).
+//  · 매칭 키는 script 앞 60자 (공백 normalize 후 fullScript 와 비교)
+//  · 같은 키가 fullScript 에 여러 곳에 나오면 모호 → 보강 안 함
+//  · prepend 최대 400자 — 거리 멀면 보강 위험 → 보강 포기
+function extendLeadingSentence(script, fullScript) {
+  if (!script || !fullScript) return script;
+  const original = String(script);
+  const s = original.replace(/^\s+/, '');
+  if (!s) return original;
+  const norm = (t) => String(t).replace(/\s+/g, ' ');
+  const normFull = norm(fullScript);
+  for (const keyLen of [60, 40, 30]) {
+    if (s.length < keyLen) continue;
+    const head = norm(s.slice(0, keyLen)).trim();
+    if (!head) continue;
+    const firstIdx = normFull.indexOf(head);
+    if (firstIdx < 0) continue;
+    const dupIdx = normFull.indexOf(head, firstIdx + 1);
+    if (dupIdx >= 0) continue; // 같은 head 여러 곳 → 모호. 보강 포기.
+    // 매칭 위치 직전 500자 안에서 가장 가까운 종결자 위치
+    const windowStart = Math.max(0, firstIdx - 500);
+    const before = normFull.slice(windowStart, firstIdx);
+    const matches = [...before.matchAll(/[.!?…。！？]["'""'\)\]\】]?\s+/g)];
+    if (matches.length === 0) {
+      // 본문 맨 앞 부근 — 종결자 없음. 거리가 짧으면 본문 시작부터 prepend.
+      if (firstIdx === 0) return original;
+      if (firstIdx <= 400 && windowStart === 0) {
+        return before + s;
+      }
+      return original;
+    }
+    const last = matches[matches.length - 1];
+    const sentenceStart = last.index + last[0].length;
+    const prepend = before.slice(sentenceStart);
+    if (prepend.length === 0) return original; // 이미 문장 시작
+    if (prepend.length > 400) return original; // 너무 멀어서 보강 위험
+    return prepend + s;
+  }
+  return original;
+}
+
+// 끝문장 보강 — script_excerpt 가 종결자 없이 끝나거나 단어/콤마 중간에서 잘리면
+//  fullScript 에서 같은 위치를 찾아 그 다음 첫 종결자(. ! ? …)까지 이어 붙인다.
+//  ★ 본문 수정/창작 아님 — 원본에서 그대로 가져와 append 만 한다 (안전).
+//  · 매칭 키는 script 끝 60자 (공백 normalize 후 fullScript 와 비교)
+//  · 같은 키가 fullScript 에 여러 곳에 나오면 모호 → 보강 안 함
+//  · 확장 길이는 최대 400자 — 비정상적으로 긴 다음 문장 보호
+function extendTrailingSentence(script, fullScript) {
+  if (!script || !fullScript) return script;
+  const original = String(script);
+  const s = original.replace(/\s+$/, '');
+  if (!s) return original;
+  // 이미 정상 종결자로 끝나면 보강 불필요
+  if (/[.!?。！？…"'"'\)\]\】]\s*$/.test(s)) return original;
+  // 공백 normalize 한 fullScript 와 매칭
+  const norm = (t) => String(t).replace(/\s+/g, ' ');
+  const normFull = norm(fullScript);
+  // 매칭 키 길이 — 60자 → 40자 → 30자 단계적 폴백
+  for (const keyLen of [60, 40, 30]) {
+    if (s.length < keyLen) continue;
+    const tail = norm(s.slice(-keyLen)).trim();
+    if (!tail) continue;
+    const firstIdx = normFull.indexOf(tail);
+    if (firstIdx < 0) continue;
+    const dupIdx = normFull.indexOf(tail, firstIdx + 1);
+    if (dupIdx >= 0) continue; // 같은 tail 이 여러 곳에 → 모호. 보강 포기.
+    const afterPos = firstIdx + tail.length;
+    const rest = normFull.slice(afterPos, afterPos + 500);
+    // 다음 종결자까지 — 최대 400자
+    const m = rest.match(/^[^.!?…。！？]{0,400}[.!?…。！？]["'""'\)\]\】]?/);
+    if (!m || !m[0]) return original;
+    return s + m[0];
+  }
+  return original;
 }
 
 // script_excerpt 잘림 검출 — 매우 보수적 (false positive 방지):
@@ -1362,10 +1441,18 @@ export function validateAndFilterCards(cards, category, opts = {}) {
     // ★ 사용자 명시 원칙: 본문 텍스트는 절대 수정/변경 안 함.
     //    띄어쓰기/줄바꿈만 정리. 첫/끝 자투리(잘린 토큰)는 잘라내기만 — 단어 prepend/append 안 함.
     //    fullScript 에서 prepend 하는 rescueScriptExcerptEdges, rescueMiddleParagraphStarts 모두 사용 안 함.
-    // 1) 첫/끝 자투리 잘라내기 (중간은 안 건드림 — 원문 보존)
+    // 1) 첫문장이 문장 중간에서 시작했으면 fullScript 에서 앞 종결자 직후까지 거슬러 prepend.
+    if (fullScript) {
+      c.script_excerpt = extendLeadingSentence(c.script_excerpt, fullScript);
+    }
+    // 2) 첫/끝 자투리 잘라내기 폴백 (extendLeading 실패한 경우 — fullScript 매칭 안 됨).
     c.script_excerpt = cleanScriptExcerptEdges(c.script_excerpt);
-    // 2) PDF 페이지 폭 줄바꿈 정리 — 한 단락 안 부자연스러운 \n 은 공백으로 합침.
+    // 3) PDF 페이지 폭 줄바꿈 정리 — 한 단락 안 부자연스러운 \n 은 공백으로 합침.
     c.script_excerpt = collapsePdfLineWraps(c.script_excerpt);
+    // 4) 끝문장이 종결자 없이 잘렸으면 fullScript 에서 다음 종결자까지 이어 붙임 (원본 그대로 append).
+    if (fullScript) {
+      c.script_excerpt = extendTrailingSentence(c.script_excerpt, fullScript);
+    }
   }
 
   console.log(
