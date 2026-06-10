@@ -284,19 +284,24 @@
   .bottom-nav .nav-item.nav-home-center { justify-content: flex-start; }
   .bottom-nav .nav-item.nav-home-center .nav-home-circle {
     width: 56px; height: 56px;
-    background: var(--latte);
-    border: 2.5px solid var(--latte);  /* 베이지 림 */
+    background: transparent;
+    border: 2px solid transparent;
     border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
     margin-top: -18px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
     transition: border-color 120ms;
-    overflow: hidden;
+    overflow: visible;
+    padding: 0;
   }
   .bottom-nav .nav-item.nav-home-center .nav-home-yarn {
-    width: 100%; height: 100%;
+    width: 56px; height: 56px;        /* 원 안에 정확히 fit */
+    object-fit: contain;                /* 비율 보존 — 찌그러짐 방지 */
     border-radius: 50%;
     display: block;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
   }
   .bottom-nav .nav-item.nav-home-center.active { color: var(--espresso); }
   .bottom-nav .nav-item.nav-home-center.active .nav-home-circle { border-color: var(--cta); }
