@@ -5888,6 +5888,9 @@ function openFeedPostDetail(post) {
   state.detailType = 'post';
   state.currentFeedPost = post;
   state.currentHighlight = null;
+  // 명대사 박스 복원 (하이라이트 모드에서 숨겼던 경우)
+  const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
+  if (quoteBox) quoteBox.style.display = '';
   // 명대사 읽어보기 표시, 카드 보기 숨김 (피드 글 모드)
   const openCardBtn = document.getElementById('fp-open-card');
   const highlightCardViewBtn = document.getElementById('fp-highlight-card-view');
@@ -5925,13 +5928,17 @@ function openHighlightDetail(highlight) {
   state.detailType = 'highlight';
   state.currentHighlight = highlight;
   state.currentFeedPost = null;
-  if (fpQuote) fpQuote.textContent = cleanQuote(card.quote) || '명대사 준비 중';
-  const src = [displayTitle(w.title), w.author].filter(Boolean).join(' · ');
-  if (fpSource) fpSource.textContent = src ? `— ${src}` : '';
+  // 하이라이트 모드 — 명대사 박스 자체 숨김 (사용자 명세). 제목+작가만 fp-source 텍스트로 표시.
+  const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
+  if (quoteBox) quoteBox.style.display = 'none';
+  if (fpSource) fpSource.textContent = '';
   if (fpAuthor) fpAuthor.textContent = highlight.author_nickname || '익명';
   if (fpDate) fpDate.textContent = formatBookmarkDate(highlight.created_at) || formatRelativeTime(highlight.created_at);
-  // 하이라이트는 selected_text 가 본문
-  if (fpBody) fpBody.textContent = highlight.selected_text || '';
+  // 하이라이트는 selected_text 가 본문. 작성자 아래에 제목·작가 별도 라인 추가 (fp-body 앞).
+  if (fpBody) {
+    const src = [displayTitle(w.title), w.author].filter(Boolean).join(' · ');
+    fpBody.textContent = (src ? `— ${src}\n\n` : '') + (highlight.selected_text || '');
+  }
   // 명대사 읽어보기 버튼 숨김, 카드 보기 버튼 표시 (사용자 명세)
   const openCardBtn = document.getElementById('fp-open-card');
   const highlightCardViewBtn = document.getElementById('fp-highlight-card-view');
