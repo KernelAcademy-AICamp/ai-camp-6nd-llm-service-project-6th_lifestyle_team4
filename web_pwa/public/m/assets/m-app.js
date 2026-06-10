@@ -2940,7 +2940,7 @@ function renderDailyOzPick() {
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
       <!-- 오즈 헤더 — 책 위 고양이 + 이름 + 메타 (원 안에 가두지 않음, 더 크게) -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-        <img src="assets/cat/cat_shelf_few.png" alt="오즈"
+        <img src="assets/cat/cat_shelf_many.png" alt="오즈"
           style="width:72px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">오즈</p>
