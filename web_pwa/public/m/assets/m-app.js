@@ -2914,12 +2914,27 @@ function renderDailyOzPick() {
   }
   const allCards = state.allCards || [];
   if (allCards.length === 0) { sec.style.display = 'none'; return; }
-  const matched = allCards.filter((card) => {
-    const kws = Array.isArray(card.keywords) ? card.keywords : [];
-    return kws.some((k) => taste.has(k));
-  });
-  const pool = matched.length > 0 ? matched : allCards;
-  const pick = pool[Math.floor(Math.random() * pool.length)];
+
+  // 하루 1개 — localStorage 에 date+card_id 캐시. 같은 날짜면 같은 카드, 0시에 갱신.
+  const OZ_DAILY_KEY = 'ds.oz.daily';
+  const todayKey = todayStr();
+  let pick = null;
+  try {
+    const raw = JSON.parse(safeStorageGet(OZ_DAILY_KEY, 'null') || 'null');
+    if (raw && raw.date === todayKey && raw.cardId) {
+      pick = allCards.find((c) => c && c.card_id === raw.cardId);
+    }
+  } catch { /* ignore */ }
+
+  if (!pick) {
+    const matched = allCards.filter((card) => {
+      const kws = Array.isArray(card.keywords) ? card.keywords : [];
+      return kws.some((k) => taste.has(k));
+    });
+    const pool = matched.length > 0 ? matched : allCards;
+    pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pick) safeStorageSet(OZ_DAILY_KEY, JSON.stringify({ date: todayKey, cardId: pick.card_id }));
+  }
   if (!pick) { sec.style.display = 'none'; return; }
   const matchedKw = (pick.keywords || []).find((k) => taste.has(k));
   const reason = matchedKw
@@ -2964,11 +2979,8 @@ function renderDailyOzPick() {
   `;
   sec.querySelector('.daily-oz-card')?.addEventListener('click', () => {
     track('daily_oz_clicked', { card_id: pick.card_id });
-    // 사용자 명세: 카드 상세 X → LIBRARY 로 이동 + 추천 책 펼침.
-    const allWorks = groupAllCardsByWork();
-    const targetWork = allWorks.find((w) => (w.cards || []).some((c) => c.card_id === pick.card_id));
-    setView('archive');
-    setTimeout(() => { if (targetWork && typeof openBookModal === 'function') openBookModal(targetWork, allWorks); }, 80);
+    // 사용자 명세: daily 탭에 머물러 — 카드 상세만 (LIBRARY 이동 X).
+    openDetail(pick);
   });
 }
 
