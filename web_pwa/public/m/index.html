@@ -412,7 +412,7 @@
 
   /* Main content padding */
   /* main 영역(home/library/feed/notice/settings) padding-bottom 으로 bottom-nav 가림 방지 */
-  main { padding: 0 20px 56px; }
+  main { padding: 0 20px 14px; }
 
   /* Bookmark row spacing */
   .bookmark-row {
@@ -1300,15 +1300,43 @@
     border-radius: 3px 3px 0 0;
     box-shadow: 0 3px 8px rgba(14,12,10,0.22);
   }
+  /* 피드 글쓰기 — 말풍선 모양으로 nav 우측 고양이가 말하는 것처럼 (사용자 명세) */
   #feed-fab {
-    position: fixed; right: 20px; bottom: 80px; z-index: 29;
-    width: 56px; height: 56px; border-radius: 50%;
-    background: var(--espresso); color: var(--paper);
-    border: none; cursor: pointer;
+    position: fixed; right: 28px; bottom: 88px; z-index: 53;
+    background: var(--paper);
+    color: var(--espresso);
+    border: 1.5px solid var(--espresso);
+    cursor: pointer;
     display: none; align-items: center; justify-content: center;
-    box-shadow: 0 6px 20px rgba(14,12,10,0.35);
+    padding: 7px 14px;
+    border-radius: 18px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(14,12,10,0.18);
+    transition: transform 120ms;
   }
-  #feed-fab .material-symbols-outlined { font-size: 28px; }
+  #feed-fab:active { transform: scale(0.96); }
+  /* 말풍선 꼬리 — 우측 아래(고양이 방향)로 향하는 작은 삼각 */
+  #feed-fab::after {
+    content: '';
+    position: absolute;
+    right: 14px; bottom: -8px;
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid var(--espresso);
+  }
+  #feed-fab::before {
+    content: '';
+    position: absolute;
+    right: 15px; bottom: -6px;
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 7px solid var(--paper);
+    z-index: 1;
+  }
   /* Feed overlays (picker + compose) — modal pattern */
   .feed-sheet {
     background: var(--paper); width: 100%; max-width: 460px;
@@ -1606,7 +1634,6 @@
     <div id="daily-section-trending" style="display:none;"></div>
     <div id="daily-section-oz" style="display:none;"></div>
     <div id="daily-section-recent" style="display:none;"></div>
-    <div style="height:8px;"></div>
   </section>
 
   <!-- ===== TODAY view (기존 view-home, 라벨만 TODAY) ===== -->
@@ -1759,10 +1786,8 @@
     <div style="height:40px;"></div>
   </section>
 
-  <!-- Feed FAB — feed 탭에서만 노출 (setView에서 토글) -->
-  <button id="feed-fab" aria-label="한줄 리뷰 작성">
-    <span class="material-symbols-outlined">add</span>
-  </button>
+  <!-- Feed 글쓰기 — 말풍선 + nav 고양이가 말하는 것처럼 (사용자 명세) -->
+  <button id="feed-fab" aria-label="글쓰기">글쓰기</button>
 
   <!-- ===== Notice view (공지사항) ===== -->
   <section id="view-notice" style="display:none;">
