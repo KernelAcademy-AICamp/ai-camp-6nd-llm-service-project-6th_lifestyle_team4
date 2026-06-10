@@ -4477,9 +4477,9 @@ function paintAuthIdentity() {
 // 실타래 게이트 — 투어 중/이미 연 카드/충전 후에만 실제 상세를 연다.
 function openDetail(card) {
   if (!card) return;
-  // 사용자 명세: 북마크한 카드는 실타래 사용 없이 무료 재열람.
-  const isBookmarked = !!card.card_id && (state.bookmarks || []).some((b) => b && b.card_id === card.card_id);
-  if (isTourActive() || isCardUnlocked(card.card_id) || isBookmarked) { openDetailApproved(card); return; }
+  // 사용자 명세: 실타래 한 번 사용한 카드는 3일간 무료 재열람 (isCardUnlocked = unlock 윈도우 3일).
+  //   3일 지나면 다시 실타래 사용. 북마크 여부 무관.
+  if (isTourActive() || isCardUnlocked(card.card_id)) { openDetailApproved(card); return; }
   if (yarnAvailable() <= 0) { showYarnInsufficient(); return; }
   showYarnConfirm(card);
 }
