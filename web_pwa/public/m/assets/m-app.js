@@ -4207,6 +4207,17 @@ function getUnlockedMap() {
   } catch {}
   return {};
 }
+// 신규 게이트 정책(투어 무관, 3일 unlock만 무료) 적용 시 1회 unlock 누적 자동 리셋
+//   기존 사용자가 이전 정책(투어 활성 중 무제한 무료)에서 카드를 다 unlock 마킹해뒀던 케이스 복구
+(function _yarnGateMigration_v2() {
+  try {
+    if (!safeStorageGet('ds.yarn.gate.v2')) {
+      safeStorageSet(YARN_UNLOCKED_KEY, '{}');
+      safeStorageSet('ds.yarn.gate.v2', '1');
+    }
+  } catch {}
+})();
+
 function isCardUnlocked(cardId) {
   const ts = getUnlockedMap()[String(cardId)];
   return !!ts && (Date.now() - ts < YARN_UNLOCK_WINDOW_MS);
