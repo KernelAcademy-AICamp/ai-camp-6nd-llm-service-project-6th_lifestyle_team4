@@ -1533,8 +1533,8 @@
   </div>
   <div style="display:flex;align-items:center;gap:12px;">
     <button id="yarn-chip" aria-label="남은 실타래" title="남은 실타래"
-            style="display:inline-flex;align-items:center;gap:5px;background:transparent;border:0.5px solid var(--latte);border-radius:999px;padding:4px 10px;cursor:pointer;color:var(--walnut);">
-      <span style="font-size:13px;line-height:1;">🧶</span>
+            style="display:inline-flex;align-items:center;gap:5px;background:transparent;border:0.5px solid var(--latte);border-radius:999px;padding:3px 10px 3px 4px;cursor:pointer;color:var(--walnut);">
+      <img src="assets/daily-script-bar.png" alt="실타래" style="width:20px;height:20px;display:block;pointer-events:none;" />
       <span class="yarn-chip-count t-label-sm" style="font-weight:700;">5</span>
     </button>
     <!-- LIVE 표시 제거됨 (사용자 명시) — 실시간 상태는 백그라운드에서만 동작 -->
@@ -1942,37 +1942,10 @@
     <span class="t-label-sm">FEED</span>
     <span class="nav-dot"></span>
   </button>
-  <!-- 가운데 — 주황 실타래 돌출 원형 + "오늘의 명대사" 라벨 -->
+  <!-- 가운데 — 안드 daily script bar.png 사용 + "오늘의 명대사" 라벨 -->
   <button data-nav="home" class="nav-item nav-home-center">
     <span class="nav-home-circle">
-      <svg class="nav-home-yarn" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" aria-label="yarn">
-        <defs>
-          <radialGradient id="yarnGrad" cx="38%" cy="38%" r="65%">
-            <stop offset="0%" stop-color="#E07A52"/>
-            <stop offset="65%" stop-color="#C04F2A"/>
-            <stop offset="100%" stop-color="#9A3A18"/>
-          </radialGradient>
-        </defs>
-        <!-- 주황 본체 -->
-        <circle cx="30" cy="30" r="28" fill="url(#yarnGrad)"/>
-        <!-- 실 가닥 — 여러 타원이 다른 각도로 겹침 (마구잡이 감긴 실 텍스처) -->
-        <g fill="none" stroke="#5C2A12" stroke-width="0.7" stroke-linecap="round" opacity="0.72">
-          <ellipse cx="30" cy="30" rx="23" ry="9" transform="rotate(0 30 30)"/>
-          <ellipse cx="30" cy="30" rx="23" ry="9" transform="rotate(22 30 30)"/>
-          <ellipse cx="30" cy="30" rx="23" ry="9" transform="rotate(44 30 30)"/>
-          <ellipse cx="30" cy="30" rx="23" ry="9" transform="rotate(66 30 30)"/>
-          <ellipse cx="30" cy="30" rx="23" ry="9" transform="rotate(88 30 30)"/>
-          <ellipse cx="30" cy="30" rx="23" ry="9" transform="rotate(110 30 30)"/>
-          <ellipse cx="30" cy="30" rx="23" ry="9" transform="rotate(132 30 30)"/>
-          <ellipse cx="30" cy="30" rx="23" ry="9" transform="rotate(154 30 30)"/>
-          <ellipse cx="30" cy="30" rx="17" ry="5" transform="rotate(15 30 30)"/>
-          <ellipse cx="30" cy="30" rx="17" ry="5" transform="rotate(50 30 30)"/>
-          <ellipse cx="30" cy="30" rx="17" ry="5" transform="rotate(85 30 30)"/>
-          <ellipse cx="30" cy="30" rx="17" ry="5" transform="rotate(125 30 30)"/>
-        </g>
-        <!-- 좌상단 하이라이트 — 부드러운 광택 -->
-        <ellipse cx="22" cy="20" rx="6" ry="3" fill="#F2A07A" opacity="0.35" transform="rotate(-30 22 20)"/>
-      </svg>
+      <img class="nav-home-yarn" src="assets/daily-script-bar.png" alt="오늘의 명대사" />
     </span>
     <span class="t-label-sm">오늘의 명대사</span>
     <span class="nav-dot"></span>
@@ -2163,7 +2136,7 @@
       <p class="t-body-sm c-walnut" style="margin-top:6px;">실타래로 명장면 전문을 열람하세요</p>
 
       <div style="display:flex;align-items:center;gap:10px;margin-top:18px;background:rgba(216,160,90,0.14);border-radius:10px;padding:16px;">
-        <span style="font-size:20px;line-height:1;">🧶</span>
+        <img src="assets/daily-script-bar.png" alt="실타래" style="width:24px;height:24px;display:block;" />
         <span class="t-title-lg c-espresso">보유 실타래 <span id="yarn-balance-num">5</span></span>
       </div>
       <p class="t-label-sm c-walnut" style="margin-top:8px;">매일 5개의 실타래가 무료로 채워져요.</p>

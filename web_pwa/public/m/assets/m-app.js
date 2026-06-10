@@ -4157,7 +4157,7 @@ function renderYarnTiers() {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:0.5px solid var(--latte);';
     row.innerHTML =
-        `<span style="display:flex;align-items:center;gap:12px;"><span style="font-size:20px;line-height:1;">🧶</span>`
+        `<span style="display:flex;align-items:center;gap:12px;"><img src="assets/daily-script-bar.png" alt="실타래" style="width:24px;height:24px;display:block;" /></span>`
       + `<span class="t-title-lg c-espresso">실타래 ${count}개</span></span>`
       + `<span class="yarn-tier-buy" style="background:var(--cta);color:#fff;-webkit-text-fill-color:#fff;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;">₩${price.toLocaleString()}</span>`;
     row.querySelector('.yarn-tier-buy').addEventListener('click', async () => {
