@@ -2742,10 +2742,42 @@ function renderDailyNewBooks() {
 
 // 섹션 3: 이럴 땐, 이런 문장
 const CONTEXT_CATEGORIES = [
-  { id: 'comfort', label: '위로가 필요할 때', keywords: ['위로', '슬픔', '아픔', '눈물', '치유'] },
-  { id: 'flutter', label: '설레는 날',        keywords: ['사랑', '설렘', '첫', '두근'] },
-  { id: 'lonely',  label: '먹먹한 밤',        keywords: ['외로움', '그리움', '밤', '고독'] },
-  { id: 'resolve', label: '결심이 필요할 때', keywords: ['결심', '의지', '도전', '용기', '운명'] },
+  { id: 'comfort', label: '위로가 필요할 때',
+    keywords: ['위로', '슬픔', '아픔', '눈물', '치유', '회복', '안식', '평온', '포근', '따뜻', '따스', '기댐', '감싸', '쓰다듬', '받아들', '용서', '슬퍼', '아파'],
+    // 차분~따스 + 강도 낮~중 (감정 짙으면 위로보다 절망)
+    toneScore: (t, i) => {
+      let s = 0;
+      if (t != null) s += (t < 0.6 ? 2 : t < 0.8 ? 1 : 0);
+      if (i != null) s += (i < 0.7 ? 1 : 0);
+      return s;
+    } },
+  { id: 'flutter', label: '설레는 날',
+    keywords: ['사랑', '설렘', '첫사랑', '두근', '떨림', '봄', '꽃', '만남', '청춘', '달콤', '가슴', '설레', '연인', '키스', '입맞춤', '미소', '눈빛', '입술'],
+    // 따스~뜨거움 + 강도 중~높
+    toneScore: (t, i) => {
+      let s = 0;
+      if (t != null) s += (t > 0.5 ? 2 : t > 0.3 ? 1 : 0);
+      if (i != null) s += (i > 0.4 ? 1 : 0);
+      return s;
+    } },
+  { id: 'lonely',  label: '먹먹한 밤',
+    keywords: ['외로움', '그리움', '고독', '적막', '침묵', '회상', '공허', '먹먹', '쓸쓸', '낙엽', '회한', '밤하늘', '혼자', '홀로', '잊혀', '그립', '추억', '낙심', '비'],
+    // 차분 + 잔잔 (낮은 온도 + 낮은 강도)
+    toneScore: (t, i) => {
+      let s = 0;
+      if (t != null) s += (t < 0.5 ? 2 : 0);
+      if (i != null) s += (i < 0.5 ? 2 : i < 0.7 ? 1 : 0);
+      return s;
+    } },
+  { id: 'resolve', label: '결심이 필요할 때',
+    keywords: ['결심', '의지', '도전', '용기', '운명', '신념', '다짐', '각오', '맞서', '투지', '이겨', '포기하지', '나아', '극복', '굳건', '강인', '싸움', '꿈', '희망', '믿음'],
+    // 강도 높음 (뜨거움 + 강렬)
+    toneScore: (t, i) => {
+      let s = 0;
+      if (i != null) s += (i > 0.6 ? 2 : i > 0.4 ? 1 : 0);
+      if (t != null) s += (t > 0.5 ? 1 : 0);
+      return s;
+    } },
 ];
 let _contextualTimer = null;
 let _contextualCatId = null;
@@ -2753,12 +2785,27 @@ let _contextualCardIdx = 0;
 function stopContextualCarousel() {
   if (_contextualTimer) { clearInterval(_contextualTimer); _contextualTimer = null; }
 }
+// 카드의 키워드 + 본문(quote/excerpt/significance) 에서 카테고리 키워드 매칭.
+// 매칭된 키워드 수 + tone 점수 합산 → 높은 점수 카드 우선.
 function filterContextualCards(catId) {
   const cat = CONTEXT_CATEGORIES.find((c) => c.id === catId) || CONTEXT_CATEGORIES[0];
-  return (state.allCards || []).filter((card) => {
+  const cards = state.allCards || [];
+  const scored = [];
+  for (const card of cards) {
     const kws = Array.isArray(card.keywords) ? card.keywords : [];
-    return kws.some((k) => cat.keywords.some((t) => String(k).includes(t)));
-  }).slice(0, 12);
+    const haystack = (kws.join(' ') + ' ' + (card.quote || '') + ' ' + (card.script_excerpt || '') + ' ' + (card.significance || '')).toLowerCase();
+    // 키워드 매칭 점수 — 매칭된 카테고리 키워드 수
+    let kwHits = 0;
+    for (const t of cat.keywords) { if (haystack.includes(t.toLowerCase())) kwHits++; }
+    if (kwHits === 0) continue;
+    // tone 점수 — temperature/intensity 가 카테고리에 맞는지
+    const t = _normTone(Number(card.temperature));
+    const i = _normTone(Number(card.intensity));
+    const toneS = typeof cat.toneScore === 'function' ? cat.toneScore(t, i) : 0;
+    scored.push({ card, score: kwHits * 3 + toneS });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 12).map((x) => x.card);
 }
 function renderDailyContextual() {
   const sec = document.getElementById('daily-section-contextual');
@@ -2891,10 +2938,10 @@ function renderDailyOzPick() {
   sec.innerHTML = `
     <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">오즈의 오늘의 추천</h2>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
-      <!-- 오즈 헤더 — 아바타 + 이름 + 메타 -->
+      <!-- 오즈 헤더 — 책 위 고양이 아바타 + 이름 + 메타 -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-        <span style="width:36px;height:36px;border-radius:50%;background:var(--latte);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <span class="material-symbols-outlined" style="font-size:20px;color:var(--cta);">auto_awesome</span>
+        <span style="width:44px;height:44px;border-radius:50%;background:var(--latte);display:inline-flex;align-items:flex-end;justify-content:center;flex-shrink:0;overflow:hidden;">
+          <img src="assets/cat/cat_shelf_few.png" alt="오즈" style="width:90%;height:auto;object-fit:contain;pointer-events:none;user-select:none;" />
         </span>
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">오즈</p>
