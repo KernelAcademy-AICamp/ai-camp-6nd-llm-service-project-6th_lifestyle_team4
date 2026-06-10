@@ -5846,6 +5846,11 @@ function openFeedPostDetail(post) {
   state.detailType = 'post';
   state.currentFeedPost = post;
   state.currentHighlight = null;
+  // 명대사 읽어보기 표시, 카드 보기 숨김 (피드 글 모드)
+  const openCardBtn = document.getElementById('fp-open-card');
+  const highlightCardViewBtn = document.getElementById('fp-highlight-card-view');
+  if (openCardBtn) openCardBtn.style.display = '';
+  if (highlightCardViewBtn) highlightCardViewBtn.style.display = 'none';
   const card = post.cards || {};
   const w = card.works || {};
   if (fpQuote) fpQuote.textContent = cleanQuote(card.quote) || '명대사 준비 중';
@@ -5885,6 +5890,11 @@ function openHighlightDetail(highlight) {
   if (fpDate) fpDate.textContent = formatBookmarkDate(highlight.created_at) || formatRelativeTime(highlight.created_at);
   // 하이라이트는 selected_text 가 본문
   if (fpBody) fpBody.textContent = highlight.selected_text || '';
+  // 명대사 읽어보기 버튼 숨김, 카드 보기 버튼 표시 (사용자 명세)
+  const openCardBtn = document.getElementById('fp-open-card');
+  const highlightCardViewBtn = document.getElementById('fp-highlight-card-view');
+  if (openCardBtn) openCardBtn.style.display = 'none';
+  if (highlightCardViewBtn) highlightCardViewBtn.style.display = 'block';
   paintFeedCommentForm();
   if (fpCommentInput) { fpCommentInput.value = ''; fpCommentInput.placeholder = '이 하이라이트에 대한 생각을 남겨주세요…'; }
   updateFpCounter();
@@ -6204,6 +6214,19 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
 // 피드 글 상세 + 댓글 wiring
 if (feedpostBack) feedpostBack.addEventListener('click', closeFeedPostDetail);
 if (fpOpenCard) fpOpenCard.addEventListener('click', openCardFromFeedPost);
+$('#fp-highlight-card-view')?.addEventListener('click', () => {
+  const h = state.currentHighlight;
+  if (!h) return;
+  // state.allCards 에서 카드 객체 찾아 openDetail — 실타래 + 3일 unlock 자동 적용
+  const card = (state.allCards || []).find((c) => c && c.card_id === h.card_id);
+  if (!card) {
+    // 폴백 — highlight.cards 미니멈 객체로 openDetail (실타래 게이트만 동작)
+    openDetail({ card_id: h.card_id, ...(h.cards || {}) });
+    return;
+  }
+  track('highlight_card_view', { highlight_id: h.highlight_id, card_id: h.card_id });
+  openDetail(card);
+});
 if (fpCommentInput) fpCommentInput.addEventListener('input', updateFpCounter);
 if (fpCommentSubmit) fpCommentSubmit.addEventListener('click', submitFeedComment);
 
