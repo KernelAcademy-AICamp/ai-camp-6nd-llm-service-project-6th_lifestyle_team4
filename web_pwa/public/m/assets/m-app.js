@@ -5843,7 +5843,9 @@ function updateFpCounter() {
 
 function openFeedPostDetail(post) {
   if (!post || !feedpostScreen) return;
+  state.detailType = 'post';
   state.currentFeedPost = post;
+  state.currentHighlight = null;
   const card = post.cards || {};
   const w = card.works || {};
   if (fpQuote) fpQuote.textContent = cleanQuote(card.quote) || '명대사 준비 중';
@@ -5866,6 +5868,65 @@ function openFeedPostDetail(post) {
   if (isRealFeedPost(post)) {
     loadFeedComments(post.post_id).catch((e) => console.warn('[m] loadFeedComments failed:', e));
   }
+}
+
+// 하이라이트 상세 — feedpost-screen 재사용. state.detailType = 'highlight' 로 분기.
+function openHighlightDetail(highlight) {
+  if (!highlight || !feedpostScreen) return;
+  const card = highlight.cards || {};
+  const w = card.works || {};
+  state.detailType = 'highlight';
+  state.currentHighlight = highlight;
+  state.currentFeedPost = null;
+  if (fpQuote) fpQuote.textContent = cleanQuote(card.quote) || '명대사 준비 중';
+  const src = [displayTitle(w.title), w.author].filter(Boolean).join(' · ');
+  if (fpSource) fpSource.textContent = src ? `— ${src}` : '';
+  if (fpAuthor) fpAuthor.textContent = highlight.author_nickname || '익명';
+  if (fpDate) fpDate.textContent = formatBookmarkDate(highlight.created_at) || formatRelativeTime(highlight.created_at);
+  // 하이라이트는 selected_text 가 본문
+  if (fpBody) fpBody.textContent = highlight.selected_text || '';
+  paintFeedCommentForm();
+  if (fpCommentInput) { fpCommentInput.value = ''; fpCommentInput.placeholder = '이 하이라이트에 대한 생각을 남겨주세요…'; }
+  updateFpCounter();
+  state.highlightComments = [];
+  state.highlightCommentLikes = new Map();
+  state.highlightCommentLikedByMe = new Set();
+  renderFeedComments();
+  history.pushState({ overlay: 'feedPost' }, '');
+  feedpostScreen.style.display = 'flex';
+  if (feedpostBody) feedpostBody.scrollTop = 0;
+  requestAnimationFrame(() => feedpostScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+  track('highlight_opened', { highlight_id: highlight.highlight_id });
+  loadHighlightComments(highlight.highlight_id).catch((e) => console.warn('[m] loadHighlightComments failed:', e));
+}
+
+async function loadHighlightComments(highlightId) {
+  const sb = await getSupabase();
+  const { data, error } = await sb
+    .from('card_highlight_comments')
+    .select('comment_id, highlight_id, user_id, parent_comment_id, author_nickname, body, created_at')
+    .eq('highlight_id', highlightId)
+    .order('created_at', { ascending: true });
+  if (error) { console.warn('[m] highlight comments load error:', error.message); return; }
+  if (!state.currentHighlight || String(state.currentHighlight.highlight_id) !== String(highlightId)) return;
+  state.highlightComments = data || [];
+  const commentIds = (data || []).map((c) => c.comment_id);
+  state.highlightCommentLikes = new Map();
+  state.highlightCommentLikedByMe = new Set();
+  if (commentIds.length > 0) {
+    try {
+      const { data: likes } = await sb
+        .from('card_highlight_comment_likes')
+        .select('comment_id, user_id')
+        .in('comment_id', commentIds);
+      for (const l of (likes || [])) {
+        state.highlightCommentLikes.set(l.comment_id, (state.highlightCommentLikes.get(l.comment_id) || 0) + 1);
+        if (state.userId && l.user_id === state.userId) state.highlightCommentLikedByMe.add(l.comment_id);
+      }
+    } catch (e) { console.warn('[m] highlight comment likes load failed:', e); }
+  }
+  renderFeedComments();
 }
 
 async function loadFeedComments(postId) {
@@ -5900,7 +5961,11 @@ async function loadFeedComments(postId) {
 
 function renderFeedComments() {
   if (!fpCommentsList || !fpCommentsHeader) return;
-  const list = state.feedPostComments || [];
+  // type 분기 — highlight 면 highlight 데이터 사용, 아니면 feed_post
+  const isHighlight = state.detailType === 'highlight';
+  const list = isHighlight ? (state.highlightComments || []) : (state.feedPostComments || []);
+  const likesMap = isHighlight ? state.highlightCommentLikes : state.feedPostCommentLikes;
+  const likedByMe = isHighlight ? state.highlightCommentLikedByMe : state.feedPostCommentLikedByMe;
   fpCommentsHeader.textContent = `댓글 ${list.length}`;
   if (list.length === 0) {
     fpCommentsList.innerHTML = '';
@@ -5928,8 +5993,8 @@ function renderFeedComments() {
     const nick = escapeHtml(c.author_nickname || '익명');
     const when = escapeHtml(formatRelativeTime(c.created_at));
     const body = escapeHtml(c.body || '');
-    const likes = state.feedPostCommentLikes?.get(c.comment_id) || 0;
-    const liked = state.feedPostCommentLikedByMe?.has(c.comment_id);
+    const likes = likesMap?.get(c.comment_id) || 0;
+    const liked = likedByMe?.has(c.comment_id);
     const heart = `<button class="fp-like" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 6px;color:${liked ? 'var(--cta)' : 'var(--walnut)'};">
       <span class="material-symbols-outlined" style="font-size:16px;${liked ? 'font-variation-settings:\'FILL\' 1;' : ''}">favorite</span>
       <span style="font-size:11px;">${likes}</span>
@@ -5984,7 +6049,9 @@ function renderFeedComments() {
 
 function startFeedReply(commentId) {
   state.replyingToFeedCommentId = commentId;
-  const target = (state.feedPostComments || []).find((c) => c.comment_id === commentId);
+  const isHighlight = state.detailType === 'highlight';
+  const list = isHighlight ? (state.highlightComments || []) : (state.feedPostComments || []);
+  const target = list.find((c) => c.comment_id === commentId);
   const nick = target?.author_nickname || '익명';
   if (fpCommentInput) {
     fpCommentInput.placeholder = `@${nick} 에게 답글⋯`;
@@ -5994,21 +6061,25 @@ function startFeedReply(commentId) {
 
 async function toggleFeedCommentLike(commentId) {
   if (state.isAnonymous || !state.userId) { toast('로그인이 필요합니다'); return; }
-  const liked = state.feedPostCommentLikedByMe?.has(commentId);
+  const isHighlight = state.detailType === 'highlight';
+  const table = isHighlight ? 'card_highlight_comment_likes' : 'feed_post_comment_likes';
+  const likesMap = isHighlight ? state.highlightCommentLikes : state.feedPostCommentLikes;
+  const likedSet = isHighlight ? state.highlightCommentLikedByMe : state.feedPostCommentLikedByMe;
+  const liked = likedSet?.has(commentId);
   try {
     const sb = await getSupabase();
     if (liked) {
-      const { error } = await sb.from('feed_post_comment_likes')
+      const { error } = await sb.from(table)
         .delete().eq('comment_id', commentId).eq('user_id', state.userId);
       if (error) throw error;
-      state.feedPostCommentLikedByMe.delete(commentId);
-      state.feedPostCommentLikes.set(commentId, Math.max(0, (state.feedPostCommentLikes.get(commentId) || 1) - 1));
+      likedSet.delete(commentId);
+      likesMap.set(commentId, Math.max(0, (likesMap.get(commentId) || 1) - 1));
     } else {
-      const { error } = await sb.from('feed_post_comment_likes')
+      const { error } = await sb.from(table)
         .insert({ comment_id: commentId, user_id: state.userId });
       if (error) throw error;
-      state.feedPostCommentLikedByMe.add(commentId);
-      state.feedPostCommentLikes.set(commentId, (state.feedPostCommentLikes.get(commentId) || 0) + 1);
+      likedSet.add(commentId);
+      likesMap.set(commentId, (likesMap.get(commentId) || 0) + 1);
     }
     renderFeedComments();
   } catch (err) {
@@ -6020,29 +6091,41 @@ async function toggleFeedCommentLike(commentId) {
 async function submitFeedComment() {
   if (state.feedCommentSubmitting) return;
   if (state.isAnonymous) { toast('로그인이 필요합니다'); return; }
-  const post = state.currentFeedPost;
-  if (!post || !isRealFeedPost(post) || !state.userId) return;
+  const isHighlight = state.detailType === 'highlight';
+  const item = isHighlight ? state.currentHighlight : state.currentFeedPost;
+  if (!item || !state.userId) return;
+  if (!isHighlight && !isRealFeedPost(item)) return;
   const body = String(fpCommentInput.value || '').trim();
   if (!body) { toast('내용을 입력해주세요'); return; }
   state.feedCommentSubmitting = true;
   if (fpCommentSubmit) fpCommentSubmit.disabled = true;
   try {
     const sb = await getSupabase();
-    const payload = { post_id: post.post_id, user_id: state.userId, author_nickname: state.userNickname || null, body };
+    const table = isHighlight ? 'card_highlight_comments' : 'feed_post_comments';
+    const fkField = isHighlight ? 'highlight_id' : 'post_id';
+    const fkValue = isHighlight ? item.highlight_id : item.post_id;
+    const payload = { [fkField]: fkValue, user_id: state.userId, author_nickname: state.userNickname || null, body };
     if (state.replyingToFeedCommentId) payload.parent_comment_id = state.replyingToFeedCommentId;
-    const { data, error } = await sb
-      .from('feed_post_comments')
-      .insert(payload)
-      .select('comment_id, post_id, user_id, parent_comment_id, author_nickname, body, created_at')
-      .single();
+    const selectCols = isHighlight
+      ? 'comment_id, highlight_id, user_id, parent_comment_id, author_nickname, body, created_at'
+      : 'comment_id, post_id, user_id, parent_comment_id, author_nickname, body, created_at';
+    const { data, error } = await sb.from(table).insert(payload).select(selectCols).single();
     if (error) throw error;
-    track('feed_comment_submitted', { post_id: post.post_id, is_reply: !!payload.parent_comment_id });
+    track(isHighlight ? 'highlight_comment_submitted' : 'feed_comment_submitted', { is_reply: !!payload.parent_comment_id });
     fpCommentInput.value = '';
     fpCommentInput.placeholder = '댓글을 남겨주세요';
     state.replyingToFeedCommentId = null;
     updateFpCounter();
-    if (data && !(state.feedPostComments || []).find((c) => c.comment_id === data.comment_id)) {
-      state.feedPostComments = [...(state.feedPostComments || []), data];
+    if (data) {
+      if (isHighlight) {
+        if (!(state.highlightComments || []).find((c) => c.comment_id === data.comment_id)) {
+          state.highlightComments = [...(state.highlightComments || []), data];
+        }
+      } else {
+        if (!(state.feedPostComments || []).find((c) => c.comment_id === data.comment_id)) {
+          state.feedPostComments = [...(state.feedPostComments || []), data];
+        }
+      }
       renderFeedComments();
     }
   } catch (err) {
@@ -6057,12 +6140,18 @@ async function submitFeedComment() {
 async function deleteFeedComment(commentId) {
   if (state.isAnonymous || !state.userId) return;
   if (!confirm('이 댓글을 삭제할까요?')) return;
+  const isHighlight = state.detailType === 'highlight';
+  const table = isHighlight ? 'card_highlight_comments' : 'feed_post_comments';
   try {
     const sb = await getSupabase();
-    const { error } = await sb.from('feed_post_comments')
+    const { error } = await sb.from(table)
       .delete().eq('comment_id', commentId).eq('user_id', state.userId);
     if (error) throw error;
-    state.feedPostComments = (state.feedPostComments || []).filter((c) => c.comment_id !== commentId);
+    if (isHighlight) {
+      state.highlightComments = (state.highlightComments || []).filter((c) => c.comment_id !== commentId);
+    } else {
+      state.feedPostComments = (state.feedPostComments || []).filter((c) => c.comment_id !== commentId);
+    }
     renderFeedComments();
   } catch (err) {
     console.warn('[m] deleteFeedComment failed:', err);
@@ -6076,6 +6165,9 @@ function closeFeedPostDetailInternal() {
   setTimeout(() => {
     feedpostScreen.style.display = 'none';
     document.body.style.overflow = '';
+    // type 리셋 — 다음 진입 시 정확히 분기되게
+    state.detailType = null;
+    state.currentHighlight = null;
   }, 250);
   state.currentFeedPost = null;
 }
@@ -6589,6 +6681,8 @@ function renderHighlights() {
       </div>
       <p class="hl-card-foot">#${String(h.card_id).padStart(5,'0')}</p>
     `;
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', () => openHighlightDetail(h));
     highlightsList.appendChild(item);
   }
 }
