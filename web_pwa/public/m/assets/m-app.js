@@ -6303,11 +6303,12 @@ $$('[data-nav]').forEach((btn) => {
   btn.addEventListener('click', () => {
     const nav = btn.dataset.nav;
     track('nav', { to: nav });
-    closeAllOpenOverlays();
-    // TODAY(가운데 실타래) 클릭 = 매번 새 명대사 새로고침 (어느 탭에 있었든).
-    if (nav === 'home' && !document.querySelector('.detail-screen.open')) {
+    // TODAY 탭에 있는 동안 TODAY를 다시 누르면 새로고침 — 다른 탭에서 진입할 땐 새로고침 안 함.
+    if (nav === 'home' && state.currentView === 'home' && !document.querySelector('.detail-screen.open')) {
       refreshTodayCard();
+      return;
     }
+    closeAllOpenOverlays();
     setView(nav);
   });
 });
