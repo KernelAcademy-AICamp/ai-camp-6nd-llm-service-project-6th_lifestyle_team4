@@ -639,7 +639,7 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
       userPk: state.userId != null ? String(state.userId) : null,
     });
     paintAuthIdentity();
-    await Promise.all([loadAllCards(), loadBookmarks(), loadBookmarkCounts()]);
+    await Promise.all([loadAllCards(), loadBookmarks(), loadBookmarkCounts(), loadCommentCounts()]);
     paintTasteProfile();
     renderHome();
     // 초기 setView — history에 중복 entry 안 쌓이게 suppress 후 replaceState로 마무리
@@ -1219,6 +1219,22 @@ async function loadBookmarkCounts() {
     (data || []).forEach((r) => state.bookmarkCounts.set(r.card_id, r.bookmark_count));
   } catch (e) {
     console.warn('[m] loadBookmarkCounts error:', e);
+  }
+}
+
+// 카드별 댓글 수 — card_comments 전체 fetch 후 JS 에서 집계.
+// 인기 대사 점수 + 카드 메타(댓글 수) 표시에 사용.
+async function loadCommentCounts() {
+  state.commentCounts = new Map();
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb.from('card_comments').select('card_id');
+    if (error) { console.warn('[m] comment counts load failed:', error.message); return; }
+    for (const c of (data || [])) {
+      state.commentCounts.set(c.card_id, (state.commentCounts.get(c.card_id) || 0) + 1);
+    }
+  } catch (e) {
+    console.warn('[m] loadCommentCounts error:', e);
   }
 }
 
@@ -2859,32 +2875,39 @@ function renderDailyContextual() {
   // 자동 회전 비활성 — 사용자가 칩을 직접 누를 때만 카드 변경 (사용자 명시).
 }
 
-// 섹션 4: 인기 대사 top 3
+// 섹션 4: 인기 대사 top 3 — 인기 = 북마크 + 조회수 + 댓글 수 (모두 가중치).
 function renderDailyTrending() {
   const sec = document.getElementById('daily-section-trending');
   if (!sec) return;
-  const cards = (state.allCards || [])
+  const bookmarkMap = state.bookmarkCounts || new Map();
+  const commentMap = state.commentCounts || new Map();
+  const scored = (state.allCards || [])
     .filter((c) => c?.quote)
-    .map((c) => ({ c, score: (c.bookmark_count || 0) * 10 + (c.view_count || 0) }))
+    .map((c) => {
+      const bm = bookmarkMap.get(c.card_id) || 0;
+      const cm = commentMap.get(c.card_id) || 0;
+      const vw = c.view_count || 0;
+      return { c, bm, cm, vw, score: bm * 10 + cm * 5 + vw };
+    })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map((x) => x.c);
-  if (cards.length === 0) { sec.style.display = 'none'; return; }
+    .slice(0, 3);
+  if (scored.length === 0) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
   sec.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
       <h2 class="t-headline-md c-espresso">이번 주 인기 대사</h2>
       <button id="daily-trending-all" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;">전체 ›</button>
     </div>
-    ${cards.map((c, i) => `
+    ${scored.map(({ c, bm, cm, vw }, i) => `
       <button type="button" data-card-id="${c.card_id}"
         style="display:flex;align-items:flex-start;gap:14px;width:100%;background:transparent;border:none;border-bottom:0.5px solid var(--latte);cursor:pointer;padding:14px 0;text-align:left;">
         <span style="font-family:'Noto Serif KR',serif;font-size:22px;color:var(--espresso);flex-shrink:0;width:20px;">${i + 1}</span>
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);line-height:1.5;">"${escapeHtml((c.quote || '').slice(0, 80))}"</p>
           <div style="margin-top:8px;display:flex;gap:14px;font-size:11px;color:var(--walnut);">
-            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">bookmark</span>${c.bookmark_count || 0}</span>
-            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">visibility</span>${c.view_count || 0}</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">bookmark</span>${formatCount(bm)}</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">visibility</span>${formatCount(vw)}</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">chat_bubble</span>${formatCount(cm)}</span>
           </div>
         </div>
       </button>
