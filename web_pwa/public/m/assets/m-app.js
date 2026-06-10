@@ -2800,10 +2800,9 @@ function renderDailyNewBooks() {
       const w = works.find((x) => x.key === key);
       if (!w) return;
       track('daily_newbook_clicked', { work_key: key });
-      // 사용자 명세: 새 책 클릭 → LIBRARY 로 이동 + 그 책 펼침 (팝업).
-      //   카드 진입 시 북마크 무료 / 미북마크는 실타래 차감 (openDetail 내부 처리).
-      setView('archive');
-      setTimeout(() => { if (typeof openBookModal === 'function') openBookModal(w); }, 80);
+      // 사용자 명세: daily 탭 그대로 머무름 + 팝업만 표시 (LIBRARY 이동 X).
+      //   카드 진입 시 실타래 게이트는 openDetail 안에서 자동 처리.
+      if (typeof openBookModal === 'function') openBookModal(w, works);
     });
   });
 }
