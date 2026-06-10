@@ -2663,11 +2663,7 @@ function renderDailyContextual() {
   };
   sec.querySelectorAll('[data-ctx]').forEach((btn) => btn.addEventListener('click', () => switchTo(btn.dataset.ctx)));
   switchTo(CONTEXT_CATEGORIES[0].id);
-  _contextualTimer = setInterval(() => {
-    if (state.currentView !== 'daily') { stopContextualCarousel(); return; }
-    _contextualCardIdx++;
-    renderCard();
-  }, 5000);
+  // 자동 회전 비활성 — 사용자가 칩을 직접 누를 때만 카드 변경 (사용자 명시).
 }
 
 // 섹션 4: 인기 대사 top 3
