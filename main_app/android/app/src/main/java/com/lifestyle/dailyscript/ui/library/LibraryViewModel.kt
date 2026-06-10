@@ -49,10 +49,14 @@ class LibraryViewModel : ViewModel() {
     /** Group cards by work → one book per work, ordered by genre then title for a tidy "All" view. */
     private fun buildBooks(cards: List<CardDto>): List<LibraryBook> =
         cards
-            .filter { it.works != null }
-            .groupBy { it.works!!.workId }
+            .mapNotNull { card -> card.works?.let { work -> card to work } }
+            .groupBy { (_, work) -> work.workId }
             .map { (workId, group) ->
-                LibraryBook(workId = workId, work = group.first().works!!, cards = group)
+                LibraryBook(
+                    workId = workId,
+                    work = group.first().second,
+                    cards = group.map { it.first },
+                )
             }
             .sortedWith(
                 compareBy(

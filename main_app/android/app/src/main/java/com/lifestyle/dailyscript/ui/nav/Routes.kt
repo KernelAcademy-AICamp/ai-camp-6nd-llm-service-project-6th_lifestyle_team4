@@ -1,8 +1,10 @@
 package com.lifestyle.dailyscript.ui.nav
 
 object Routes {
+    const val DAILY = "daily"
     const val HOME = "home"
     const val ARCHIVE = "archive"
+    const val ARCHIVE_WORK = "archive/{workId}"
     const val FEED = "feed"
     const val NOTICE = "notice"
     const val SETTINGS = "settings"
@@ -14,5 +16,6 @@ object Routes {
     const val PRIVACY = "privacy"
     const val YARN_PURCHASE = "yarn_purchase"
     const val DETAIL = "detail/{cardId}"
+    fun archiveWork(workId: Long) = "archive/$workId"
     fun detail(cardId: Long) = "detail/$cardId"
 }

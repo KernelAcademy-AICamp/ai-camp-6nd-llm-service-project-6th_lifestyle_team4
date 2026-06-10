@@ -18,7 +18,7 @@ class YarnRepository {
     suspend fun consumeYarn(): Int =
         client.postgrest.rpc("consume_yarn").decodeAs<Int>()
 
-    /** QA 전용 — 충전 잔액 지급. 지급 후 잔액 반환. */
+    /** QA/데모용 — 충전 잔액 지급. 지급 후 잔액 반환. */
     suspend fun grantYarn(n: Int): Int =
         client.postgrest.rpc(
             function = "grant_yarn",

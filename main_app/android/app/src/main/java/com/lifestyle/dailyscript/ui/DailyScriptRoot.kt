@@ -44,6 +44,7 @@ import com.lifestyle.dailyscript.ui.components.BottomNavBar
 import com.lifestyle.dailyscript.ui.components.HomeTopBar
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SettingsTopBar
+import com.lifestyle.dailyscript.ui.daily.DailyScreen
 import com.lifestyle.dailyscript.ui.detail.DetailScreen
 import com.lifestyle.dailyscript.ui.feed.FeedScreen
 import com.lifestyle.dailyscript.ui.feedback.FeedbackScreen
@@ -113,7 +114,11 @@ fun DailyScriptRoot() {
 private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
-    val currentRoute = backStack?.destination?.route
+    val destinationRoute = backStack?.destination?.route
+    val currentRoute = when (destinationRoute) {
+        Routes.ARCHIVE_WORK -> Routes.ARCHIVE
+        else -> destinationRoute
+    }
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
 
@@ -165,13 +170,13 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         // 마침/건너뛰기 → 홈으로 복귀(상세에서 시작했다면 닫고 돌아옴).
         coach.onEnd = {
             navController.navigate(Routes.HOME) {
-                popUpTo(Routes.NOTICE) { inclusive = false }
+                popUpTo(Routes.DAILY) { inclusive = false }
                 launchSingleTop = true
             }
         }
     }
 
-    val isDetail = currentRoute?.startsWith("detail/") == true || currentRoute == Routes.DETAIL
+    val isDetail = destinationRoute?.startsWith("detail/") == true || destinationRoute == Routes.DETAIL
     val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.BOOKMARKS, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE)
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
@@ -186,7 +191,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         Column(modifier = Modifier.fillMaxSize().imePadding()) {
         if (showTopBar) {
             when (currentRoute) {
-                Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(
+                Routes.DAILY, Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(
                     yarn = yarnAvailable,
                     onYarnClick = {
                         AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
@@ -208,7 +213,21 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         // 본문이 비쳐 보인다. 각 화면이 스크롤 끝/떠있는 요소를 BottomBarContentInset 만큼 띄워
         // 카드에 가려지지 않게 처리한다.
         Box(modifier = Modifier.weight(1f)) {
-            NavHost(navController = navController, startDestination = Routes.NOTICE) {
+            NavHost(navController = navController, startDestination = Routes.DAILY) {
+                composable(Routes.DAILY) {
+                    DailyScreen(
+                        userId = session.userId,
+                        onOpenNotice = { navController.navigate(Routes.NOTICE) { launchSingleTop = true } },
+                        onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                        onOpenLibraryWork = { workId ->
+                            if (workId > 0L) {
+                                navController.navigate(Routes.archiveWork(workId)) { launchSingleTop = true }
+                            } else {
+                                navController.navigate(Routes.ARCHIVE) { launchSingleTop = true }
+                            }
+                        },
+                    )
+                }
                 composable(Routes.HOME) {
                     HomeScreen(
                         userId = session.userId,
@@ -218,6 +237,16 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 }
                 composable(Routes.ARCHIVE) {
                     LibraryScreen(
+                        onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                    )
+                }
+                composable(
+                    route = Routes.ARCHIVE_WORK,
+                    arguments = listOf(navArgument("workId") { type = NavType.LongType }),
+                ) { entry ->
+                    val workId = entry.arguments?.getLong("workId")?.takeIf { it > 0L }
+                    LibraryScreen(
+                        initialOpenWorkId = workId,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
@@ -263,7 +292,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                             AppAnalytics.track("onboarding_requested")
                             coach.requestStart()
                             navController.navigate(Routes.HOME) {
-                                popUpTo(Routes.NOTICE) { inclusive = false }
+                                popUpTo(Routes.DAILY) { inclusive = false }
                                 launchSingleTop = true
                             }
                         },

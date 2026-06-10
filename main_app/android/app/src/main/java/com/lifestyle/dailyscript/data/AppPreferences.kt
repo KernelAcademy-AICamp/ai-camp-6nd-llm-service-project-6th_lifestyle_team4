@@ -46,6 +46,8 @@ object AppPreferences {
     private val YARN_DAILY_DATE = stringPreferencesKey("yarn_daily_date") // yyyy-MM-dd of daily grant
     private val YARN_DAILY_USED = intPreferencesKey("yarn_daily_used")    // daily yarns spent on YARN_DAILY_DATE
     private val UNLOCKED = stringPreferencesKey("unlocked_card_ids")      // CSV of "cardId:epochMillis" (3일 무료 재열람)
+    private val OZ_DAILY_DATE = stringPreferencesKey("oz_daily_date")     // yyyy-MM-dd for Daily Oz pick
+    private val OZ_DAILY_CARD_ID = longPreferencesKey("oz_daily_card_id") // cached card_id for that date
 
     @Volatile
     private lateinit var store: DataStore<Preferences>
@@ -147,6 +149,19 @@ object AppPreferences {
     val noticeLastSeenId: Flow<Long> get() = store.data.map { it[NOTICE_LAST_SEEN] ?: 0L }
     suspend fun setNoticeLastSeen(id: Long) {
         store.edit { p -> if ((p[NOTICE_LAST_SEEN] ?: 0L) < id) p[NOTICE_LAST_SEEN] = id }
+    }
+
+    // --- Daily / Oz recommendation cache ---
+    suspend fun ozDailyCardId(today: String): Long? {
+        val prefs = store.data.first()
+        return if (prefs[OZ_DAILY_DATE] == today) prefs[OZ_DAILY_CARD_ID] else null
+    }
+
+    suspend fun setOzDailyCard(today: String, cardId: Long) {
+        store.edit { p ->
+            p[OZ_DAILY_DATE] = today
+            p[OZ_DAILY_CARD_ID] = cardId
+        }
     }
 
     // --- Feed category (오늘의 한줄 vs 하이라이트) ---

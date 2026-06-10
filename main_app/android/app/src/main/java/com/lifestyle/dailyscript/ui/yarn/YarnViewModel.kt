@@ -84,7 +84,7 @@ class YarnViewModel : ViewModel() {
         return true
     }
 
-    /** QA 전용 — fire-and-forget 충전. */
+    /** QA/데모용 — fire-and-forget 충전. */
     fun grant(n: Int) = viewModelScope.launch { addYarn(n) }
 }
 

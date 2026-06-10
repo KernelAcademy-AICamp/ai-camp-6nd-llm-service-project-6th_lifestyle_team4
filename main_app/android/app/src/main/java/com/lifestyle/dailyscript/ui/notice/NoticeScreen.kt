@@ -60,7 +60,7 @@ fun NoticeScreen(vm: NoticeViewModel) {
 
         when {
             state.loading && state.notices.isEmpty() -> CenteredNote("불러오는 중⋯")
-            state.error != null && state.notices.isEmpty() -> CenteredNote(state.error!!, error = true)
+            state.error != null && state.notices.isEmpty() -> CenteredNote(state.error.orEmpty(), error = true)
             state.notices.isEmpty() -> CenteredNote("등록된 공지가 없습니다.")
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -132,7 +132,7 @@ private fun NoticeBody(body: String) {
                 t.isEmpty() -> Box(modifier = Modifier.height(10.dp))
                 image.matches(t) -> Unit // skip images
                 heading.matches(t) -> {
-                    val text = heading.find(t)!!.groupValues[1]
+                    val text = heading.find(t)?.groupValues?.getOrNull(1).orEmpty()
                     Box(modifier = Modifier.height(6.dp))
                     Text(
                         text = Markdown.bold(text),
@@ -142,7 +142,7 @@ private fun NoticeBody(body: String) {
                     Box(modifier = Modifier.height(2.dp))
                 }
                 bullet.matches(t) -> {
-                    val text = bullet.find(t)!!.groupValues[1]
+                    val text = bullet.find(t)?.groupValues?.getOrNull(1).orEmpty()
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                         Text("•  ", style = MaterialTheme.typography.bodyMedium, color = Roast)
                         Text(

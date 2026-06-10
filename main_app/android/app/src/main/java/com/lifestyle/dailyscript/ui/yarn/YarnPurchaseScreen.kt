@@ -110,7 +110,6 @@ fun YarnPurchaseScreen(yarnVm: YarnViewModel, onBack: () -> Unit) {
                 ChargeContent(
                     available = available,
                     onTier = { count ->
-                        // 결제 없이 즉시 충전(서버 잔액 +count). 성공/실패를 토스트로 안내.
                         scope.launch {
                             val ok = yarnVm.addYarn(count)
                             Toast.makeText(

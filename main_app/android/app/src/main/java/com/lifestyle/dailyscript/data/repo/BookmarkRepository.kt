@@ -28,16 +28,18 @@ class BookmarkRepository {
             script_excerpt,
             excerpt_description,
             significance,
+            created_at,
             keywords,
             temperature,
             intensity,
             view_count,
+            comment_count,
             quote_original,
             script_excerpt_original,
             excerpt_description_original,
             significance_original,
             keywords_original,
-            works ( work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original )
+            works ( work_id, title, subtitle, format, author, release_year, cover_url, characters, title_original, subtitle_original, author_original )
         )
         """.trimIndent()
     )

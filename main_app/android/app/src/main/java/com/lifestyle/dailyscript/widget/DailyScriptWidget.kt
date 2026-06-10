@@ -68,9 +68,10 @@ internal object DailyScriptWidget : GlanceAppWidget() {
                     maxLines = 4,
                 )
                 Spacer(modifier = GlanceModifier.defaultWeight())
-                if (!card?.workTitle.isNullOrBlank()) {
+                val workTitle = card?.workTitle?.takeIf { it.isNotBlank() }
+                if (workTitle != null) {
                     Text(
-                        text = card!!.workTitle.uppercase(),
+                        text = workTitle.uppercase(),
                         style = TextStyle(
                             color = androidx.glance.color.ColorProvider(day = Walnut, night = Walnut),
                             fontSize = 10.sp,

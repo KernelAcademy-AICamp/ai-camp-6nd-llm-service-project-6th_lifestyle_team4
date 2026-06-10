@@ -116,7 +116,7 @@ fun MyCommentsScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Uni
         ActivityTopBar(title = "내 댓글", onBack = onBack)
         when {
             state.loading && state.comments.isEmpty() -> ActivityNote("불러오는 중⋯")
-            state.error != null && state.comments.isEmpty() -> ActivityNote(state.error!!, error = true)
+            state.error != null && state.comments.isEmpty() -> ActivityNote(state.error.orEmpty(), error = true)
             state.comments.isEmpty() -> ActivityEmpty(
                 icon = Icons.Outlined.Forum,
                 title = "아직 단 댓글이 없어요",

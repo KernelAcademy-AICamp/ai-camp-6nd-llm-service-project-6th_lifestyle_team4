@@ -15,6 +15,7 @@ data class CardDto(
     @SerialName("script_excerpt") val scriptExcerpt: String,
     @SerialName("excerpt_description") val excerptDescription: String? = null,
     val significance: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
     val keywords: JsonElement,
     val temperature: Int,
     val intensity: Int,

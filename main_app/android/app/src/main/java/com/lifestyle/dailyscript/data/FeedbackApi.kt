@@ -2,6 +2,7 @@ package com.lifestyle.dailyscript.data
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.forms.submitForm
 import io.ktor.http.Parameters
 
@@ -25,7 +26,13 @@ object FeedbackApi {
         message: String,
         email: String,
     ) {
-        val client = HttpClient(Android)
+        val client = HttpClient(Android) {
+            install(HttpTimeout) {
+                connectTimeoutMillis = 10_000
+                requestTimeoutMillis = 15_000
+                socketTimeoutMillis = 15_000
+            }
+        }
         try {
             client.submitForm(
                 url = ENDPOINT,

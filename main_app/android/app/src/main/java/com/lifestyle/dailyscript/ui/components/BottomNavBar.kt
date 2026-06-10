@@ -18,8 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.DynamicFeed
+import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -104,10 +104,10 @@ fun BottomNavBar(
             horizontalArrangement = Arrangement.SpaceAround,
         ) {
             NavItem(
-                route = Routes.NOTICE,
-                label = stringResource(R.string.nav_notice),
-                icon = Icons.Outlined.Campaign,
-                active = currentRoute == Routes.NOTICE,
+                route = Routes.DAILY,
+                label = stringResource(R.string.nav_daily),
+                icon = Icons.Outlined.Explore,
+                active = currentRoute == Routes.DAILY,
                 onClick = onSelect,
                 badge = noticeBadge,
                 modifier = Modifier.weight(1f),
@@ -200,7 +200,7 @@ private fun HomeCenterButton(
                 Image(
                     bitmap = yarnBitmap,
                     contentDescription = stringResource(R.string.nav_home_label),
-                    contentScale = ContentScale.Fit, // 비율 보존 — 가로 직사각형 PNG 가 원 안에 잘리지 않게
+                    contentScale = ContentScale.Crop, // 투명 여백을 잘라 실타래가 원 안을 꽉 채우게
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {

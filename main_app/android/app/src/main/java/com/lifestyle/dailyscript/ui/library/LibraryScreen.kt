@@ -99,7 +99,10 @@ private const val LibraryPageSize = 12
  * tap a cover to swing the book open and read its gathered 명대사 — tapping one opens the card.
  */
 @Composable
-fun LibraryScreen(onOpenCard: (Long) -> Unit) {
+fun LibraryScreen(
+    onOpenCard: (Long) -> Unit,
+    initialOpenWorkId: Long? = null,
+) {
     val vm: LibraryViewModel = viewModel()
     val state by vm.state.collectAsState()
 
@@ -108,6 +111,11 @@ fun LibraryScreen(onOpenCard: (Long) -> Unit) {
     var search by remember { mutableStateOf("") }
     var genre by remember { mutableStateOf<String?>(null) } // null = 전체
     var openWorkId by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(initialOpenWorkId, state.books) {
+        val workId = initialOpenWorkId ?: return@LaunchedEffect
+        if (state.books.any { it.workId == workId }) openWorkId = workId
+    }
 
     LaunchedEffect(search) {
         val q = search.trim()

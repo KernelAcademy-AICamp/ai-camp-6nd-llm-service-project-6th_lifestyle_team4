@@ -558,12 +558,12 @@ private fun workGroupKey(title: String?, subtitle: String?, author: String?): St
 
 /** Group bookmarked cards into books by series/subtitle/author (matches the PWA shelf). */
 private fun buildBooks(bookmarks: List<BookmarkRow>): List<ShelfBook> {
-    val rows = bookmarks.filter { it.cards != null }
+    val rows = bookmarks.mapNotNull { row -> row.cards?.let { card -> row to card } }
     return rows
-        .groupBy { row -> row.cards!!.works.let { workGroupKey(it?.title, it?.subtitle, it?.author) } }
+        .groupBy { (_, card) -> card.works.let { workGroupKey(it?.title, it?.subtitle, it?.author) } }
         .entries
         .mapIndexed { index, (_, group) ->
-            val cardList = group.map { it.cards!! }
+            val cardList = group.map { it.second }
             val work = cardList.first().works
             val (series, subtitle) = resolveSeriesSubtitle(work?.title, work?.subtitle, work?.author)
             val displayName = subtitle.ifBlank { series }.ifBlank { cardList.first().quote }
@@ -582,7 +582,7 @@ private fun buildBooks(bookmarks: List<BookmarkRow>): List<ShelfBook> {
                 format = work?.format,
                 year = work?.releaseYear,
                 cards = cardList,
-                bookmarkedAt = group.associate { it.cards!!.cardId to it.createdAt },
+                bookmarkedAt = group.associate { (row, card) -> card.cardId to row.createdAt },
                 width = width,
                 height = height,
                 leather = Leathers[index % Leathers.size],

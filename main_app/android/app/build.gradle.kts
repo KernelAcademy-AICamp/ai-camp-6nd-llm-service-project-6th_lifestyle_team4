@@ -20,10 +20,10 @@ val googleWebClientId: String = localProps.getProperty("GOOGLE_WEB_CLIENT_ID")
     ?: ""
 val amplitudeApiKey: String = localProps.getProperty("AMPLITUDE_API_KEY")
     ?: System.getenv("AMPLITUDE_API_KEY")
-    ?: "016c6218aa17a49377b3ac38e6958070"
+    ?: ""
 val clarityProjectId: String = localProps.getProperty("CLARITY_PROJECT_ID")
     ?: System.getenv("CLARITY_PROJECT_ID")
-    ?: "x0ojzn9obs"
+    ?: ""
 
 // Release signing. Values live in keystore.properties (git-ignored, per machine);
 // absent on machines without the keystore, so debug builds keep working.

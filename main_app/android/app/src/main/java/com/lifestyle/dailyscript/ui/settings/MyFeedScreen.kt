@@ -146,7 +146,7 @@ fun MyFeedScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) {
         val empty = if (category == CAT_COMMENT) state.posts.isEmpty() else state.highlights.isEmpty()
         when {
             state.loading && empty -> ActivityNote("불러오는 중⋯")
-            state.error != null && empty -> ActivityNote(state.error!!, error = true)
+            state.error != null && empty -> ActivityNote(state.error.orEmpty(), error = true)
             empty && category == CAT_COMMENT -> ActivityEmpty(
                 icon = Icons.Outlined.EditNote,
                 title = "아직 작성한 한줄이 없어요",

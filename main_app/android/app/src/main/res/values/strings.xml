@@ -13,6 +13,7 @@
     <string name="edition_note">Limited Edition Digital Manuscript</string>
     <string name="significance_label">작품의 의의</string>
     <string name="nav_home">Home</string>
+    <string name="nav_daily">Daily</string>
     <string name="nav_archive">Library</string>
     <string name="nav_feed">Feed</string>
     <string name="nav_notice">Notice</string>
