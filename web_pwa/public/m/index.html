@@ -1816,6 +1816,20 @@
       <div class="hairline"></div>
     </div>
 
+    <!-- NOTICE entry — 내 활동 위에 별도 (사용자 명세). 익명/회원 모두 표시. -->
+    <div id="mypage-notice-block">
+      <button id="mypage-notice-entry"
+              style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
+        <div style="flex:1;min-width:0;">
+          <p class="t-title-lg c-espresso" style="margin-bottom:4px;">공지사항</p>
+          <p class="t-body-sm c-walnut">업데이트와 소식</p>
+        </div>
+        <span id="mypage-notice-dot" style="display:none;width:7px;height:7px;background:var(--cta);border-radius:50%;margin-right:8px;"></span>
+        <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+      </button>
+      <div class="hairline"></div>
+    </div>
+
     <!-- 내 활동 섹션 라벨 — 로그인(활동 블록 표시) 시에만 노출 -->
     <div id="mypage-activity-label" style="display:none;">
       <div style="height:20px;"></div>
@@ -1870,20 +1884,6 @@
           <p class="t-body-sm c-walnut">보유 실타래 충전 · 매일 5개 무료</p>
         </div>
         <img src="assets/daily-script-bar.png" alt="" style="width:22px;height:22px;object-fit:cover;border-radius:50%;margin-right:8px;display:block;" />
-        <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
-      </button>
-      <div class="hairline"></div>
-    </div>
-
-    <!-- NOTICE entry — DAILY 공지와 동일한 view-notice 진입 -->
-    <div id="mypage-notice-block">
-      <button id="mypage-notice-entry"
-              style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
-        <div style="flex:1;min-width:0;">
-          <p class="t-title-lg c-espresso" style="margin-bottom:4px;">공지사항</p>
-          <p class="t-body-sm c-walnut">업데이트와 소식</p>
-        </div>
-        <span id="mypage-notice-dot" style="display:none;width:7px;height:7px;background:var(--cta);border-radius:50%;margin-right:8px;"></span>
         <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
       </button>
       <div class="hairline"></div>
