@@ -2308,7 +2308,7 @@ function renderArchive() {
       ? `<div class="lib-cover" style="background:${leatherColorFor(w.title)};">
           <img class="lib-cover-img" src="${escapeHtml(work.cover_url)}" alt="${escapeHtml(displayName)}" loading="lazy" />
         </div>
-        <span class="lib-count">명대사 ${w.cards.length}</span>`
+        <span class="lib-count">${escapeHtml(displayName)}</span>`
       : `<div class="lib-cover" style="background:${leatherColorFor(w.title)};">
           <div class="lib-cover-fallback">
             <span class="lib-cover-meta">${escapeHtml(label)}</span>
@@ -2316,7 +2316,7 @@ function renderArchive() {
             <span class="lib-cover-meta">${escapeHtml((w.author || '').toUpperCase())}</span>
           </div>
         </div>
-        <span class="lib-count">명대사 ${w.cards.length}</span>`;
+        <span class="lib-count">${escapeHtml(displayName)}</span>`;
     btn.addEventListener('click', () => {
       track('library_book_opened', { work_key: w.key });
       openBookModal(w, allWorks);
@@ -6204,7 +6204,7 @@ async function loadAndRenderHighlights() {
     const sb = await getSupabase();
     let { data, error } = await sb
       .from('card_highlights')
-      .select('highlight_id, card_id, user_id, selected_text, author_nickname, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
+      .select('highlight_id, card_id, user_id, selected_text, author_nickname, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year, cover_url))')
       .order('created_at', { ascending: false })
       .limit(50);
     // 018 마이그레이션 안 돌아간 경우 author_nickname 빼고 재시도
@@ -6212,7 +6212,7 @@ async function loadAndRenderHighlights() {
       console.warn('[hl] author_nickname column missing, falling back select');
       const retry = await sb
         .from('card_highlights')
-        .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
+        .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year, cover_url))')
         .order('created_at', { ascending: false })
         .limit(50);
       data = retry.data; error = retry.error;
@@ -6249,6 +6249,7 @@ function renderHighlights() {
     const metaLine = [formatLabel, when].filter(Boolean).join(' · ');
     const coverColor = leatherColorFor(w.title || title);
 
+    const cover = w.cover_url || '';
     const item = document.createElement('div');
     item.className = 'hl-card';
     item.innerHTML = `
@@ -6256,10 +6257,19 @@ function renderHighlights() {
         <p class="nickname">${escapeHtml(nickname)}</p>
         ${metaLine ? `<p class="meta">${escapeHtml(metaLine)}</p>` : ''}
       </div>
-      <div class="hl-bookcover" style="background:${coverColor};">
-        <p class="bc-title">${escapeHtml(title)}</p>
-        ${subtitle ? `<p class="bc-subtitle">${escapeHtml(subtitle)}</p>` : ''}
-        ${author ? `<p class="bc-author">${escapeHtml(author)}</p>` : ''}
+      <div class="hl-bookcover" style="background:${coverColor};overflow:hidden;position:relative;">
+        ${cover
+          ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" loading="lazy"
+              style="width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0;" />`
+          : `<p class="bc-title">${escapeHtml(title)}</p>
+            ${subtitle ? `<p class="bc-subtitle">${escapeHtml(subtitle)}</p>` : ''}
+            ${author ? `<p class="bc-author">${escapeHtml(author)}</p>` : ''}`
+        }
+      </div>
+      <!-- 책표지 바로 아래 — 제목 + 작가 (사용자 명세) -->
+      <div class="hl-book-info" style="text-align:center;margin-top:10px;">
+        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);font-weight:600;line-height:1.3;">${escapeHtml(title)}</p>
+        ${author ? `<p style="margin:3px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(author)}${year ? ' · ' + escapeHtml(String(year)) : ''}</p>` : ''}
       </div>
       <div class="hl-quote">
         <span class="open-q">“</span>
