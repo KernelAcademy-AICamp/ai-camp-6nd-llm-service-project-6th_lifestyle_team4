@@ -8,6 +8,7 @@ import com.lifestyle.dailyscript.data.Recommend
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
+import com.lifestyle.dailyscript.data.repo.CommentRepository
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,7 @@ class HomeViewModel : ViewModel() {
 
     private val cardRepo = CardRepository()
     private val bookmarkRepo = BookmarkRepository()
+    private val commentRepo = CommentRepository()
 
     private var allCards: List<CardDto> = emptyList()
     private var bookmarkCards: List<CardDto> = emptyList()
@@ -73,6 +75,8 @@ class HomeViewModel : ViewModel() {
                 lastTrackedShownId = today.cardId
             }
             val recent = buildRecent(AppPreferences.recentlyShown.first())
+            // 댓글 수는 card_comments 집계 Map(PWA 동일) — denormalized 컬럼 대신 실제 행 수.
+            val commentCounts = runCatching { commentRepo.allCommentCounts() }.getOrDefault(emptyMap())
 
             _state.value = HomeState(
                 loading = false,
@@ -80,6 +84,7 @@ class HomeViewModel : ViewModel() {
                 todayBookmarked = today != null && bookmarkCards.any { it.cardId == today.cardId },
                 recent = recent,
                 bookmarkCounts = loadCounts(listOfNotNull(today) + recent),
+                commentCounts = commentCounts,
                 error = listOfNotNull(
                     cardsResult.exceptionOrNull()?.message,
                     bookmarksResult.exceptionOrNull()?.message,
@@ -206,6 +211,7 @@ data class HomeState(
     val todayBookmarked: Boolean = false,
     val recent: List<CardDto> = emptyList(),
     val bookmarkCounts: Map<Long, Int> = emptyMap(),
+    val commentCounts: Map<Long, Int> = emptyMap(),
     val error: String? = null,
     val bookmarkActionInFlight: Boolean = false,
 )

@@ -141,7 +141,8 @@ fun HomeScreen(
             bookmarkActionInFlight = state.bookmarkActionInFlight,
             loading = state.loading,
             bookmarkCount = state.todayCard?.let { state.bookmarkCounts[it.cardId] } ?: 0,
-            commentCount = state.todayCard?.commentCount ?: 0,
+            // 댓글 수: card_comments 집계 Map 우선(PWA 동일), 없으면 denormalized 컬럼 폴백.
+            commentCount = state.todayCard?.let { state.commentCounts[it.cardId] ?: it.commentCount } ?: 0,
             onBookmarkToggle = { vm.toggleTodayBookmark(userId) },
             onOpen = {
                 state.todayCard?.let {

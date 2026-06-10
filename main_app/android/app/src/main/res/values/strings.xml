@@ -18,7 +18,7 @@
     <string name="nav_feed">Feed</string>
     <string name="nav_notice">Notice</string>
     <string name="nav_settings">My</string>
-    <string name="nav_home_label">오늘의 명대사</string>
+    <string name="nav_home_label">TODAY</string>
     <string name="anonymous_user">Anonymous</string>
     <string name="profile_bio">매일 한 장의 명대사로 하루를 시작합니다.</string>
     <string name="general_preferences">일반 설정</string>

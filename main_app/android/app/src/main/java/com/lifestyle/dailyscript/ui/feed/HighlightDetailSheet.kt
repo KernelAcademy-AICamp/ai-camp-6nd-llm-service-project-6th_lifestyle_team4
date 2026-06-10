@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.data.model.Highlight
+import com.lifestyle.dailyscript.data.model.HighlightComment
 import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.theme.CardWarm
@@ -121,7 +122,9 @@ fun HighlightDetailSheet(
                     } else {
                         CommentComposer(
                             submitting = state.submitting,
+                            replyingTo = state.replyingTo,
                             onSubmit = { vm.submitComment(userId, myNickname, it) },
+                            onCancelReply = { vm.cancelReply() },
                         )
                     }
 
@@ -145,13 +148,16 @@ fun HighlightDetailSheet(
                     )
                 }
             } else {
-                items(state.comments, key = { "hc-${it.commentId}" }) { c ->
-                    CommentRow(
-                        authorNickname = c.authorNickname,
-                        body = c.body,
-                        createdAt = c.createdAt,
-                        isMine = c.userId == userId,
-                        onDelete = { vm.deleteComment(userId, c.commentId) },
+                items(groupFeedComments(state.comments), key = { "hc-${it.first.commentId}" }) { (c, isReply) ->
+                    FeedCommentRow(
+                        comment = c,
+                        isReply = isReply,
+                        likeUsers = state.likes[c.commentId] ?: emptySet(),
+                        myUserId = userId,
+                        isAnonymous = isAnonymous,
+                        onToggleLike = { vm.toggleLike(userId, it) },
+                        onDelete = { vm.deleteComment(userId, it) },
+                        onReply = { vm.startReply(it as HighlightComment) },
                     )
                 }
             }
@@ -199,7 +205,7 @@ private fun HighlightContentCard(highlight: Highlight, onOpenCard: () -> Unit) {
         }
         Box(modifier = Modifier.height(24.dp))
         SharpButton(
-            label = "명대사 읽어보기",
+            label = "카드 보기",
             onClick = onOpenCard,
             modifier = Modifier.fillMaxWidth(),
         )

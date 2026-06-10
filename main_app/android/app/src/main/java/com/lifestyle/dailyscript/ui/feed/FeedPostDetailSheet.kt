@@ -29,7 +29,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +59,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.data.model.CardDto
+import com.lifestyle.dailyscript.data.model.FeedComment
+import com.lifestyle.dailyscript.data.model.FeedCommentLike
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.detail.relativeTime
@@ -148,7 +152,9 @@ fun FeedPostDetailSheet(
                     } else {
                         CommentComposer(
                             submitting = state.submitting,
+                            replyingTo = state.replyingTo,
                             onSubmit = { vm.submitComment(userId, myNickname, it) },
+                            onCancelReply = { vm.cancelReply() },
                         )
                     }
 
@@ -172,13 +178,16 @@ fun FeedPostDetailSheet(
                     )
                 }
             } else {
-                items(state.comments, key = { "c-${it.commentId}" }) { c ->
-                    CommentRow(
-                        authorNickname = c.authorNickname,
-                        body = c.body,
-                        createdAt = c.createdAt,
-                        isMine = c.userId == userId,
-                        onDelete = { vm.deleteComment(userId, c.commentId) },
+                items(groupFeedComments(state.comments), key = { "c-${it.first.commentId}" }) { (c, isReply) ->
+                    FeedCommentRow(
+                        comment = c,
+                        isReply = isReply,
+                        likeUsers = state.likes[c.commentId] ?: emptySet(),
+                        myUserId = userId,
+                        isAnonymous = isAnonymous,
+                        onToggleLike = { vm.toggleLike(userId, it) },
+                        onDelete = { vm.deleteComment(userId, it) },
+                        onReply = { vm.startReply(it as FeedComment) },
                     )
                 }
             }
@@ -294,12 +303,18 @@ internal fun AuthorRow(nickname: String?, createdAt: String) {
 }
 
 /**
- * 댓글 입력 — CommentsSection.CommentComposer 의 IME bring-into-view 패턴 미러(답글 없음).
+ * 댓글 입력 — CommentsSection.CommentComposer 의 IME bring-into-view 패턴 미러.
+ * replyingTo 가 있으면 "@닉네임 에게 답글" 헤더 + 취소를 띄우고 placeholder 도 바꾼다.
  * 피드 글·하이라이트 상세 공용.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-internal fun CommentComposer(submitting: Boolean, onSubmit: (String) -> Unit) {
+internal fun CommentComposer(
+    submitting: Boolean,
+    replyingTo: FeedCommentLike?,
+    onSubmit: (String) -> Unit,
+    onCancelReply: () -> Unit,
+) {
     var text by remember { mutableStateOf("") }
     var focused by remember { mutableStateOf(false) }
     val bringReq = remember { BringIntoViewRequester() }
@@ -308,6 +323,30 @@ internal fun CommentComposer(submitting: Boolean, onSubmit: (String) -> Unit) {
         if (focused && imeBottom > 0) runCatching { bringReq.bringIntoView() }
     }
     val shape = RoundedCornerShape(8.dp)
+
+    if (replyingTo != null) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "↳ ${replyingTo.authorNickname ?: "익명"}에게 답글",
+                style = MaterialTheme.typography.labelSmall,
+                color = Cta,
+            )
+            Text(
+                text = "취소",
+                style = MaterialTheme.typography.labelSmall,
+                color = Walnut,
+                modifier = Modifier
+                    .clickable { onCancelReply() }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -328,7 +367,7 @@ internal fun CommentComposer(submitting: Boolean, onSubmit: (String) -> Unit) {
             decorationBox = { inner ->
                 if (text.isEmpty()) {
                     Text(
-                        text = "이 글에 대한 생각을 남겨주세요…",
+                        text = if (replyingTo != null) "답글을 남기세요…" else "이 글에 대한 생각을 남겨주세요…",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Walnut,
                     )
@@ -365,22 +404,27 @@ internal fun CommentComposer(submitting: Boolean, onSubmit: (String) -> Unit) {
 }
 
 /**
- * 평면 댓글 행 — 닉네임 + 상대시간 + 본문 + (본인 글이면) DELETE. 좋아요·답글 없음.
- * 피드 글·하이라이트 상세 공용 — FeedComment/HighlightComment 어느 쪽이든 원시값으로 받는다.
+ * 댓글 행 — 닉네임 + 상대시간 + 본문 + 하트(좋아요 토글·카운트) + (top-level) REPLY + (본인 글) DELETE.
+ * CommentsSection.CommentRow 미러. 피드 글·하이라이트 상세 공용 (FeedComment/HighlightComment 공통).
  */
 @Composable
-internal fun CommentRow(
-    authorNickname: String?,
-    body: String,
-    createdAt: String,
-    isMine: Boolean,
-    onDelete: () -> Unit,
+internal fun FeedCommentRow(
+    comment: FeedCommentLike,
+    isReply: Boolean,
+    likeUsers: Set<Long>,
+    myUserId: Long,
+    isAnonymous: Boolean,
+    onToggleLike: (Long) -> Unit,
+    onDelete: (Long) -> Unit,
+    onReply: (FeedCommentLike) -> Unit,
 ) {
+    val likedByMe = myUserId in likeUsers
+    val isMine = comment.userId == myUserId
     val shape = RoundedCornerShape(6.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 10.dp)
+            .padding(start = if (isReply) 24.dp else 0.dp, bottom = 10.dp)
             .background(Paper, shape)
             .border(0.5.dp, Latte, shape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -391,32 +435,82 @@ internal fun CommentRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = authorNickname ?: "익명",
+                text = (if (isReply) "↳ " else "") + (comment.authorNickname ?: "익명"),
                 style = MaterialTheme.typography.titleMedium,
                 color = Espresso,
             )
             Text(
-                text = relativeTime(createdAt),
+                text = relativeTime(comment.createdAt),
                 style = MaterialTheme.typography.labelSmall,
                 color = Walnut,
             )
         }
         Box(modifier = Modifier.height(6.dp))
         Text(
-            text = body,
+            text = comment.body,
             style = MaterialTheme.typography.bodyMedium,
             color = Espresso,
         )
-        if (isMine) {
-            Box(modifier = Modifier.height(8.dp))
-            Text(
-                text = "DELETE",
-                style = MaterialTheme.typography.labelSmall,
-                color = Walnut,
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .clickable(onClick = onDelete),
-            )
+        Box(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (likedByMe) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = "Like",
+                    tint = if (likedByMe) Cta else Walnut,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable(enabled = !isAnonymous) { onToggleLike(comment.commentId) },
+                )
+                Text(
+                    text = " ${likeUsers.size}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (likedByMe) Cta else Walnut,
+                )
+                if (!isReply && !isAnonymous) {
+                    Text(
+                        text = "REPLY",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Walnut,
+                        modifier = Modifier
+                            .padding(start = 16.dp)
+                            .clickable { onReply(comment) },
+                    )
+                }
+            }
+            if (isMine) {
+                Text(
+                    text = "DELETE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Walnut,
+                    modifier = Modifier.clickable { onDelete(comment.commentId) },
+                )
+            }
         }
     }
+}
+
+/**
+ * top-level → 답글(1단 깊이) 평탄화. 답글의 답글은 루트 top-level 아래로 정규화(PWA 동일).
+ * 반환: (댓글, isReply) 순서 리스트 — top 바로 뒤에 그 답글들이 온다.
+ */
+internal fun groupFeedComments(list: List<FeedCommentLike>): List<Pair<FeedCommentLike, Boolean>> {
+    if (list.isEmpty()) return emptyList()
+    val byId = list.associateBy { it.commentId }
+    fun rootOf(c: FeedCommentLike): Long {
+        val parentId = c.parentCommentId ?: return c.commentId
+        val parent = byId[parentId]
+        return parent?.parentCommentId ?: parentId
+    }
+    val repliesByRoot = list.filter { it.parentCommentId != null }.groupBy { rootOf(it) }
+    val out = mutableListOf<Pair<FeedCommentLike, Boolean>>()
+    list.filter { it.parentCommentId == null }.forEach { top ->
+        out += top to false
+        (repliesByRoot[top.commentId] ?: emptyList()).forEach { reply -> out += reply to true }
+    }
+    return out
 }

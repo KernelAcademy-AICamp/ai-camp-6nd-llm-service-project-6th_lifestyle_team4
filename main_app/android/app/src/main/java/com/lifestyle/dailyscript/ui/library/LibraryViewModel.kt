@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.WorkDto
+import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
 import com.lifestyle.dailyscript.ui.util.GENRE_ORDER
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,7 @@ data class LibraryBook(
 data class LibraryState(
     val loading: Boolean = true,
     val books: List<LibraryBook> = emptyList(),
+    val bookmarkedCardIds: Set<Long> = emptySet(),
     val error: String? = null,
 )
 
@@ -30,18 +32,29 @@ data class LibraryState(
  */
 class LibraryViewModel : ViewModel() {
     private val cardRepo = CardRepository()
+    private val bookmarkRepo = BookmarkRepository()
     private val _state = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = _state.asStateFlow()
 
     private var loaded = false
 
-    fun load() {
+    fun load(userId: Long) {
         if (loaded) return
         loaded = true
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
-            runCatching { cardRepo.fetchAllCards() }
-                .onSuccess { cards -> _state.value = LibraryState(loading = false, books = buildBooks(cards)) }
+            val cardsResult = runCatching { cardRepo.fetchAllCards() }
+            // 펼친 책 모달에서 북마크한 카드에 뱃지를 다는 데 쓰는 내 북마크 card_id 집합.
+            val bookmarkedIds = runCatching { bookmarkRepo.list(userId).map { it.cardId }.toSet() }
+                .getOrDefault(emptySet())
+            cardsResult
+                .onSuccess { cards ->
+                    _state.value = LibraryState(
+                        loading = false,
+                        books = buildBooks(cards),
+                        bookmarkedCardIds = bookmarkedIds,
+                    )
+                }
                 .onFailure { e -> _state.value = LibraryState(loading = false, error = e.message ?: "불러오기 실패") }
         }
     }

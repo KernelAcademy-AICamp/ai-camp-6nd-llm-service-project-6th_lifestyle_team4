@@ -77,6 +77,8 @@ fun SettingsScreen(
     onOpenMyFeed: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenYarnPurchase: () -> Unit,
+    onOpenNotice: () -> Unit,
+    hasUnreadNotice: Boolean = false,
     onOpenGuide: () -> Unit,
     onOpenTerms: () -> Unit,
     onOpenPrivacy: () -> Unit,
@@ -160,6 +162,29 @@ fun SettingsScreen(
 
         Box(modifier = Modifier.height(16.dp))
         Hairline()
+
+        // --- 공지사항 (내 활동 위, 익명·로그인 모두 노출) — PWA eed7f22 동일 ---
+        Box(modifier = Modifier.height(20.dp))
+        SectionLabel(text = "공지")
+        SettingRow(
+            title = "공지사항",
+            subtitle = "업데이트와 소식",
+            onClick = onOpenNotice,
+            trailing = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (hasUnreadNotice) {
+                        Box(modifier = Modifier.size(7.dp).background(Cta, CircleShape))
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                        contentDescription = null,
+                        tint = Walnut,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            },
+        )
 
         if (session.isAnonymous) {
             // --- ACCOUNT (anonymous) ---

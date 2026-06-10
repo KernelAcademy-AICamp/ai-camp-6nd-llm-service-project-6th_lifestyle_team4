@@ -3,6 +3,7 @@ package com.lifestyle.dailyscript.data.repo
 import com.lifestyle.dailyscript.data.SupabaseProvider
 import com.lifestyle.dailyscript.data.model.FeedComment
 import com.lifestyle.dailyscript.data.model.FeedCommentInsert
+import com.lifestyle.dailyscript.data.model.FeedCommentLikeRow
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.data.model.FeedPostInsert
 import com.lifestyle.dailyscript.data.model.Highlight
@@ -27,9 +28,9 @@ class FeedRepository {
     private val highlightSelect =
         Columns.raw("highlight_id, card_id, user_id, author_nickname, selected_text, user_note, created_at, $nestedCard")
     private val feedCommentSelect =
-        Columns.raw("comment_id, post_id, user_id, author_nickname, body, created_at")
+        Columns.raw("comment_id, post_id, user_id, parent_comment_id, author_nickname, body, created_at")
     private val highlightCommentSelect =
-        Columns.raw("comment_id, highlight_id, user_id, author_nickname, body, created_at")
+        Columns.raw("comment_id, highlight_id, user_id, parent_comment_id, author_nickname, body, created_at")
 
     suspend fun loadPosts(): List<FeedPost> =
         client.postgrest["feed_posts"]
@@ -108,7 +109,7 @@ class FeedRepository {
         )
     }
 
-    // ---- feed_post_comments — 피드 글 상세의 댓글 (좋아요/답글 없는 평면 목록) ----
+    // ---- feed_post_comments — 피드 글 상세의 댓글 (대댓글 parent_comment_id + 하트) ----
 
     suspend fun loadComments(postId: Long): List<FeedComment> =
         client.postgrest["feed_post_comments"]
@@ -123,12 +124,14 @@ class FeedRepository {
         userId: Long,
         body: String,
         authorNickname: String?,
+        parentCommentId: Long?,
     ): FeedComment =
         client.postgrest["feed_post_comments"]
             .insert(
                 FeedCommentInsert(
                     postId = postId,
                     userId = userId,
+                    parentCommentId = parentCommentId,
                     authorNickname = authorNickname,
                     body = body,
                 )
@@ -143,6 +146,14 @@ class FeedRepository {
             }
         }
     }
+
+    /** feed_post_comment_likes: comment_id → 좋아요 누른 user_id 집합. */
+    suspend fun loadCommentLikes(commentIds: List<Long>): Map<Long, Set<Long>> =
+        loadLikes("feed_post_comment_likes", commentIds)
+
+    /** @param liked target state. true → insert a like, false → remove it. */
+    suspend fun setCommentLike(commentId: Long, userId: Long, liked: Boolean) =
+        setLike("feed_post_comment_likes", commentId, userId, liked)
 
     // ---- card_highlight_comments — 하이라이트 카드 상세의 댓글 (feed_post_comments 미러) ----
 
@@ -159,12 +170,14 @@ class FeedRepository {
         userId: Long,
         body: String,
         authorNickname: String?,
+        parentCommentId: Long?,
     ): HighlightComment =
         client.postgrest["card_highlight_comments"]
             .insert(
                 HighlightCommentInsert(
                     highlightId = highlightId,
                     userId = userId,
+                    parentCommentId = parentCommentId,
                     authorNickname = authorNickname,
                     body = body,
                 )
@@ -176,6 +189,38 @@ class FeedRepository {
             filter {
                 eq("comment_id", commentId)
                 eq("user_id", userId)
+            }
+        }
+    }
+
+    /** card_highlight_comment_likes: comment_id → 좋아요 누른 user_id 집합. */
+    suspend fun loadHighlightCommentLikes(commentIds: List<Long>): Map<Long, Set<Long>> =
+        loadLikes("card_highlight_comment_likes", commentIds)
+
+    suspend fun setHighlightCommentLike(commentId: Long, userId: Long, liked: Boolean) =
+        setLike("card_highlight_comment_likes", commentId, userId, liked)
+
+    // ---- 좋아요 공용 헬퍼 (두 like 테이블의 컬럼이 comment_id/user_id로 동일) ----
+
+    private suspend fun loadLikes(table: String, commentIds: List<Long>): Map<Long, Set<Long>> {
+        if (commentIds.isEmpty()) return emptyMap()
+        val rows = client.postgrest[table]
+            .select(Columns.raw("comment_id, user_id")) {
+                filter { isIn("comment_id", commentIds) }
+            }
+            .decodeList<FeedCommentLikeRow>()
+        return rows.groupBy({ it.commentId }, { it.userId }).mapValues { (_, ids) -> ids.toSet() }
+    }
+
+    private suspend fun setLike(table: String, commentId: Long, userId: Long, liked: Boolean) {
+        if (liked) {
+            client.postgrest[table].insert(FeedCommentLikeRow(commentId, userId))
+        } else {
+            client.postgrest[table].delete {
+                filter {
+                    eq("comment_id", commentId)
+                    eq("user_id", userId)
+                }
             }
         }
     }

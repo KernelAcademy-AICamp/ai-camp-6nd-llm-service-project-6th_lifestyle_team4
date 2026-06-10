@@ -1,6 +1,7 @@
 package com.lifestyle.dailyscript.data.repo
 
 import com.lifestyle.dailyscript.data.SupabaseProvider
+import com.lifestyle.dailyscript.data.model.CardIdRow
 import com.lifestyle.dailyscript.data.model.Comment
 import com.lifestyle.dailyscript.data.model.CommentInsert
 import com.lifestyle.dailyscript.data.model.CommentLikeRow
@@ -40,6 +41,17 @@ class CommentRepository {
                 order("created_at", Order.ASCENDING)
             }
             .decodeList()
+
+    /**
+     * 카드별 댓글 수(답글 포함) — card_comments 의 card_id 만 전량 읽어 직접 집계.
+     * denormalized cards.comment_count 컬럼 대신 실제 행을 세어 정확도 우선(PWA loadCommentCounts 동일).
+     */
+    suspend fun allCommentCounts(): Map<Long, Int> =
+        client.postgrest["card_comments"]
+            .select(Columns.raw("card_id")) { limit(20000) }
+            .decodeList<CardIdRow>()
+            .groupingBy { it.cardId }
+            .eachCount()
 
     /** Returns the comment_id → set of user_ids who liked it. */
     suspend fun loadLikes(commentIds: List<Long>): Map<Long, Set<Long>> {

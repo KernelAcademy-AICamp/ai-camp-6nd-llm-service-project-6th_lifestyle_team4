@@ -27,10 +27,14 @@ class HighlightDetailViewModel : ViewModel() {
         _state.value = HighlightDetailState(loading = true)
         viewModelScope.launch {
             val comments = runCatching { feedRepo.loadHighlightComments(highlightId) }
+                .getOrDefault(emptyList())
+            val likes = runCatching {
+                feedRepo.loadHighlightCommentLikes(comments.map { it.commentId })
+            }.getOrDefault(emptyMap())
             _state.value = _state.value.copy(
                 loading = false,
-                comments = comments.getOrDefault(emptyList()),
-                error = comments.exceptionOrNull()?.message,
+                comments = comments,
+                likes = likes,
             )
         }
     }
@@ -39,19 +43,21 @@ class HighlightDetailViewModel : ViewModel() {
         if (_state.value.submitting) return
         val body = rawBody.trim()
         if (body.isEmpty() || highlightId <= 0L) return
+        val parentId = _state.value.replyingTo?.commentId
         _state.value = _state.value.copy(submitting = true, error = null)
         viewModelScope.launch {
             runCatching {
-                feedRepo.addHighlightComment(highlightId, userId, body, nickname.ifBlank { null })
+                feedRepo.addHighlightComment(highlightId, userId, body, nickname.ifBlank { null }, parentId)
             }.onSuccess { added ->
                 val exists = _state.value.comments.any { it.commentId == added.commentId }
                 AppAnalytics.track(
                     "highlight_comment_submitted",
-                    mapOf("highlight_id" to highlightId, "comment_id" to added.commentId),
+                    mapOf("highlight_id" to highlightId, "comment_id" to added.commentId, "is_reply" to (parentId != null)),
                 )
                 _state.value = _state.value.copy(
                     comments = if (exists) _state.value.comments else _state.value.comments + added,
                     submitting = false,
+                    replyingTo = null,
                 )
             }.onFailure { error ->
                 _state.value = _state.value.copy(
@@ -68,6 +74,7 @@ class HighlightDetailViewModel : ViewModel() {
                 .onSuccess {
                     _state.value = _state.value.copy(
                         comments = _state.value.comments.filterNot { it.commentId == commentId },
+                        replyingTo = _state.value.replyingTo?.takeIf { it.commentId != commentId },
                     )
                 }
                 .onFailure { error ->
@@ -75,11 +82,37 @@ class HighlightDetailViewModel : ViewModel() {
                 }
         }
     }
+
+    fun toggleLike(userId: Long, commentId: Long) {
+        if (userId <= 0L) return
+        val current = _state.value.likes[commentId] ?: emptySet()
+        val liked = userId in current
+        // 낙관적 갱신 후 서버 반영.
+        val next = if (liked) current - userId else current + userId
+        _state.value = _state.value.copy(likes = _state.value.likes + (commentId to next))
+        viewModelScope.launch {
+            runCatching { feedRepo.setHighlightCommentLike(commentId, userId, !liked) }
+                .onFailure {
+                    // 실패 시 롤백.
+                    _state.value = _state.value.copy(likes = _state.value.likes + (commentId to current))
+                }
+        }
+    }
+
+    fun startReply(comment: HighlightComment) {
+        _state.value = _state.value.copy(replyingTo = comment)
+    }
+
+    fun cancelReply() {
+        _state.value = _state.value.copy(replyingTo = null)
+    }
 }
 
 data class HighlightDetailState(
     val loading: Boolean = true,
     val comments: List<HighlightComment> = emptyList(),
+    val likes: Map<Long, Set<Long>> = emptyMap(),
+    val replyingTo: HighlightComment? = null,
     val submitting: Boolean = false,
     val error: String? = null,
 )

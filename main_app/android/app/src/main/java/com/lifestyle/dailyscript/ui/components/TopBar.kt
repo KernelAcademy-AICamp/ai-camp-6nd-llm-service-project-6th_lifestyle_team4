@@ -90,21 +90,11 @@ fun BrandWordmark() {
 }
 
 @Composable
-fun HomeTopBar(yarn: Int, onYarnClick: () -> Unit, onMyPageClick: () -> Unit) {
+fun HomeTopBar(yarn: Int, onYarnClick: () -> Unit) {
     TopBarContainer {
         BrandWordmark()
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            YarnChip(yarn = yarn, onClick = onYarnClick)
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = stringResource(R.string.my_page),
-                style = MaterialTheme.typography.labelSmall,
-                color = Walnut,
-                modifier = Modifier
-                    .clickable(onClick = onMyPageClick)
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-            )
-        }
+        // 우측 상단 MY PAGE 버튼 제거 — MY 진입은 하단 탭으로만 (PWA 1a5b8d2 동일). 실타래 칩만 유지.
+        YarnChip(yarn = yarn, onClick = onYarnClick)
     }
 }
 

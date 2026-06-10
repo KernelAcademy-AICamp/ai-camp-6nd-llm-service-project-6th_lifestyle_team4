@@ -34,6 +34,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
@@ -60,6 +61,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -84,6 +86,7 @@ import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.GENRE_ORDER
 import com.lifestyle.dailyscript.ui.util.Markdown
+import com.lifestyle.dailyscript.ui.util.displayTitle
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import kotlinx.coroutines.delay
 
@@ -100,13 +103,14 @@ private const val LibraryPageSize = 12
  */
 @Composable
 fun LibraryScreen(
+    userId: Long,
     onOpenCard: (Long) -> Unit,
     initialOpenWorkId: Long? = null,
 ) {
     val vm: LibraryViewModel = viewModel()
     val state by vm.state.collectAsState()
 
-    LaunchedEffect(Unit) { vm.load() }
+    LaunchedEffect(userId) { vm.load(userId) }
 
     var search by remember { mutableStateOf("") }
     var genre by remember { mutableStateOf<String?>(null) } // null = 전체
@@ -253,6 +257,7 @@ fun LibraryScreen(
         if (opened != null) {
             OpenedLibraryBook(
                 book = opened,
+                bookmarkedCardIds = state.bookmarkedCardIds,
                 onOpenCard = onOpenCard,
                 onClose = { openWorkId = null },
             )
@@ -297,10 +302,12 @@ private fun BookGrid(books: List<LibraryBook>, onOpen: (Long) -> Unit, modifier:
                 )
                 Box(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "명대사 ${book.cards.size}",
+                    text = book.work.displayTitle().ifBlank { "—" },
                     style = MaterialTheme.typography.labelSmall,
                     color = Walnut,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
                 )
             }
         }
@@ -432,8 +439,9 @@ private fun LibrarySearchField(value: String, onChange: (String) -> Unit, modifi
  * Mirrors the archive OpenedBook, simplified for the whole-catalog [LibraryBook] (no bookmark dates).
  */
 @Composable
-private fun OpenedLibraryBook(
+internal fun OpenedLibraryBook(
     book: LibraryBook,
+    bookmarkedCardIds: Set<Long>,
     onOpenCard: (Long) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -516,9 +524,11 @@ private fun OpenedLibraryBook(
                     Box(modifier = Modifier.height(20.dp))
                     Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Sand))
                     Box(modifier = Modifier.height(12.dp))
-                    book.cards.forEach { card ->
+                    book.cards.forEachIndexed { index, card ->
                         LibraryQuoteItem(
                             card = card,
+                            serial = index + 1,
+                            bookmarked = card.cardId in bookmarkedCardIds,
                             onOpen = {
                                 onOpenCard(card.cardId)
                                 onClose()
@@ -598,7 +608,7 @@ private fun LibraryBookHeader(book: LibraryBook, onClose: () -> Unit) {
 
 /** One gathered card in the opened book (serial, quote, short description). */
 @Composable
-private fun LibraryQuoteItem(card: CardDto, onOpen: () -> Unit) {
+private fun LibraryQuoteItem(card: CardDto, serial: Int, bookmarked: Boolean, onOpen: () -> Unit) {
     val accent = Sand
     Box(
         modifier = Modifier
@@ -609,7 +619,8 @@ private fun LibraryQuoteItem(card: CardDto, onOpen: () -> Unit) {
             .clickable(onClick = onOpen),
     ) {
         Column(
-            modifier = Modifier.padding(start = 18.dp, top = 18.dp, end = 16.dp, bottom = 16.dp),
+            // 우측 상단 북마크 뱃지/#순번과 겹치지 않게 우측 여백 확보 (PWA padding-right 36px).
+            modifier = Modifier.padding(start = 18.dp, top = 18.dp, end = 36.dp, bottom = 16.dp),
         ) {
             Text(
                 text = Markdown.quote(card.quote),
@@ -632,9 +643,21 @@ private fun LibraryQuoteItem(card: CardDto, onOpen: () -> Unit) {
                 )
             }
         }
-        // Card serial (일련번호) — the card_id with no leading zeros.
+        // 북마크한 카드는 우측 상단에 채워진 bookmark 뱃지로 구별 (PWA db0d5ff).
+        if (bookmarked) {
+            Icon(
+                imageVector = Icons.Outlined.Bookmark,
+                contentDescription = "북마크함",
+                tint = Cta,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp, end = 10.dp)
+                    .size(16.dp),
+            )
+        }
+        // Card serial (일련번호) — 책 안에서의 0패딩 순번(#01, #02…). 북마크 뱃지 아래로 내림.
         Text(
-            text = "#${card.cardId}",
+            text = "#%02d".format(serial),
             style = TextStyle(
                 fontSize = 9.sp,
                 letterSpacing = 0.25.em,
@@ -643,7 +666,7 @@ private fun LibraryQuoteItem(card: CardDto, onOpen: () -> Unit) {
             ),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 10.dp, end = 12.dp),
+                .padding(top = if (bookmarked) 32.dp else 10.dp, end = 12.dp),
         )
     }
 }

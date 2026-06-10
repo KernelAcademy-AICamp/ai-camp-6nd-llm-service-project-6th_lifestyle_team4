@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.lifestyle.dailyscript.R
-import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Paper
@@ -33,7 +32,7 @@ private enum class Decision { Checking, NeedConfirm, Approved, Insufficient }
  * 카드 열람 게이트. [content](=DetailScreen)는 차감이 승인된 뒤에만 컴포즈되므로
  * vm.load/incrementView 도 그때만 실행된다.
  *
- * - 온보딩 코치 투어 중이면 무료(차감/다이얼로그 없음).
+ * - 게이트는 항상 작동(코치 투어/온보딩 중에도). 3일 unlock 윈도우(isUnlocked)만 무료 통과 — PWA 동일.
  * - 이미 연 카드면 바로 통과.
  * - 아니면 확인 다이얼로그(잔액 0이면 부족 다이얼로그) → 사용 시 우선순위 차감.
  */
@@ -45,9 +44,6 @@ fun YarnGate(
     onCancel: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val coach = LocalCoachController.current
-    if (coach?.active == true) { content(); return } // 투어 = 무료
-
     val context = LocalContext.current
     val available by yarnVm.available.collectAsState()
     var decision by remember(cardId) { mutableStateOf(Decision.Checking) }

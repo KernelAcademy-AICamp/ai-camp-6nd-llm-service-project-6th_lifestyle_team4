@@ -197,10 +197,6 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
                         navController.navigate(Routes.YARN_PURCHASE) { launchSingleTop = true }
                     },
-                    onMyPageClick = {
-                        AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.SETTINGS))
-                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
-                    },
                 )
                 Routes.SETTINGS -> SettingsTopBar(onFeedback = {
                     AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.FEEDBACK))
@@ -237,6 +233,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 }
                 composable(Routes.ARCHIVE) {
                     LibraryScreen(
+                        userId = session.userId,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
@@ -246,6 +243,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 ) { entry ->
                     val workId = entry.arguments?.getLong("workId")?.takeIf { it > 0L }
                     LibraryScreen(
+                        userId = session.userId,
                         initialOpenWorkId = workId,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
@@ -288,6 +286,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                             AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
                             navController.navigate(Routes.YARN_PURCHASE)
                         },
+                        onOpenNotice = {
+                            AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.NOTICE))
+                            navController.navigate(Routes.NOTICE) { launchSingleTop = true }
+                        },
+                        hasUnreadNotice = noticeBadge > 0,
                         onOpenGuide = {
                             AppAnalytics.track("onboarding_requested")
                             coach.requestStart()

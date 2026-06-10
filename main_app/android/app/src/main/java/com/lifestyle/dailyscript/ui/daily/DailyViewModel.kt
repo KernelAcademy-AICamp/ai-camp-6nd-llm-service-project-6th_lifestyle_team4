@@ -9,6 +9,7 @@ import com.lifestyle.dailyscript.data.model.Notice
 import com.lifestyle.dailyscript.data.model.WorkDto
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
+import com.lifestyle.dailyscript.data.repo.CommentRepository
 import com.lifestyle.dailyscript.data.repo.NoticeRepository
 import java.time.Instant
 import java.time.LocalDate
@@ -26,6 +27,7 @@ class DailyViewModel : ViewModel() {
     private val cardRepo = CardRepository()
     private val bookmarkRepo = BookmarkRepository()
     private val noticeRepo = NoticeRepository()
+    private val commentRepo = CommentRepository()
 
     private var activeUserId: Long? = null
 
@@ -41,6 +43,7 @@ class DailyViewModel : ViewModel() {
             val bookmarksResult = runCatching { bookmarkRepo.list(userId) }
             val noticesResult = runCatching { noticeRepo.list() }
             val countsResult = runCatching { bookmarkRepo.allCounts() }
+            val commentCountsResult = runCatching { commentRepo.allCommentCounts() }
             if (activeUserId != userId) return@launch
 
             val cards = cardsResult.getOrDefault(emptyList())
@@ -55,6 +58,7 @@ class DailyViewModel : ViewModel() {
                 bookmarks = bookmarks,
                 notices = noticesResult.getOrDefault(emptyList()),
                 bookmarkCounts = countsResult.getOrDefault(emptyMap()),
+                commentCounts = commentCountsResult.getOrDefault(emptyMap()),
                 ozPick = ozPick,
                 error = listOfNotNull(
                     cardsResult.exceptionOrNull()?.message,
@@ -114,6 +118,7 @@ data class DailyState(
     val bookmarks: List<BookmarkRow> = emptyList(),
     val notices: List<Notice> = emptyList(),
     val bookmarkCounts: Map<Long, Int> = emptyMap(),
+    val commentCounts: Map<Long, Int> = emptyMap(),
     val ozPick: CardDto? = null,
     val error: String? = null,
 )

@@ -214,7 +214,7 @@ private fun HomeCenterButton(
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = stringResource(R.string.nav_home_label), // "오늘의 명대사" — 대문자화 안 함
+            text = stringResource(R.string.nav_home_label), // "TODAY" (PWA d4bd87d)
             color = if (active) Cta else Espresso, // 선택=오렌지, 미선택=검정
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,

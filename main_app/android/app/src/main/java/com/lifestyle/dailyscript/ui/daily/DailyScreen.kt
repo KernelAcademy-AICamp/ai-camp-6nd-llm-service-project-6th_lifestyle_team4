@@ -62,6 +62,8 @@ import com.lifestyle.dailyscript.data.model.WorkDto
 import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.rememberAssetBitmap
+import com.lifestyle.dailyscript.ui.library.LibraryBook
+import com.lifestyle.dailyscript.ui.library.OpenedLibraryBook
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
@@ -100,6 +102,8 @@ fun DailyScreen(
 
     val cats = remember { mutableStateListOf<CatSpawn>() }
     val scope = rememberCoroutineScope()
+    // 새 책 탭 → LIBRARY 화면으로 이동하지 않고 daily 에 머문 채 책 펼침 팝업만 표시 (PWA 0ec4ed4).
+    var openWorkId by remember { mutableStateOf<Long?>(null) }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -162,7 +166,7 @@ fun DailyScreen(
                 books = state.books,
                 onOpenWork = { workId ->
                     AppAnalytics.track("daily_newbook_clicked", mapOf("work_id" to workId))
-                    onOpenLibraryWork(workId)
+                    openWorkId = workId
                 },
             )
             DailyContextual(
@@ -175,6 +179,7 @@ fun DailyScreen(
             DailyTrending(
                 cards = state.allCards,
                 bookmarkCounts = state.bookmarkCounts,
+                commentCounts = state.commentCounts,
                 onOpenCard = { card ->
                     AppAnalytics.track("daily_trending_clicked", mapOf("card_id" to card.cardId))
                     onOpenCard(card.cardId)
@@ -216,6 +221,25 @@ fun DailyScreen(
                         },
                 )
             }
+        }
+
+        // 새 책 펼침 팝업 — daily 에 머문 채 그 작품의 모인 명대사를 LIBRARY 와 동일한 모달로 보여준다.
+        val openedWork = state.books.firstOrNull { it.workId == openWorkId }
+        if (openedWork != null) {
+            val bookmarkedIds = remember(state.bookmarks) { state.bookmarks.map { it.cardId }.toSet() }
+            OpenedLibraryBook(
+                book = LibraryBook(
+                    workId = openedWork.workId,
+                    work = openedWork.work,
+                    cards = openedWork.cards,
+                ),
+                bookmarkedCardIds = bookmarkedIds,
+                onOpenCard = { cardId ->
+                    openWorkId = null
+                    onOpenCard(cardId)
+                },
+                onClose = { openWorkId = null },
+            )
         }
     }
 }
@@ -437,15 +461,17 @@ private fun DailyContextual(cards: List<CardDto>, onOpenCard: (CardDto) -> Unit)
 private fun DailyTrending(
     cards: List<CardDto>,
     bookmarkCounts: Map<Long, Int>,
+    commentCounts: Map<Long, Int>,
     onOpenCard: (CardDto) -> Unit,
     onOpenAll: () -> Unit,
 ) {
-    val scored = remember(cards, bookmarkCounts) {
+    val scored = remember(cards, bookmarkCounts, commentCounts) {
         cards
             .filter { it.quote.isNotBlank() }
             .map {
                 val bm = bookmarkCounts[it.cardId] ?: 0
-                val cm = it.commentCount ?: 0
+                // 댓글 수는 card_comments 집계 Map 우선(PWA 동일), 없으면 denormalized 컬럼 폴백.
+                val cm = commentCounts[it.cardId] ?: it.commentCount ?: 0
                 val vw = it.viewCount ?: 0
                 TrendingCard(it, bm, cm, vw, bm * 10 + cm * 5 + vw)
             }

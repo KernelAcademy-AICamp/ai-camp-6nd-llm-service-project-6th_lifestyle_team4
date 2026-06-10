@@ -1,5 +1,6 @@
 package com.lifestyle.dailyscript.ui.feed
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -181,22 +183,62 @@ fun FeedScreen(
             }
         }
 
-        // Compose FAB (members only)
+        // Compose FAB — 말풍선 모양(하단 바 우측 고양이가 "글쓰기"라고 말하듯). members only.
         if (!isAnonymous) {
-            Box(
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     // 떠 있는 하단 바 위로 — 카드 높이만큼 올려 가리지 않게.
-                    .padding(end = 20.dp, bottom = BottomBarContentInset + 20.dp)
-                    .size(56.dp)
-                    .coachAnchor(coach, "feed_fab")
-                    .background(Espresso, RoundedCornerShape(28.dp))
-                    .clickable {
-                        if (state.category == FEED_HIGHLIGHT) hlPickerOpen = true else todayPickerOpen = true
-                    },
-                contentAlignment = Alignment.Center,
+                    .padding(end = 20.dp, bottom = BottomBarContentInset + 14.dp)
+                    .coachAnchor(coach, "feed_fab"),
+                horizontalAlignment = Alignment.End,
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "작성", tint = Paper)
+                val bubbleShape = RoundedCornerShape(18.dp)
+                Row(
+                    modifier = Modifier
+                        .background(Paper, bubbleShape)
+                        .border(1.5.dp, Espresso, bubbleShape)
+                        .clip(bubbleShape)
+                        .clickable {
+                            if (state.category == FEED_HIGHLIGHT) hlPickerOpen = true else todayPickerOpen = true
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Outlined.Edit,
+                        contentDescription = null,
+                        tint = Espresso,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Box(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "글쓰기",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Espresso,
+                    )
+                }
+                // 우측 아래로 향하는 꼬리 삼각형. 위 모서리는 말풍선 하단 보더에 살짝 겹쳐 가린다.
+                // 색은 @Composable 스코프에서 미리 잡아 DrawScope 람다로 넘긴다(테마 색은 composable 프로퍼티).
+                val tailFill = Paper
+                val tailStroke = Espresso
+                Canvas(
+                    modifier = Modifier
+                        .padding(end = 18.dp)
+                        .offset(y = (-1.5).dp)
+                        .size(width = 16.dp, height = 9.dp),
+                ) {
+                    val tail = Path().apply {
+                        moveTo(0f, 0f)
+                        lineTo(size.width, 0f)
+                        lineTo(size.width * 0.38f, size.height)
+                        close()
+                    }
+                    drawPath(tail, color = tailFill)
+                    val stroke = 1.5.dp.toPx()
+                    drawLine(tailStroke, Offset(0f, 0f), Offset(size.width * 0.38f, size.height), strokeWidth = stroke)
+                    drawLine(tailStroke, Offset(size.width, 0f), Offset(size.width * 0.38f, size.height), strokeWidth = stroke)
+                }
             }
         }
     }
@@ -527,6 +569,30 @@ private fun HighlightCard(hl: Highlight, onClick: () -> Unit) {
 
         Box(modifier = Modifier.height(22.dp))
         HlBookCover(w)
+
+        // 책표지 바로 아래 — 제목 + 작가·연도 (PWA .hl-book-info)
+        Box(modifier = Modifier.height(12.dp))
+        Text(
+            text = w.displayTitle().ifBlank { "—" },
+            style = TextStyle(
+                fontFamily = EditorialSerif,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+            ),
+            color = Espresso,
+            textAlign = TextAlign.Center,
+        )
+        val authorYear = listOfNotNull(w?.author?.ifBlank { null }, w?.releaseYear?.toString())
+            .joinToString(" · ")
+        if (authorYear.isNotBlank()) {
+            Box(modifier = Modifier.height(3.dp))
+            Text(
+                text = authorYear,
+                style = TextStyle(fontFamily = EditorialSans, fontSize = 11.sp),
+                color = Walnut,
+                textAlign = TextAlign.Center,
+            )
+        }
 
         Box(modifier = Modifier.height(22.dp))
         HlQuote(hl.selectedText)
