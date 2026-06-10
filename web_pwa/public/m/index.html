@@ -373,6 +373,25 @@
     text-align: center;
     min-height: 14px;               /* 카운트 줄 높이 고정 */
   }
+  /* LIBRARY 페이지 버튼 */
+  #archive-pages .lib-page-btn {
+    min-width: 32px; height: 32px;
+    padding: 0 10px;
+    background: var(--paper);
+    border: 0.5px solid var(--latte);
+    color: var(--espresso);
+    font-family: 'Noto Serif KR', serif;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  #archive-pages .lib-page-btn.active {
+    background: var(--espresso);
+    color: var(--paper);
+    border-color: var(--espresso);
+    font-weight: 700;
+  }
+  #archive-pages .lib-page-btn:hover:not(.active) { border-color: var(--espresso); }
 
   /* 장식용 고양이 (안드 BottomNavBar.cat_empty 매칭) — 바 우상단에 걸쳐 위로 솟음. 클릭 통과.
      bottom: 40px = bar 높이 64px - (52*0.54) — PNG ledge 선(위→아래 46%) 이 바 윗면에 정확히 닿음.

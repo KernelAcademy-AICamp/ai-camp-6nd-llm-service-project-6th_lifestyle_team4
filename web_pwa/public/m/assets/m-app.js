@@ -2326,7 +2326,15 @@ function renderArchive() {
   gridEl.style.display = 'grid';
   gridEl.innerHTML = '';
 
-  for (const w of works) {
+  // 페이지네이션 — 4열 × 3행 = 12권/페이지
+  const PAGE_SIZE = 12;
+  const totalPages = Math.max(1, Math.ceil(works.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, state.archivePage || 1), totalPages);
+  state.archivePage = safePage;
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pageWorks = works.slice(pageStart, pageStart + PAGE_SIZE);
+
+  for (const w of pageWorks) {
     const work = (w.cards || [])[0]?.works || { title: w.title, cover_url: null };
     const displayName = displayTitle(w.title);
     const label = GENRE_LABEL[w.format] || '기타';
@@ -2353,6 +2361,37 @@ function renderArchive() {
       openBookModal(w, allWorks);
     });
     gridEl.appendChild(btn);
+  }
+
+  // 페이지 버튼 — 그리드 바로 아래 한 줄
+  let pagesEl = document.getElementById('archive-pages');
+  if (!pagesEl) {
+    pagesEl = document.createElement('div');
+    pagesEl.id = 'archive-pages';
+    pagesEl.style.cssText = 'display:flex;justify-content:center;gap:8px;margin:24px 0 40px;flex-wrap:wrap;';
+    gridEl.parentNode.insertBefore(pagesEl, gridEl.nextSibling);
+  }
+  if (totalPages <= 1) {
+    pagesEl.style.display = 'none';
+  } else {
+    pagesEl.style.display = 'flex';
+    const btns = [];
+    if (safePage > 1) btns.push(`<button data-page="${safePage - 1}" class="lib-page-btn">‹</button>`);
+    for (let p = 1; p <= totalPages; p++) {
+      btns.push(`<button data-page="${p}" class="lib-page-btn${p === safePage ? ' active' : ''}">${p}</button>`);
+    }
+    if (safePage < totalPages) btns.push(`<button data-page="${safePage + 1}" class="lib-page-btn">›</button>`);
+    pagesEl.innerHTML = btns.join('');
+    pagesEl.querySelectorAll('[data-page]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const p = Number(b.dataset.page);
+        if (!Number.isNaN(p)) {
+          state.archivePage = p;
+          renderArchive();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      });
+    });
   }
 }
 
@@ -2498,6 +2537,7 @@ document.addEventListener('keydown', (e) => {
 let archiveSearchTrackTimer = null;
 archiveSearchInput.addEventListener('input', (e) => {
   state.archiveSearch = e.target.value;
+  state.archivePage = 1;  // 검색 변경 시 페이지 1로
   renderArchive();
   // 디바운스 — 입력이 멎고 700ms 뒤 비어있지 않은 질의만 1회 전송
   clearTimeout(archiveSearchTrackTimer);
@@ -2540,6 +2580,7 @@ function renderShelfChips(chipsEl, allWorks, currentGenre, onSelect) {
 function renderArchiveChips() {
   renderShelfChips(archiveChips, groupAllCardsByWork(), state.archiveGenre || '', (g) => {
     state.archiveGenre = g;
+    state.archivePage = 1;  // 장르 변경 시 페이지 1로
     track('library_genre_filtered', { genre: g || 'all' });
     renderArchiveChips();
     renderArchive();
