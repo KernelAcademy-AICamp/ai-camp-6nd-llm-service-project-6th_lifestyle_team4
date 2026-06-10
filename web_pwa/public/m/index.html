@@ -310,6 +310,32 @@
   .bottom-nav .nav-item.active { color: var(--espresso); }
   .bottom-nav .nav-item.active .nav-dot { background: var(--cta); }
 
+  /* 가운데 TODAY — 돌출 원형 + 실타래 아이콘 (안드로이드 BottomNavBar.HomeCenterButton 매칭) */
+  .bottom-nav { overflow: visible; }
+  .bottom-nav .nav-item.nav-center {
+    justify-content: flex-start;
+  }
+  .bottom-nav .nav-item.nav-center .nav-center-circle {
+    width: 54px; height: 54px;
+    border-radius: 50%;
+    background: var(--latte);
+    box-shadow: 0 2px 8px rgba(60,40,20,0.18);
+    display: flex; align-items: center; justify-content: center;
+    margin-top: -22px;       /* 바 위로 22px 돌출 */
+    border: 2px solid transparent;
+    transition: border-color 120ms;
+  }
+  .bottom-nav .nav-item.nav-center.active .nav-center-circle {
+    border-color: var(--cta);
+  }
+  .bottom-nav .nav-item.nav-center .nav-center-icon {
+    width: 26px; height: 26px;
+    color: var(--espresso);
+  }
+  .bottom-nav .nav-item.nav-center .t-label-sm {
+    margin-top: 4px;
+  }
+
   /* Main content padding */
   /* main 영역(home/library/feed/notice/settings) padding-bottom 으로 bottom-nav 가림 방지 */
   main { padding: 0 20px 80px; }
@@ -692,6 +718,116 @@
     transform: translateY(-50%);
     color: var(--walnut); font-size: 18px !important;
     pointer-events: none;
+  }
+
+  /* ===== DAILY 공지 카루셀 (섹션 1) ===== */
+  .daily-notice-card {
+    width: 100%;
+    background: var(--latte);
+    border: 0.5px solid var(--sand);
+    border-radius: 0;
+    padding: 16px 18px;
+    cursor: pointer;
+    text-align: left;
+    display: block;
+    transition: opacity 200ms;
+  }
+  .daily-notice-card:active { opacity: 0.7; }
+  .daily-notice-tag {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--cta);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .daily-notice-title {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 15px;
+    color: var(--espresso);
+    margin: 0;
+    line-height: 1.4;
+    font-weight: 700;
+  }
+  .daily-notice-body {
+    font-size: 12px;
+    color: var(--walnut);
+    margin: 6px 0 0;
+    line-height: 1.5;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .daily-notice-dots {
+    display: flex; justify-content: center; gap: 6px; margin-top: 10px;
+  }
+  .daily-notice-dots .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--sand);
+    transition: background 200ms, width 200ms;
+  }
+  .daily-notice-dots .dot.active {
+    background: var(--cta);
+    width: 16px;
+    border-radius: 3px;
+  }
+  .daily-section-label {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--walnut);
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  /* ===== Library 4열 그리드 (안드 BookGrid GridCells.Fixed(4) 매칭) ===== */
+  #library-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px 10px;
+    padding: 16px 0 60px;
+  }
+  #library-grid .lib-book {
+    display: flex; flex-direction: column; align-items: center;
+    background: transparent; border: none; cursor: pointer; padding: 0;
+  }
+  #library-grid .lib-cover {
+    width: 100%;
+    aspect-ratio: 132 / 188;
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(60,40,20,0.18);
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 8px 6px;
+  }
+  #library-grid .lib-cover-title {
+    font-family: 'Noto Serif KR', serif;
+    color: var(--paper);
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.2;
+    word-break: keep-all;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  }
+  #library-grid .lib-cover-meta {
+    font-size: 9px;
+    color: var(--paper);
+    opacity: 0.8;
+    text-align: center;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  #library-grid .lib-count {
+    font-size: 10px;
+    color: var(--walnut);
+    margin-top: 6px;
+    text-align: center;
   }
 
   /* ===== library 고양이 마스코트 ===== */
@@ -1392,10 +1528,23 @@
     <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
   </div>
   <div style="display:flex;align-items:center;gap:14px;">
-    <div title="실시간 동기화 상태" style="display:flex;align-items:center;gap:6px;">
-      <span id="rt-status-dot" style="width:8px;height:8px;border-radius:50%;background:#C9B89A;display:inline-block;"></span>
-      <span id="rt-status-label" class="t-label-sm c-walnut" style="font-size:10px;">⋯</span>
-    </div>
+    <!-- 실타래 잔액 칩 (안드 TopBar 잔액 표시 매칭) — yarn 초기화 후 paintYarnBalance 가 표시 -->
+    <button id="yarn-chip" aria-label="실타래 잔액"
+      style="display:none;align-items:center;gap:4px;background:var(--latte);border:0;border-radius:14px;
+      padding:4px 10px 4px 8px;cursor:pointer;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
+        style="width:14px;height:14px;color:var(--espresso);">
+        <path stroke-width="1.5" d="M12 3 A9 9 0 0 1 12 21 A9 9 0 0 1 12 3 Z"/>
+        <path stroke-width="1.3" d="M4.6 9.5 A9 9 0 0 1 14.5 3.6"/>
+        <path stroke-width="1.3" d="M3.5 14.5 A9 9 0 0 1 9.6 20.5"/>
+        <path stroke-width="1.3" d="M6 18.2 A13 13 0 0 1 18.4 6.2"/>
+        <path stroke-width="1.3" d="M10 20.6 A13 13 0 0 1 20.7 10.3"/>
+      </svg>
+      <span id="yarn-chip-count" class="t-label-sm c-espresso" style="font-size:12px;font-weight:600;">5</span>
+    </button>
+    <!-- LIVE 표시 제거됨 — 실시간 상태는 백그라운드에서만 동작 -->
+    <span id="rt-status-dot" style="display:none;"></span>
+    <span id="rt-status-label" style="display:none;"></span>
     <button id="my-page-btn" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;padding:4px 6px;">
       MY PAGE
     </button>
@@ -1417,7 +1566,29 @@
 <main>
 
   <!-- ===== Home view ===== -->
-  <section id="view-home">
+  <!-- ===== DAILY view (discovery — 6 sections, 3단계에서 채움) ===== -->
+  <section id="view-daily">
+    <div style="padding-top:24px;"></div>
+    <p id="daily-date" class="t-label-sm c-walnut" style="text-align:center;">— · — · —</p>
+    <div style="height:10px;"></div>
+    <h1 class="t-display-md c-espresso" style="text-align:center;font-size:28px;line-height:38px;">디스커버리</h1>
+    <div style="height:32px;"></div>
+    <!-- 섹션 1: 공지사항 — 회전 카루셀 -->
+    <div id="daily-section-notice" style="display:none;"></div>
+    <!-- 섹션 2: 새로 들어온 책 -->
+    <div id="daily-section-new-books" style="display:none;"></div>
+    <!-- 섹션 3: 이럴 땐, 이런 문장 -->
+    <div id="daily-section-contextual" style="display:none;"></div>
+    <!-- 섹션 4: 이번 주 인기 대사 -->
+    <div id="daily-section-trending" style="display:none;"></div>
+    <!-- 섹션 5: 오즈의 오늘의 추천 -->
+    <div id="daily-section-oz" style="display:none;"></div>
+    <!-- 섹션 6: 다시 만나기 -->
+    <div id="daily-section-recent" style="display:none;"></div>
+    <div style="height:40px;"></div>
+  </section>
+
+  <section id="view-home" style="display:none;">
     <div id="home-loading" style="display:flex;flex-direction:column;align-items:center;padding:80px 0;">
       <div class="spinner"></div>
       <p class="t-label-sm c-walnut" style="margin-top:16px;">Loading⋯</p>
@@ -1427,11 +1598,8 @@
       <div style="padding-top:24px;"></div>
       <p class="t-label-sm c-walnut" id="home-date" style="text-align:center;">— · — · —</p>
       <div style="height:10px;"></div>
-      <div style="position:relative;text-align:center;">
+      <div style="text-align:center;">
         <h1 class="t-display-md c-espresso" style="font-size:28px;line-height:38px;">오늘<span style="font-size:0.7em;letter-spacing:-0.02em;">의</span> 명대사</h1>
-        <button id="home-refresh" aria-label="다른 명대사 보기" class="home-random-btn" style="position:absolute;right:0;top:50%;transform:translateY(-50%);">
-          <span class="material-symbols-outlined c-walnut" style="font-size:18px;">refresh</span>
-        </button>
       </div>
 
       <div style="height:20px;"></div>
@@ -1499,6 +1667,42 @@
   </section>
 
   <!-- ===== Archive view (bookshelf) ===== -->
+  <!-- ===== LIBRARY view — 안드 LibraryScreen 매칭: 전체 작품 4열 그리드 + 장르칩 + 검색 ===== -->
+  <section id="view-library" style="display:none;">
+    <div style="height:28px;"></div>
+    <h1 class="t-display-md c-espresso">전체 작품</h1>
+    <p id="library-count" class="t-label-sm c-walnut" style="margin-top:6px;"></p>
+
+    <!-- Genre chips -->
+    <div class="archive-chips" id="library-chips" role="tablist" style="margin-top:18px;"></div>
+
+    <!-- Title search -->
+    <div class="archive-search" style="margin-top:10px;">
+      <span class="material-symbols-outlined">search</span>
+      <input id="library-search-input" type="search" placeholder="작품 제목으로 검색" />
+    </div>
+
+    <div id="library-loading" style="padding:16px 0;">
+      <p class="t-body-md c-walnut">Loading⋯</p>
+    </div>
+
+    <!-- 4열 vertical 그리드 — 안드 BookGrid GridCells.Fixed(4) 매칭 -->
+    <div id="library-grid" style="display:none;"></div>
+
+    <div id="library-empty" style="display:none;padding:60px 0;text-align:center;">
+      <span class="material-symbols-outlined c-sand" style="font-size:56px;">menu_book</span>
+      <p class="t-headline-sm c-espresso" style="margin-top:14px;">표시할 작품이 없습니다.</p>
+    </div>
+
+    <div id="library-no-result" style="display:none;padding:60px 0;text-align:center;">
+      <span class="material-symbols-outlined c-sand" style="font-size:56px;">search_off</span>
+      <p class="t-headline-sm c-espresso" style="margin-top:14px;">검색 결과가 없습니다</p>
+      <p class="t-body-md c-walnut" style="margin-top:6px;">다른 단어로 시도해보세요</p>
+    </div>
+
+    <div style="height:40px;"></div>
+  </section>
+
   <section id="view-archive" style="display:none;">
     <!-- library 고양이 마스코트 (유저 상황에 따라 자세/표정 변화) -->
     <img id="archive-cat" class="archive-cat" alt="" src="assets/cat/cat_idle.png" style="height:58px;" />
@@ -1657,6 +1861,33 @@
       <div class="hairline"></div>
     </div>
 
+    <!-- BOOKMARK entry — view-archive 로 이동 (안드: MY 에서 진입). 회원만. -->
+    <div id="mypage-bookmarks-block" style="display:none;">
+      <button id="mypage-bookmarks-entry"
+              style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
+        <div style="flex:1;min-width:0;">
+          <p class="t-title-lg c-espresso" style="margin-bottom:4px;">북마크</p>
+          <p class="t-body-sm c-walnut" id="mypage-bookmarks-count">보관한 명대사 모아보기</p>
+        </div>
+        <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+      </button>
+      <div class="hairline"></div>
+    </div>
+
+    <!-- NOTICE entry — view-notice 로 이동 (안드: MY 에서 진입). 익명/회원 모두. -->
+    <div id="mypage-notice-block">
+      <button id="mypage-notice-entry"
+              style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
+        <div style="flex:1;min-width:0;">
+          <p class="t-title-lg c-espresso" style="margin-bottom:4px;">공지사항</p>
+          <p class="t-body-sm c-walnut">업데이트와 소식</p>
+        </div>
+        <span id="mypage-notice-dot" style="display:none;width:7px;height:7px;background:var(--cta);border-radius:50%;margin-right:8px;"></span>
+        <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
+      </button>
+      <div class="hairline"></div>
+    </div>
+
     <div style="height:40px;"></div>
     <p class="t-label-sm c-walnut" style="margin-bottom:12px;font-weight:700;">일반 설정</p>
 
@@ -1740,14 +1971,34 @@
 </main>
 
 <!-- ===== Bottom Nav ===== -->
+<!-- 순서: DAILY / FEED / TODAY / LIBRARY / MY  (사용자 명세) -->
 <div class="hairline" style="position:fixed;left:0;right:0;bottom:64px;z-index:31;"></div>
 <nav class="bottom-nav">
-  <button data-nav="home" class="nav-item active">
-    <span class="material-symbols-outlined nav-icon">home</span>
-    <span class="t-label-sm">HOME</span>
+  <button data-nav="daily" class="nav-item active">
+    <span class="material-symbols-outlined nav-icon">explore</span>
+    <span class="t-label-sm">DAILY</span>
     <span class="nav-dot"></span>
   </button>
-  <button data-nav="archive" class="nav-item">
+  <button data-nav="feed" class="nav-item">
+    <span class="material-symbols-outlined nav-icon">dynamic_feed</span>
+    <span class="t-label-sm">FEED</span>
+    <span class="nav-dot"></span>
+  </button>
+  <!-- 가운데 — 실타래 돌출 원형 (안드로이드 ic_yarn.xml SVG 매핑) -->
+  <button data-nav="home" class="nav-item nav-center">
+    <div class="nav-center-circle">
+      <svg class="nav-center-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-label="yarn">
+        <path stroke-width="1.5" d="M12 3 A9 9 0 0 1 12 21 A9 9 0 0 1 12 3 Z"/>
+        <path stroke-width="1.3" d="M4.6 9.5 A9 9 0 0 1 14.5 3.6"/>
+        <path stroke-width="1.3" d="M3.5 14.5 A9 9 0 0 1 9.6 20.5"/>
+        <path stroke-width="1.3" d="M6 18.2 A13 13 0 0 1 18.4 6.2"/>
+        <path stroke-width="1.3" d="M10 20.6 A13 13 0 0 1 20.7 10.3"/>
+      </svg>
+    </div>
+    <span class="t-label-sm">TODAY</span>
+    <span class="nav-dot"></span>
+  </button>
+  <button data-nav="library" class="nav-item">
     <svg class="nav-icon nav-icon-library" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-label="library">
       <rect x="4.5" y="6" width="3" height="13"/>
       <rect x="8.5" y="8" width="3" height="11"/>
@@ -1758,21 +2009,11 @@
     <span class="t-label-sm">LIBRARY</span>
     <span class="nav-dot"></span>
   </button>
-  <button data-nav="feed" class="nav-item">
-    <span class="material-symbols-outlined nav-icon">dynamic_feed</span>
-    <span class="t-label-sm">FEED</span>
-    <span class="nav-dot"></span>
-  </button>
-  <button data-nav="notice" class="nav-item">
-    <span class="material-symbols-outlined nav-icon">campaign</span>
-    <span class="t-label-sm">NOTICE</span>
-    <span class="nav-dot"></span>
-    <span id="notice-unread-dot"></span>
-  </button>
   <button data-nav="settings" class="nav-item">
     <span class="material-symbols-outlined nav-icon">person</span>
     <span class="t-label-sm">MY</span>
     <span class="nav-dot"></span>
+    <span id="notice-unread-dot"></span>
   </button>
 </nav>
 
