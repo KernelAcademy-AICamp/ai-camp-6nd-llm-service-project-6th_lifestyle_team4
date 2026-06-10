@@ -5899,6 +5899,7 @@ function openFeedPostDetail(post) {
   state.detailType = 'post';
   state.currentFeedPost = post;
   state.currentHighlight = null;
+  if (feedFab) feedFab.style.display = 'none';   // 댓글 화면에서는 글쓰기 말풍선 숨김
   // 명대사 박스 복원 (하이라이트 모드에서 숨겼던 경우)
   const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
   if (quoteBox) quoteBox.style.display = '';
@@ -5945,6 +5946,7 @@ function openHighlightDetail(highlight) {
   if (fpSource) fpSource.textContent = '';
   if (fpAuthor) fpAuthor.textContent = highlight.author_nickname || '익명';
   if (fpDate) fpDate.textContent = formatBookmarkDate(highlight.created_at) || formatRelativeTime(highlight.created_at);
+  if (feedFab) feedFab.style.display = 'none';   // 댓글 화면에서는 글쓰기 말풍선 숨김
   // 하이라이트는 selected_text 가 본문. 작성자 아래에 제목·작가 별도 라인 추가 (fp-body 앞).
   if (fpBody) {
     const src = [displayTitle(w.title), w.author].filter(Boolean).join(' · ');
@@ -6238,6 +6240,8 @@ function closeFeedPostDetailInternal() {
     // type 리셋 — 다음 진입 시 정확히 분기되게
     state.detailType = null;
     state.currentHighlight = null;
+    // 피드 탭으로 돌아가면 글쓰기 말풍선 다시 표시
+    if (feedFab && state.currentView === 'feed') feedFab.style.display = 'inline-flex';
   }, 250);
   state.currentFeedPost = null;
 }
@@ -6871,7 +6875,7 @@ function setView(view) {
   if (viewFeed) viewFeed.style.display = (view === 'feed') ? 'block' : 'none';
   if (viewNotice) viewNotice.style.display = (view === 'notice') ? 'block' : 'none';
   viewSettings.style.display = (view === 'settings') ? 'block' : 'none';
-  if (feedFab) feedFab.style.display = (view === 'feed') ? 'flex' : 'none';
+  if (feedFab) feedFab.style.display = (view === 'feed') ? 'inline-flex' : 'none';
 
   // Top bar — Settings has its own
   topBarHome.style.display = (view === 'settings') ? 'none' : 'flex';
