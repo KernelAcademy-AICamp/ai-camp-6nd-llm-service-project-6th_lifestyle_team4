@@ -2938,11 +2938,10 @@ function renderDailyOzPick() {
   sec.innerHTML = `
     <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">오즈의 오늘의 추천</h2>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
-      <!-- 오즈 헤더 — 책 위 고양이 아바타 + 이름 + 메타 -->
+      <!-- 오즈 헤더 — 책 위 고양이 + 이름 + 메타 (원 안에 가두지 않음, 더 크게) -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-        <span style="width:44px;height:44px;border-radius:50%;background:var(--latte);display:inline-flex;align-items:flex-end;justify-content:center;flex-shrink:0;overflow:hidden;">
-          <img src="assets/cat/cat_shelf_few.png" alt="오즈" style="width:90%;height:auto;object-fit:contain;pointer-events:none;user-select:none;" />
-        </span>
+        <img src="assets/cat/cat_shelf_few.png" alt="오즈"
+          style="width:72px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">오즈</p>
           <p style="margin:2px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(metaText)}</p>
@@ -5726,13 +5725,29 @@ async function loadFeedComments(postId) {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('feed_post_comments')
-    .select('comment_id, post_id, user_id, author_nickname, body, created_at')
+    .select('comment_id, post_id, user_id, parent_comment_id, author_nickname, body, created_at')
     .eq('post_id', postId)
     .order('created_at', { ascending: true });
   if (error) { console.warn('[m] feed comments load error:', error.message); return; }
-  // 로드 도중 다른 글로 이동했으면 무시
   if (!state.currentFeedPost || String(state.currentFeedPost.post_id) !== String(postId)) return;
   state.feedPostComments = data || [];
+
+  // 좋아요 — 댓글별 카운트 + 내가 누른 목록
+  const commentIds = (data || []).map((c) => c.comment_id);
+  state.feedPostCommentLikes = new Map();
+  state.feedPostCommentLikedByMe = new Set();
+  if (commentIds.length > 0) {
+    try {
+      const { data: likes } = await sb
+        .from('feed_post_comment_likes')
+        .select('comment_id, user_id')
+        .in('comment_id', commentIds);
+      for (const l of (likes || [])) {
+        state.feedPostCommentLikes.set(l.comment_id, (state.feedPostCommentLikes.get(l.comment_id) || 0) + 1);
+        if (state.userId && l.user_id === state.userId) state.feedPostCommentLikedByMe.add(l.comment_id);
+      }
+    } catch (e) { console.warn('[m] feed comment likes load failed:', e); }
+  }
   renderFeedComments();
 }
 
@@ -5746,30 +5761,113 @@ function renderFeedComments() {
     return;
   }
   if (fpCommentsEmpty) fpCommentsEmpty.style.display = 'none';
+
+  // 트리 구성 — top-level은 parent_comment_id == null. 답글은 부모 아래 평면(2단 깊이 제한).
+  const topLevel = list.filter((c) => c.parent_comment_id == null);
+  const childrenOf = new Map();
+  for (const c of list) {
+    if (c.parent_comment_id == null) continue;
+    let parentKey = c.parent_comment_id;
+    // 답글의 답글은 최상위 부모 아래로 합침 (2단 깊이 제한)
+    const parent = list.find((x) => x.comment_id === parentKey);
+    if (parent && parent.parent_comment_id != null) parentKey = parent.parent_comment_id;
+    if (!childrenOf.has(parentKey)) childrenOf.set(parentKey, []);
+    childrenOf.get(parentKey).push(c);
+  }
+
   const myUserId = state.userId;
-  fpCommentsList.innerHTML = list.map((c) => {
+  const renderOne = (c, isReply) => {
     const isMine = myUserId != null && c.user_id === myUserId;
     const nick = escapeHtml(c.author_nickname || '익명');
     const when = escapeHtml(formatRelativeTime(c.created_at));
     const body = escapeHtml(c.body || '');
-    const del = isMine
-      ? `<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button class="fp-comment-delete" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;">Delete</button></div>`
+    const likes = state.feedPostCommentLikes?.get(c.comment_id) || 0;
+    const liked = state.feedPostCommentLikedByMe?.has(c.comment_id);
+    const heart = `<button class="fp-like" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 6px;color:${liked ? 'var(--cta)' : 'var(--walnut)'};">
+      <span class="material-symbols-outlined" style="font-size:16px;${liked ? 'font-variation-settings:\'FILL\' 1;' : ''}">favorite</span>
+      <span style="font-size:11px;">${likes}</span>
+    </button>`;
+    const replyBtn = !isReply
+      ? `<button class="fp-reply" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;color:var(--walnut);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;padding:4px 6px;">답글</button>`
       : '';
-    return `<div style="border:0.5px solid var(--latte);background:var(--paper);padding:12px 14px;">`
+    const del = isMine
+      ? `<button class="fp-comment-delete" data-comment-id="${c.comment_id}" style="background:transparent;border:none;cursor:pointer;color:var(--walnut);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;padding:4px 6px;">삭제</button>`
+      : '';
+    const indent = isReply ? 'margin-left:28px;border-left:2px solid var(--latte);padding-left:12px;' : '';
+    return `<div style="border:0.5px solid var(--latte);background:var(--paper);padding:12px 14px;${indent}">`
       + `<div style="display:flex;justify-content:space-between;align-items:center;">`
-      + `<span class="t-body-md c-espresso" style="font-weight:600;">${nick}</span>`
+      + `<span class="t-body-md c-espresso" style="font-weight:600;">${isReply ? '↳ ' : ''}${nick}</span>`
       + `<span class="t-label-sm c-walnut">${when}</span>`
       + `</div>`
-      + `<p class="t-body-md c-espresso" style="margin-top:6px;white-space:pre-wrap;word-break:keep-all;">${body}</p>`
-      + del
+      + `<p class="t-body-md c-espresso" style="margin:6px 0 8px;white-space:pre-wrap;word-break:keep-all;">${body}</p>`
+      + `<div style="display:flex;justify-content:space-between;align-items:center;">`
+      + `<div style="display:flex;gap:4px;">${heart}${replyBtn}</div>`
+      + `<div>${del}</div>`
+      + `</div>`
       + `</div>`;
-  }).join('');
+  };
+
+  const blocks = [];
+  for (const c of topLevel) {
+    blocks.push(renderOne(c, false));
+    const replies = childrenOf.get(c.comment_id) || [];
+    for (const r of replies) blocks.push(renderOne(r, true));
+  }
+  fpCommentsList.innerHTML = blocks.join('');
+
   fpCommentsList.querySelectorAll('.fp-comment-delete').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = parseInt(btn.dataset.commentId, 10);
       if (!Number.isNaN(id)) deleteFeedComment(id);
     });
   });
+  fpCommentsList.querySelectorAll('.fp-like').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (!Number.isNaN(id)) toggleFeedCommentLike(id);
+    });
+  });
+  fpCommentsList.querySelectorAll('.fp-reply').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.commentId, 10);
+      if (!Number.isNaN(id)) startFeedReply(id);
+    });
+  });
+}
+
+function startFeedReply(commentId) {
+  state.replyingToFeedCommentId = commentId;
+  const target = (state.feedPostComments || []).find((c) => c.comment_id === commentId);
+  const nick = target?.author_nickname || '익명';
+  if (fpCommentInput) {
+    fpCommentInput.placeholder = `@${nick} 에게 답글⋯`;
+    fpCommentInput.focus();
+  }
+}
+
+async function toggleFeedCommentLike(commentId) {
+  if (state.isAnonymous || !state.userId) { toast('로그인이 필요합니다'); return; }
+  const liked = state.feedPostCommentLikedByMe?.has(commentId);
+  try {
+    const sb = await getSupabase();
+    if (liked) {
+      const { error } = await sb.from('feed_post_comment_likes')
+        .delete().eq('comment_id', commentId).eq('user_id', state.userId);
+      if (error) throw error;
+      state.feedPostCommentLikedByMe.delete(commentId);
+      state.feedPostCommentLikes.set(commentId, Math.max(0, (state.feedPostCommentLikes.get(commentId) || 1) - 1));
+    } else {
+      const { error } = await sb.from('feed_post_comment_likes')
+        .insert({ comment_id: commentId, user_id: state.userId });
+      if (error) throw error;
+      state.feedPostCommentLikedByMe.add(commentId);
+      state.feedPostCommentLikes.set(commentId, (state.feedPostCommentLikes.get(commentId) || 0) + 1);
+    }
+    renderFeedComments();
+  } catch (err) {
+    console.warn('[m] toggleFeedCommentLike failed:', err);
+    toast('좋아요 처리 실패');
+  }
 }
 
 async function submitFeedComment() {
@@ -5783,14 +5881,18 @@ async function submitFeedComment() {
   if (fpCommentSubmit) fpCommentSubmit.disabled = true;
   try {
     const sb = await getSupabase();
+    const payload = { post_id: post.post_id, user_id: state.userId, author_nickname: state.userNickname || null, body };
+    if (state.replyingToFeedCommentId) payload.parent_comment_id = state.replyingToFeedCommentId;
     const { data, error } = await sb
       .from('feed_post_comments')
-      .insert({ post_id: post.post_id, user_id: state.userId, author_nickname: state.userNickname || null, body })
-      .select('comment_id, post_id, user_id, author_nickname, body, created_at')
+      .insert(payload)
+      .select('comment_id, post_id, user_id, parent_comment_id, author_nickname, body, created_at')
       .single();
     if (error) throw error;
-    track('feed_comment_submitted', { post_id: post.post_id });
+    track('feed_comment_submitted', { post_id: post.post_id, is_reply: !!payload.parent_comment_id });
     fpCommentInput.value = '';
+    fpCommentInput.placeholder = '댓글을 남겨주세요';
+    state.replyingToFeedCommentId = null;
     updateFpCounter();
     if (data && !(state.feedPostComments || []).find((c) => c.comment_id === data.comment_id)) {
       state.feedPostComments = [...(state.feedPostComments || []), data];
