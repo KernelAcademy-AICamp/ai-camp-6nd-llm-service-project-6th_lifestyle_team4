@@ -6420,16 +6420,44 @@ function setView(view) {
   if (view === 'notice') renderNotice();
   if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); paintMyFeedEntry(); paintMyBookmarksEntry(); paintMyNoticeEntry(); }
   if (view === 'daily') {
-    renderDailyDate();
-    renderDailyNotice();
-    renderDailyNewBooks();
-    renderDailyContextual();
-    renderDailyTrending();
-    renderDailyOzPick();
-    renderDailyRecent();
+    // 캐시된 state.allCards 에 cover_url 키가 없으면 (이전 SELECT 결과) 강제 reload — 한 번만.
+    const sample = (state.allCards || [])[0];
+    const needsReload = sample?.works && !('cover_url' in sample.works);
+    if (needsReload) {
+      state.allCards = null;
+      loadAllCards().then(() => {
+        if (state.currentView === 'daily') {
+          renderDailyDate();
+          renderDailyNotice();
+          renderDailyNewBooks();
+          renderDailyContextual();
+          renderDailyTrending();
+          renderDailyOzPick();
+          renderDailyRecent();
+        }
+      });
+    } else {
+      renderDailyDate();
+      renderDailyNotice();
+      renderDailyNewBooks();
+      renderDailyContextual();
+      renderDailyTrending();
+      renderDailyOzPick();
+      renderDailyRecent();
+    }
   } else {
     stopNoticeCarousel?.();
     stopContextualCarousel?.();
+  }
+  // LIBRARY 도 동일 — cover_url 누락 시 reload
+  if (view === 'archive') {
+    const sample = (state.allCards || [])[0];
+    if (sample?.works && !('cover_url' in sample.works)) {
+      state.allCards = null;
+      loadAllCards().then(() => {
+        if (state.currentView === 'archive') { renderArchiveChips(); renderArchive(); }
+      });
+    }
   }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
