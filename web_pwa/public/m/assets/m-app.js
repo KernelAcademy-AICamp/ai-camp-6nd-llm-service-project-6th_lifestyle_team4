@@ -1511,7 +1511,7 @@ async function toggleBookmark(cardId) {
     } else {
       const { data, error } = await sb.from('user_bookmarks')
         .insert({ user_id: state.userId, card_id: cardId })
-        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters))')
+        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters, cover_url))')
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
@@ -3408,7 +3408,7 @@ async function renderMyComments() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('feed_posts')
-    .select('post_id, card_id, user_id, body, created_at, cards(card_id, quote, works(title, subtitle, format, author, release_year))')
+    .select('post_id, card_id, user_id, body, created_at, cards(card_id, quote, works(title, subtitle, format, author, release_year, cover_url))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false })
     .limit(50);
@@ -3508,7 +3508,7 @@ async function renderMyHighlights() {
   const sb = await getSupabase();
   const { data, error } = await sb
     .from('card_highlights')
-    .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year))')
+    .select('highlight_id, card_id, user_id, selected_text, created_at, cards(card_id, works(work_id, title, subtitle, format, author, release_year, cover_url))')
     .eq('user_id', state.userId)
     .order('created_at', { ascending: false })
     .limit(50);
