@@ -2241,32 +2241,85 @@ function decorateShelfWithCats(shelf, genre) {
 
 // LIBRARY 탭 = 전체 도서 카탈로그 (비회원 포함 누구나 열람)
 function renderArchive() {
+  // 안드 LibraryScreen 매칭: 4열 vertical 그리드 + 칩 + 검색. 고양이 마스코트는 안드에 없으니 숨김.
+  const gridEl = document.getElementById('archive-grid');
+  if (archiveCat) archiveCat.style.display = 'none';
+  if (archiveShelves) archiveShelves.style.display = 'none';
+
   if (!state.allCards || state.allCards.length === 0) {
     if (archiveLoading) archiveLoading.style.display = 'block';
-    if (archiveShelves) archiveShelves.style.display = 'none';
+    if (gridEl) gridEl.style.display = 'none';
     if (archiveEmpty) archiveEmpty.style.display = 'none';
     if (archiveNoResult) archiveNoResult.style.display = 'none';
-    if (archiveCat) archiveCat.style.display = '';
-    setCatBaseMood('idle');
     loadAllCards().then(() => {
       if (state.currentView === 'archive') { renderArchiveChips(); renderArchive(); }
     }).catch(() => {});
     return;
   }
+  if (archiveLoading) archiveLoading.style.display = 'none';
+
   const allWorks = groupAllCardsByWork();
   const totalCards = state.allCards.length;
-  const status = renderShelfView({
-    allWorks,
-    search: state.archiveSearch,
-    genre: state.archiveGenre,
-    els: { shelves: archiveShelves, empty: archiveEmpty, noResult: archiveNoResult, count: archiveCount, loading: archiveLoading },
-    countText: (w) => `전체 ${w.length}권 · 명대사 ${totalCards}편`,
+  if (archiveCount) archiveCount.textContent = `전체 ${allWorks.length}권 · 명대사 ${totalCards}편`;
+
+  const q = (state.archiveSearch || '').trim().toLowerCase();
+  const genre = state.archiveGenre || '';
+  const works = allWorks.filter((w) => {
+    if (genre === 'other') { if (GENRE_ORDER.includes(w.format)) return false; }
+    else if (genre && w.format !== genre) return false;
+    if (q) {
+      const title = displayTitle(w.title).toLowerCase();
+      const series = (w.series || '').toLowerCase();
+      const sub = (w.subtitle || '').toLowerCase();
+      const author = (w.author || '').toLowerCase();
+      if (!title.includes(q) && !series.includes(q) && !sub.includes(q) && !author.includes(q)) return false;
+    }
+    return true;
   });
-  // 코너 고양이 — 검색 결과 0이면 confused, 책장이 있으면(책장 위 고양이로 대체) 숨김
-  if (archiveCat) {
-    if (status === 'no-result') { archiveCat.style.display = ''; setCatBaseMood('confused'); }
-    else if (status === 'shelves') { archiveCat.style.display = 'none'; }
-    else { archiveCat.style.display = ''; setCatBaseMood('idle'); }
+
+  if (allWorks.length === 0) {
+    if (gridEl) gridEl.style.display = 'none';
+    if (archiveNoResult) archiveNoResult.style.display = 'none';
+    if (archiveEmpty) archiveEmpty.style.display = 'block';
+    return;
+  }
+  if (works.length === 0) {
+    if (gridEl) gridEl.style.display = 'none';
+    if (archiveEmpty) archiveEmpty.style.display = 'none';
+    if (archiveNoResult) archiveNoResult.style.display = 'block';
+    return;
+  }
+  if (archiveEmpty) archiveEmpty.style.display = 'none';
+  if (archiveNoResult) archiveNoResult.style.display = 'none';
+  if (!gridEl) return;
+  gridEl.style.display = 'grid';
+  gridEl.innerHTML = '';
+
+  for (const w of works) {
+    const work = (w.cards || [])[0]?.works || { title: w.title, cover_url: null };
+    const displayName = displayTitle(w.title);
+    const label = GENRE_LABEL[w.format] || '기타';
+    const titleLen = displayName.length;
+    const fontSize = titleLen <= 6 ? 13 : titleLen <= 10 ? 11 : 10;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'lib-book';
+    btn.innerHTML = work.cover_url
+      ? `<div class="lib-cover" style="background:${leatherColorFor(w.title)};padding:0;">
+          <img class="lib-cover-img" src="${escapeHtml(work.cover_url)}" alt="${escapeHtml(displayName)}" loading="lazy" />
+        </div>
+        <span class="lib-count">명대사 ${w.cards.length}</span>`
+      : `<div class="lib-cover" style="background:${leatherColorFor(w.title)};">
+          <span class="lib-cover-meta">${escapeHtml(label)}</span>
+          <span class="lib-cover-title" style="font-size:${fontSize}px;">${escapeHtml(displayName)}</span>
+          <span class="lib-cover-meta">${escapeHtml((w.author || '').toUpperCase())}</span>
+        </div>
+        <span class="lib-count">명대사 ${w.cards.length}</span>`;
+    btn.addEventListener('click', () => {
+      track('library_book_opened', { work_key: w.key });
+      openBookModal(w, allWorks);
+    });
+    gridEl.appendChild(btn);
   }
 }
 

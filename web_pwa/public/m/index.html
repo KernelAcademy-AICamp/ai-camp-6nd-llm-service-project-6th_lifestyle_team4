@@ -300,6 +300,58 @@
   .bottom-nav .nav-item.nav-home-center.active .nav-home-circle { border-color: var(--cta); }
   .bottom-nav .nav-item.nav-home-center .nav-dot { display: none; }
 
+  /* LIBRARY 4열 그리드 (안드 LibraryScreen BookGrid GridCells.Fixed(4) 매칭) */
+  #archive-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px 10px;
+    padding: 16px 0 60px;
+  }
+  #archive-grid .lib-book {
+    display: flex; flex-direction: column; align-items: center;
+    background: transparent; border: none; cursor: pointer; padding: 0;
+  }
+  #archive-grid .lib-cover {
+    width: 100%;
+    aspect-ratio: 132 / 188;
+    background: var(--latte);
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(60,40,20,0.18);
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 6px 4px;
+    border-radius: 2px;
+  }
+  #archive-grid .lib-cover-img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  #archive-grid .lib-cover-title {
+    font-family: 'Noto Serif KR', 'Nanum Myeongjo', serif;
+    color: var(--paper);
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.2;
+    word-break: keep-all;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  }
+  #archive-grid .lib-cover-meta {
+    font-size: 8px;
+    color: var(--paper);
+    opacity: 0.85;
+    text-align: center;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  #archive-grid .lib-count {
+    font-size: 10px;
+    color: var(--walnut);
+    margin-top: 6px;
+    text-align: center;
+  }
+
   /* 장식용 고양이 (안드 BottomNavBar.cat_empty 매칭) — 바 우상단에 걸쳐 위로 솟음. 클릭 통과. */
   .bottom-nav .bottom-nav-cat {
     position: absolute;
@@ -1582,7 +1634,9 @@
       <p class="t-body-md c-walnut">Loading⋯</p>
     </div>
 
-    <!-- 장르별 책꽂이 컨테이너 -->
+    <!-- 4열 vertical 그리드 (안드 LibraryScreen BookGrid GridCells.Fixed(4) 매칭) -->
+    <div id="archive-grid" style="display:none;"></div>
+    <!-- 기존 책꽂이 컨테이너 (호환용 — renderArchive 가 사용하면 fallback) -->
     <div id="archive-shelves" style="display:none;"></div>
 
     <div id="archive-empty" style="display:none;padding:60px 0;text-align:center;">
