@@ -68,6 +68,7 @@ const topBarHome = $('#top-bar-home');
 const topBarSettings = $('#top-bar-settings');
 const headerHairline = $('#header-hairline');
 
+const viewDaily = $('#view-daily');
 const viewHome = $('#view-home');
 const viewArchive = $('#view-archive');
 const viewFeed = $('#view-feed');
@@ -267,7 +268,7 @@ const state = {
   bookmarks: [],            // raw bookmark rows
   bookmarkedIds: new Set(),
   bookmarkCounts: new Map(),  // card_id → bookmark_count (from card_bookmark_counts view)
-  currentView: 'home',
+  currentView: 'daily',
   detailCardId: null,
   pushEnabled: false,
   bookmarkActionInFlight: false,
@@ -674,7 +675,7 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
 
 function getInitialView() {
   const hash = (location.hash || '').replace('#', '');
-  return ['home','archive','feed','notice','settings'].includes(hash) ? hash : 'home';
+  return ['daily','home','archive','feed','notice','settings'].includes(hash) ? hash : 'daily';
 }
 window.addEventListener('hashchange', () => setView(getInitialView()));
 
@@ -2472,6 +2473,324 @@ function paintMyBookmarksEntry() {
   if (!mypageBookmarksBlock) return;
   mypageBookmarksBlock.style.display = state.userId ? 'block' : 'none';
 }
+
+// MY 안 NOTICE 항목 — 안 읽은 공지 있으면 빨간 dot
+function paintMyNoticeEntry() {
+  const dot = document.getElementById('mypage-notice-dot');
+  if (!dot) return;
+  dot.style.display = typeof hasUnreadNotice === 'function' && hasUnreadNotice() ? 'inline-block' : 'none';
+}
+
+// ===== DAILY 6 섹션 =====
+function renderDailyDate() {
+  const el = document.getElementById('daily-date');
+  if (!el) return;
+  const d = new Date();
+  const days = ['일','월','화','수','목','금','토'];
+  el.textContent = `${d.getFullYear()} · ${String(d.getMonth()+1).padStart(2,'0')} · ${String(d.getDate()).padStart(2,'0')} · ${days[d.getDay()]}`;
+}
+
+const NOTICE_TAG_LABEL_DAILY = { update: 'UPDATE', notice: 'NOTICE', event: 'EVENT' };
+let _noticeCarouselTimer = null;
+let _noticeCarouselIdx = 0;
+function stopNoticeCarousel() {
+  if (_noticeCarouselTimer) { clearInterval(_noticeCarouselTimer); _noticeCarouselTimer = null; }
+}
+function stripMarkdownLite(s) {
+  return String(s || '').replace(/[*_`~#>]/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\s+/g, ' ').trim();
+}
+
+// 섹션 1: 공지 회전 카루셀 — 최대 3개, 5초 자동 전환.
+function renderDailyNotice() {
+  const sec = document.getElementById('daily-section-notice');
+  if (!sec) return;
+  stopNoticeCarousel();
+  if (!state.noticesLoaded) {
+    if (typeof loadNotices === 'function') {
+      loadNotices().then(() => { if (state.currentView === 'daily') renderDailyNotice(); });
+    }
+  }
+  const items = (state.notices || []).slice(0, 3);
+  if (items.length === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  const renderItem = (i) => {
+    const it = items[i];
+    return `
+      <span class="daily-notice-tag">${escapeHtml(NOTICE_TAG_LABEL_DAILY[(it.tag || 'notice').toLowerCase()] || 'NOTICE')}</span>
+      <h3 class="daily-notice-title">${escapeHtml(it.title || '')}</h3>
+      <p class="daily-notice-body">${escapeHtml(stripMarkdownLite(it.body || '').slice(0, 100))}</p>
+    `;
+  };
+  sec.innerHTML = `
+    <p class="daily-section-label">공지사항</p>
+    <button type="button" class="daily-notice-card" aria-label="공지사항 자세히">${renderItem(0)}</button>
+    ${items.length > 1 ? `<div class="daily-notice-dots">${items.map((_, i) => `<span class="dot${i === 0 ? ' active' : ''}"></span>`).join('')}</div>` : ''}
+    <div style="height:36px;"></div>
+  `;
+  sec.querySelector('.daily-notice-card')?.addEventListener('click', () => {
+    stopNoticeCarousel();
+    track('daily_notice_clicked');
+    setView('notice');
+  });
+  if (items.length > 1) {
+    _noticeCarouselIdx = 0;
+    _noticeCarouselTimer = setInterval(() => {
+      if (state.currentView !== 'daily') { stopNoticeCarousel(); return; }
+      _noticeCarouselIdx = (_noticeCarouselIdx + 1) % items.length;
+      const card = sec.querySelector('.daily-notice-card');
+      if (card) {
+        card.style.opacity = '0';
+        setTimeout(() => { if (card) { card.innerHTML = renderItem(_noticeCarouselIdx); card.style.opacity = '1'; } }, 150);
+      }
+      sec.querySelectorAll('.daily-notice-dots .dot').forEach((d, i) => d.classList.toggle('active', i === _noticeCarouselIdx));
+    }, 5000);
+  }
+}
+
+// 섹션 2: 새로 들어온 책 — 메인 + 가로 슬라이더
+function renderDailyNewBooks() {
+  const sec = document.getElementById('daily-section-new-books');
+  if (!sec) return;
+  const works = (typeof groupAllCardsByWork === 'function') ? groupAllCardsByWork()
+    : (typeof groupBookmarksByWork === 'function' ? groupBookmarksByWork() : []);
+  if (works.length === 0) { sec.style.display = 'none'; return; }
+  const sorted = [...works].sort((a, b) => {
+    const aT = Math.max(0, ...(a.cards || []).map((c) => new Date(c.created_at || 0).getTime()));
+    const bT = Math.max(0, ...(b.cards || []).map((c) => new Date(c.created_at || 0).getTime()));
+    return bT - aT;
+  });
+  const main = sorted[0];
+  const rest = sorted.slice(1, 9);
+  const sampleQuote = ((main.cards || [])[0]?.quote || '').slice(0, 60);
+  sec.style.display = 'block';
+  sec.innerHTML = `
+    <p class="daily-section-label">새로 들어온 책</p>
+    <button type="button" class="daily-newbook-main" data-work-key="${escapeHtml(main.key)}"
+      style="display:flex;gap:14px;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:18px;cursor:pointer;text-align:left;align-items:center;">
+      <div style="flex:1;min-width:0;">
+        <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:9px;letter-spacing:0.15em;font-weight:700;padding:3px 8px;border-radius:10px;">NEW · 새로 들어온 고전</span>
+        <h3 style="font-family:'Noto Serif KR',serif;font-size:22px;margin:10px 0 6px;color:var(--paper);">${escapeHtml(displayTitle(main.title))}</h3>
+        <p style="font-size:11px;color:var(--sand);margin:0 0 10px;letter-spacing:0.05em;">${escapeHtml((main.author || '').toUpperCase())} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
+        <p style="font-size:12px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
+      </div>
+      <div style="width:72px;aspect-ratio:132/188;background:${leatherColorFor(main.title)};display:flex;align-items:center;justify-content:center;padding:6px;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,0.3);">
+        <span style="font-size:10px;color:var(--paper);text-align:center;line-height:1.2;font-weight:600;">${escapeHtml(displayTitle(main.title))}</span>
+      </div>
+    </button>
+    <div style="display:flex;gap:10px;overflow-x:auto;padding:14px 0 8px;scrollbar-width:none;">
+      ${rest.map((w) => `
+        <button type="button" data-work-key="${escapeHtml(w.key)}"
+          style="background:transparent;border:none;cursor:pointer;flex-shrink:0;width:80px;text-align:center;">
+          <div style="width:80px;aspect-ratio:132/188;background:${leatherColorFor(w.title)};display:flex;align-items:center;justify-content:center;padding:6px;box-shadow:0 1px 4px rgba(60,40,20,0.18);">
+            <span style="font-size:10px;color:var(--paper);font-weight:600;line-height:1.2;text-align:center;">${escapeHtml(displayTitle(w.title))}</span>
+          </div>
+          <p style="font-size:11px;color:var(--espresso);margin:6px 0 0;font-weight:600;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;">${escapeHtml(displayTitle(w.title))}</p>
+          <p style="font-size:9px;color:var(--walnut);margin:2px 0 0;">${escapeHtml(w.author || '')}</p>
+        </button>
+      `).join('')}
+    </div>
+    <div style="height:36px;"></div>
+  `;
+  sec.querySelectorAll('[data-work-key]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.workKey;
+      const w = works.find((x) => x.key === key);
+      if (w && typeof openBookModal === 'function') {
+        track('daily_newbook_clicked', { work_key: key });
+        openBookModal(w);
+      }
+    });
+  });
+}
+
+// 섹션 3: 이럴 땐, 이런 문장
+const CONTEXT_CATEGORIES = [
+  { id: 'comfort', label: '위로가 필요할 때', keywords: ['위로', '슬픔', '아픔', '눈물', '치유'] },
+  { id: 'flutter', label: '설레는 날',        keywords: ['사랑', '설렘', '첫', '두근'] },
+  { id: 'lonely',  label: '먹먹한 밤',        keywords: ['외로움', '그리움', '밤', '고독'] },
+  { id: 'resolve', label: '결심이 필요할 때', keywords: ['결심', '의지', '도전', '용기', '운명'] },
+];
+let _contextualTimer = null;
+let _contextualCatId = null;
+let _contextualCardIdx = 0;
+function stopContextualCarousel() {
+  if (_contextualTimer) { clearInterval(_contextualTimer); _contextualTimer = null; }
+}
+function filterContextualCards(catId) {
+  const cat = CONTEXT_CATEGORIES.find((c) => c.id === catId) || CONTEXT_CATEGORIES[0];
+  return (state.allCards || []).filter((card) => {
+    const kws = Array.isArray(card.keywords) ? card.keywords : [];
+    return kws.some((k) => cat.keywords.some((t) => String(k).includes(t)));
+  }).slice(0, 12);
+}
+function renderDailyContextual() {
+  const sec = document.getElementById('daily-section-contextual');
+  if (!sec) return;
+  stopContextualCarousel();
+  sec.style.display = 'block';
+  sec.innerHTML = `
+    <p class="daily-section-label">이럴 땐, 이런 문장</p>
+    <p class="t-body-sm c-walnut" style="margin-bottom:14px;">지금 마음에 맞춰 한 문장을 골라드려요</p>
+    <div class="archive-chips" id="daily-context-chips" style="margin-bottom:16px;">
+      ${CONTEXT_CATEGORIES.map((c, i) => `<button class="a-chip ${i === 0 ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
+    </div>
+    <div id="daily-context-card-host"></div>
+    <div style="height:36px;"></div>
+  `;
+  const renderCard = () => {
+    const host = sec.querySelector('#daily-context-card-host');
+    if (!host) return;
+    const cards = filterContextualCards(_contextualCatId);
+    if (cards.length === 0) {
+      host.innerHTML = '<p class="t-body-sm c-walnut" style="text-align:center;padding:24px 0;">이 분위기에 맞는 카드는 아직 준비 중이에요</p>';
+      return;
+    }
+    const card = cards[_contextualCardIdx % cards.length];
+    host.innerHTML = `
+      <article class="sharp-card daily-context-card" data-card-id="${card.card_id}" style="padding:24px;cursor:pointer;text-align:center;">
+        <p class="quote-22" style="margin:0;">"${escapeHtml((card.quote || '').slice(0, 120))}"</p>
+        <div style="height:14px;"></div>
+        <p class="t-label-sm c-walnut" style="margin:0;">${escapeHtml(card.works?.title || '')} · ${escapeHtml(card.works?.author || '')}</p>
+      </article>
+    `;
+    host.querySelector('.daily-context-card')?.addEventListener('click', () => openDetail(card));
+  };
+  const switchTo = (catId) => {
+    _contextualCatId = catId;
+    _contextualCardIdx = 0;
+    sec.querySelectorAll('[data-ctx]').forEach((c) => c.classList.toggle('active', c.dataset.ctx === catId));
+    renderCard();
+  };
+  sec.querySelectorAll('[data-ctx]').forEach((btn) => btn.addEventListener('click', () => switchTo(btn.dataset.ctx)));
+  switchTo(CONTEXT_CATEGORIES[0].id);
+  // 자동 회전 비활성 — 사용자가 칩을 직접 누를 때만 카드 변경 (사용자 명시).
+}
+
+// 섹션 4: 인기 대사 top 3
+function renderDailyTrending() {
+  const sec = document.getElementById('daily-section-trending');
+  if (!sec) return;
+  const cards = (state.allCards || [])
+    .filter((c) => c?.quote)
+    .map((c) => ({ c, score: (c.bookmark_count || 0) * 10 + (c.view_count || 0) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((x) => x.c);
+  if (cards.length === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  sec.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+      <h2 class="t-headline-md c-espresso">이번 주 인기 대사</h2>
+      <button id="daily-trending-all" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;">전체 ›</button>
+    </div>
+    ${cards.map((c, i) => `
+      <button type="button" data-card-id="${c.card_id}"
+        style="display:flex;align-items:flex-start;gap:14px;width:100%;background:transparent;border:none;border-bottom:0.5px solid var(--latte);cursor:pointer;padding:14px 0;text-align:left;">
+        <span style="font-family:'Noto Serif KR',serif;font-size:22px;color:var(--espresso);flex-shrink:0;width:20px;">${i + 1}</span>
+        <div style="flex:1;min-width:0;">
+          <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);line-height:1.5;">"${escapeHtml((c.quote || '').slice(0, 80))}"</p>
+          <div style="margin-top:8px;display:flex;gap:14px;font-size:11px;color:var(--walnut);">
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">bookmark</span>${c.bookmark_count || 0}</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px !important;">visibility</span>${c.view_count || 0}</span>
+          </div>
+        </div>
+      </button>
+    `).join('')}
+    <div style="height:36px;"></div>
+  `;
+  sec.querySelectorAll('[data-card-id]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cardId = Number(btn.dataset.cardId);
+      const card = (state.allCards || []).find((c) => c.card_id === cardId);
+      if (card) { track('daily_trending_clicked', { card_id: cardId }); openDetail(card); }
+    });
+  });
+  sec.querySelector('#daily-trending-all')?.addEventListener('click', () => setView('archive'));
+}
+
+// 섹션 5: 오즈 추천
+function renderDailyOzPick() {
+  const sec = document.getElementById('daily-section-oz');
+  if (!sec) return;
+  const taste = new Set();
+  if (Array.isArray(state.userTasteKeywords)) state.userTasteKeywords.forEach((k) => taste.add(k));
+  if (Array.isArray(state.tasteKeywords)) state.tasteKeywords.forEach((k) => taste.add(k));
+  for (const b of (state.bookmarks || [])) {
+    const card = b?.cards;
+    if (card?.keywords && Array.isArray(card.keywords)) card.keywords.forEach((k) => taste.add(k));
+  }
+  const allCards = state.allCards || [];
+  if (allCards.length === 0) { sec.style.display = 'none'; return; }
+  const matched = allCards.filter((card) => {
+    const kws = Array.isArray(card.keywords) ? card.keywords : [];
+    return kws.some((k) => taste.has(k));
+  });
+  const pool = matched.length > 0 ? matched : allCards;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  if (!pick) { sec.style.display = 'none'; return; }
+  const matchedKw = (pick.keywords || []).find((k) => taste.has(k));
+  const reason = matchedKw
+    ? `'${matchedKw}'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
+    : '오즈가 오늘 골라드린 한 문장이에요.';
+  const work = pick.works || {};
+  sec.style.display = 'block';
+  sec.innerHTML = `
+    <p class="daily-section-label">오즈의 오늘의 추천</p>
+    <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span style="width:36px;height:36px;border-radius:50%;background:var(--cta);display:inline-flex;align-items:center;justify-content:center;color:var(--paper);font-weight:700;font-size:13px;flex-shrink:0;">오즈</span>
+        <div style="flex:1;min-width:0;">
+          <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">오즈</p>
+          <p style="margin:2px 0 0;font-size:11px;color:var(--walnut);line-height:1.4;">${escapeHtml(reason)}</p>
+        </div>
+      </div>
+      <div class="hairline"></div>
+      <div style="height:14px;"></div>
+      <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:15px;color:var(--espresso);line-height:1.6;text-align:center;">"${escapeHtml((pick.quote || '').slice(0, 100))}"</p>
+      <div style="height:12px;"></div>
+      <p class="t-label-sm c-walnut" style="text-align:center;margin:0;">${escapeHtml(work.title || '')} · ${escapeHtml(work.author || '')} · ${work.release_year || ''}</p>
+    </article>
+    <div style="height:36px;"></div>
+  `;
+  sec.querySelector('.daily-oz-card')?.addEventListener('click', () => {
+    track('daily_oz_clicked', { card_id: pick.card_id });
+    openDetail(pick);
+  });
+}
+
+// 섹션 6: 다시 만나기 — 최근 북마크
+function renderDailyRecent() {
+  const sec = document.getElementById('daily-section-recent');
+  if (!sec) return;
+  const bookmarks = state.bookmarks || [];
+  if (bookmarks.length === 0) { sec.style.display = 'none'; return; }
+  const recent = [...bookmarks].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0];
+  const card = recent?.cards;
+  if (!card) { sec.style.display = 'none'; return; }
+  const days = Math.floor((Date.now() - new Date(recent.created_at || 0).getTime()) / (24 * 60 * 60 * 1000));
+  const ago = days <= 0 ? '오늘' : days === 1 ? '어제' : `${days}일 전`;
+  const work = card.works || {};
+  sec.style.display = 'block';
+  sec.innerHTML = `
+    <h2 class="t-headline-md c-espresso" style="margin-bottom:6px;">다시 만나기</h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 14px;">지난주 담아둔 문장, 다시 읽어볼까요</p>
+    <button type="button" class="sharp-card daily-recent-card" data-card-id="${card.card_id}"
+      style="display:flex;align-items:center;gap:14px;width:100%;padding:16px;cursor:pointer;text-align:left;">
+      <div style="width:64px;aspect-ratio:132/188;background:${leatherColorFor(work.title || '')};display:flex;align-items:center;justify-content:center;padding:6px;flex-shrink:0;box-shadow:0 1px 4px rgba(60,40,20,0.2);">
+        <span style="font-size:9px;color:var(--paper);text-align:center;line-height:1.2;font-weight:600;">${escapeHtml(displayTitle(work.title || ''))}</span>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);line-height:1.5;">"${escapeHtml((card.quote || '').slice(0, 70))}"</p>
+        <p class="t-label-sm c-walnut" style="margin:8px 0 0;">${escapeHtml(work.title || '')} · ${ago} 북마크</p>
+      </div>
+    </button>
+    <div style="height:36px;"></div>
+  `;
+  sec.querySelector('.daily-recent-card')?.addEventListener('click', () => {
+    track('daily_recent_clicked', { card_id: card.card_id });
+    openDetail(card);
+  });
+}
 function openBookmarksScreen() {
   if (!bookmarksScreen) return;
   if (!state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
@@ -2497,6 +2816,10 @@ function closeBookmarksScreen() {
   else closeBookmarksScreenInternal();
 }
 if (mypageBookmarksEntry) mypageBookmarksEntry.addEventListener('click', openBookmarksScreen);
+$('#mypage-notice-entry')?.addEventListener('click', () => {
+  track('nav_my_notice');
+  setView('notice');
+});
 if (bookmarksBack) bookmarksBack.addEventListener('click', closeBookmarksScreen);
 if (bmSearchInput) {
   bmSearchInput.addEventListener('input', (e) => {
@@ -5891,6 +6214,7 @@ function renderNotice() {
 function setView(view) {
   // LIBRARY(archive) 탭은 전체 도서 카탈로그 — 누구나 열람(익명 게이트 제거).
   state.currentView = view;
+  if (viewDaily) viewDaily.style.display = (view === 'daily') ? 'block' : 'none';
   viewHome.style.display = (view === 'home') ? 'block' : 'none';
   viewArchive.style.display = (view === 'archive') ? 'block' : 'none';
   if (viewFeed) viewFeed.style.display = (view === 'feed') ? 'block' : 'none';
@@ -5916,7 +6240,19 @@ function setView(view) {
     if (!state.feedLoaded) loadFeedPosts();  // 읽기는 공개 — 익명도 실제 피드 로드
   }
   if (view === 'notice') renderNotice();
-  if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); paintMyFeedEntry(); paintMyBookmarksEntry(); }
+  if (view === 'settings') { paintTasteProfile(); paintMyChatsEntry(); paintMyFeedEntry(); paintMyBookmarksEntry(); paintMyNoticeEntry(); }
+  if (view === 'daily') {
+    renderDailyDate();
+    renderDailyNotice();
+    renderDailyNewBooks();
+    renderDailyContextual();
+    renderDailyTrending();
+    renderDailyOzPick();
+    renderDailyRecent();
+  } else {
+    stopNoticeCarousel?.();
+    stopContextualCarousel?.();
+  }
 
   // tab 전환을 history stack에 쌓음 (back으로 이전 탭 복귀 가능)
   if (!suppressPushState) {
@@ -5963,7 +6299,7 @@ $$('[data-nav]').forEach((btn) => {
   btn.addEventListener('click', () => {
     const nav = btn.dataset.nav;
     track('nav', { to: nav });
-    // 이미 홈(오버레이 없음)에서 HOME 탭을 다시 누르면 새로고침 — 제거된 새로고침 버튼 대체.
+    // TODAY 탭에 있는 동안 TODAY를 다시 누르면 새로고침 — 다른 탭에서 진입할 땐 새로고침 안 함.
     if (nav === 'home' && state.currentView === 'home' && !document.querySelector('.detail-screen.open')) {
       refreshTodayCard();
       return;
