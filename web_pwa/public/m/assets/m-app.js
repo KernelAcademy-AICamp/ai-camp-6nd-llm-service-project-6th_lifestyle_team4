@@ -2241,32 +2241,85 @@ function decorateShelfWithCats(shelf, genre) {
 
 // LIBRARY 탭 = 전체 도서 카탈로그 (비회원 포함 누구나 열람)
 function renderArchive() {
+  // 안드 LibraryScreen 매칭: 4열 vertical 그리드 + 칩 + 검색. 고양이 마스코트는 안드에 없으니 숨김.
+  const gridEl = document.getElementById('archive-grid');
+  if (archiveCat) archiveCat.style.display = 'none';
+  if (archiveShelves) archiveShelves.style.display = 'none';
+
   if (!state.allCards || state.allCards.length === 0) {
     if (archiveLoading) archiveLoading.style.display = 'block';
-    if (archiveShelves) archiveShelves.style.display = 'none';
+    if (gridEl) gridEl.style.display = 'none';
     if (archiveEmpty) archiveEmpty.style.display = 'none';
     if (archiveNoResult) archiveNoResult.style.display = 'none';
-    if (archiveCat) archiveCat.style.display = '';
-    setCatBaseMood('idle');
     loadAllCards().then(() => {
       if (state.currentView === 'archive') { renderArchiveChips(); renderArchive(); }
     }).catch(() => {});
     return;
   }
+  if (archiveLoading) archiveLoading.style.display = 'none';
+
   const allWorks = groupAllCardsByWork();
   const totalCards = state.allCards.length;
-  const status = renderShelfView({
-    allWorks,
-    search: state.archiveSearch,
-    genre: state.archiveGenre,
-    els: { shelves: archiveShelves, empty: archiveEmpty, noResult: archiveNoResult, count: archiveCount, loading: archiveLoading },
-    countText: (w) => `전체 ${w.length}권 · 명대사 ${totalCards}편`,
+  if (archiveCount) archiveCount.textContent = `전체 ${allWorks.length}권 · 명대사 ${totalCards}편`;
+
+  const q = (state.archiveSearch || '').trim().toLowerCase();
+  const genre = state.archiveGenre || '';
+  const works = allWorks.filter((w) => {
+    if (genre === 'other') { if (GENRE_ORDER.includes(w.format)) return false; }
+    else if (genre && w.format !== genre) return false;
+    if (q) {
+      const title = displayTitle(w.title).toLowerCase();
+      const series = (w.series || '').toLowerCase();
+      const sub = (w.subtitle || '').toLowerCase();
+      const author = (w.author || '').toLowerCase();
+      if (!title.includes(q) && !series.includes(q) && !sub.includes(q) && !author.includes(q)) return false;
+    }
+    return true;
   });
-  // 코너 고양이 — 검색 결과 0이면 confused, 책장이 있으면(책장 위 고양이로 대체) 숨김
-  if (archiveCat) {
-    if (status === 'no-result') { archiveCat.style.display = ''; setCatBaseMood('confused'); }
-    else if (status === 'shelves') { archiveCat.style.display = 'none'; }
-    else { archiveCat.style.display = ''; setCatBaseMood('idle'); }
+
+  if (allWorks.length === 0) {
+    if (gridEl) gridEl.style.display = 'none';
+    if (archiveNoResult) archiveNoResult.style.display = 'none';
+    if (archiveEmpty) archiveEmpty.style.display = 'block';
+    return;
+  }
+  if (works.length === 0) {
+    if (gridEl) gridEl.style.display = 'none';
+    if (archiveEmpty) archiveEmpty.style.display = 'none';
+    if (archiveNoResult) archiveNoResult.style.display = 'block';
+    return;
+  }
+  if (archiveEmpty) archiveEmpty.style.display = 'none';
+  if (archiveNoResult) archiveNoResult.style.display = 'none';
+  if (!gridEl) return;
+  gridEl.style.display = 'grid';
+  gridEl.innerHTML = '';
+
+  for (const w of works) {
+    const work = (w.cards || [])[0]?.works || { title: w.title, cover_url: null };
+    const displayName = displayTitle(w.title);
+    const label = GENRE_LABEL[w.format] || '기타';
+    const titleLen = displayName.length;
+    const fontSize = titleLen <= 6 ? 13 : titleLen <= 10 ? 11 : 10;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'lib-book';
+    btn.innerHTML = work.cover_url
+      ? `<div class="lib-cover" style="background:${leatherColorFor(w.title)};padding:0;">
+          <img class="lib-cover-img" src="${escapeHtml(work.cover_url)}" alt="${escapeHtml(displayName)}" loading="lazy" />
+        </div>
+        <span class="lib-count">명대사 ${w.cards.length}</span>`
+      : `<div class="lib-cover" style="background:${leatherColorFor(w.title)};">
+          <span class="lib-cover-meta">${escapeHtml(label)}</span>
+          <span class="lib-cover-title" style="font-size:${fontSize}px;">${escapeHtml(displayName)}</span>
+          <span class="lib-cover-meta">${escapeHtml((w.author || '').toUpperCase())}</span>
+        </div>
+        <span class="lib-count">명대사 ${w.cards.length}</span>`;
+    btn.addEventListener('click', () => {
+      track('library_book_opened', { work_key: w.key });
+      openBookModal(w, allWorks);
+    });
+    gridEl.appendChild(btn);
   }
 }
 
@@ -2481,7 +2534,41 @@ function paintMyNoticeEntry() {
   dot.style.display = typeof hasUnreadNotice === 'function' && hasUnreadNotice() ? 'inline-block' : 'none';
 }
 
-// ===== DAILY 6 섹션 =====
+// ===== DAILY 6 섹션 헬퍼 =====
+// 책표지 — works.cover_url 있으면 이미지, 없으면 가죽색 + 제목 폴백.
+function dailyBookCoverHTML(work, opts = {}) {
+  const w = opts.width || 80;
+  const h = opts.height || Math.round(w * 188 / 132);
+  const radius = opts.radius || 2;
+  const title = displayTitle(work?.title || '');
+  const cover = work?.cover_url || '';
+  const fontSize = Math.max(8, Math.round(w / 8));
+  if (cover) {
+    return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};box-shadow:0 1px 4px rgba(60,40,20,0.18);overflow:hidden;border-radius:${radius}px;">
+      <img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" loading="lazy"
+        style="width:100%;height:100%;object-fit:cover;display:block;" />
+    </div>`;
+  }
+  return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};display:flex;align-items:center;justify-content:center;padding:6px;box-shadow:0 1px 4px rgba(60,40,20,0.18);border-radius:${radius}px;">
+    <span style="font-size:${fontSize}px;color:var(--paper);text-align:center;line-height:1.2;font-weight:600;">${escapeHtml(title)}</span>
+  </div>`;
+}
+
+// 온도/강도 → 한국어 정서 라벨 (사용자 명시: 온도/감도/여운)
+function toneLabels(card) {
+  if (!card) return null;
+  const t = Number(card.temperature);
+  const i = Number(card.intensity);
+  const tempLabel = !Number.isFinite(t) ? null
+    : t < 0.34 ? '차분함' : t < 0.67 ? '따스함' : '뜨거움';
+  const intensityLabel = !Number.isFinite(i) ? null
+    : i < 0.34 ? '잔잔' : i < 0.67 ? '적당' : '강렬';
+  // aftertaste 데이터 없으니 significance 길이로 짧은/긴 추정 (있으면 표시).
+  const sig = String(card.significance || '');
+  const aftertasteLabel = sig ? (sig.length > 120 ? '길음' : sig.length > 60 ? '보통' : '짧음') : null;
+  return { tempLabel, intensityLabel, aftertasteLabel };
+}
+
 function renderDailyDate() {
   const el = document.getElementById('daily-date');
   if (!el) return;
@@ -2500,7 +2587,7 @@ function stripMarkdownLite(s) {
   return String(s || '').replace(/[*_`~#>]/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\s+/g, ' ').trim();
 }
 
-// 섹션 1: 공지 회전 카루셀 — 최대 3개, 5초 자동 전환.
+// 섹션 1: 공지 한 줄 + 메가폰 + 10초 (사용자 명세). 클릭 → view-notice.
 function renderDailyNotice() {
   const sec = document.getElementById('daily-section-notice');
   if (!sec) return;
@@ -2513,21 +2600,19 @@ function renderDailyNotice() {
   const items = (state.notices || []).slice(0, 3);
   if (items.length === 0) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
-  const renderItem = (i) => {
-    const it = items[i];
-    return `
-      <span class="daily-notice-tag">${escapeHtml(NOTICE_TAG_LABEL_DAILY[(it.tag || 'notice').toLowerCase()] || 'NOTICE')}</span>
-      <h3 class="daily-notice-title">${escapeHtml(it.title || '')}</h3>
-      <p class="daily-notice-body">${escapeHtml(stripMarkdownLite(it.body || '').slice(0, 100))}</p>
-    `;
-  };
+
+  const renderTitle = (i) => escapeHtml(items[i].title || '');
+
   sec.innerHTML = `
-    <p class="daily-section-label">공지사항</p>
-    <button type="button" class="daily-notice-card" aria-label="공지사항 자세히">${renderItem(0)}</button>
-    ${items.length > 1 ? `<div class="daily-notice-dots">${items.map((_, i) => `<span class="dot${i === 0 ? ' active' : ''}"></span>`).join('')}</div>` : ''}
-    <div style="height:36px;"></div>
+    <button type="button" class="daily-notice-row" aria-label="공지사항 자세히"
+      style="display:flex;align-items:center;width:100%;background:var(--latte);border:0.5px solid var(--sand);padding:12px 14px;cursor:pointer;text-align:left;">
+      <span class="material-symbols-outlined" style="font-size:18px;color:var(--cta);margin-right:10px;flex-shrink:0;">campaign</span>
+      <span class="daily-notice-title-line" style="flex:1;min-width:0;font-size:13px;color:var(--espresso);font-weight:500;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:opacity 200ms;">${renderTitle(0)}</span>
+      <span class="material-symbols-outlined" style="font-size:16px;color:var(--walnut);margin-left:8px;flex-shrink:0;">chevron_right</span>
+    </button>
+    <div style="height:28px;"></div>
   `;
-  sec.querySelector('.daily-notice-card')?.addEventListener('click', () => {
+  sec.querySelector('.daily-notice-row')?.addEventListener('click', () => {
     stopNoticeCarousel();
     track('daily_notice_clicked');
     setView('notice');
@@ -2537,17 +2622,16 @@ function renderDailyNotice() {
     _noticeCarouselTimer = setInterval(() => {
       if (state.currentView !== 'daily') { stopNoticeCarousel(); return; }
       _noticeCarouselIdx = (_noticeCarouselIdx + 1) % items.length;
-      const card = sec.querySelector('.daily-notice-card');
-      if (card) {
-        card.style.opacity = '0';
-        setTimeout(() => { if (card) { card.innerHTML = renderItem(_noticeCarouselIdx); card.style.opacity = '1'; } }, 150);
+      const titleEl = sec.querySelector('.daily-notice-title-line');
+      if (titleEl) {
+        titleEl.style.opacity = '0';
+        setTimeout(() => { if (titleEl) { titleEl.innerHTML = renderTitle(_noticeCarouselIdx); titleEl.style.opacity = '1'; } }, 200);
       }
-      sec.querySelectorAll('.daily-notice-dots .dot').forEach((d, i) => d.classList.toggle('active', i === _noticeCarouselIdx));
-    }, 5000);
+    }, 10000);  // 사용자 명세: 10초
   }
 }
 
-// 섹션 2: 새로 들어온 책 — 메인 + 가로 슬라이더
+// 섹션 2: 새로 들어온 책 — 책표지 이미지 + Serif 큰 제목 + 가로 슬라이더
 function renderDailyNewBooks() {
   const sec = document.getElementById('daily-section-new-books');
   if (!sec) return;
@@ -2562,32 +2646,32 @@ function renderDailyNewBooks() {
   const main = sorted[0];
   const rest = sorted.slice(1, 9);
   const sampleQuote = ((main.cards || [])[0]?.quote || '').slice(0, 60);
+  const mainWork = (main.cards || [])[0]?.works || { title: main.title, cover_url: null };
+
   sec.style.display = 'block';
   sec.innerHTML = `
-    <p class="daily-section-label">새로 들어온 책</p>
     <button type="button" class="daily-newbook-main" data-work-key="${escapeHtml(main.key)}"
-      style="display:flex;gap:14px;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:18px;cursor:pointer;text-align:left;align-items:center;">
+      style="display:flex;gap:16px;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px;cursor:pointer;text-align:left;align-items:flex-start;">
       <div style="flex:1;min-width:0;">
-        <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:9px;letter-spacing:0.15em;font-weight:700;padding:3px 8px;border-radius:10px;">NEW · 새로 들어온 고전</span>
-        <h3 style="font-family:'Noto Serif KR',serif;font-size:22px;margin:10px 0 6px;color:var(--paper);">${escapeHtml(displayTitle(main.title))}</h3>
-        <p style="font-size:11px;color:var(--sand);margin:0 0 10px;letter-spacing:0.05em;">${escapeHtml((main.author || '').toUpperCase())} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
-        <p style="font-size:12px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
+        <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
+        <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(displayTitle(main.title))}</h3>
+        <p style="font-size:11px;color:var(--sand);margin:0 0 12px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
+        <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;font-family:'Noto Serif KR',serif;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
       </div>
-      <div style="width:72px;aspect-ratio:132/188;background:${leatherColorFor(main.title)};display:flex;align-items:center;justify-content:center;padding:6px;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,0.3);">
-        <span style="font-size:10px;color:var(--paper);text-align:center;line-height:1.2;font-weight:600;">${escapeHtml(displayTitle(main.title))}</span>
-      </div>
+      ${dailyBookCoverHTML(mainWork, { width: 90 })}
     </button>
-    <div style="display:flex;gap:10px;overflow-x:auto;padding:14px 0 8px;scrollbar-width:none;">
-      ${rest.map((w) => `
-        <button type="button" data-work-key="${escapeHtml(w.key)}"
-          style="background:transparent;border:none;cursor:pointer;flex-shrink:0;width:80px;text-align:center;">
-          <div style="width:80px;aspect-ratio:132/188;background:${leatherColorFor(w.title)};display:flex;align-items:center;justify-content:center;padding:6px;box-shadow:0 1px 4px rgba(60,40,20,0.18);">
-            <span style="font-size:10px;color:var(--paper);font-weight:600;line-height:1.2;text-align:center;">${escapeHtml(displayTitle(w.title))}</span>
-          </div>
-          <p style="font-size:11px;color:var(--espresso);margin:6px 0 0;font-weight:600;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;">${escapeHtml(displayTitle(w.title))}</p>
-          <p style="font-size:9px;color:var(--walnut);margin:2px 0 0;">${escapeHtml(w.author || '')}</p>
-        </button>
-      `).join('')}
+    <div style="display:flex;gap:12px;overflow-x:auto;padding:16px 0 8px;scrollbar-width:none;">
+      ${rest.map((w) => {
+        const work = (w.cards || [])[0]?.works || { title: w.title, cover_url: null };
+        return `
+          <button type="button" data-work-key="${escapeHtml(w.key)}"
+            style="background:transparent;border:none;cursor:pointer;flex-shrink:0;width:82px;text-align:center;padding:0;">
+            ${dailyBookCoverHTML(work, { width: 82 })}
+            <p style="font-size:11px;color:var(--espresso);margin:8px 0 0;font-weight:600;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;font-family:'Noto Serif KR',serif;">${escapeHtml(displayTitle(w.title))}</p>
+            <p style="font-size:10px;color:var(--walnut);margin:3px 0 0;line-height:1.3;">${escapeHtml(w.author || '')}</p>
+          </button>
+        `;
+      }).join('')}
     </div>
     <div style="height:36px;"></div>
   `;
@@ -2595,10 +2679,12 @@ function renderDailyNewBooks() {
     btn.addEventListener('click', () => {
       const key = btn.dataset.workKey;
       const w = works.find((x) => x.key === key);
-      if (w && typeof openBookModal === 'function') {
-        track('daily_newbook_clicked', { work_key: key });
-        openBookModal(w);
-      }
+      if (!w) return;
+      track('daily_newbook_clicked', { work_key: key });
+      // 사용자 명세: 새 책 클릭 → LIBRARY 로 이동 + 그 책 펼침 (팝업).
+      //   카드 진입 시 북마크 무료 / 미북마크는 실타래 차감 (openDetail 내부 처리).
+      setView('archive');
+      setTimeout(() => { if (typeof openBookModal === 'function') openBookModal(w); }, 80);
     });
   });
 }
@@ -2646,11 +2732,20 @@ function renderDailyContextual() {
       return;
     }
     const card = cards[_contextualCardIdx % cards.length];
+    const labels = toneLabels(card);
+    const chipsHtml = labels && (labels.tempLabel || labels.intensityLabel || labels.aftertasteLabel)
+      ? `<div style="display:flex;gap:14px;justify-content:center;margin-top:14px;flex-wrap:wrap;">
+          ${labels.tempLabel ? `<span style="font-size:11px;color:var(--walnut);">온도 <strong style="color:var(--cta);font-weight:600;margin-left:4px;">${escapeHtml(labels.tempLabel)}</strong></span>` : ''}
+          ${labels.intensityLabel ? `<span style="font-size:11px;color:var(--walnut);">감도 <strong style="color:var(--cta);font-weight:600;margin-left:4px;">${escapeHtml(labels.intensityLabel)}</strong></span>` : ''}
+          ${labels.aftertasteLabel ? `<span style="font-size:11px;color:var(--walnut);">여운 <strong style="color:var(--cta);font-weight:600;margin-left:4px;">${escapeHtml(labels.aftertasteLabel)}</strong></span>` : ''}
+        </div>`
+      : '';
     host.innerHTML = `
       <article class="sharp-card daily-context-card" data-card-id="${card.card_id}" style="padding:24px;cursor:pointer;text-align:center;">
-        <p class="quote-22" style="margin:0;">"${escapeHtml((card.quote || '').slice(0, 120))}"</p>
+        <p style="margin:0;font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:18px;line-height:1.6;color:var(--espresso);">"${escapeHtml((card.quote || '').slice(0, 120))}"</p>
         <div style="height:14px;"></div>
         <p class="t-label-sm c-walnut" style="margin:0;">${escapeHtml(card.works?.title || '')} · ${escapeHtml(card.works?.author || '')}</p>
+        ${chipsHtml}
       </article>
     `;
     host.querySelector('.daily-context-card')?.addEventListener('click', () => openDetail(card));
@@ -2737,18 +2832,24 @@ function renderDailyOzPick() {
   sec.innerHTML = `
     <p class="daily-section-label">오즈의 오늘의 추천</p>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-        <span style="width:36px;height:36px;border-radius:50%;background:var(--cta);display:inline-flex;align-items:center;justify-content:center;color:var(--paper);font-weight:700;font-size:13px;flex-shrink:0;">오즈</span>
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">
+        <span style="width:38px;height:38px;border-radius:50%;background:var(--cta);display:inline-flex;align-items:center;justify-content:center;color:var(--paper);font-weight:700;font-size:13px;flex-shrink:0;font-family:'Noto Serif KR',serif;">오즈</span>
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">오즈</p>
-          <p style="margin:2px 0 0;font-size:11px;color:var(--walnut);line-height:1.4;">${escapeHtml(reason)}</p>
+          <p style="margin:3px 0 0;font-size:12px;color:var(--walnut);line-height:1.5;">${escapeHtml(reason)}</p>
         </div>
       </div>
       <div class="hairline"></div>
-      <div style="height:14px;"></div>
-      <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:15px;color:var(--espresso);line-height:1.6;text-align:center;">"${escapeHtml((pick.quote || '').slice(0, 100))}"</p>
-      <div style="height:12px;"></div>
-      <p class="t-label-sm c-walnut" style="text-align:center;margin:0;">${escapeHtml(work.title || '')} · ${escapeHtml(work.author || '')} · ${work.release_year || ''}</p>
+      <div style="height:16px;"></div>
+      <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:16px;color:var(--espresso);line-height:1.6;text-align:center;font-weight:500;">"${escapeHtml((pick.quote || '').slice(0, 100))}"</p>
+      <div style="height:16px;"></div>
+      <div style="display:flex;align-items:center;gap:14px;justify-content:center;">
+        ${dailyBookCoverHTML(work, { width: 56 })}
+        <div style="text-align:left;">
+          <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);font-weight:600;line-height:1.3;">${escapeHtml(work.title || '')}</p>
+          <p style="margin:3px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(work.author || '')} · ${work.release_year || ''}</p>
+        </div>
+      </div>
     </article>
     <div style="height:36px;"></div>
   `;
@@ -2772,15 +2873,13 @@ function renderDailyRecent() {
   const work = card.works || {};
   sec.style.display = 'block';
   sec.innerHTML = `
-    <h2 class="t-headline-md c-espresso" style="margin-bottom:6px;">다시 만나기</h2>
+    <h2 style="font-family:'Noto Serif KR',serif;font-size:20px;color:var(--espresso);margin:0 0 6px;font-weight:700;">다시 만나기</h2>
     <p class="t-body-sm c-walnut" style="margin:0 0 14px;">지난주 담아둔 문장, 다시 읽어볼까요</p>
     <button type="button" class="sharp-card daily-recent-card" data-card-id="${card.card_id}"
-      style="display:flex;align-items:center;gap:14px;width:100%;padding:16px;cursor:pointer;text-align:left;">
-      <div style="width:64px;aspect-ratio:132/188;background:${leatherColorFor(work.title || '')};display:flex;align-items:center;justify-content:center;padding:6px;flex-shrink:0;box-shadow:0 1px 4px rgba(60,40,20,0.2);">
-        <span style="font-size:9px;color:var(--paper);text-align:center;line-height:1.2;font-weight:600;">${escapeHtml(displayTitle(work.title || ''))}</span>
-      </div>
+      style="display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px;cursor:pointer;text-align:left;">
+      ${dailyBookCoverHTML(work, { width: 64 })}
       <div style="flex:1;min-width:0;">
-        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);line-height:1.5;">"${escapeHtml((card.quote || '').slice(0, 70))}"</p>
+        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);line-height:1.6;word-break:keep-all;overflow-wrap:break-word;">"${escapeHtml(card.quote || '')}"</p>
         <p class="t-label-sm c-walnut" style="margin:8px 0 0;">${escapeHtml(work.title || '')} · ${ago} 북마크</p>
       </div>
     </button>
@@ -4431,6 +4530,8 @@ function paintAuthIdentity() {
 // 실타래 게이트 — 투어 중/이미 연 카드/충전 후에만 실제 상세를 연다.
 function openDetail(card) {
   if (!card) return;
+  // 사용자 명세: 실타래 한 번 사용한 카드는 3일간 무료 재열람 (isCardUnlocked = unlock 윈도우 3일).
+  //   3일 지나면 다시 실타래 사용. 북마크 여부 무관.
   if (isTourActive() || isCardUnlocked(card.card_id)) { openDetailApproved(card); return; }
   if (yarnAvailable() <= 0) { showYarnInsufficient(); return; }
   showYarnConfirm(card);
