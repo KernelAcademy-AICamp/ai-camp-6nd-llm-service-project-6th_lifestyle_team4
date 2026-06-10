@@ -271,7 +271,12 @@ function filteredRows() {
       if (cSeries !== state.workFilter) return false;
     }
     if (q) {
-      const hay = `${c.quote || ''} ${c.excerpt_description || ''} ${(c.keywords || []).join(' ')}`.toLowerCase();
+      // 작품 제목/부제/작가/원제 도 검색 hay 에 포함 — 파우스트 등 본문 미언급 카드 누락 방지
+      const w = c.works || {};
+      const hay = [
+        c.quote, c.excerpt_description, (c.keywords || []).join(' '),
+        w.title, w.subtitle, w.author, w.title_original, w.subtitle_original, w.author_original,
+      ].filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     if (state.missingEnOnly && !cardMissingEnOriginal(c)) return false;
