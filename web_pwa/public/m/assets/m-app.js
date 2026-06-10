@@ -3133,14 +3133,41 @@ function openBookmarksScreen() {
   document.body.style.overflow = 'hidden';
   renderBookmarksChips();
   renderBookmarksShelf();
+  spawnBookmarksMascot();   // 매번 진입 시 랜덤 자세 + 위치 (사용자 명세)
   track('bookmarks_opened');
 }
+
+// MY > 북마크 화면 진입 시 오즈 고양이 spawn — 매번 자세/위치 랜덤.
+function spawnBookmarksMascot() {
+  // 기존 mascot 제거 (재진입 시 새로 spawn)
+  document.querySelectorAll('.bm-random-mascot').forEach((el) => el.remove());
+  if (!bookmarksScreen) return;
+  const file = RANDOM_CAT_FILES[Math.floor(Math.random() * RANDOM_CAT_FILES.length)];
+  const img = document.createElement('img');
+  img.src = `assets/cat/${file}`;
+  img.className = 'bm-random-mascot';
+  img.alt = '';
+  img.setAttribute('aria-hidden', 'true');
+  const w = 70 + Math.floor(Math.random() * 40);  // 70~110px
+  const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  // 상단 헤더 70px + 검색/칩 영역 (~140px) 아래에 spawn — 상단 컨텐츠 가리지 않음.
+  const top = 200 + Math.random() * Math.max(0, vh * 0.5 - w);
+  const left = 12 + Math.random() * Math.max(0, vw - w - 24);
+  const rotate = Math.floor(Math.random() * 30) - 15;
+  img.style.cssText = `position:fixed;width:${w}px;height:auto;top:${Math.floor(top)}px;left:${Math.floor(left)}px;z-index:80;pointer-events:none;user-select:none;-webkit-user-drag:none;opacity:0;transform:rotate(${rotate}deg);transition:opacity 400ms;`;
+  bookmarksScreen.appendChild(img);
+  requestAnimationFrame(() => { img.style.opacity = '1'; });
+}
+
 function closeBookmarksScreenInternal() {
   if (!bookmarksScreen) return;
   bookmarksScreen.classList.remove('open');
   setTimeout(() => {
     bookmarksScreen.style.display = 'none';
     document.body.style.overflow = '';
+    // 닫을 때 mascot 제거 — 다음 진입 시 새로 spawn
+    document.querySelectorAll('.bm-random-mascot').forEach((el) => el.remove());
   }, 250);
 }
 function closeBookmarksScreen() {
