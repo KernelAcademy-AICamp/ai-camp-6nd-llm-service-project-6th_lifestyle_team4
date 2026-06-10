@@ -2305,14 +2305,16 @@ function renderArchive() {
     btn.type = 'button';
     btn.className = 'lib-book';
     btn.innerHTML = work.cover_url
-      ? `<div class="lib-cover" style="background:${leatherColorFor(w.title)};padding:0;">
+      ? `<div class="lib-cover" style="background:${leatherColorFor(w.title)};">
           <img class="lib-cover-img" src="${escapeHtml(work.cover_url)}" alt="${escapeHtml(displayName)}" loading="lazy" />
         </div>
         <span class="lib-count">명대사 ${w.cards.length}</span>`
       : `<div class="lib-cover" style="background:${leatherColorFor(w.title)};">
-          <span class="lib-cover-meta">${escapeHtml(label)}</span>
-          <span class="lib-cover-title" style="font-size:${fontSize}px;">${escapeHtml(displayName)}</span>
-          <span class="lib-cover-meta">${escapeHtml((w.author || '').toUpperCase())}</span>
+          <div class="lib-cover-fallback">
+            <span class="lib-cover-meta">${escapeHtml(label)}</span>
+            <span class="lib-cover-title" style="font-size:${fontSize}px;">${escapeHtml(displayName)}</span>
+            <span class="lib-cover-meta">${escapeHtml((w.author || '').toUpperCase())}</span>
+          </div>
         </div>
         <span class="lib-count">명대사 ${w.cards.length}</span>`;
     btn.addEventListener('click', () => {
