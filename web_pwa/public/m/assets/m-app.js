@@ -3055,9 +3055,6 @@ function renderDailyOzPick() {
 // 랜덤 고양이 spawn — 오즈 카드 클릭 시 view-daily 안 랜덤 위치에 생성, 10초 후 페이드아웃.
 const RANDOM_CAT_FILES = ['cat_confused.png', 'cat_empty.png', 'cat_idle.png', 'cat_shelf_few.png', 'cat_shelf_many.png', 'cat_struck.png'];
 function spawnRandomCat() {
-  const sec = document.getElementById('view-daily');
-  if (!sec) return;
-  if (getComputedStyle(sec).position === 'static') sec.style.position = 'relative';
   const file = RANDOM_CAT_FILES[Math.floor(Math.random() * RANDOM_CAT_FILES.length)];
   const img = document.createElement('img');
   img.src = `assets/cat/${file}`;
@@ -3065,15 +3062,14 @@ function spawnRandomCat() {
   img.alt = '';
   img.setAttribute('aria-hidden', 'true');
   const w = 60 + Math.floor(Math.random() * 50);  // 60~110px
-  const rect = sec.getBoundingClientRect();
-  // 현재 보이는 영역(viewport) 안에 spawn — 상하 100px 마진 제외.
-  const yMin = Math.max(0, window.scrollY + 100 - rect.top);
-  const yMax = Math.max(yMin + 1, window.scrollY + window.innerHeight - 200 - rect.top);
-  const top = yMin + Math.random() * (yMax - yMin);
-  const left = Math.random() * Math.max(0, rect.width - w);
+  // viewport 안 랜덤 위치 — 상단 100px(상단바), 하단 120px(하단탭) 마진 제외.
+  const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  const top = 100 + Math.random() * Math.max(0, vh - w - 220);
+  const left = 16 + Math.random() * Math.max(0, vw - w - 32);
   const rotate = Math.floor(Math.random() * 30) - 15;
-  img.style.cssText = `position:absolute;width:${w}px;height:auto;top:${Math.floor(top)}px;left:${Math.floor(left)}px;z-index:50;pointer-events:none;user-select:none;-webkit-user-drag:none;opacity:0;transform:rotate(${rotate}deg);transition:opacity 500ms;`;
-  sec.appendChild(img);
+  img.style.cssText = `position:fixed;width:${w}px;height:auto;top:${Math.floor(top)}px;left:${Math.floor(left)}px;z-index:90;pointer-events:none;user-select:none;-webkit-user-drag:none;opacity:0;transform:rotate(${rotate}deg);transition:opacity 500ms;`;
+  document.body.appendChild(img);
   requestAnimationFrame(() => { img.style.opacity = '1'; });
   setTimeout(() => {
     img.style.opacity = '0';
