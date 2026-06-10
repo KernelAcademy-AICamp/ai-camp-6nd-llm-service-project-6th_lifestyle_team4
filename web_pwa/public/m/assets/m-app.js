@@ -2461,7 +2461,7 @@ function buildGenreShelf(genre, items, onOpen) {
   });
 
   shelf.appendChild(row);
-  decorateShelfWithCats(shelf, genre); // 책장 안/위에 고양이 분산
+  // decorateShelfWithCats 제거 — 사용자 명세: 북마크 책장 고정 고양이 X (랜덤 mascot 으로만)
   section.appendChild(shelf);
   return section;
 }
