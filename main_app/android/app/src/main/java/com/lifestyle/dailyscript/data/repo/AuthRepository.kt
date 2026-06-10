@@ -8,10 +8,12 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
 import com.lifestyle.dailyscript.BuildConfig
+import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.SupabaseProvider
 import com.lifestyle.dailyscript.data.model.BookmarkInsert
 import com.lifestyle.dailyscript.data.model.CardIdRow
 import com.lifestyle.dailyscript.data.model.UserInsert
+import com.lifestyle.dailyscript.data.model.UserPrefs
 import com.lifestyle.dailyscript.data.model.UserRow
 import io.github.jan.supabase.auth.SignOutScope
 import io.github.jan.supabase.auth.auth
@@ -24,7 +26,10 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.UUID
 
 /** Social OAuth providers we support (web-redirect flow via Supabase). */
@@ -83,6 +88,7 @@ class AuthRepository {
 
         if (existing != null) {
             clearPending()
+            syncPrefsFromRow(existing) // DB 선호도 → DataStore (기기 간 동기화 + 온보딩 재노출 방지)
             return UserSession(
                 existing.userId,
                 isAnonymous,
@@ -285,6 +291,38 @@ class AuthRepository {
             if (ageGroup != null) set("age_group", ageGroup)
         }) {
             filter { eq("user_id", userId) }
+        }
+    }
+
+    /**
+     * 온보딩 선호도를 users 행에 저장 (PWA savePreferencesToDb, 033 컬럼).
+     * 실패해도 로컬(DataStore)은 이미 저장돼 있어 흐름엔 지장 없다 — 호출측 fire-and-forget.
+     */
+    suspend fun updatePreferences(userId: Long, prefs: UserPrefs) {
+        client.postgrest["users"].update({
+            set("pref_genres", buildJsonArray { prefs.genres.forEach { add(it) } })
+            set("pref_themes", buildJsonArray { prefs.themes.forEach { add(it) } })
+            set("pref_any", prefs.any)
+            set("pref_updated_at", Instant.now().toString())
+        }) {
+            filter { eq("user_id", userId) }
+        }
+    }
+
+    /**
+     * DB users 행의 선호도 → DataStore (PWA syncPrefsFromDb). DB가 우선 —
+     * 재설치/다른 기기에서도 온보딩이 다시 뜨지 않는다. pref 필드가 전부 null이면 미설정.
+     */
+    private suspend fun syncPrefsFromRow(row: UserRow) {
+        if (row.prefGenres == null && row.prefThemes == null && row.prefAny == null) return
+        runCatching {
+            AppPreferences.savePrefs(
+                UserPrefs(
+                    genres = row.prefGenres ?: emptyList(),
+                    themes = row.prefThemes ?: emptyList(),
+                    any = row.prefAny ?: false,
+                ),
+            )
         }
     }
 

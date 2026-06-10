@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.AppPreferences
+import com.lifestyle.dailyscript.data.Recommend
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.Comment
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
@@ -14,6 +15,7 @@ import com.lifestyle.dailyscript.ui.feed.FEED_TODAY
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class DetailViewModel : ViewModel() {
@@ -66,10 +68,12 @@ class DetailViewModel : ViewModel() {
             runCatching { bookmarkRepo.toggle(userId, card.cardId) }
                 .onSuccess { now ->
                     val delta = if (now) 1 else -1
+                    val prefs = AppPreferences.userPrefs.first()
                     AppAnalytics.trackCard(
                         if (now) "bookmark_added" else "bookmark_removed",
                         card,
-                        mapOf("source" to "detail"),
+                        mapOf("source" to "detail") +
+                            if (now) Recommend.matchProps(card, prefs) else emptyMap(),
                     )
                     _state.value = _state.value.copy(
                         bookmarked = now,

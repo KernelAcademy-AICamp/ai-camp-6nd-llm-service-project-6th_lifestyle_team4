@@ -13,6 +13,10 @@ data class UserRow(
     @SerialName("login_id") val loginId: String? = null,
     // 충전(구매) 실타래 잔액. 06_yarn.sql 적용 전/익명 신규 행을 위해 기본 0.
     @SerialName("yarn_balance") val yarnBalance: Int = 0,
+    // 온보딩 선호도 (033_user_preferences.sql) — 미설정 행은 null.
+    @SerialName("pref_genres") val prefGenres: List<String>? = null,
+    @SerialName("pref_themes") val prefThemes: List<String>? = null,
+    @SerialName("pref_any") val prefAny: Boolean? = null,
 )
 
 @Serializable

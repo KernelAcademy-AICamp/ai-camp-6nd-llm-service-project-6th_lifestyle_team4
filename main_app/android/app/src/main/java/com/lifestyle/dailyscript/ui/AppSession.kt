@@ -6,7 +6,9 @@ import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifestyle.dailyscript.data.AppAnalytics
+import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.SupabaseProvider
+import com.lifestyle.dailyscript.data.model.UserPrefs
 import com.lifestyle.dailyscript.data.repo.AuthRepository
 import com.lifestyle.dailyscript.data.repo.SocialProvider
 import com.lifestyle.dailyscript.data.repo.UserSession
@@ -186,6 +188,28 @@ class AppSessionViewModel : ViewModel() {
                     _authMessage.value = "프로필이 저장됐어요"
                 }
                 .onFailure { _authMessage.value = "저장 실패: ${it.message ?: ""}" }
+        }
+    }
+
+    /**
+     * 선호도 온보딩 완료/건너뛰기 — 로컬 저장(→오버레이 닫힘) 후 서버에도 저장.
+     * 서버 저장은 fire-and-forget (PWA 동일): 실패해도 로컬은 이미 저장돼 재노출되지 않는다.
+     */
+    fun savePreferences(genres: List<String>, themes: List<String>, any: Boolean, skipped: Boolean) {
+        val session = (_state.value as? SessionState.Ready)?.session ?: return
+        val prefs = UserPrefs(genres = genres, themes = themes, any = any)
+        viewModelScope.launch {
+            AppPreferences.savePrefs(prefs)
+            runCatching { authRepo.updatePreferences(session.userId, prefs) }
+            AppAnalytics.track(
+                "preferences_set",
+                mapOf(
+                    "genreCount" to genres.size,
+                    "themeCount" to themes.size,
+                    "any" to any,
+                    "skipped" to skipped,
+                ),
+            )
         }
     }
 

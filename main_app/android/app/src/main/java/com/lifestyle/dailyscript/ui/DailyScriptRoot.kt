@@ -37,6 +37,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lifestyle.dailyscript.data.AppAnalytics
+import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.repo.UserSession
 import com.lifestyle.dailyscript.ui.archive.ArchiveScreen
 import com.lifestyle.dailyscript.ui.components.BottomNavBar
@@ -55,6 +56,7 @@ import com.lifestyle.dailyscript.ui.notice.NoticeViewModel
 import com.lifestyle.dailyscript.ui.onboarding.CoachController
 import com.lifestyle.dailyscript.ui.onboarding.CoachTourOverlay
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
+import com.lifestyle.dailyscript.ui.onboarding.PreferenceOverlay
 import com.lifestyle.dailyscript.ui.settings.LegalScreen
 import com.lifestyle.dailyscript.ui.settings.MyCommentsScreen
 import com.lifestyle.dailyscript.ui.settings.MyFeedScreen
@@ -372,6 +374,16 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
             )
         }
         CoachTourOverlay(coach)
+        // 선호도(장르·주제) 온보딩 — 홈 + 오늘 카드 준비 시 1회, 코치 투어보다 먼저 뜬다
+        // (PWA 부팅 순서: maybeShowPreferences → maybeShowGuide. 투어는 prefSelected 후에만 시작).
+        // initial=null(DataStore 방출 전)엔 띄우지 않아 완료 사용자에게 깜빡임이 없다.
+        val homeState by homeVm.state.collectAsState()
+        val prefSelected by AppPreferences.prefSelected.collectAsState(initial = null)
+        if (prefSelected == false && currentRoute == Routes.HOME && !homeState.loading && homeState.todayCard != null) {
+            PreferenceOverlay(onFinish = { r ->
+                sessionVm.savePreferences(r.genres, r.themes, r.any, r.skipped)
+            })
+        }
         // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(기존 프로필 다이얼로그 재사용, 건너뛰기 가능).
         if (showProfilePrompt) {
             ProfileDialog(

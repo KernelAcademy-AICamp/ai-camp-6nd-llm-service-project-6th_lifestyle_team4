@@ -23,6 +23,12 @@ class HomeViewModel : ViewModel() {
     private var allCards: List<CardDto> = emptyList()
     private var bookmarkCards: List<CardDto> = emptyList()
 
+    // 점수 추천의 인기도 항(card_id → bookmark_count, 뷰 전체). 화면 표시용 카운트와 별개.
+    private var allBookmarkCounts: Map<Long, Int> = emptyMap()
+
+    // card_shown 중복 발화 방지 — 홈 재진입마다 load()가 다시 돌아도 같은 카드는 1회만 집계.
+    private var lastTrackedShownId: Long? = null
+
     // 활성 세션 식별 — VM이 액티비티 스코프라 로그아웃/로그인 도중 떠 있던 load()가
     // 늦게 끝나며 다른 사용자의 데이터로 state를 덮어쓰는 레이스를 막는다.
     private var activeUserId: Long? = null
@@ -32,6 +38,9 @@ class HomeViewModel : ViewModel() {
 
     /** Initial load / screen entry — restore the last-shown card (PWA renderHome). */
     fun load(userId: Long) {
+        // 세션이 바뀌면 card_shown 중복 가드를 리셋 — PWA는 로그인 시 reload로 상태가
+        // 초기화되지만 액티비티 스코프 VM은 살아남으므로 직접 초기화한다.
+        if (activeUserId != userId) lastTrackedShownId = null
         activeUserId = userId
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
@@ -41,14 +50,27 @@ class HomeViewModel : ViewModel() {
             allCards = cardsResult.getOrDefault(emptyList())
             bookmarkCards = bookmarksResult.getOrNull()?.mapNotNull { it.cards } ?: emptyList()
 
+            allBookmarkCounts = runCatching { bookmarkRepo.allCounts() }.getOrDefault(emptyMap())
+
             val tasteEnabled = AppPreferences.tasteEnabled.first()
             val recentIds = AppPreferences.recentlyShown.first()
+            val prefs = AppPreferences.userPrefs.first()
             // Show the card the user was last looking at; a brand-new user (no queue)
-            // gets a random pick, which we then remember as the last-shown.
+            // gets a fresh pick, which we then remember as the last-shown.
             var today = Recommend.restoreLastShown(allCards, recentIds, bookmarkCards)
+            var source = "restore"
             if (today == null) {
-                today = Recommend.pickRandom(allCards, tasteEnabled, bookmarkCards, recentIds)
+                val pick = Recommend.pickCard(allCards, prefs, tasteEnabled, bookmarkCards, recentIds, allBookmarkCounts)
+                today = pick?.card
+                source = pick?.source ?: "random"
                 if (today != null) AppPreferences.rememberShown(today.cardId)
+            }
+            if (today != null && lastTrackedShownId != today.cardId) {
+                AppAnalytics.track(
+                    "card_shown",
+                    mapOf("card_id" to today.cardId, "source" to source) + Recommend.matchProps(today, prefs),
+                )
+                lastTrackedShownId = today.cardId
             }
             val recent = buildRecent(AppPreferences.recentlyShown.first())
 
@@ -77,6 +99,9 @@ class HomeViewModel : ViewModel() {
         if (_state.value.loading) return // 진행 중이면 무시 — 연타로 중복 새로고침/카운트 차감 방지
         if (allCards.isEmpty()) { load(userId); return }
         viewModelScope.launch {
+            // load()와 동일한 세션 가드 — 로그아웃/재로그인 직후 이전 사용자의
+            // allCards/bookmarkCards/allBookmarkCounts 로 새 세션을 덮어쓰지 않게.
+            if (activeUserId != userId) return@launch
             if (isAnonymous) {
                 val today = LocalDate.now().toString()
                 if (AppPreferences.refreshCountToday(today) >= FREE_REFRESH_LIMIT) {
@@ -90,23 +115,30 @@ class HomeViewModel : ViewModel() {
             _state.value = _state.value.copy(loading = true, error = null)
             val tasteEnabled = AppPreferences.tasteEnabled.first()
             val recentIds = AppPreferences.recentlyShown.first()
-            val pick = Recommend.pickRandom(allCards, tasteEnabled, bookmarkCards, recentIds)
-            if (pick != null) {
-                AppPreferences.rememberShown(pick.cardId)
+            val prefs = AppPreferences.userPrefs.first()
+            val pick = Recommend.pickCard(allCards, prefs, tasteEnabled, bookmarkCards, recentIds, allBookmarkCounts)
+            val card = pick?.card
+            if (card != null) {
+                AppPreferences.rememberShown(card.cardId)
                 AppAnalytics.trackCard(
                     "today_refreshed",
-                    pick,
+                    card,
                     mapOf("is_anonymous" to isAnonymous),
                 )
+                AppAnalytics.track(
+                    "card_shown",
+                    mapOf("card_id" to card.cardId, "source" to pick.source) + Recommend.matchProps(card, prefs),
+                )
+                lastTrackedShownId = card.cardId
             }
             val newRecentIds = AppPreferences.recentlyShown.first()
             val recent = buildRecent(newRecentIds)
             _state.value = _state.value.copy(
                 loading = false,
-                todayCard = pick,
-                todayBookmarked = pick != null && bookmarkCards.any { it.cardId == pick.cardId },
+                todayCard = card,
+                todayBookmarked = card != null && bookmarkCards.any { it.cardId == card.cardId },
                 recent = recent,
-                bookmarkCounts = _state.value.bookmarkCounts + loadCounts(listOfNotNull(pick) + recent),
+                bookmarkCounts = _state.value.bookmarkCounts + loadCounts(listOfNotNull(card) + recent),
             )
         }
     }
@@ -120,10 +152,12 @@ class HomeViewModel : ViewModel() {
                 .onSuccess { now ->
                     val refreshed = runCatching { bookmarkRepo.list(userId) }.getOrNull()
                     if (refreshed != null) bookmarkCards = refreshed.mapNotNull { it.cards }
+                    val prefs = AppPreferences.userPrefs.first()
                     AppAnalytics.trackCard(
                         if (now) "bookmark_added" else "bookmark_removed",
                         card,
-                        mapOf("source" to "home_today"),
+                        mapOf("source" to "home_today") +
+                            if (now) Recommend.matchProps(card, prefs) else emptyMap(),
                     )
                     val delta = if (now) 1 else -1
                     val newCount = ((_state.value.bookmarkCounts[card.cardId] ?: 0) + delta).coerceAtLeast(0)

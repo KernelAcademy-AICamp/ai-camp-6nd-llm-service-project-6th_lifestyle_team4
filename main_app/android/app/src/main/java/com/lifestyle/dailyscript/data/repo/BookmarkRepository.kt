@@ -69,6 +69,16 @@ class BookmarkRepository {
         return rows.associate { it.cardId to it.bookmarkCount }
     }
 
+    /**
+     * 뷰 전체 (card_id → bookmark_count) — 점수 추천의 인기도 항에 사용.
+     * PWA loadBookmarkCounts 와 동일하게 전량 로드 (카드 수백 장 규모).
+     */
+    suspend fun allCounts(): Map<Long, Int> =
+        client.postgrest["card_bookmark_counts"]
+            .select(Columns.raw("card_id, bookmark_count")) { limit(2000) }
+            .decodeList<CardBookmarkCount>()
+            .associate { it.cardId to it.bookmarkCount }
+
     private suspend fun findBookmark(userId: Long, cardId: Long): BookmarkIdRow? {
         return client.postgrest["user_bookmarks"]
             .select(Columns.raw("bookmark_id")) {

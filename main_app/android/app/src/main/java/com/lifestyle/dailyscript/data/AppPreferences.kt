@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.lifestyle.dailyscript.data.model.UserPrefs
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -38,6 +39,10 @@ object AppPreferences {
     private val NOTICE_LAST_SEEN = longPreferencesKey("notice_last_seen_id") // max notice_id the user has seen
     private val FEED_CATEGORY = stringPreferencesKey("feed_category") // "today" | "highlight"
     private val GUIDE_SEEN = booleanPreferencesKey("guide_seen")     // onboarding coachmark shown once
+    private val PREF_SELECTED = booleanPreferencesKey("pref_selected") // 선호도 온보딩 완료 여부 (PWA ds.prefSelected)
+    private val PREF_GENRES = stringPreferencesKey("pref_genres")      // CSV of format values (PWA ds.pref.genres)
+    private val PREF_THEMES = stringPreferencesKey("pref_themes")      // CSV of 한글 주제명 (PWA ds.pref.themes)
+    private val PREF_ANY = booleanPreferencesKey("pref_any")           // "상관없음" 선택 여부
     private val YARN_DAILY_DATE = stringPreferencesKey("yarn_daily_date") // yyyy-MM-dd of daily grant
     private val YARN_DAILY_USED = intPreferencesKey("yarn_daily_used")    // daily yarns spent on YARN_DAILY_DATE
     private val UNLOCKED = stringPreferencesKey("unlocked_card_ids")      // CSV of "cardId:epochMillis" (3일 무료 재열람)
@@ -152,4 +157,30 @@ object AppPreferences {
     val guideSeen: Flow<Boolean> get() = store.data.map { it[GUIDE_SEEN] ?: false }
     suspend fun setGuideSeen() { store.edit { it[GUIDE_SEEN] = true } }
     suspend fun resetGuideSeen() { store.edit { it[GUIDE_SEEN] = false } }
+
+    // --- 선호도 온보딩 (PWA ds.prefSelected / ds.pref — 코치 투어 직전 1회) ---
+    val prefSelected: Flow<Boolean> get() = store.data.map { it[PREF_SELECTED] ?: false }
+
+    /** 저장된 선호도. 온보딩 미완료(미동기화)면 null — PWA getPrefs()의 null과 동일 의미. */
+    val userPrefs: Flow<UserPrefs?> get() = store.data.map { p ->
+        if (p[PREF_SELECTED] != true) null
+        else UserPrefs(
+            genres = parseCsvStrings(p[PREF_GENRES]),
+            themes = parseCsvStrings(p[PREF_THEMES]),
+            any = p[PREF_ANY] ?: false,
+        )
+    }
+
+    /** 선호도 저장 + 완료 마킹. 온보딩 완료/건너뛰기와 DB→로컬 동기화(DB 우선)가 공용으로 쓴다. */
+    suspend fun savePrefs(prefs: UserPrefs) {
+        store.edit {
+            it[PREF_GENRES] = prefs.genres.joinToString(",")
+            it[PREF_THEMES] = prefs.themes.joinToString(",")
+            it[PREF_ANY] = prefs.any
+            it[PREF_SELECTED] = true
+        }
+    }
+
+    private fun parseCsvStrings(raw: String?): List<String> =
+        raw?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
 }

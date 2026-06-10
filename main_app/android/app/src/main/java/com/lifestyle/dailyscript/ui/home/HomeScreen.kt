@@ -91,11 +91,16 @@ fun HomeScreen(
     // First-run onboarding → the interactive spotlight tour (rendered in DailyScriptRoot).
     val coach = LocalCoachController.current
     val guideSeen by AppPreferences.guideSeen.collectAsState(initial = true)
+    // 선호도 온보딩(PreferenceOverlay)이 끝난 뒤에만 투어 시작 — PWA 부팅 순서:
+    // maybeShowPreferences → maybeShowGuide. null 은 DataStore 방출 전(둘 다 안 띄움).
+    val prefSelected by AppPreferences.prefSelected.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
     // Keep the tour's target card in sync so "전문 읽으러 가기" opens today's detail.
     LaunchedEffect(state.todayCard?.cardId) { coach?.tourCardId = state.todayCard?.cardId }
-    LaunchedEffect(guideSeen, state.loading, state.todayCard) {
-        if (!guideSeen && !state.loading && state.todayCard != null && coach != null && !coach.active) {
+    LaunchedEffect(guideSeen, prefSelected, state.loading, state.todayCard) {
+        if (prefSelected == true && !guideSeen && !state.loading && state.todayCard != null &&
+            coach != null && !coach.active
+        ) {
             coach.start()
             scope.launch { AppPreferences.setGuideSeen() }
         }
