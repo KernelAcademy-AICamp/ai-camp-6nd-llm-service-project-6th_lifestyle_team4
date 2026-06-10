@@ -3041,9 +3041,48 @@ function renderDailyOzPick() {
     </article>
     <div style="height:36px;"></div>
   `;
-  // 사용자 명세: 오즈 카드는 클릭 반응 없음 (카드 상세 이동 X, daily 그대로).
+  // 사용자 명세: 오즈 카드 클릭 → daily 탭에 랜덤 고양이 spawn (카드 상세 이동 X).
   const ozCard = sec.querySelector('.daily-oz-card');
-  if (ozCard) { ozCard.style.cursor = 'default'; }
+  if (ozCard) {
+    ozCard.style.cursor = 'pointer';
+    ozCard.addEventListener('click', () => {
+      track('daily_oz_clicked', { card_id: pick.card_id });
+      spawnRandomCat();
+    });
+  }
+}
+
+// 랜덤 고양이 spawn — 오즈 카드 클릭 시 view-daily 안 랜덤 위치에 생성, 10초 후 페이드아웃.
+const RANDOM_CAT_FILES = ['cat_confused.png', 'cat_empty.png', 'cat_idle.png', 'cat_shelf_few.png', 'cat_shelf_many.png', 'cat_struck.png'];
+function spawnRandomCat() {
+  const sec = document.getElementById('view-daily');
+  if (!sec) return;
+  if (getComputedStyle(sec).position === 'static') sec.style.position = 'relative';
+  const file = RANDOM_CAT_FILES[Math.floor(Math.random() * RANDOM_CAT_FILES.length)];
+  const img = document.createElement('img');
+  img.src = `assets/cat/${file}`;
+  img.className = 'daily-random-cat';
+  img.alt = '';
+  img.setAttribute('aria-hidden', 'true');
+  const w = 60 + Math.floor(Math.random() * 50);  // 60~110px
+  const rect = sec.getBoundingClientRect();
+  // 현재 보이는 영역(viewport) 안에 spawn — 상하 100px 마진 제외.
+  const yMin = Math.max(0, window.scrollY + 100 - rect.top);
+  const yMax = Math.max(yMin + 1, window.scrollY + window.innerHeight - 200 - rect.top);
+  const top = yMin + Math.random() * (yMax - yMin);
+  const left = Math.random() * Math.max(0, rect.width - w);
+  const rotate = Math.floor(Math.random() * 30) - 15;
+  img.style.cssText = `position:absolute;width:${w}px;height:auto;top:${Math.floor(top)}px;left:${Math.floor(left)}px;z-index:50;pointer-events:none;user-select:none;-webkit-user-drag:none;opacity:0;transform:rotate(${rotate}deg);transition:opacity 500ms;`;
+  sec.appendChild(img);
+  requestAnimationFrame(() => { img.style.opacity = '1'; });
+  setTimeout(() => {
+    img.style.opacity = '0';
+    setTimeout(() => { if (img.parentNode) img.parentNode.removeChild(img); }, 600);
+  }, 10000);
+}
+
+function clearRandomCats() {
+  document.querySelectorAll('.daily-random-cat').forEach((el) => el.remove());
 }
 
 // 섹션 6: 다시 만나기 — 최근 북마크
@@ -6671,6 +6710,7 @@ function setView(view) {
   } else {
     stopNoticeCarousel?.();
     stopContextualCarousel?.();
+    clearRandomCats?.();   // 다른 페이지 이동 시 랜덤 고양이 모두 제거 (사용자 명세)
   }
   // LIBRARY 도 동일 — cover_url 누락 시 reload
   if (view === 'archive') {
