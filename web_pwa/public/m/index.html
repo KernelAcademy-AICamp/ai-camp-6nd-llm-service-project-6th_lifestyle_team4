@@ -314,10 +314,9 @@
   #archive-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: 1fr;          /* 모든 row 같은 높이 */
     gap: 20px 10px;
     padding: 16px 0 60px;
-    align-items: stretch;
+    align-items: start;
   }
   #archive-grid .lib-book {
     display: flex; flex-direction: column; align-items: stretch;
@@ -325,14 +324,16 @@
     padding: 0;
     width: 100%;
   }
+  /* iOS Safari aspect-ratio 폴백 — padding-bottom 으로 132:188 비율 강제 */
   #archive-grid .lib-cover {
     width: 100%;
-    aspect-ratio: 132 / 188;       /* 모든 책 동일 비율 */
+    height: 0;
+    padding-bottom: 142.42%;        /* 188/132 = 1.4242 */
     background: var(--latte);
     overflow: hidden;
+    -webkit-box-shadow: 0 1px 4px rgba(60,40,20,0.18);
     box-shadow: 0 1px 4px rgba(60,40,20,0.18);
     border-radius: 2px;
-    padding: 0;                     /* 폴백/이미지 둘 다 padding 0 — 박스 크기 통일 */
     position: relative;
     display: block;
   }
@@ -343,6 +344,7 @@
     padding: 6px 4px;
   }
   #archive-grid .lib-cover-img {
+    position: absolute; inset: 0;
     width: 100%; height: 100%; object-fit: cover; display: block;
   }
   #archive-grid .lib-cover-title {
@@ -572,10 +574,13 @@
   }
   /* 상황설명 — 대사와 분리되도록 은은한 톤 블록으로 감싼다 */
   .scene-block {
-    border: 0.5px solid var(--latte);
-    border-radius: 4px;
+    border: 1px solid var(--latte);     /* 0.5px 는 iOS 일부 환경에서 흐림 → 1px */
+    border-radius: 8px;
     padding: 16px 18px;
     text-align: left;
+    background: var(--paper);
+    -webkit-box-shadow: 0 1px 3px rgba(60,40,20,0.06);
+    box-shadow: 0 1px 3px rgba(60,40,20,0.06);
   }
   .scene-block .scene-label {
     display: block;
