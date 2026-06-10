@@ -764,38 +764,30 @@
     pointer-events: none;
   }
 
-  /* ===== DAILY — 둥근 모서리 + 두꺼운 보더 + 입체 그림자 (다크 테마 가독성) ===== */
+  /* ===== DAILY — 둥근 모서리 + 약한 그림자 (피드 .sharp-card 톤 매칭) ===== */
   #view-daily .sharp-card,
   #view-daily .daily-notice-row,
   #view-daily .daily-newbook-main {
     border-radius: 14px;
     overflow: hidden;
-    border: 1.5px solid rgba(60, 40, 20, 0.18);
-    box-shadow:
-      0 4px 14px rgba(0, 0, 0, 0.12),
-      0 1px 3px rgba(0, 0, 0, 0.08);
+    border: 0.5px solid var(--latte);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   }
-  #view-daily .daily-notice-row {
-    border-radius: 12px;
-  }
-  /* 다크 테마 — 보더 살짝 밝게, 그림자 더 깊게 */
+  #view-daily .daily-notice-row { border-radius: 12px; }
+  /* 다크 테마 — 보더만 밝게, 그림자 그대로 약하게 */
   @media (prefers-color-scheme: dark) {
     #view-daily .sharp-card,
     #view-daily .daily-notice-row,
     #view-daily .daily-newbook-main {
-      border-color: rgba(255, 255, 255, 0.22);
-      box-shadow:
-        0 4px 18px rgba(0, 0, 0, 0.5),
-        0 1px 4px rgba(0, 0, 0, 0.3);
+      border-color: rgba(255, 255, 255, 0.12);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
     }
   }
   [data-theme="dark"] #view-daily .sharp-card,
   [data-theme="dark"] #view-daily .daily-notice-row,
   [data-theme="dark"] #view-daily .daily-newbook-main {
-    border-color: rgba(255, 255, 255, 0.22);
-    box-shadow:
-      0 4px 18px rgba(0, 0, 0, 0.5),
-      0 1px 4px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   }
 
   /* ===== DAILY 6 섹션 ===== */

@@ -2537,7 +2537,9 @@ function paintMyNoticeEntry() {
 }
 
 // ===== DAILY 6 섹션 헬퍼 =====
-// 책표지 — works.cover_url 있으면 이미지, 없으면 가죽색 + 제목 폴백.
+// 책표지 — LIBRARY (#archive-grid .lib-cover) 와 동일 구조. cover_url 있으면 이미지, 없으면 가죽색 + 제목 폴백.
+//  · 박스 크기는 opts.width 로 지정 (132:188 비율)
+//  · 이미지 로드 실패 시 onerror 로 .lib-cover-fallback 표시
 function dailyBookCoverHTML(work, opts = {}) {
   const w = opts.width || 80;
   const h = opts.height || Math.round(w * 188 / 132);
@@ -2545,14 +2547,21 @@ function dailyBookCoverHTML(work, opts = {}) {
   const title = displayTitle(work?.title || '');
   const cover = work?.cover_url || '';
   const fontSize = Math.max(8, Math.round(w / 8));
+  const fallback = `<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:6px 4px;">
+    <span style="font-size:8px;color:var(--paper);opacity:0.85;text-align:center;letter-spacing:0.05em;text-transform:uppercase;">${escapeHtml(GENRE_LABEL[work?.format] || '기타')}</span>
+    <span style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:${fontSize}px;color:var(--paper);font-weight:600;text-align:center;line-height:1.2;word-break:keep-all;text-shadow:0 1px 2px rgba(0,0,0,0.25);overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;">${escapeHtml(title)}</span>
+    <span style="font-size:8px;color:var(--paper);opacity:0.85;text-align:center;letter-spacing:0.05em;text-transform:uppercase;">${escapeHtml((work?.author || '').toUpperCase())}</span>
+  </div>`;
   if (cover) {
-    return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};box-shadow:0 1px 4px rgba(60,40,20,0.18);overflow:hidden;border-radius:${radius}px;">
+    return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};box-shadow:0 1px 4px rgba(60,40,20,0.18);overflow:hidden;border-radius:${radius}px;position:relative;">
       <img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" loading="lazy"
+        onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', this.dataset.fallback);"
+        data-fallback="${escapeHtml(fallback)}"
         style="width:100%;height:100%;object-fit:cover;display:block;" />
     </div>`;
   }
-  return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};display:flex;align-items:center;justify-content:center;padding:6px;box-shadow:0 1px 4px rgba(60,40,20,0.18);border-radius:${radius}px;">
-    <span style="font-size:${fontSize}px;color:var(--paper);text-align:center;line-height:1.2;font-weight:600;">${escapeHtml(title)}</span>
+  return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};box-shadow:0 1px 4px rgba(60,40,20,0.18);border-radius:${radius}px;position:relative;overflow:hidden;">
+    ${fallback}
   </div>`;
 }
 
