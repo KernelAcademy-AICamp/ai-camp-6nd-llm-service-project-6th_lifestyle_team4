@@ -1628,7 +1628,11 @@ function applyTodayCard(card) {
     chip.textContent = format;
     todayChips.appendChild(chip);
   }
-  todayChips.insertAdjacentHTML('beforeend', `<span style="margin-left:10px;">${renderCounts(card)}</span>`);
+  // TODAY 카드 메타 — 사용자 명세: 북마크 위치(우상단)는 댓글 수, 북마크 수는 북마크 아이콘 아래.
+  todayChips.insertAdjacentHTML('beforeend', `<span style="margin-left:10px;">${renderCountsForToday(card)}</span>`);
+  // 북마크 버튼 아래 카운트 갱신
+  const bmCountEl = document.getElementById('today-bookmark-count');
+  if (bmCountEl) bmCountEl.textContent = formatCount(state.bookmarkCounts?.get(card?.card_id) || 0);
   const kws = Array.isArray(card.keywords) ? card.keywords : [];
 
   // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
@@ -1836,6 +1840,17 @@ function renderCounts(card) {
     + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">visibility</span>${views}</span>`
     + `<span>·</span>`
     + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">bookmark</span>${bookmarks}</span>`
+    + `</span>`;
+}
+
+// TODAY 카드 전용 — 북마크 수 자리에 댓글 수 (북마크 수는 우상단 북마크 아이콘 아래로 이동, 사용자 명세).
+function renderCountsForToday(card) {
+  const views = formatCount(card?.view_count || 0);
+  const comments = formatCount(state.commentCounts?.get(card?.card_id) || 0);
+  return `<span class="t-label-sm c-walnut" style="display:inline-flex;align-items:center;gap:6px;">`
+    + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">visibility</span>${views}</span>`
+    + `<span>·</span>`
+    + `<span style="display:inline-flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:14px;">chat_bubble</span>${comments}</span>`
     + `</span>`;
 }
 
