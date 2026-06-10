@@ -3062,11 +3062,27 @@ function spawnRandomCat() {
   img.alt = '';
   img.setAttribute('aria-hidden', 'true');
   const w = 60 + Math.floor(Math.random() * 50);  // 60~110px
-  // viewport 안 랜덤 위치 — 상단 100px(상단바), 하단 120px(하단탭) 마진 제외.
+
+  // viewport 안에 보이는 컨텐츠 박스만 추려 → 그 중 랜덤 박스 위에 spawn (사용자 명세: 빈공간 회피).
   const vh = window.innerHeight;
   const vw = window.innerWidth;
-  const top = 100 + Math.random() * Math.max(0, vh - w - 220);
-  const left = 16 + Math.random() * Math.max(0, vw - w - 32);
+  const candidates = Array.from(document.querySelectorAll('#view-daily .sharp-card, #view-daily .daily-notice-row, #view-daily .daily-newbook-main'))
+    .map((el) => ({ el, r: el.getBoundingClientRect() }))
+    .filter((x) => x.r.bottom > 80 && x.r.top < vh - 80 && x.r.height > 60 && x.r.width > 60);
+
+  let top, left;
+  if (candidates.length > 0) {
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const r = pick.r;
+    // 박스 안 랜덤 위치 (박스 안 가득). 음수 방지.
+    top = r.top + Math.random() * Math.max(0, r.height - w);
+    left = r.left + Math.random() * Math.max(0, r.width - w);
+  } else {
+    // 폴백 — viewport 상단~중앙에 (하단 빈 공간 회피)
+    top = 100 + Math.random() * Math.max(0, vh * 0.55 - w);
+    left = 16 + Math.random() * Math.max(0, vw - w - 32);
+  }
+
   const rotate = Math.floor(Math.random() * 30) - 15;
   img.style.cssText = `position:fixed;width:${w}px;height:auto;top:${Math.floor(top)}px;left:${Math.floor(left)}px;z-index:90;pointer-events:none;user-select:none;-webkit-user-drag:none;opacity:0;transform:rotate(${rotate}deg);transition:opacity 500ms;`;
   document.body.appendChild(img);
