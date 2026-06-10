@@ -374,12 +374,12 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
             )
         }
         CoachTourOverlay(coach)
-        // 선호도(장르·주제) 온보딩 — 홈 + 오늘 카드 준비 시 1회, 코치 투어보다 먼저 뜬다
-        // (PWA 부팅 순서: maybeShowPreferences → maybeShowGuide. 투어는 prefSelected 후에만 시작).
+        // 선호도(장르·주제) 온보딩 — 첫 접속/미선택 사용자에게 앱 진입 즉시 1회, 시작 탭(NOTICE)보다
+        // 먼저 전 화면 위에 띄운다 (스플래시가 걷히면 바로 보임). 코치 투어는 prefSelected 후
+        // 홈 첫 진입 때 시작 (PWA 순서: 선호도 → 투어). 덕분에 홈 첫 카드부터 선호가 반영된다.
         // initial=null(DataStore 방출 전)엔 띄우지 않아 완료 사용자에게 깜빡임이 없다.
-        val homeState by homeVm.state.collectAsState()
         val prefSelected by AppPreferences.prefSelected.collectAsState(initial = null)
-        if (prefSelected == false && currentRoute == Routes.HOME && !homeState.loading && homeState.todayCard != null) {
+        if (prefSelected == false) {
             PreferenceOverlay(onFinish = { r ->
                 sessionVm.savePreferences(r.genres, r.themes, r.any, r.skipped)
             })
