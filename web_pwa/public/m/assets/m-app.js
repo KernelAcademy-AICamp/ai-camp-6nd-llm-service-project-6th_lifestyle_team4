@@ -2778,9 +2778,9 @@ function renderDailyNewBooks() {
         <p style="font-size:11px;color:var(--sand);margin:0 0 12px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
         <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;font-family:'Noto Serif KR',serif;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
       </div>
-      <!-- 책표지 — espresso 어두운 배경 위에서 검은 표지도 분리되어 보이게 베이지 외곽선 + 그림자 -->
-      <div style="flex-shrink:0;padding:3px;background:var(--latte);border-radius:3px;box-shadow:0 6px 18px rgba(0,0,0,0.5);">
-        ${dailyBookCoverHTML(mainWork, { width: 84 })}
+      <!-- 책표지 — 얇은 베이지 림 + 그림자로 검은 표지 분리 (사용자 명세: 림 얇게) -->
+      <div style="flex-shrink:0;padding:1px;background:var(--latte);border-radius:2px;box-shadow:0 6px 18px rgba(0,0,0,0.5);">
+        ${dailyBookCoverHTML(mainWork, { width: 88 })}
       </div>
     </button>
     <div style="display:flex;gap:12px;overflow-x:auto;padding:16px 0 8px;scrollbar-width:none;">
