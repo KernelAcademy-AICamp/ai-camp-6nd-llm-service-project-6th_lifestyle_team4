@@ -2777,7 +2777,7 @@ function renderDailyNewBooks() {
   // 풀 크기 변경 시 idx 보정 (예: 9→8 줄면)
   if (_newbooksMainIdx >= sorted.length) _newbooksMainIdx = 0;
 
-  const renderBlock = () => {
+  const renderBlock = (animate = false) => {
     const main = sorted[_newbooksMainIdx];
     if (!main) return;
     const rest = sorted.filter((_, i) => i !== _newbooksMainIdx);
@@ -2785,6 +2785,20 @@ function renderDailyNewBooks() {
     const mainWork = (main.cards || [])[0]?.works || { title: main.title, cover_url: null };
     sec.innerHTML = renderTemplate(main, rest, mainWork, sampleQuote);
     attachClickHandlers(works);
+    if (animate) {
+      // 메인 박스 슬라이드 인 — 우측에서 들어옴
+      const mainBtn = sec.querySelector('.daily-newbook-main');
+      if (mainBtn) {
+        mainBtn.style.transition = 'none';
+        mainBtn.style.transform = 'translateX(40%)';
+        mainBtn.style.opacity = '0';
+        requestAnimationFrame(() => {
+          mainBtn.style.transition = 'transform 500ms cubic-bezier(0.25, 0.8, 0.3, 1), opacity 400ms ease-out';
+          mainBtn.style.transform = 'translateX(0)';
+          mainBtn.style.opacity = '1';
+        });
+      }
+    }
   };
 
   const renderTemplate = (main, rest, mainWork, sampleQuote) => `
@@ -2833,12 +2847,12 @@ function renderDailyNewBooks() {
   sec.style.display = 'block';
   renderBlock();
 
-  // 10초마다 메인 책 다음 인덱스 (사용자 명세: 9개 순환)
+  // 10초마다 메인 책 다음 인덱스 — 추가된 순서(최신 1번 → 오래된 9번) 순환, 슬라이드 인 애니메이션
   if (sorted.length > 1) {
     _newbooksTimer = setInterval(() => {
       if (state.currentView !== 'daily') { stopNewbooksRotation(); return; }
       _newbooksMainIdx = (_newbooksMainIdx + 1) % sorted.length;
-      renderBlock();
+      renderBlock(true);
     }, 10000);
   }
 }
