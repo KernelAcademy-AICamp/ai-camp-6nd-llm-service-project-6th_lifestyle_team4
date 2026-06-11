@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Daily Script — 고양이 데모</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100vh;
+    overflow: hidden;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+  .scene {
+    position: relative;
+    width: 100%; height: 100%;
+    background: linear-gradient(180deg, #FAF8F2 0%, #EDE3CD 70%, #DDC8A0 100%);
+  }
+  /* 지면 */
+  .ground {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 70px;
+    background: linear-gradient(180deg, #C9B89A 0%, #A89272 100%);
+    border-top: 2px solid #8B7355;
+    z-index: 1;
+  }
+  .ground::before {
+    content: '';
+    position: absolute; left: 0; right: 0; top: 8px;
+    height: 1px; opacity: 0.3;
+    background: repeating-linear-gradient(
+      90deg, transparent 0 12px, #5A3A1E 12px 14px
+    );
+  }
+  /* 책장(구조물) */
+  .shelf {
+    position: absolute;
+    right: 12%; bottom: 70px;
+    width: 220px; height: 160px;
+    background: linear-gradient(180deg, #7B4A26 0%, #4A2E16 100%);
+    border-top: 5px solid #9B6A3B;
+    box-shadow:
+      0 6px 18px rgba(0,0,0,0.35),
+      inset 0 -3px 0 rgba(0,0,0,0.3),
+      inset 3px 0 0 rgba(255,255,255,0.05);
+    z-index: 2;
+  }
+  /* 책장 안 책 spine 텍스처 */
+  .shelf::before {
+    content: '';
+    position: absolute; inset: 12px 8px 8px;
+    background: repeating-linear-gradient(
+      90deg,
+      #5A3018 0 18px,
+      #6E3B1F 18px 36px,
+      #8B4A24 36px 54px,
+      #4A2810 54px 72px
+    );
+    opacity: 0.55;
+  }
+  .shelf::after {
+    content: 'B O O K S';
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(232, 220, 196, 0.9);
+    font-family: 'Nanum Myeongjo', serif;
+    font-size: 22px; letter-spacing: 0.6em;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+  /* 작은 표지판(돌출 구조물) */
+  .sign {
+    position: absolute;
+    left: 20%; bottom: 70px;
+    width: 90px; height: 80px;
+    background: #8B5A2B;
+    border-top: 4px solid #B8865F;
+    border-radius: 4px 4px 0 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 2;
+  }
+  .sign::after {
+    content: '🪴';
+    position: absolute; left: 50%; top: -28px;
+    transform: translateX(-50%);
+    font-size: 28px;
+  }
+
+  /* 고양이 */
+  .cat {
+    position: absolute;
+    bottom: 70px;
+    width: 130px; height: auto;
+    transform-origin: bottom center;
+    z-index: 5;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    /* 움직임 transition — 동적으로 JS가 덮어쓰기 */
+    transition: left 6s linear, bottom 0.7s cubic-bezier(0.5, 0, 0.5, 1.6);
+  }
+  .cat.flip { transform: scaleX(-1); }
+  /* 호흡 — 항상 미세 */
+  .cat-inner {
+    animation: catBreathe 3s ease-in-out infinite;
+  }
+  @keyframes catBreathe {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.015); filter: brightness(1.04); }
+  }
+  /* 점프 시 squash-stretch */
+  .cat.jumping .cat-inner {
+    animation: catJump 0.7s cubic-bezier(0.5, 0, 0.5, 1) 1;
+  }
+  @keyframes catJump {
+    0%   { transform: scaleY(0.85) scaleX(1.1); }
+    30%  { transform: scaleY(1.1)  scaleX(0.92); }
+    70%  { transform: scaleY(1.05) scaleX(0.95); }
+    100% { transform: scaleY(1) scaleX(1); }
+  }
+
+  /* 상태 표시 */
+  .hud {
+    position: absolute;
+    top: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(250,248,242,0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 0.5px solid #C9B89A;
+    border-radius: 16px;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: #5A3A1E;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    z-index: 100;
+  }
+  .hud strong { color: #2B211A; }
+
+  .title {
+    position: absolute;
+    top: 60px; left: 50%; transform: translateX(-50%);
+    font-family: 'Noto Serif KR', 'Nanum Myeongjo', serif;
+    font-size: 14px;
+    color: #8B7355;
+    opacity: 0.7;
+    letter-spacing: 0.3em;
+    z-index: 100;
+  }
+
+  /* 그림자 — 점프 시 작아짐 */
+  .cat-shadow {
+    position: absolute;
+    bottom: 60px;
+    width: 80px; height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 70%);
+    z-index: 4;
+    pointer-events: none;
+    transition: left 6s linear, bottom 0.7s cubic-bezier(0.5, 0, 0.5, 1.6),
+                width 0.7s cubic-bezier(0.5, 0, 0.5, 1.6),
+                opacity 0.7s ease-out;
+  }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="ground"></div>
+  <div class="sign"></div>
+  <div class="shelf"></div>
+
+  <p class="title">DAILY SCRIPT · CAT</p>
+  <p class="hud">상태: <strong id="state">잠에서 깸</strong></p>
+
+  <div class="cat-shadow" id="catShadow"></div>
+  <img id="cat" class="cat" src="assets/cat/cat_idle.png" alt="" />
+</div>
+
+<script>
+const cat = document.getElementById('cat');
+const shadow = document.getElementById('catShadow');
+const stateEl = document.getElementById('state');
+
+const POSES = {
+  walk:     'assets/cat/cat_idle.png',
+  idle:     'assets/cat/cat_idle.png',
+  look:     'assets/cat/cat_confused.png',
+  surprise: 'assets/cat/cat_struck.png',
+  sit_few:  'assets/cat/cat_shelf_few.png',
+  sit_many: 'assets/cat/cat_shelf_many.png',
+  rest:     'assets/cat/cat_empty.png',
+};
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const setPose = (key) => { cat.src = POSES[key] || POSES.idle; };
+const setDir  = (d) => cat.classList.toggle('flip', d === 'left');
+const setInfo = (t) => stateEl.textContent = t;
+
+// 고양이 + 그림자 동시 이동
+function moveTo({ left, bottom = 70, durationMs = 6000, ease = 'linear', shadowOpacity = 1, shadowScale = 1 }) {
+  cat.style.transition    = `left ${durationMs}ms ${ease}, bottom 0.7s cubic-bezier(0.5, 0, 0.5, 1.6)`;
+  shadow.style.transition = `left ${durationMs}ms ${ease}, bottom 0.7s cubic-bezier(0.5, 0, 0.5, 1.6), width 0.7s ease-out, opacity 0.7s ease-out`;
+  cat.style.left = left;
+  cat.style.bottom = bottom + 'px';
+  shadow.style.left = `calc(${left} + 25px)`;
+  shadow.style.bottom = '64px';
+  shadow.style.opacity = shadowOpacity;
+  shadow.style.width = (80 * shadowScale) + 'px';
+}
+
+async function jump({ toLeft, toBottom, durationMs = 700 }) {
+  cat.classList.add('jumping');
+  moveTo({ left: toLeft, bottom: toBottom, durationMs, ease: 'ease-out', shadowOpacity: 0.3, shadowScale: 0.6 });
+  setPose('surprise');
+  await sleep(durationMs);
+  cat.classList.remove('jumping');
+}
+
+// 초기 위치
+cat.style.left = '40px';
+cat.style.bottom = '70px';
+shadow.style.left = '65px';
+shadow.style.bottom = '64px';
+setPose('rest');
+
+async function loop() {
+  // 0. 일어나기
+  setInfo('일어남'); setPose('idle');
+  await sleep(1200);
+
+  while (true) {
+    // 1. 우측으로 산책 — 표지판 앞까지
+    setInfo('산책 중 →'); setDir('right'); setPose('walk');
+    moveTo({ left: '14%', durationMs: 5000 });
+    await sleep(5200);
+
+    // 2. 표지판 앞 멈춤 → 둘러보기
+    setInfo('어? 화분이다 🤔'); setPose('look');
+    await sleep(1800);
+
+    // 3. 다시 우측으로 (책장 앞까지)
+    setInfo('산책 중 →'); setPose('walk');
+    moveTo({ left: 'calc(88% - 360px)', durationMs: 5500 });
+    await sleep(5700);
+
+    // 4. 책장 앞 멈춤
+    setInfo('책장이다 😼'); setPose('look');
+    await sleep(1500);
+
+    // 5. 점프해서 책장 위로
+    setInfo('점프!');
+    await jump({ toLeft: 'calc(88% - 320px)', toBottom: 230, durationMs: 650 });
+
+    // 6. 책장 위 앉음
+    setInfo('책장 위 정복 😺'); setPose('sit_few');
+    await sleep(2200);
+
+    // 7. 누워서 휴식
+    setInfo('낮잠 자는 중 zzz...'); setPose('rest');
+    await sleep(3500);
+
+    // 8. 일어남
+    setInfo('일어남'); setPose('sit_many');
+    await sleep(1200);
+
+    // 9. 점프해서 내려옴
+    setInfo('점프 내려옴');
+    await jump({ toLeft: 'calc(88% - 440px)', toBottom: 70, durationMs: 650 });
+
+    // 10. 좌측으로 산책
+    setInfo('산책 중 ←'); setDir('left'); setPose('walk');
+    moveTo({ left: '40px', durationMs: 7000 });
+    await sleep(7200);
+
+    // 11. 잠시 멈춤
+    setInfo('잠시 멈춤'); setPose('idle');
+    await sleep(1500);
+
+    // 12. 가끔 깜짝 놀람
+    setInfo('깜짝!'); setPose('surprise');
+    await sleep(800);
+  }
+}
+
+loop();
+</script>
+</body>
+</html>
