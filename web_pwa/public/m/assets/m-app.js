@@ -6245,6 +6245,33 @@ function openCardFromFeedPost() {
 }
 
 if (feedFab) feedFab.addEventListener('click', openFeedPicker);
+
+// 안드 DetailScreen 하단 두 버튼 — 북마크하고 오늘의 한줄 작성 / 라이브러리 진입
+$('#detail-post-oneliner')?.addEventListener('click', async () => {
+  const card = state.detailCard;
+  if (!card) return;
+  // 북마크 보장 — 안 됐으면 토글 (fire-and-forget)
+  const isBookmarked = (state.bookmarks || []).some((b) => b?.card_id === card.card_id);
+  if (!isBookmarked) {
+    try { await toggleBookmark(card.card_id); } catch {}
+  }
+  if (state.isAnonymous) { toast('로그인 후 오늘의 한줄을 남길 수 있어요.'); return; }
+  track('detail_post_oneliner', { card_id: card.card_id });
+  openFeedCompose(card);
+});
+$('#detail-go-library')?.addEventListener('click', () => {
+  const card = state.detailCard;
+  if (!card) return;
+  track('detail_go_library', { card_id: card.card_id });
+  // 라이브러리(archive) 로 이동 + 해당 작품 책 펼침 모달
+  const allWorks = groupAllCardsByWork();
+  const targetWork = allWorks.find((w) => (w.cards || []).some((c) => c.card_id === card.card_id));
+  closeDetail();
+  setTimeout(() => {
+    setView('archive');
+    setTimeout(() => { if (targetWork && typeof openBookModal === 'function') openBookModal(targetWork, allWorks); }, 80);
+  }, 260);
+});
 if (feedPickerClose) feedPickerClose.addEventListener('click', closeFeedPicker);
 if (feedComposeClose) feedComposeClose.addEventListener('click', closeFeedCompose);
 if (feedPickerModal) feedPickerModal.addEventListener('click', (e) => { if (e.target === feedPickerModal) closeFeedPicker(); });
