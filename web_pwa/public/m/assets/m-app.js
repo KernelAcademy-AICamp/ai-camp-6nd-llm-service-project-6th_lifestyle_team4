@@ -2783,22 +2783,35 @@ function renderDailyNewBooks() {
     const rest = sorted.filter((_, i) => i !== _newbooksMainIdx);
     const sampleQuote = ((main.cards || [])[0]?.quote || '').slice(0, 60);
     const mainWork = (main.cards || [])[0]?.works || { title: main.title, cover_url: null };
-    sec.innerHTML = renderTemplate(main, rest, mainWork, sampleQuote);
-    attachClickHandlers(works);
+    const applyHTML = () => {
+      sec.innerHTML = renderTemplate(main, rest, mainWork, sampleQuote);
+      attachClickHandlers(works);
+    };
     if (animate) {
-      // 메인 박스 슬라이드 인 — 우측에서 들어옴
-      const mainBtn = sec.querySelector('.daily-newbook-main');
-      if (mainBtn) {
-        mainBtn.style.transition = 'none';
-        mainBtn.style.transform = 'translateX(40%)';
-        mainBtn.style.opacity = '0';
-        requestAnimationFrame(() => {
-          mainBtn.style.transition = 'transform 500ms cubic-bezier(0.25, 0.8, 0.3, 1), opacity 400ms ease-out';
-          mainBtn.style.transform = 'translateX(0)';
-          mainBtn.style.opacity = '1';
-        });
+      // 이전 메인 박스를 좌측으로 슬라이드 아웃 → 새 메인 박스를 우측에서 슬라이드 인 (옆으로 넘어가는 형식)
+      const oldMain = sec.querySelector('.daily-newbook-main');
+      if (oldMain) {
+        oldMain.style.transition = 'transform 380ms cubic-bezier(0.55, 0, 0.7, 1), opacity 300ms ease-in';
+        oldMain.style.transform = 'translateX(-40%)';
+        oldMain.style.opacity = '0';
+        setTimeout(() => {
+          applyHTML();
+          const newMain = sec.querySelector('.daily-newbook-main');
+          if (newMain) {
+            newMain.style.transition = 'none';
+            newMain.style.transform = 'translateX(40%)';
+            newMain.style.opacity = '0';
+            requestAnimationFrame(() => {
+              newMain.style.transition = 'transform 420ms cubic-bezier(0.25, 0.8, 0.3, 1), opacity 340ms ease-out';
+              newMain.style.transform = 'translateX(0)';
+              newMain.style.opacity = '1';
+            });
+          }
+        }, 400);
+        return;
       }
     }
+    applyHTML();
   };
 
   const renderTemplate = (main, rest, mainWork, sampleQuote) => `
@@ -5966,7 +5979,7 @@ function openFeedPostDetail(post) {
   }
 }
 
-// 하이라이트 상세 — feedpost-screen 재사용. state.detailType = 'highlight' 로 분기.
+// 하이라이트 상세 — 안드 HighlightDetailSheet 매칭 (책표지 + 발췌 + 출처 + "카드 보기").
 function openHighlightDetail(highlight) {
   if (!highlight || !feedpostScreen) return;
   const card = highlight.cards || {};
@@ -5974,23 +5987,50 @@ function openHighlightDetail(highlight) {
   state.detailType = 'highlight';
   state.currentHighlight = highlight;
   state.currentFeedPost = null;
-  // 하이라이트 모드 — 명대사 박스 자체 숨김 (사용자 명세). 제목+작가만 fp-source 텍스트로 표시.
+  // 명대사 박스(card-warm 배경)를 안드 HighlightContentCard 구조로 재구성:
+  //   책표지(120x170 cover_url 또는 가죽색 폴백) + selected_text(큰 serif) + 출처 + '카드 보기' 버튼
   const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
-  if (quoteBox) quoteBox.style.display = 'none';
-  if (fpSource) fpSource.textContent = '';
+  if (quoteBox) {
+    quoteBox.style.display = '';
+    const title = displayTitle(w.title || '');
+    const author = w.author || '';
+    const source = [title, author].filter(Boolean).join(' · ');
+    const coverHTML = w.cover_url
+      ? `<div style="width:120px;height:170px;margin:0 auto;background:${leatherColorFor(title)};overflow:hidden;box-shadow:0 4px 14px rgba(60,40,20,0.3);border-radius:2px;">
+          <img src="${escapeHtml(w.cover_url)}" alt="${escapeHtml(title)}" loading="lazy"
+            onerror="this.outerHTML='<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:10px;\\'><span style=\\'font-family:Noto Serif KR,serif;color:#FAF8F2;font-weight:600;font-size:14px;text-align:center;line-height:1.3;text-shadow:0 1px 2px rgba(0,0,0,0.45);\\'>${escapeHtml(title).replace(/'/g, "&#39;")}</span></div>'"
+            style="width:100%;height:100%;object-fit:cover;display:block;" />
+        </div>`
+      : `<div style="width:120px;height:170px;margin:0 auto;background:${leatherColorFor(title)};display:flex;align-items:center;justify-content:center;padding:10px;box-shadow:0 4px 14px rgba(60,40,20,0.3);border-radius:2px;">
+          <span style="font-family:'Noto Serif KR',serif;color:#FAF8F2;font-weight:600;font-size:14px;text-align:center;line-height:1.3;text-shadow:0 1px 2px rgba(0,0,0,0.45);">${escapeHtml(title)}</span>
+        </div>`;
+    quoteBox.innerHTML = `
+      ${coverHTML}
+      <div style="height:22px;"></div>
+      <p id="fp-quote" class="t-headline-md c-espresso" style="line-height:1.6;font-family:'Noto Serif KR','Nanum Myeongjo',Georgia,serif;text-align:center;margin:0;">${escapeHtml(highlight.selected_text || '')}</p>
+      ${source ? `<div style="height:16px;"></div><p id="fp-source" class="t-label-sm c-walnut" style="letter-spacing:0.1em;text-align:center;margin:0;">— ${escapeHtml(source)}</p>` : '<p id="fp-source" style="display:none;"></p>'}
+      <div style="height:24px;"></div>
+      <button id="fp-open-card" class="sharp-btn" style="width:100%;">카드 보기</button>
+    `;
+    // fp-open-card 새로 만든 요소 — 핸들러 재등록 (실타래 게이트 자동)
+    quoteBox.querySelector('#fp-open-card')?.addEventListener('click', () => {
+      const h = state.currentHighlight;
+      if (!h) return;
+      const cardObj = (state.allCards || []).find((c) => c && c.card_id === h.card_id);
+      track('highlight_card_view', { highlight_id: h.highlight_id, card_id: h.card_id });
+      openDetail(cardObj || { card_id: h.card_id, ...(h.cards || {}) });
+    });
+  }
   if (fpAuthor) fpAuthor.textContent = highlight.author_nickname || '익명';
   if (fpDate) fpDate.textContent = formatBookmarkDate(highlight.created_at) || formatRelativeTime(highlight.created_at);
   if (feedFab) feedFab.style.display = 'none';   // 댓글 화면에서는 글쓰기 말풍선 숨김
-  // 하이라이트는 selected_text 가 본문. 작성자 아래에 제목·작가 별도 라인 추가 (fp-body 앞).
+  // fp-body = 작성자 메모(user_note)만 — selected_text 는 위 박스에 이미 표시
   if (fpBody) {
-    const src = [displayTitle(w.title), w.author].filter(Boolean).join(' · ');
-    fpBody.textContent = (src ? `— ${src}\n\n` : '') + (highlight.selected_text || '');
+    fpBody.textContent = (highlight.user_note || '').trim();
   }
-  // 명대사 읽어보기 버튼 숨김, 카드 보기 버튼 표시 (사용자 명세)
-  const openCardBtn = document.getElementById('fp-open-card');
+  // 카드 보기는 quoteBox 안에 들어갔으니 별도 fp-highlight-card-view 버튼은 숨김
   const highlightCardViewBtn = document.getElementById('fp-highlight-card-view');
-  if (openCardBtn) openCardBtn.style.display = 'none';
-  if (highlightCardViewBtn) highlightCardViewBtn.style.display = 'block';
+  if (highlightCardViewBtn) highlightCardViewBtn.style.display = 'none';
   paintFeedCommentForm();
   if (fpCommentInput) { fpCommentInput.value = ''; fpCommentInput.placeholder = '이 하이라이트에 대한 생각을 남겨주세요…'; }
   updateFpCounter();
