@@ -2751,25 +2751,43 @@ function renderDailyNotice() {
   }
 }
 
-// 섹션 2: 새로 들어온 책 — 책표지 이미지 + Serif 큰 제목 + 가로 슬라이더
+// 새 책 메인 순환 — 최근 9개 중 10초마다 한 권씩
+let _newbooksTimer = null;
+let _newbooksMainIdx = 0;
+let _newbooksPool = [];   // 최근 9개 정렬된 works
+function stopNewbooksRotation() {
+  if (_newbooksTimer) { clearInterval(_newbooksTimer); _newbooksTimer = null; }
+}
+
+// 섹션 2: 새로 들어온 책 — 최근 9권 중 메인 1권 (10초마다 순환) + 슬라이더(나머지)
 function renderDailyNewBooks() {
   const sec = document.getElementById('daily-section-new-books');
   if (!sec) return;
+  stopNewbooksRotation();
   const works = (typeof groupAllCardsByWork === 'function') ? groupAllCardsByWork()
     : (typeof groupBookmarksByWork === 'function' ? groupBookmarksByWork() : []);
   if (works.length === 0) { sec.style.display = 'none'; return; }
+  // 최신 9권 (가장 오래된 건 자동으로 빠짐 — 사용자 명세)
   const sorted = [...works].sort((a, b) => {
     const aT = Math.max(0, ...(a.cards || []).map((c) => new Date(c.created_at || 0).getTime()));
     const bT = Math.max(0, ...(b.cards || []).map((c) => new Date(c.created_at || 0).getTime()));
     return bT - aT;
-  });
-  const main = sorted[0];
-  const rest = sorted.slice(1, 9);
-  const sampleQuote = ((main.cards || [])[0]?.quote || '').slice(0, 60);
-  const mainWork = (main.cards || [])[0]?.works || { title: main.title, cover_url: null };
+  }).slice(0, 9);
+  _newbooksPool = sorted;
+  // 풀 크기 변경 시 idx 보정 (예: 9→8 줄면)
+  if (_newbooksMainIdx >= sorted.length) _newbooksMainIdx = 0;
 
-  sec.style.display = 'block';
-  sec.innerHTML = `
+  const renderBlock = () => {
+    const main = sorted[_newbooksMainIdx];
+    if (!main) return;
+    const rest = sorted.filter((_, i) => i !== _newbooksMainIdx);
+    const sampleQuote = ((main.cards || [])[0]?.quote || '').slice(0, 60);
+    const mainWork = (main.cards || [])[0]?.works || { title: main.title, cover_url: null };
+    sec.innerHTML = renderTemplate(main, rest, mainWork, sampleQuote);
+    attachClickHandlers(works);
+  };
+
+  const renderTemplate = (main, rest, mainWork, sampleQuote) => `
     <button type="button" class="daily-newbook-main" data-work-key="${escapeHtml(main.key)}"
       style="display:flex;gap:16px;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px;cursor:pointer;text-align:left;align-items:flex-start;">
       <div style="flex:1;min-width:0;">
@@ -2798,17 +2816,31 @@ function renderDailyNewBooks() {
     </div>
     <div style="height:36px;"></div>
   `;
-  sec.querySelectorAll('[data-work-key]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.workKey;
-      const w = works.find((x) => x.key === key);
-      if (!w) return;
-      track('daily_newbook_clicked', { work_key: key });
-      // 사용자 명세: daily 탭 그대로 머무름 + 팝업만 표시 (LIBRARY 이동 X).
-      //   카드 진입 시 실타래 게이트는 openDetail 안에서 자동 처리.
-      if (typeof openBookModal === 'function') openBookModal(w, works);
+
+  const attachClickHandlers = (worksList) => {
+    sec.querySelectorAll('[data-work-key]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.workKey;
+        const w = worksList.find((x) => x.key === key);
+        if (!w) return;
+        track('daily_newbook_clicked', { work_key: key });
+        // daily 탭 그대로 머무름 + 팝업만 표시 (LIBRARY 이동 X). 실타래 게이트는 openDetail.
+        if (typeof openBookModal === 'function') openBookModal(w, worksList);
+      });
     });
-  });
+  };
+
+  sec.style.display = 'block';
+  renderBlock();
+
+  // 10초마다 메인 책 다음 인덱스 (사용자 명세: 9개 순환)
+  if (sorted.length > 1) {
+    _newbooksTimer = setInterval(() => {
+      if (state.currentView !== 'daily') { stopNewbooksRotation(); return; }
+      _newbooksMainIdx = (_newbooksMainIdx + 1) % sorted.length;
+      renderBlock();
+    }, 10000);
+  }
 }
 
 // 섹션 3: 이럴 땐, 이런 문장
@@ -6940,7 +6972,8 @@ function setView(view) {
   } else {
     stopNoticeCarousel?.();
     stopContextualCarousel?.();
-    clearRandomCats?.();   // 다른 페이지 이동 시 랜덤 고양이 모두 제거 (사용자 명세)
+    stopNewbooksRotation?.();   // 새 책 메인 순환 정지
+    clearRandomCats?.();        // 다른 페이지 이동 시 랜덤 고양이 모두 제거
   }
   // LIBRARY 도 동일 — cover_url 누락 시 reload
   if (view === 'archive') {
