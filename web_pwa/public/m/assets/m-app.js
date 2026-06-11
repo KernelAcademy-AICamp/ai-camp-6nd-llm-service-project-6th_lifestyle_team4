@@ -5616,12 +5616,13 @@ function buildFeedItem(post) {
   wrap.className = 'feed-item';
   const title = displayTitle(w.title) || '—';
   const author = w.author || '';
-  // 표지는 works.cover_url(Supabase Storage 공개 URL). 없으면 미표시.
+  // 표지 — cover_url 있으면 이미지, 없으면 가죽색 폴백 (사용자 명세: 리골레토 등도 표시)
   const cover = w.cover_url || '';
+  const fallbackBg = leatherColorFor(w.title || title);
   const coverHtml = cover
     ? `<img class="fb-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
-         onerror="this.remove()" />`
-    : '';
+         onerror="this.outerHTML='<div class=\\'fb-cover-fallback\\' style=\\'background:${fallbackBg};\\'><span>${escapeHtml(title).replace(/'/g, "&#39;")}</span></div>'" />`
+    : `<div class="fb-cover-fallback" style="background:${fallbackBg};"><span>${escapeHtml(title)}</span></div>`;
   wrap.innerHTML = `
     <div class="feed-item-head">
       <div class="feed-avatar"><span class="material-symbols-outlined">edit</span></div>
