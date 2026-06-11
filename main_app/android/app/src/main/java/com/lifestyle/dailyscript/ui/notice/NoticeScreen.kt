@@ -1,7 +1,9 @@
 package com.lifestyle.dailyscript.ui.notice
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,23 +12,34 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lifestyle.dailyscript.data.model.Notice
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.detail.relativeTime
+import com.lifestyle.dailyscript.ui.settings.ActivityTopBar
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -38,7 +51,7 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.Markdown
 
 @Composable
-fun NoticeScreen(vm: NoticeViewModel) {
+fun NoticeScreen(vm: NoticeViewModel, onBack: () -> Unit) {
     val state by vm.state.collectAsState()
 
     // Opening the screen marks everything seen → clears the badge.
@@ -49,14 +62,9 @@ fun NoticeScreen(vm: NoticeViewModel) {
             .fillMaxSize()
             .background(Paper),
     ) {
-        Box(modifier = Modifier.height(28.dp))
-        Text(
-            text = "공지사항",
-            style = MaterialTheme.typography.displayMedium,
-            color = Espresso,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        Box(modifier = Modifier.height(16.dp))
+        // 좌상단 뒤로가기 + 제목 — 다른 하위 페이지(내 댓글·보관함·약관)와 동일한 상단 바.
+        ActivityTopBar(title = "공지사항", onBack = onBack)
+        Box(modifier = Modifier.height(8.dp))
 
         when {
             state.loading && state.notices.isEmpty() -> CenteredNote("불러오는 중⋯")
@@ -80,11 +88,18 @@ fun NoticeScreen(vm: NoticeViewModel) {
 @Composable
 private fun NoticeCard(notice: Notice) {
     val shape = RoundedCornerShape(12.dp)
+    // 접힘이 기본 — 제목 + 본문 3줄 미리보기만 보이고, 탭하면 전체 본문이 펼쳐진다.
+    var expanded by remember { mutableStateOf(false) }
+    // 3줄 안에 다 들어가는 짧은 공지는 펼칠 게 없으므로 토글을 숨긴다(미리보기 오버플로로 판단).
+    var expandable by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(shape)
             .background(CardWarm, shape)
             .border(0.5.dp, Latte, shape)
+            .then(if (expandable) Modifier.clickable { expanded = !expanded } else Modifier)
+            .animateContentSize()
             .padding(horizontal = 18.dp, vertical = 20.dp),
     ) {
         Row(
@@ -111,8 +126,53 @@ private fun NoticeCard(notice: Notice) {
             color = Espresso,
         )
         Box(modifier = Modifier.height(10.dp))
-        NoticeBody(notice.body)
+        if (expanded) {
+            NoticeBody(notice.body)
+        } else {
+            Text(
+                text = noticePreview(notice.body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Roast,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { result -> if (result.hasVisualOverflow) expandable = true },
+            )
+        }
+        if (expandable) {
+            Box(modifier = Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (expanded) "접기" else "더보기",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Walnut,
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = if (expanded) "접기" else "더보기",
+                    tint = Walnut,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
     }
+}
+
+/**
+ * Collapsed-state plain-text preview — flattens the markdown subset NoticeBody renders
+ * (strips `#` headings, `-`/`•` bullets, `**bold**` markers; drops image lines) so a clean
+ * 3-line `maxLines` clamp can stand in for the full body.
+ */
+private fun noticePreview(body: String): String {
+    val image = Regex("^!\\[.*]\\(https://.*\\)$")
+    return body.split("\n")
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && !image.matches(it) }
+        .joinToString(" ") { line ->
+            line
+                .replace(Regex("^#{1,3}\\s+"), "")
+                .replace(Regex("^[-•]\\s+"), "")
+                .replace("**", "")
+        }
 }
 
 /**

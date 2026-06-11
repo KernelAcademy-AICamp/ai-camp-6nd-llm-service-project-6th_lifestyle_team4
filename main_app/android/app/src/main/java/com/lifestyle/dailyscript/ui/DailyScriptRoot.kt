@@ -182,7 +182,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     }
 
     val isDetail = destinationRoute?.startsWith("detail/") == true || destinationRoute == Routes.DETAIL
-    val fullScreenRoutes = setOf(Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.BOOKMARKS, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE)
+    val fullScreenRoutes = setOf(Routes.NOTICE, Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.BOOKMARKS, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE)
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
     // 하단 바는 모든 화면에서 노출 — 메인 탭·상세는 물론 마이 하위 페이지(내 댓글/내 피드/보관함/
@@ -209,7 +209,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         Column(modifier = Modifier.fillMaxSize().imePadding()) {
         if (showTopBar) {
             when (currentRoute) {
-                Routes.DAILY, Routes.HOME, Routes.ARCHIVE, Routes.FEED, Routes.NOTICE -> HomeTopBar(
+                Routes.DAILY, Routes.HOME, Routes.ARCHIVE, Routes.FEED -> HomeTopBar(
                     yarn = yarnAvailable,
                     onYarnClick = {
                         AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
@@ -275,7 +275,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                     )
                 }
                 composable(Routes.NOTICE) {
-                    NoticeScreen(vm = noticeVm)
+                    NoticeScreen(vm = noticeVm, onBack = { navController.popBackStack() })
                 }
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
