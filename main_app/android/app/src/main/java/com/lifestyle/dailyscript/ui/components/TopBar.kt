@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
@@ -101,27 +102,25 @@ fun HomeTopBar(yarn: Int, onYarnClick: () -> Unit, onOzHouseClick: () -> Unit) {
     }
 }
 
-/** 실타래 칩 옆 OZ's house — 고양이 집 진입 (홈 아이콘 + 라벨). */
+/** 실타래 칩 옆 OZ's house — 아이콘 위 + 작은 라벨 아래 (수직 배치). */
 @Composable
 fun OzHouseChip(onClick: () -> Unit) {
-    val shape = RoundedCornerShape(50)
-    Row(
+    Column(
         modifier = Modifier
-            .background(Sand.copy(alpha = 0.35f), shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 9.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = androidx.compose.material.icons.Icons.Outlined.Cottage,
             contentDescription = "OZ's house",
             tint = Espresso,
-            modifier = Modifier.size(15.dp),
+            modifier = Modifier.size(20.dp),
         )
-        Spacer(Modifier.width(5.dp))
         Text(
             text = "OZ’s house",
             style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 8.5.sp,
                 fontWeight = FontWeight.Bold,
                 platformStyle = PlatformTextStyle(includeFontPadding = false),
             ),
