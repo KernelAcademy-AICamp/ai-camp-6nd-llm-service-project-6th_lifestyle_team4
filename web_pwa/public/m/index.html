@@ -807,10 +807,11 @@
     pointer-events: none;
   }
 
-  /* ===== DAILY — 둥근 모서리 + 약한 그림자 (피드 .sharp-card 톤 매칭) ===== */
+  /* ===== DAILY · TODAY — 둥근 모서리 + 약한 그림자 (피드 .sharp-card 톤 매칭) ===== */
   #view-daily .sharp-card,
   #view-daily .daily-notice-row,
-  #view-daily .daily-newbook-main {
+  #view-daily .daily-newbook-main,
+  #view-home #today-card {
     border-radius: 14px;
     overflow: hidden;
     border: 0.5px solid var(--latte);
@@ -821,14 +822,16 @@
   @media (prefers-color-scheme: dark) {
     #view-daily .sharp-card,
     #view-daily .daily-notice-row,
-    #view-daily .daily-newbook-main {
+    #view-daily .daily-newbook-main,
+    #view-home #today-card {
       border-color: rgba(255, 255, 255, 0.12);
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
     }
   }
   [data-theme="dark"] #view-daily .sharp-card,
   [data-theme="dark"] #view-daily .daily-notice-row,
-  [data-theme="dark"] #view-daily .daily-newbook-main {
+  [data-theme="dark"] #view-daily .daily-newbook-main,
+  [data-theme="dark"] #view-home #today-card {
     border-color: rgba(255, 255, 255, 0.12);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   }
