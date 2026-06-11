@@ -46,6 +46,7 @@ object AppPreferences {
     private val YARN_DAILY_DATE = stringPreferencesKey("yarn_daily_date") // yyyy-MM-dd of daily grant
     private val YARN_DAILY_USED = intPreferencesKey("yarn_daily_used")    // daily yarns spent on YARN_DAILY_DATE
     private val UNLOCKED = stringPreferencesKey("unlocked_card_ids")      // CSV of "cardId:epochMillis" (3일 무료 재열람)
+    private val REWARDED = stringPreferencesKey("rewarded_card_ids")      // CSV of cardIds — 카드당 1회 첫 열람 +1 실타래 보상
     private val OZ_DAILY_DATE = stringPreferencesKey("oz_daily_date")     // yyyy-MM-dd for Daily Oz pick
     private val OZ_DAILY_CARD_ID = longPreferencesKey("oz_daily_card_id") // cached card_id for that date
 
@@ -134,6 +135,20 @@ object AppPreferences {
             current.entries.removeAll { now - it.value >= UNLOCK_WINDOW_MS } // 만료 항목 정리
             current[cardId] = now
             p[UNLOCKED] = current.entries.joinToString(",") { "${it.key}:${it.value}" }
+        }
+    }
+
+    // 카드 첫 열람 +1 실타래 보상 — 카드당 1회만(중복 지급 없음). PWA ds.yarnRewarded 와 동일 정책.
+    suspend fun isRewarded(cardId: Long): Boolean {
+        val raw = store.data.first()[REWARDED] ?: return false
+        return raw.split(",").any { it.trim().toLongOrNull() == cardId }
+    }
+
+    suspend fun markRewarded(cardId: Long) {
+        store.edit { p ->
+            val current = (p[REWARDED] ?: "").split(",").mapNotNull { it.trim().toLongOrNull() }.toMutableSet()
+            current.add(cardId)
+            p[REWARDED] = current.joinToString(",")
         }
     }
 

@@ -4327,6 +4327,37 @@ async function grantYarnRpc(n) {
   return typeof data === 'number' ? data : parseInt(data, 10);
 }
 
+// 카드 첫 열람 보상 — 카드당 1회 +1 실타래 (중복 지급 없음).
+//   로컬 키 ds.yarnRewarded 에 카드ID 기록 → optimistic 차단 후 RPC 호출.
+const YARN_REWARDED_KEY = 'ds.yarnRewarded';
+function getRewardedMap() {
+  try {
+    const raw = JSON.parse(safeStorageGet(YARN_REWARDED_KEY, 'null') || 'null');
+    if (raw && typeof raw === 'object') return raw;
+  } catch {}
+  return {};
+}
+function isCardRewarded(cardId) {
+  return !!getRewardedMap()[String(cardId)];
+}
+function markCardRewarded(cardId) {
+  const map = getRewardedMap();
+  map[String(cardId)] = Date.now();
+  safeStorageSet(YARN_REWARDED_KEY, JSON.stringify(map));
+}
+async function rewardYarnForFirstView(cardId) {
+  if (!cardId || isCardRewarded(cardId)) return;
+  markCardRewarded(cardId);   // 우선 마킹해 중복 호출 차단 (RPC 전)
+  try {
+    const balance = await grantYarnRpc(1);
+    state.yarnPurchased = balance;
+    renderYarnChip();
+    try { toast('실타래 +1 (카드 첫 열람)'); } catch {}
+  } catch (e) {
+    console.warn('[m] rewardYarnForFirstView failed:', e);
+  }
+}
+
 // 차감: 'alreadyUnlocked' | 'chargedDaily' | 'chargedPurchased' | 'insufficient' | 'error'
 async function spendYarn(cardId) {
   if (isCardUnlocked(cardId)) return 'alreadyUnlocked';
@@ -4911,14 +4942,12 @@ function paintAuthIdentity() {
 }
 
 // ---------- Detail (full-screen) ----------
-// 실타래 게이트 — 투어 중/이미 연 카드/충전 후에만 실제 상세를 연다.
+// 사용자 명세(2026-06): 실타래 게이트/팝업 제거 — 모든 카드 자유 열람.
+//   대신 카드 1개당 1번에 한해 처음 열람 시 실타래 +1 지급 (중복 없음).
 function openDetail(card) {
   if (!card) return;
-  // 사용자 명세: 실타래 한 번 사용한 카드는 3일간 무료 재열람.
-  //   3일 지나면 다시 실타래 사용. coachmark(투어) 무관 — 항상 게이트 작동.
-  if (isCardUnlocked(card.card_id)) { openDetailApproved(card); return; }
-  if (yarnAvailable() <= 0) { showYarnInsufficient(); return; }
-  showYarnConfirm(card);
+  rewardYarnForFirstView(card.card_id);
+  openDetailApproved(card);
 }
 
 function openDetailApproved(card) {

@@ -84,6 +84,17 @@ class YarnViewModel : ViewModel() {
         return true
     }
 
+    /**
+     * 카드 첫 열람 보상 — 카드당 1회 +1 실타래. 중복 지급 없음.
+     * 사용자 명세(2026-06): 실타래 사용 팝업 제거, 모든 카드 자유 열람 + 카드 1개당 1번 +1 보상.
+     */
+    suspend fun rewardFirstView(cardId: Long) {
+        if (AppPreferences.isRewarded(cardId)) return
+        AppPreferences.markRewarded(cardId)   // 우선 마킹해 중복 호출 차단
+        val newBalance = runCatching { repo.grantYarn(1) }.getOrNull() ?: return
+        purchased.value = newBalance
+    }
+
     /** QA/데모용 — fire-and-forget 충전. */
     fun grant(n: Int) = viewModelScope.launch { addYarn(n) }
 }
