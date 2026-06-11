@@ -250,7 +250,8 @@
   .bottom-nav {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 51;
     background: var(--paper);
-    height: 64px;
+    height: calc(64px + env(safe-area-inset-bottom));   /* iPhone 홈 인디케이터 영역 추가 */
+    padding-bottom: env(safe-area-inset-bottom);
     display: flex;
     overflow: visible;   /* 가운데 돌출 원형 HOME 버튼이 바 위로 솟을 수 있게 */
   }
@@ -401,7 +402,7 @@
   .bottom-nav .bottom-nav-cat {
     position: absolute;
     right: 8px;
-    bottom: 32px;
+    bottom: calc(32px + env(safe-area-inset-bottom));  /* iPhone 홈 인디케이터 영역 위로 */
     height: 52px;
     width: auto;              /* 원본 1143x497 ≈ 2.3:1 비율 유지 */
     pointer-events: none;
@@ -412,7 +413,7 @@
 
   /* Main content padding */
   /* main 영역(home/library/feed/notice/settings) padding-bottom 으로 bottom-nav 가림 방지 */
-  main { padding: 0 20px 14px; }
+  main { padding: 0 20px calc(14px + env(safe-area-inset-bottom)); }
 
   /* Bookmark row spacing */
   .bookmark-row {
@@ -1302,7 +1303,7 @@
   }
   /* 피드 글쓰기 — 말풍선 모양으로 nav 우측 고양이가 말하는 것처럼 (사용자 명세) */
   #feed-fab {
-    position: fixed; right: 28px; bottom: 88px; z-index: 53;
+    position: fixed; right: 28px; bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 53;
     background: var(--paper);
     color: var(--espresso);
     border: 1.5px solid var(--espresso);
@@ -1998,7 +1999,7 @@
 </main>
 
 <!-- ===== Bottom Nav ===== -->
-<div class="hairline" style="position:fixed;left:0;right:0;bottom:64px;z-index:31;"></div>
+<div class="hairline" style="position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));z-index:31;"></div>
 <!-- 순서: DAILY / FEED / TODAY(가운데 실타래 돌출) / LIBRARY / MY  (사용자 명세) -->
 <nav class="bottom-nav">
   <!-- 장식용 고양이 — 안드 BottomNavBar.kt 의 cat_empty 매칭. 우상단 모서리에 걸쳐 위로 솟음. 클릭 통과. -->
