@@ -96,10 +96,12 @@
     <string name="yarn_tab_about">ABOUT</string>
     <string name="yarn_about_lede">DAILY SCRIPT의 화폐</string>
     <string name="yarn_about_title">실타래</string>
-    <string name="yarn_about_body">실타래는 명대사가 포함된 명장면을 읽을 때 사용하는 한 올입니다.</string>
+    <string name="yarn_about_body">실타래는 명대사가 포함된 명장면을 읽을 때 지급되는 한 올입니다.</string>
     <string name="yarn_about_note">text(텍스트)의 어원은 라틴어 textere ‘짜다’. 문장은 한 올, 한 올을 엮은 것입니다.</string>
-    <string name="yarn_about_outro">한 올의 실, 실타래로 문장을 열어보세요.</string>
-    <string name="yarn_daily_note">매일 5개의 실타래가 무료로 채워져요.</string>
+    <string name="yarn_about_outro">한 올의 실 실타래로 나만의 공간을 꾸며보세요</string>
+    <string name="yarn_daily_note">매일 출석으로 실타래를 모아보세요.\n\n실타래로 명장면 전문을 열람하세요.\n실타래로 나만의 공간을 꾸며보세요.</string>
+    <string name="attendance_title">출석체크</string>
+    <string name="attendance_reward">출석체크 완료! 실타래 +5</string>
     <string name="yarn_confirm_title">실타래 사용</string>
     <string name="yarn_confirm_body">이 카드를 읽으면 실타래 1개가 사용됩니다.</string>
     <string name="yarn_confirm_use">사용하기</string>

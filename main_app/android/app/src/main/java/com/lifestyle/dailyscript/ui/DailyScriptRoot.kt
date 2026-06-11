@@ -146,6 +146,24 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         yarnVm.refreshDaily()
     }
 
+    // 출석체크 — 00시 기준 그날 첫 진입이면 1회 다이얼로그 + 실타래 +5
+    var attendanceVisible by remember { mutableStateOf(false) }
+    var attendanceRewarded by remember { mutableStateOf(false) }
+    LaunchedEffect(session.userId, session.isAnonymous) {
+        if (session.isAnonymous) return@LaunchedEffect
+        val today = java.time.LocalDate.now().toString()
+        if (AppPreferences.attendanceLastShown() == today) return@LaunchedEffect
+        AppPreferences.markAttendanceShown(today)
+        attendanceRewarded = yarnVm.rewardAttendance()
+        attendanceVisible = true
+    }
+    if (attendanceVisible) {
+        com.lifestyle.dailyscript.ui.yarn.AttendanceDialog(
+            rewardedToday = attendanceRewarded,
+            onDismiss = { attendanceVisible = false },
+        )
+    }
+
     // Interactive spotlight onboarding tour (앱 사용법 / 첫 실행). Starts only once HOME is shown.
     val coach = remember { CoachController() }
     LaunchedEffect(session.userId, session.isAnonymous, session.gender, session.ageGroup) {

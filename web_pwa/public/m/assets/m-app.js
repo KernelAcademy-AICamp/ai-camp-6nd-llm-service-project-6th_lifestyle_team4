@@ -4410,8 +4410,8 @@ function buildAttendanceCalendarHTML() {
     const borderStyle = isToday ? 'border:1.5px solid var(--cta);' : 'border:1px solid transparent;';
     cells.push(
       `<div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;${borderStyle}background:${attended ? 'rgba(216,160,90,0.14)' : 'transparent'};gap:2px;">
-        <div style="height:22px;display:flex;align-items:center;justify-content:center;">${attended ? yarnImg : ''}</div>
         <span style="font-size:11px;color:${attended ? 'var(--espresso)' : 'var(--walnut)'};font-weight:${isToday ? 700 : 500};">${d}</span>
+        <div style="height:22px;display:flex;align-items:center;justify-content:center;">${attended ? yarnImg : ''}</div>
       </div>`
     );
   }
