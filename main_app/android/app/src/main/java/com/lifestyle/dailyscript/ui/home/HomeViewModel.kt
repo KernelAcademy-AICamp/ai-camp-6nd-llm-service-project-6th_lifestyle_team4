@@ -39,10 +39,14 @@ class HomeViewModel : ViewModel() {
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
     /** Initial load / screen entry — restore the last-shown card (PWA renderHome). */
-    fun load(userId: Long) {
+    fun load(userId: Long, force: Boolean = false) {
         // 세션이 바뀌면 card_shown 중복 가드를 리셋 — PWA는 로그인 시 reload로 상태가
         // 초기화되지만 액티비티 스코프 VM은 살아남으므로 직접 초기화한다.
         if (activeUserId != userId) lastTrackedShownId = null
+        // 탭 재진입 시 재요청 방지 — VM이 액티비티 스코프라 살아있으므로, 같은 세션으로 이미
+        // 로드됐다면 다시 불러오지 않는다(홈 재탭 새로고침은 refresh()가 따로 담당). 세션이
+        // 바뀌면 activeUserId != userId 라 통과하고, 첫 로드 실패 복구는 force=true 로 강제한다.
+        if (!force && activeUserId == userId && !_state.value.loading && _state.value.loaded) return
         activeUserId = userId
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
@@ -80,6 +84,7 @@ class HomeViewModel : ViewModel() {
 
             _state.value = HomeState(
                 loading = false,
+                loaded = true,
                 todayCard = today,
                 todayBookmarked = today != null && bookmarkCards.any { it.cardId == today.cardId },
                 recent = recent,
@@ -102,7 +107,7 @@ class HomeViewModel : ViewModel() {
     /** Refresh — non-deterministic pick excluding recently shown. Non-members are capped at 3/day. */
     fun refresh(userId: Long, isAnonymous: Boolean) {
         if (_state.value.loading) return // 진행 중이면 무시 — 연타로 중복 새로고침/카운트 차감 방지
-        if (allCards.isEmpty()) { load(userId); return }
+        if (allCards.isEmpty()) { load(userId, force = true); return } // 첫 로드 실패 복구 — 가드 우회
         viewModelScope.launch {
             // load()와 동일한 세션 가드 — 로그아웃/재로그인 직후 이전 사용자의
             // allCards/bookmarkCards/allBookmarkCounts 로 새 세션을 덮어쓰지 않게.
@@ -207,6 +212,7 @@ class HomeViewModel : ViewModel() {
 
 data class HomeState(
     val loading: Boolean = true,
+    val loaded: Boolean = false,
     val todayCard: CardDto? = null,
     val todayBookmarked: Boolean = false,
     val recent: List<CardDto> = emptyList(),

@@ -3,6 +3,8 @@ package com.lifestyle.dailyscript.ui
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,13 +25,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -185,6 +190,19 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     // 단, 키보드(IME)가 떠 있으면 숨김 — 입력 컴포저가 키보드 바로 위에 붙도록.
     val imeVisible = WindowInsets.isImeVisible
     val showBottomBar = currentRoute != null && !imeVisible
+
+    // 뒤로가기 종료는 시작 탭(오늘)에서만 — 다른 탭/상세에선 NavController가 오늘로 되돌리거나 pop한다.
+    // 오늘에서 한 번 누르면 토스트만, 2초 내 한 번 더 누르면 실제 종료(실수 종료 방지).
+    var lastBackPressAt by remember { mutableStateOf(0L) }
+    BackHandler(enabled = currentRoute == Routes.DAILY) {
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressAt < 2000L) {
+            activity?.finish()
+        } else {
+            lastBackPressAt = now
+            Toast.makeText(context, "뒤로 가기를 한 번 더 누르면 종료돼요", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     CompositionLocalProvider(LocalCoachController provides coach) {
       Box(modifier = Modifier.fillMaxSize()) {
@@ -394,9 +412,16 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 onSelect = { route ->
                     if (currentRoute != route) {
                         AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to route))
-                        // 앵커로 collapse하지 않고 방문 순서대로 쌓는다 → 뒤로가기가 직전에 보던 탭으로.
+                        // 표준 하단탭 패턴 — 시작 목적지까지 popUpTo(saveState)로 떠나는 탭의 상태를 저장하고
+                        // restoreState로 되살린다. 덕분에 탭을 다시 눌러도 그 탭의 NavBackStackEntry(=ViewModel)
+                        // 가 복원돼 데이터를 다시 불러오지 않는다(각 VM의 loaded 가드와 맞물림). 백스택은
+                        // [시작탭, 현재탭]으로 얕게 유지 → 뒤로가기는 시작탭(오늘)으로 모였다가 앱 종료.
                         // (같은 탭 재탭은 위 currentRoute != route 가드로 중복 push 방지)
-                        navController.navigate(route) { launchSingleTop = true }
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     } else if (route == Routes.HOME) {
                         // 이미 홈일 때 홈 탭을 다시 누르면 새로고침 — 제거된 새로고침 버튼을 대체.
                         homeVm.refresh(session.userId, session.isAnonymous)

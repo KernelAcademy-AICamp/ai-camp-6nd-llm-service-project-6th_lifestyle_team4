@@ -26,7 +26,13 @@ class FeedViewModel : ViewModel() {
     private val _state = MutableStateFlow(FeedState())
     val state: StateFlow<FeedState> = _state.asStateFlow()
 
+    // 탭 재진입 시 재요청 방지 — 표준 탭 패턴으로 VM이 복원되면 첫 로드 후 다시 불러오지 않는다.
+    // (글 등록은 submitPost가 loadPosts로 직접 갱신, 세션이 바뀌면 VM 자체가 새로 생성됨)
+    private var loaded = false
+
     fun load(userId: Long) {
+        if (loaded) return
+        loaded = true
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
             val category = AppPreferences.feedCategory.first()
