@@ -651,6 +651,8 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
     await maybeShowPreferences();
     // 첫 접속/첫 로그인 시 사용법 안내 1회. 안내가 떴으면 로그인 유도는 다음 기회로 미룬다.
     if (!(await maybeShowGuide())) maybeShowLanding();
+    // 출석체크 — 00시 기준 오늘 첫 진입이면 1회 모달 + 실타래 +5
+    maybeShowAttendance().catch((e) => console.warn('[m] attendance failed:', e));
     // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(프로필 편집기, 건너뛰기 가능)
     if (state.justSocialSignup) { state.justSocialSignup = false; openNicknameModal(); }
     // 공지를 불러와 새 공지가 있으면 NOTICE 탭에 안 읽음 점 표시 (부팅을 막지 않게 백그라운드)
@@ -4257,24 +4259,11 @@ function bumpRefreshCount() {
 //   - 차감 우선순위: 무료분 → 충전 잔액
 //   - 투어 중에는 무료(차감/다이얼로그 없음)
 // ============================================================================
-const YARN_DAILY_GRANT = 5;
+// 사용자 명세(2026-06): 매일 5개 무료 폐지 — 일일 잔여분(YARN_DAILY_GRANT) 제거.
+//   잔액 = 서버 충전분(state.yarnPurchased) 만. 보상은 카드 첫 열람(+1) + 출석체크(+5).
 const YARN_UNLOCK_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;  // 3일
-const YARN_DAILY_KEY = 'ds.yarnDaily';
 const YARN_UNLOCKED_KEY = 'ds.yarnUnlocked';
 const YARN_TIERS = [[1, 100], [10, 1000], [21, 2000], [32, 3000], [113, 10000]];
-
-function getYarnDaily() {
-  try {
-    const raw = JSON.parse(safeStorageGet(YARN_DAILY_KEY, 'null') || 'null');
-    if (raw && raw.date === todayStr() && Number.isInteger(raw.used)) return raw;
-  } catch {}
-  return { date: todayStr(), used: 0 };
-}
-function bumpYarnDaily() {
-  const next = { date: todayStr(), used: getYarnDaily().used + 1 };
-  safeStorageSet(YARN_DAILY_KEY, JSON.stringify(next));
-  return next.used;
-}
 function getUnlockedMap() {
   try {
     const raw = JSON.parse(safeStorageGet(YARN_UNLOCKED_KEY, 'null') || 'null');
@@ -4307,8 +4296,7 @@ function markCardUnlocked(cardId) {
   safeStorageSet(YARN_UNLOCKED_KEY, JSON.stringify(map));
 }
 function yarnAvailable() {
-  const freeLeft = Math.max(0, YARN_DAILY_GRANT - getYarnDaily().used);
-  return freeLeft + (state.yarnPurchased || 0);
+  return state.yarnPurchased || 0;
 }
 function isTourActive() {
   return !!document.querySelector('#coachmark');
@@ -4358,18 +4346,12 @@ async function rewardYarnForFirstView(cardId) {
   }
 }
 
-// 차감: 'alreadyUnlocked' | 'chargedDaily' | 'chargedPurchased' | 'insufficient' | 'error'
+// 차감 — 카드 열람 게이트 제거됐으나 호출 시그니처는 호환 유지(현재 사용처 없음).
 async function spendYarn(cardId) {
   if (isCardUnlocked(cardId)) return 'alreadyUnlocked';
-  const freeLeft = Math.max(0, YARN_DAILY_GRANT - getYarnDaily().used);
-  if (freeLeft > 0) {
-    bumpYarnDaily();
-    markCardUnlocked(cardId);
-    return 'chargedDaily';
-  }
   try {
     const balance = await consumeYarnRpc();
-    if (balance < 0) return 'insufficient';   // 잔액 부족(미차감)
+    if (balance < 0) return 'insufficient';
     state.yarnPurchased = balance;
     markCardUnlocked(cardId);
     return 'chargedPurchased';
@@ -4377,6 +4359,95 @@ async function spendYarn(cardId) {
     console.warn('[m] consumeYarn failed:', e);
     return 'error';
   }
+}
+
+// ─────── 출석체크 ───────
+// 사용자 명세: 00시 기준 그날 처음 앱을 열면 한 달 달력 팝업 1회 + 실타래 5개 지급.
+//   ds.attendance.history = 출석한 날짜 배열(YYYY-MM-DD)
+//   ds.attendance.lastShown = 오늘 모달을 띄웠는지(매일 1회로 제한)
+const ATTENDANCE_HISTORY_KEY = 'ds.attendance.history';
+const ATTENDANCE_LAST_SHOWN_KEY = 'ds.attendance.lastShown';
+const ATTENDANCE_REWARD = 5;
+
+function getAttendanceHistory() {
+  try {
+    const raw = JSON.parse(safeStorageGet(ATTENDANCE_HISTORY_KEY, 'null') || 'null');
+    if (Array.isArray(raw)) return raw;
+  } catch {}
+  return [];
+}
+function hasAttendanceToday() {
+  return getAttendanceHistory().includes(todayStr());
+}
+function markAttendanceToday() {
+  const t = todayStr();
+  const h = getAttendanceHistory();
+  if (h.includes(t)) return false;
+  h.push(t);
+  safeStorageSet(ATTENDANCE_HISTORY_KEY, JSON.stringify(h));
+  return true;
+}
+
+function buildAttendanceCalendarHTML() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const lastDate = new Date(year, month + 1, 0).getDate();
+  const history = new Set(getAttendanceHistory());
+  const todayKey = todayStr();
+  const yarnImg = `<img src="assets/daily-script-bar.png" alt="실타래" style="width:22px;height:22px;object-fit:cover;border-radius:50%;display:block;" />`;
+  const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
+  const head = dayLabels.map((d, i) =>
+    `<div style="text-align:center;font-size:11px;color:${i === 0 ? 'var(--cta)' : 'var(--walnut)'};font-weight:700;padding:6px 0;">${d}</div>`
+  ).join('');
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push('<div></div>');
+  for (let d = 1; d <= lastDate; d++) {
+    const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const attended = history.has(ds);
+    const isToday = ds === todayKey;
+    const borderStyle = isToday ? 'border:1.5px solid var(--cta);' : 'border:1px solid transparent;';
+    cells.push(
+      `<div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;${borderStyle}background:${attended ? 'rgba(216,160,90,0.14)' : 'transparent'};gap:2px;">
+        <div style="height:22px;display:flex;align-items:center;justify-content:center;">${attended ? yarnImg : ''}</div>
+        <span style="font-size:11px;color:${attended ? 'var(--espresso)' : 'var(--walnut)'};font-weight:${isToday ? 700 : 500};">${d}</span>
+      </div>`
+    );
+  }
+  while (cells.length % 7 !== 0) cells.push('<div></div>');
+  return `
+    <p style="text-align:center;font-family:'Noto Serif KR',serif;font-size:18px;color:var(--espresso);font-weight:700;margin:0 0 12px;">${year}년 ${month + 1}월</p>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">${head}${cells.join('')}</div>
+  `;
+}
+
+async function maybeShowAttendance() {
+  const today = todayStr();
+  if (safeStorageGet(ATTENDANCE_LAST_SHOWN_KEY) === today) return;
+  safeStorageSet(ATTENDANCE_LAST_SHOWN_KEY, today);
+  const newAttendance = markAttendanceToday();  // true = 오늘 출석 첫 기록 → 보상 지급
+  if (newAttendance) {
+    try {
+      const balance = await grantYarnRpc(ATTENDANCE_REWARD);
+      state.yarnPurchased = balance;
+      renderYarnChip();
+    } catch (e) { console.warn('[m] attendance grant failed:', e); }
+    try { track('attendance_check', { date: today }); } catch {}
+  }
+  const modal = document.getElementById('attendance-modal');
+  if (!modal) return;
+  const grid = modal.querySelector('#attendance-grid');
+  const reward = modal.querySelector('#attendance-reward-msg');
+  if (grid) grid.innerHTML = buildAttendanceCalendarHTML();
+  if (reward) reward.style.display = newAttendance ? 'block' : 'none';
+  modal.style.display = 'flex';
+  modal.querySelector('#attendance-close')?.addEventListener('click', () => {
+    modal.style.display = 'none';
+  }, { once: true });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  }, { once: true });
 }
 
 function renderYarnChip() {

@@ -1942,7 +1942,7 @@
               style="display:flex;align-items:center;width:100%;background:transparent;border:none;cursor:pointer;padding:14px 0;text-align:left;">
         <div style="flex:1;min-width:0;">
           <p class="t-title-lg c-espresso" style="margin-bottom:4px;">실타래 구매</p>
-          <p class="t-body-sm c-walnut">보유 실타래 충전 · 매일 5개 무료</p>
+          <p class="t-body-sm c-walnut">보유 실타래 충전</p>
         </div>
         <img src="assets/daily-script-bar.png" alt="" style="width:22px;height:22px;object-fit:cover;border-radius:50%;margin-right:8px;display:block;" />
         <span class="material-symbols-outlined c-walnut" style="font-size:20px;">arrow_forward_ios</span>
@@ -2251,7 +2251,7 @@
         <img src="assets/daily-script-bar.png" alt="실타래" style="width:28px;height:28px;display:block;object-fit:cover;border-radius:50%;" />
         <span class="t-title-lg c-espresso">보유 실타래 <span id="yarn-balance-num">5</span></span>
       </div>
-      <p class="t-label-sm c-walnut" style="margin-top:8px;">매일 5개의 실타래가 무료로 채워져요.</p>
+      <p class="t-label-sm c-walnut" style="margin-top:10px;line-height:1.6;">매일 출석으로 실타래를 모아보세요.<br /><br />실타래로 명장면 전문을 열람하세요.<br />실타래로 나만의 공간을 꾸며보세요.</p>
 
       <div id="yarn-tiers" style="margin-top:20px;"></div>
     </div>
@@ -2260,11 +2260,11 @@
     <div id="yarn-about-tab" style="display:none;text-align:center;">
       <h1 class="t-display-md c-espresso" style="margin-top:12px;">실타래</h1>
       <p class="t-label-sm c-cta" style="margin-top:8px;letter-spacing:0.2em;font-weight:700;">DAILY SCRIPT의 화폐</p>
-      <p class="t-body-lg c-walnut" style="margin-top:20px;line-height:1.7;">실타래는 명대사가 포함된 명장면을 읽을 때 사용하는 한 올입니다.</p>
+      <p class="t-body-lg c-walnut" style="margin-top:20px;line-height:1.7;">실타래는 명대사가 포함된 명장면을 읽을 때 지급되는 한 올입니다.</p>
       <div style="margin-top:20px;background:rgba(216,160,90,0.14);border-radius:10px;padding:18px;">
         <p class="t-body-md c-espresso" style="line-height:1.7;">text(텍스트)의 어원은 라틴어 textere ‘짜다’. 문장은 한 올, 한 올을 엮은 것입니다.</p>
       </div>
-      <p class="t-body-md c-walnut" style="margin-top:20px;">한 올의 실, 실타래로 문장을 열어보세요.</p>
+      <p class="t-body-md c-walnut" style="margin-top:20px;">한 올의 실 실타래로 나만의 공간을 꾸며보세요</p>
     </div>
   </div>
 </div>
@@ -2716,6 +2716,23 @@
     <button id="signin-cancel" style="width:100%;background:transparent;border:none;margin-top:14px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);">
       취소
     </button>
+  </div>
+</div>
+
+<!-- ===== 출석체크 모달 — 00시 기준 첫 진입 시 1회. 한 달 달력 + 출석한 날에 실타래 표시 ===== -->
+<div id="attendance-modal" style="position:fixed;inset:0;background:rgba(14,12,10,0.65);display:none;align-items:center;justify-content:center;z-index:130;padding:24px;">
+  <div style="background:var(--paper);width:100%;max-width:380px;border-radius:14px;padding:22px 18px 18px;border:0.5px solid var(--latte);box-shadow:0 16px 40px rgba(0,0,0,0.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 class="t-headline-md c-espresso" style="margin:0;">출석체크</h3>
+      <button id="attendance-close" aria-label="닫기" style="background:transparent;border:none;cursor:pointer;padding:4px;display:flex;">
+        <span class="material-symbols-outlined c-walnut" style="font-size:22px;">close</span>
+      </button>
+    </div>
+    <div id="attendance-reward-msg" style="display:none;background:rgba(216,160,90,0.18);border-radius:10px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:10px;">
+      <img src="assets/daily-script-bar.png" alt="실타래" style="width:26px;height:26px;object-fit:cover;border-radius:50%;flex-shrink:0;" />
+      <p class="t-body-md c-espresso" style="margin:0;">출석체크 완료! 실타래 <strong>+5</strong></p>
+    </div>
+    <div id="attendance-grid"></div>
   </div>
 </div>
 
