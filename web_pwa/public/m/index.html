@@ -353,9 +353,10 @@
     position: absolute; inset: 0;
     width: 100%; height: 100%; object-fit: cover; display: block;
   }
+  /* 폴백 책표지(가죽색) 위 텍스트 — 다크 테마 var(--paper) 가 어두워질 수 있어 고정 밝은 색 사용 */
   #archive-grid .lib-cover-title {
     font-family: 'Noto Serif KR', 'Nanum Myeongjo', serif;
-    color: var(--paper);
+    color: #FAF8F2;
     font-weight: 600;
     text-align: center;
     line-height: 1.2;
@@ -364,15 +365,16 @@
     display: -webkit-box;
     -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.55);
   }
   #archive-grid .lib-cover-meta {
     font-size: 8px;
-    color: var(--paper);
-    opacity: 0.85;
+    color: #FAF8F2;
+    opacity: 0.9;
     text-align: center;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.45);
   }
   #archive-grid .lib-count {
     font-size: 10px;
