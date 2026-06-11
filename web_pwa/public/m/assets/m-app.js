@@ -2938,7 +2938,7 @@ function renderDailyTrending() {
       const bm = bookmarkMap.get(c.card_id) || 0;
       const cm = commentMap.get(c.card_id) || 0;
       const vw = c.view_count || 0;
-      return { c, bm, cm, vw, score: bm * 10 + cm * 5 + vw };
+      return { c, bm, cm, vw, score: bm + cm + vw };  // 단순 합계 — 사용자 명세
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
