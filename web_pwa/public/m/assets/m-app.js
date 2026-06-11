@@ -2774,7 +2774,7 @@ function renderDailyNewBooks() {
       style="display:flex;gap:16px;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px;cursor:pointer;text-align:left;align-items:flex-start;">
       <div style="flex:1;min-width:0;">
         <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
-        <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(displayTitle(main.title))}</h3>
+        <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
         <p style="font-size:11px;color:var(--sand);margin:0 0 12px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
         <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;font-family:'Noto Serif KR',serif;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
       </div>
@@ -2787,7 +2787,7 @@ function renderDailyNewBooks() {
           <button type="button" data-work-key="${escapeHtml(w.key)}"
             style="background:transparent;border:none;cursor:pointer;flex-shrink:0;width:82px;text-align:center;padding:0;">
             ${dailyBookCoverHTML(work, { width: 82 })}
-            <p style="font-size:11px;color:var(--espresso);margin:8px 0 0;font-weight:600;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;font-family:'Noto Serif KR',serif;">${escapeHtml(displayTitle(w.title))}</p>
+            <p style="font-size:11px;color:var(--espresso);margin:8px 0 0;font-weight:600;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;font-family:'Noto Serif KR',serif;">${escapeHtml(w.series || displayTitle(w.title))}</p>
             <p style="font-size:10px;color:var(--walnut);margin:3px 0 0;line-height:1.3;">${escapeHtml(w.author || '')}</p>
           </button>
         `;
