@@ -7,6 +7,7 @@ import com.lifestyle.dailyscript.data.model.WorkDto
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
 import com.lifestyle.dailyscript.ui.util.GENRE_ORDER
+import com.lifestyle.dailyscript.ui.util.workGroupKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +16,9 @@ import kotlinx.coroutines.launch
 /** One book in the library = one work, gathering all of its cards (명대사). */
 data class LibraryBook(
     val workId: Long,
+    // 같은 책의 중복 work 행을 series+subtitle+author 로 묶을 때 합쳐진 모든 work_id.
+    // 딥링크(archiveWork)가 비대표 work_id 를 넘겨도 이 집합으로 책을 찾는다.
+    val workIds: Set<Long>,
     val work: WorkDto,
     val cards: List<CardDto>,
 )
@@ -59,15 +63,21 @@ class LibraryViewModel : ViewModel() {
         }
     }
 
-    /** Group cards by work → one book per work, ordered by genre then title for a tidy "All" view. */
+    /**
+     * Group cards into books by series + subtitle + author (NOT work_id), mirroring the PWA
+     * groupAllCardsByWork — duplicate work rows of the same title fold into one book instead of
+     * showing twice. Ordered by genre then title for a tidy "All" view.
+     */
     private fun buildBooks(cards: List<CardDto>): List<LibraryBook> =
         cards
             .mapNotNull { card -> card.works?.let { work -> card to work } }
-            .groupBy { (_, work) -> work.workId }
-            .map { (workId, group) ->
+            .groupBy { (_, work) -> workGroupKey(work) }
+            .map { (_, group) ->
+                val work = group.first().second
                 LibraryBook(
-                    workId = workId,
-                    work = group.first().second,
+                    workId = work.workId,
+                    workIds = group.map { it.second.workId }.toSet(),
+                    work = work,
                     cards = group.map { it.first },
                 )
             }

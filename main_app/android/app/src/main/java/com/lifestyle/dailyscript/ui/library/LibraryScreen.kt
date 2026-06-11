@@ -56,12 +56,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -118,7 +121,8 @@ fun LibraryScreen(
 
     LaunchedEffect(initialOpenWorkId, state.books) {
         val workId = initialOpenWorkId ?: return@LaunchedEffect
-        if (state.books.any { it.workId == workId }) openWorkId = workId
+        // 딥링크 work_id 가 병합된 책의 비대표 id 일 수 있으니 workIds 집합으로 찾아 대표 id 로 연다.
+        state.books.firstOrNull { workId in it.workIds }?.let { openWorkId = it.workId }
     }
 
     LaunchedEffect(search) {
@@ -301,16 +305,43 @@ private fun BookGrid(books: List<LibraryBook>, onOpen: (Long) -> Unit, modifier:
                         },
                 )
                 Box(modifier = Modifier.height(6.dp))
-                Text(
-                    text = book.work.displayTitle().ifBlank { "—" },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Walnut,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
+                BookTitle(text = book.work.displayTitle().ifBlank { "—" })
             }
         }
+    }
+}
+
+// 표지 아래 제목 — 한 줄에 맞는 가장 큰 크기로 자동 축소(11→8sp), 자간 0 으로 가로 폭 확보.
+// 8sp 로도 한 줄에 안 들어가는 아주 긴 제목만 2줄 말줄임으로 떨어진다.
+private val BookTitleSizes = listOf(11.sp, 10.sp, 9.sp, 8.sp)
+
+@Composable
+private fun BookTitle(text: String) {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val base = MaterialTheme.typography.labelSmall.copy(
+        color = Walnut,
+        letterSpacing = 0.sp,
+        textAlign = TextAlign.Center,
+    )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val widthPx = with(density) { maxWidth.roundToPx() }
+        val fitted = BookTitleSizes.firstOrNull { size ->
+            !measurer.measure(
+                text = text,
+                style = base.copy(fontSize = size),
+                constraints = Constraints(maxWidth = widthPx),
+                maxLines = 1,
+                softWrap = false,
+            ).didOverflowWidth
+        }
+        Text(
+            text = text,
+            style = base.copy(fontSize = fitted ?: BookTitleSizes.last()),
+            maxLines = if (fitted != null) 1 else 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -320,7 +351,8 @@ private fun PageBar(page: Int, pageCount: Int, onSelect: (Int) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 14.dp),
+            // 떠 있는 하단 바와 붙어 터치가 불편하지 않도록 위로 띄움(아래 여백 ↑).
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 40.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {

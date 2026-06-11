@@ -3004,6 +3004,12 @@ function renderDailyOzPick() {
     }
   } catch { /* ignore */ }
 
+  // 취향(북마크 키워드)이 생긴 뒤엔 취향과 겹치는 카드로 한 번 승급 — 취향이 없던 시점에
+  // 캐시된 비매칭 카드가 그날 내내 고정돼 "당신이라면" 개인화 문구가 안 뜨던 문제 방지.
+  if (pick && taste.size > 0 && !(pick.keywords || []).some((k) => taste.has(k))) {
+    pick = null;
+  }
+
   if (!pick) {
     const matched = allCards.filter((card) => {
       const kws = Array.isArray(card.keywords) ? card.keywords : [];

@@ -230,6 +230,7 @@ fun DailyScreen(
             OpenedLibraryBook(
                 book = LibraryBook(
                     workId = openedWork.workId,
+                    workIds = setOf(openedWork.workId),
                     work = openedWork.work,
                     cards = openedWork.cards,
                 ),

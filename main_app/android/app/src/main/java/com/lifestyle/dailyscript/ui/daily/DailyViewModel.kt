@@ -73,10 +73,15 @@ class DailyViewModel : ViewModel() {
     private suspend fun chooseOzPick(cards: List<CardDto>, bookmarkCards: List<CardDto>): CardDto? {
         if (cards.isEmpty()) return null
         val today = LocalDate.now().toString()
-        val cached = runCatching { AppPreferences.ozDailyCardId(today) }.getOrNull()
-        cached?.let { id -> cards.firstOrNull { it.cardId == id } }?.let { return it }
-
         val taste = bookmarkCards.flatMap { it.keywordList() }.toSet()
+
+        // 하루 1개 캐시 — 단, 취향(북마크 키워드)이 생긴 뒤엔 취향과 겹치는 카드로 한 번 승급한다.
+        // 취향이 없던 시점에 캐시된 비매칭 카드가 그날 내내 고정돼 "당신이라면" 개인화 문구가
+        // 안 뜨던 문제 방지 (PWA renderDailyOzPick 과 동일한 개인화 조건 충족).
+        val cached = runCatching { AppPreferences.ozDailyCardId(today) }.getOrNull()
+            ?.let { id -> cards.firstOrNull { it.cardId == id } }
+        if (cached != null && (taste.isEmpty() || cached.keywordList().any { it in taste })) return cached
+
         val matched = if (taste.isEmpty()) emptyList()
             else cards.filter { card -> card.keywordList().any { it in taste } }
         val pick = (matched.ifEmpty { cards }).random(Random.Default)
