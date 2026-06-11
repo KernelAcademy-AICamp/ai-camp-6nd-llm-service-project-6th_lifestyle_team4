@@ -2368,8 +2368,8 @@ function renderArchive() {
   if (!pagesEl) {
     pagesEl = document.createElement('div');
     pagesEl.id = 'archive-pages';
-    // main padding-bottom(76 + safe-area) 이 이미 nav 영역 회피 — pages 는 일반 margin 만
-    pagesEl.style.cssText = 'display:flex;justify-content:center;gap:8px;margin:24px 0 20px;flex-wrap:wrap;';
+    // main padding(30 + safe-area)이 nav 회피 — pages 자체 margin 최소화
+    pagesEl.style.cssText = 'display:flex;justify-content:center;gap:8px;margin:16px 0 0;flex-wrap:wrap;';
     gridEl.parentNode.insertBefore(pagesEl, gridEl.nextSibling);
   }
   if (totalPages <= 1) {
