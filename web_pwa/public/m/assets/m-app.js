@@ -725,6 +725,10 @@ window.addEventListener('popstate', () => {
     closeYarnScreenInternal();
     return;
   }
+  if (ozHouseScreen && ozHouseScreen.classList.contains('open')) {
+    closeOzHouseInternal();
+    return;
+  }
   // 피드 모달들 (오늘의 한줄 카드 탭 / 작성 플로우 / 북마크 피커)
   if (typeof feedQuoteModal !== 'undefined' && feedQuoteModal && feedQuoteModal.style.display === 'flex') {
     closeFeedQuoteInternal();
@@ -4562,6 +4566,30 @@ function closeYarnScreen() {
 }
 if (yarnChip) yarnChip.addEventListener('click', openYarnScreen);
 if (yarnBack) yarnBack.addEventListener('click', closeYarnScreen);
+
+// OZ's house — 우측 상단 칩, 고양이 집 페이지
+const ozHouseScreen = $('#oz-house-screen');
+const ozHouseBtn = $('#oz-house-btn');
+const ozHouseBack = $('#oz-house-back');
+function openOzHouse() {
+  if (!ozHouseScreen) return;
+  history.pushState({ overlay: 'ozHouse' }, '');
+  ozHouseScreen.style.display = 'flex';
+  requestAnimationFrame(() => ozHouseScreen.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+  track('oz_house_opened');
+}
+function closeOzHouseInternal() {
+  if (!ozHouseScreen) return;
+  ozHouseScreen.classList.remove('open');
+  setTimeout(() => { ozHouseScreen.style.display = 'none'; document.body.style.overflow = ''; }, 250);
+}
+function closeOzHouse() {
+  if (history.state && history.state.overlay === 'ozHouse') history.back();
+  else closeOzHouseInternal();
+}
+if (ozHouseBtn) ozHouseBtn.addEventListener('click', openOzHouse);
+if (ozHouseBack) ozHouseBack.addEventListener('click', closeOzHouse);
 if (yarnTabCharge) yarnTabCharge.addEventListener('click', () => setYarnTab(false));
 if (yarnTabAbout) yarnTabAbout.addEventListener('click', () => setYarnTab(true));
 

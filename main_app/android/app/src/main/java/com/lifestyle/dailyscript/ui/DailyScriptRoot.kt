@@ -233,6 +233,10 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
                         navController.navigate(Routes.YARN_PURCHASE) { launchSingleTop = true }
                     },
+                    onOzHouseClick = {
+                        AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.OZ_HOUSE))
+                        navController.navigate(Routes.OZ_HOUSE) { launchSingleTop = true }
+                    },
                 )
                 Routes.SETTINGS -> SettingsTopBar(onFeedback = {
                     AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.FEEDBACK))
@@ -383,6 +387,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.YARN_PURCHASE) {
                     YarnPurchaseScreen(
                         yarnVm = yarnVm,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(Routes.OZ_HOUSE) {
+                    com.lifestyle.dailyscript.ui.ozhouse.OzHouseScreen(
                         onBack = { navController.popBackStack() },
                     )
                 }

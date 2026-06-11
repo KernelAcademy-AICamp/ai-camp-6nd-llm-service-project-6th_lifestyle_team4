@@ -90,11 +90,43 @@ fun BrandWordmark() {
 }
 
 @Composable
-fun HomeTopBar(yarn: Int, onYarnClick: () -> Unit) {
+fun HomeTopBar(yarn: Int, onYarnClick: () -> Unit, onOzHouseClick: () -> Unit) {
     TopBarContainer {
         BrandWordmark()
-        // 우측 상단 MY PAGE 버튼 제거 — MY 진입은 하단 탭으로만 (PWA 1a5b8d2 동일). 실타래 칩만 유지.
-        YarnChip(yarn = yarn, onClick = onYarnClick)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            YarnChip(yarn = yarn, onClick = onYarnClick)
+            Spacer(Modifier.width(8.dp))
+            OzHouseChip(onClick = onOzHouseClick)
+        }
+    }
+}
+
+/** 실타래 칩 옆 OZ's house — 고양이 집 진입 (홈 아이콘 + 라벨). */
+@Composable
+fun OzHouseChip(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier = Modifier
+            .background(Sand.copy(alpha = 0.35f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = androidx.compose.material.icons.Icons.Outlined.Cottage,
+            contentDescription = "OZ's house",
+            tint = Espresso,
+            modifier = Modifier.size(15.dp),
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(
+            text = "OZ’s house",
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            ),
+            color = Espresso,
+        )
     }
 }
 

@@ -1633,6 +1633,11 @@
       <img src="assets/daily-script-bar.png" alt="실타래" style="width:22px;height:22px;display:block;object-fit:cover;border-radius:50%;pointer-events:none;" />
       <span class="yarn-chip-count t-label-sm" style="font-weight:700;">5</span>
     </button>
+    <button id="oz-house-btn" aria-label="OZ's house" title="OZ's house"
+            style="display:inline-flex;align-items:center;gap:5px;background:transparent;border:0.5px solid var(--latte);border-radius:999px;padding:3px 10px 3px 6px;cursor:pointer;color:var(--walnut);">
+      <span class="material-symbols-outlined" style="font-size:18px;line-height:1;color:var(--espresso);">cottage</span>
+      <span class="t-label-sm" style="font-weight:700;color:var(--espresso);">OZ&rsquo;s house</span>
+    </button>
     <!-- LIVE 표시 제거됨 (사용자 명시) — 실시간 상태는 백그라운드에서만 동작 -->
     <span id="rt-status-dot" style="display:none;"></span>
     <span id="rt-status-label" style="display:none;"></span>
@@ -2278,6 +2283,28 @@
         <p class="t-body-md c-espresso" style="line-height:1.7;">text(텍스트)의 어원은 라틴어 textere ‘짜다’. 문장은 한 올, 한 올을 엮은 것입니다.</p>
       </div>
       <p class="t-body-md c-walnut" style="margin-top:20px;">한올의 실타래로 나만의 공간을 꾸며보세요</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== OZ's house — 고양이 집 ===== -->
+<div id="oz-house-screen" class="detail-screen">
+  <header class="top-bar">
+    <button id="oz-house-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+      <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
+    </button>
+    <div style="display:flex;flex-direction:column;align-items:center;">
+      <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">OZ&rsquo;S HOUSE</span>
+      <span class="t-body-sm c-espresso" style="margin-top:4px;">고양이 집</span>
+    </div>
+    <span style="width:40px;"></span>
+  </header>
+  <div class="hairline"></div>
+  <div class="detail-body" id="oz-house-body" style="text-align:center;padding:32px 20px 104px;">
+    <div style="background:rgba(216,160,90,0.14);border-radius:14px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:14px;">
+      <span class="material-symbols-outlined" style="font-size:56px;color:var(--cta);">cottage</span>
+      <h1 class="t-headline-lg c-espresso" style="margin:0;">OZ&rsquo;s house</h1>
+      <p class="t-body-md c-walnut" style="margin:0;line-height:1.7;">실타래로 OZ의 집을 꾸며보세요.<br />꾸미기 기능은 준비 중입니다.</p>
     </div>
   </div>
 </div>
