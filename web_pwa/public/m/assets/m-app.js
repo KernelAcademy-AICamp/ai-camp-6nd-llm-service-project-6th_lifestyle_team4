@@ -2816,7 +2816,7 @@ function renderDailyNewBooks() {
 
   const renderTemplate = (main, rest, mainWork, sampleQuote) => `
     <button type="button" class="daily-newbook-main" data-work-key="${escapeHtml(main.key)}"
-      style="display:flex;gap:16px;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px;cursor:pointer;text-align:left;align-items:flex-start;">
+      style="display:flex;gap:16px;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px;cursor:pointer;text-align:left;align-items:flex-start;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;">
       <div style="flex:1;min-width:0;">
         <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
         <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
@@ -2858,6 +2858,33 @@ function renderDailyNewBooks() {
   };
 
   sec.style.display = 'block';
+
+  // 가장 큰 메인 카드 높이 측정 — 9개 후보 모두 offscreen 렌더해 max(height) 산출 → CSS var 로 적용.
+  // 카드마다 제목·인용 길이 달라 슬라이드 전환 시 화면이 튀는 문제 방지.
+  const measureMaxMainHeight = () => {
+    const width = sec.clientWidth || sec.getBoundingClientRect().width || 360;
+    const probe = document.createElement('div');
+    probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;width:${width}px;pointer-events:none;`;
+    document.body.appendChild(probe);
+    let max = 0;
+    try {
+      for (let i = 0; i < sorted.length; i++) {
+        const m = sorted[i];
+        const rest = sorted.filter((_, idx) => idx !== i);
+        const sq = ((m.cards || [])[0]?.quote || '').slice(0, 60);
+        const mw = (m.cards || [])[0]?.works || { title: m.title, cover_url: null };
+        probe.innerHTML = renderTemplate(m, rest, mw, sq);
+        const btn = probe.querySelector('.daily-newbook-main');
+        if (btn) max = Math.max(max, btn.getBoundingClientRect().height);
+      }
+    } finally {
+      probe.remove();
+    }
+    return Math.ceil(max);
+  };
+  const maxH = measureMaxMainHeight();
+  if (maxH > 0) sec.style.setProperty('--newbook-main-min-h', maxH + 'px');
+
   renderBlock();
 
   // 10초마다 메인 책 다음 인덱스 — 추가된 순서(최신 1번 → 오래된 9번) 순환, 슬라이드 인 애니메이션
