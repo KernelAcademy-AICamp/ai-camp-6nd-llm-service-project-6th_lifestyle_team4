@@ -18,7 +18,7 @@
 
 const STEPS = [
   // ── 홈 화면 ──  (홈 탭을 다시 누르면 새 명대사로 바뀌어 별도 새로고침 버튼은 없앴어요)
-  { sel: '.bottom-nav [data-nav="home"]',    scr: '홈',   n: 1, tot: 4, title: 'HOME',            desc: '여기가 홈이에요. 매일 새로운 고전 명대사 한 장이 도착해요. (홈 탭을 다시 누르면 다른 명대사로 바뀌어요.)' },
+  { sel: '.bottom-nav [data-nav="home"]',    scr: '홈',   n: 1, tot: 4, title: 'TODAY · 오늘의 명대사', desc: '여기가 홈이에요. 매일 새 명대사 한 장이 도착해요. 가운데 실뭉치(TODAY)를 한 번 더 누르면 다른 명대사로 바뀌어요.' },
   { sel: '#today-bookmark',                  scr: '홈',   n: 2, tot: 4, title: '북마크해 두기',    desc: '마음에 들었다면 이 책갈피를 탭하세요. MY 페이지의 북마크에서 다시 꺼내볼 수 있어요.' },
   { sel: '.bottom-nav [data-nav="archive"]', scr: '홈',   n: 3, tot: 4, title: '도서 카탈로그(LIBRARY)', desc: '이제 LIBRARY에는 모든 작품이 책으로 진열돼요. 표지를 펼쳐 작품별 명대사를 둘러보세요.' },
   { sel: '#today-read',                      scr: '홈',   n: 4, tot: 4, title: '전문 읽으러 가기', desc: '한 줄만으론 아쉽죠. 이 버튼을 누르면 그 장면 전체가 펼쳐져요.', action: 'onOpenDetail' },

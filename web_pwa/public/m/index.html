@@ -1463,11 +1463,8 @@
                 width 0.36s cubic-bezier(0.22,1,0.36,1), height 0.36s cubic-bezier(0.22,1,0.36,1);
     pointer-events: none;
   }
-  #cm-hole::after {
-    content: ''; position: absolute; inset: -3px; border-radius: 14px;
-    border: 2px solid var(--cta);
-    animation: cm-pulse 1.5s ease-out infinite;
-  }
+  /* 스포트라이트 강조 링 제거 — 딱 떨어지는 주황 사각 선이 어색해서 밝은 구멍만 사용 */
+  #cm-hole::after { content: none; }
   @keyframes cm-pulse {
     0%   { transform: scale(1);    opacity: 0.85; }
     100% { transform: scale(1.14); opacity: 0; }
@@ -2475,7 +2472,7 @@
   <!-- + HL 플로팅 버튼: 본문(#detail-script)에서 텍스트를 선택하면 등장 -->
   <!-- bottom-nav(64px 높이) 위로 16px gap. z-index 62 — bottom-nav(51) 보다 위. -->
   <button id="hl-add-btn" type="button"
-          style="display:none;position:fixed;right:18px;bottom:80px;z-index:62;background:var(--cta);color:#fff;border:none;border-radius:999px;padding:12px 18px;font-size:13px;font-weight:600;letter-spacing:0.12em;box-shadow:0 6px 16px rgba(216,90,48,0.35);cursor:pointer;">
+          style="display:none;position:fixed;right:18px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:62;background:var(--cta);color:#fff;border:none;border-radius:999px;padding:12px 18px;font-size:13px;font-weight:600;letter-spacing:0.12em;box-shadow:0 6px 16px rgba(216,90,48,0.35);cursor:pointer;">
     + HL
   </button>
 </div>
