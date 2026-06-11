@@ -95,6 +95,13 @@ fun SettingsScreen(
     var showProfileDialog by remember { mutableStateOf(false) }
     var showSignInDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showAttendance by remember { mutableStateOf(false) }
+    if (showAttendance) {
+        com.lifestyle.dailyscript.ui.yarn.AttendanceDialog(
+            rewardedToday = false,
+            onDismiss = { showAttendance = false },
+        )
+    }
     // Once login succeeds the account is no longer anonymous → close the dialog.
     LaunchedEffect(session.isAnonymous) { if (!session.isAnonymous) showSignInDialog = false }
 
@@ -233,6 +240,12 @@ fun SettingsScreen(
             title = stringResource(R.string.bookmarks_entry),
             subtitle = stringResource(R.string.bookmarks_entry_desc),
             onClick = onOpenBookmarks,
+            trailingArrow = true,
+        )
+        SettingRow(
+            title = stringResource(R.string.attendance_title),
+            subtitle = "내 출석현황 보기",
+            onClick = { showAttendance = true },
             trailingArrow = true,
         )
 

@@ -3294,6 +3294,10 @@ $('#mypage-yarn-entry')?.addEventListener('click', () => {
   track('nav_my_yarn');
   openYarnScreen();
 });
+$('#mypage-attendance-entry')?.addEventListener('click', () => {
+  track('nav_my_attendance');
+  openAttendanceModal();
+});
 if (bookmarksBack) bookmarksBack.addEventListener('click', closeBookmarksScreen);
 if (bmSearchInput) {
   bmSearchInput.addEventListener('input', (e) => {
@@ -4420,6 +4424,23 @@ function buildAttendanceCalendarHTML() {
     <p style="text-align:center;font-family:'Noto Serif KR',serif;font-size:18px;color:var(--espresso);font-weight:700;margin:0 0 12px;">${year}년 ${month + 1}월</p>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">${head}${cells.join('')}</div>
   `;
+}
+
+// 출석현황 보기 — MY 진입용. 보상 지급 없이 달력만 띄움.
+function openAttendanceModal() {
+  const modal = document.getElementById('attendance-modal');
+  if (!modal) return;
+  const grid = modal.querySelector('#attendance-grid');
+  const reward = modal.querySelector('#attendance-reward-msg');
+  if (grid) grid.innerHTML = buildAttendanceCalendarHTML();
+  if (reward) reward.style.display = 'none';
+  modal.style.display = 'flex';
+  modal.querySelector('#attendance-close')?.addEventListener('click', () => {
+    modal.style.display = 'none';
+  }, { once: true });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  }, { once: true });
 }
 
 async function maybeShowAttendance() {
