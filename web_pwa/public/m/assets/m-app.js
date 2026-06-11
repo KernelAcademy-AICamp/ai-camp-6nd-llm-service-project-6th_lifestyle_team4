@@ -2788,23 +2788,23 @@ function renderDailyNewBooks() {
       attachClickHandlers(works);
     };
     if (animate) {
-      // 이전 메인 박스를 좌측으로 슬라이드 아웃 → 새 메인 박스를 우측에서 슬라이드 인 (옆으로 넘어가는 형식)
-      const oldMain = sec.querySelector('.daily-newbook-main');
-      if (oldMain) {
-        oldMain.style.transition = 'transform 380ms cubic-bezier(0.55, 0, 0.7, 1), opacity 300ms ease-in';
-        oldMain.style.transform = 'translateX(-40%)';
-        oldMain.style.opacity = '0';
+      // 박스(button)는 고정. 내부 .daily-newbook-main-inner 만 좌측 아웃 → 우측 인.
+      const oldInner = sec.querySelector('.daily-newbook-main-inner');
+      if (oldInner) {
+        oldInner.style.transition = 'transform 380ms cubic-bezier(0.55, 0, 0.7, 1), opacity 300ms ease-in';
+        oldInner.style.transform = 'translateX(-40%)';
+        oldInner.style.opacity = '0';
         setTimeout(() => {
           applyHTML();
-          const newMain = sec.querySelector('.daily-newbook-main');
-          if (newMain) {
-            newMain.style.transition = 'none';
-            newMain.style.transform = 'translateX(40%)';
-            newMain.style.opacity = '0';
+          const newInner = sec.querySelector('.daily-newbook-main-inner');
+          if (newInner) {
+            newInner.style.transition = 'none';
+            newInner.style.transform = 'translateX(40%)';
+            newInner.style.opacity = '0';
             requestAnimationFrame(() => {
-              newMain.style.transition = 'transform 420ms cubic-bezier(0.25, 0.8, 0.3, 1), opacity 340ms ease-out';
-              newMain.style.transform = 'translateX(0)';
-              newMain.style.opacity = '1';
+              newInner.style.transition = 'transform 420ms cubic-bezier(0.25, 0.8, 0.3, 1), opacity 340ms ease-out';
+              newInner.style.transform = 'translateX(0)';
+              newInner.style.opacity = '1';
             });
           }
         }, 400);
@@ -2816,16 +2816,18 @@ function renderDailyNewBooks() {
 
   const renderTemplate = (main, rest, mainWork, sampleQuote) => `
     <button type="button" class="daily-newbook-main" data-work-key="${escapeHtml(main.key)}"
-      style="display:flex;gap:16px;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px;cursor:pointer;text-align:left;align-items:flex-start;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;">
-      <div style="flex:1;min-width:0;">
-        <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
-        <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
-        <p style="font-size:11px;color:var(--sand);margin:0 0 12px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
-        <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;font-family:'Noto Serif KR',serif;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
-      </div>
-      <!-- 책표지 — 얇은 베이지 림 + 그림자로 검은 표지 분리 (사용자 명세: 림 얇게) -->
-      <div style="flex-shrink:0;padding:1px;background:var(--latte);border-radius:2px;box-shadow:0 6px 18px rgba(0,0,0,0.5);">
-        ${dailyBookCoverHTML(mainWork, { width: 88 })}
+      style="display:block;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px;cursor:pointer;text-align:left;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;overflow:hidden;position:relative;">
+      <div class="daily-newbook-main-inner" style="display:flex;gap:16px;width:100%;align-items:center;">
+        <div style="flex:1;min-width:0;">
+          <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
+          <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
+          <p style="font-size:11px;color:var(--sand);margin:0 0 12px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
+          <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;font-family:'Noto Serif KR',serif;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
+        </div>
+        <!-- 책표지 — 얇은 베이지 림 + 그림자로 검은 표지 분리 (사용자 명세: 림 얇게) -->
+        <div style="flex-shrink:0;padding:1px;background:var(--latte);border-radius:2px;box-shadow:0 6px 18px rgba(0,0,0,0.5);">
+          ${dailyBookCoverHTML(mainWork, { width: 88 })}
+        </div>
       </div>
     </button>
     <div style="display:flex;gap:12px;overflow-x:auto;padding:16px 0 8px;scrollbar-width:none;">
@@ -3216,7 +3218,7 @@ function renderDailyRecent() {
     <h2 style="font-family:'Noto Serif KR',serif;font-size:20px;color:var(--espresso);margin:0 0 6px;font-weight:700;">다시 만나기</h2>
     <p class="t-body-sm c-walnut" style="margin:0 0 14px;">지난주 담아둔 문장, 다시 읽어볼까요</p>
     <button type="button" class="sharp-card daily-recent-card" data-card-id="${card.card_id}"
-      style="display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px;cursor:pointer;text-align:left;">
+      style="display:flex;align-items:center;gap:14px;width:100%;padding:16px;cursor:pointer;text-align:left;">
       ${dailyBookCoverHTML(work, { width: 64 })}
       <div style="flex:1;min-width:0;">
         <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);line-height:1.6;word-break:keep-all;overflow-wrap:break-word;">"${escapeHtml(card.quote || '')}"</p>
