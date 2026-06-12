@@ -28,6 +28,7 @@ struct RootView: View {
     @Binding var pendingCardId: Int?
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
+    @EnvironmentObject private var prefs: PrefsStore
 
     @State private var selectedTab: Tab = .home
     @State private var homePath = NavigationPath()
@@ -48,6 +49,19 @@ struct RootView: View {
                         .font(.bodySans(15))
                         .foregroundStyle(.walnut)
                 }
+            }
+        }
+        // First-run preference picker, once. Shown over everything as soon as the
+        // session is ready; finishing saves the picks locally (UserDefaults) and
+        // flips prefSelected so it never reappears.
+        .overlay {
+            if session.ready && !prefs.prefSelected {
+                OnboardingView { genres, themes, any in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        prefs.savePrefs(genres: genres, themes: themes, any: any)
+                    }
+                }
+                .transition(.opacity)
             }
         }
         .onChange(of: session.userId) { _, newValue in

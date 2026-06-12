@@ -180,14 +180,16 @@ struct HomeView: View {
                 pick = Recommend.pickToday(
                     all: allCards,
                     tasteEnabled: prefs.tasteEnabled,
-                    bookmarkCards: bookmarks.bookmarkCards
+                    bookmarkCards: bookmarks.bookmarkCards,
+                    prefs: prefs.userPrefs
                 )
             } else {
                 pick = Recommend.pickRandom(
                     all: allCards,
                     tasteEnabled: prefs.tasteEnabled,
                     bookmarkCards: bookmarks.bookmarkCards,
-                    recentIds: prefs.recentlyShown
+                    recentIds: prefs.recentlyShown,
+                    prefs: prefs.userPrefs
                 )
             }
             if let pick { prefs.rememberShown(pick.cardId) }
