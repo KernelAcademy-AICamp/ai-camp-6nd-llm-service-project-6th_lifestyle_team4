@@ -1,6 +1,11 @@
 import Foundation
 import Supabase
 
+/// Thrown by `Supa.addHighlight` when the selection is blank after trimming — the
+/// `card_highlights.selected_text` CHECK requires 1–2000 non-blank chars, so we
+/// reject locally rather than round-tripping to a guaranteed DB failure.
+enum HighlightError: Error { case emptySelectedText }
+
 /// Single Supabase entry point for the app, built on supabase-swift.
 ///
 /// Replaces the previous hand-rolled URLSession client. Auth, reads and writes
@@ -151,6 +156,29 @@ final class Supa {
                     userId: userId,
                     authorNickname: authorNickname,
                     body: body
+                )
+            )
+            .execute()
+    }
+
+    /// Saves a highlighted passage (drag-selected from a card's script). Mirrors
+    /// Android `FeedRepository.addHighlight`; surfaces in the Feed 하이라이트 tab.
+    /// RLS blocks anonymous JWTs, so callers must gate on a signed-in member.
+    /// `selectedText` is trimmed to the DB's 1–2000 bound; `userNote` to ≤500.
+    func addHighlight(cardId: Int, userId: Int, selectedText: String, userNote: String?, authorNickname: String?) async throws {
+        let text = String(selectedText.trimmingCharacters(in: .whitespacesAndNewlines).prefix(2000))
+        // The selected_text CHECK requires 1–2000 non-blank chars; reject a
+        // blank-after-trim selection locally instead of a guaranteed DB failure.
+        guard !text.isEmpty else { throw HighlightError.emptySelectedText }
+        let note = userNote?.trimmingCharacters(in: .whitespacesAndNewlines)
+        try await client.from("card_highlights")
+            .insert(
+                HighlightInsert(
+                    cardId: cardId,
+                    userId: userId,
+                    authorNickname: authorNickname,
+                    selectedText: text,
+                    userNote: (note?.isEmpty ?? true) ? nil : String(note!.prefix(500))
                 )
             )
             .execute()

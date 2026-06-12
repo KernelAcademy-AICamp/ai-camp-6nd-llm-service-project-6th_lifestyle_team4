@@ -251,3 +251,19 @@ nonisolated struct CardHighlight: Decodable, Identifiable, Sendable {
         case card = "cards"
     }
 }
+
+nonisolated struct HighlightInsert: Encodable, Sendable {
+    let cardId: Int
+    let userId: Int
+    let authorNickname: String?
+    let selectedText: String
+    let userNote: String?
+
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case userId = "user_id"
+        case authorNickname = "author_nickname"
+        case selectedText = "selected_text"
+        case userNote = "user_note"
+    }
+}
