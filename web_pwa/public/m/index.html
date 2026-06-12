@@ -407,16 +407,14 @@
      bottom: 40px = bar 높이 64px - (52*0.54) — PNG ledge 선(위→아래 46%) 이 바 윗면에 정확히 닿음.
      앞다리는 바 안쪽으로 늘어지고 몸통은 바 위로 솟음. */
   /* cat: nav 카드 우측 상단 모서리에 걸침 (안드 CatRightInset 8dp + CatProtrusion ≈ 24dp). */
-  /* 사용자 명세: 모든 cat 을 daily(.corner) 비율로 통일 — bottom 36, 작은 height
-     → 발은 바 안에 살짝 ledge처럼 걸치고 몸은 바 위로 솟아 탭 라벨/아이콘은 안 가림. */
   .bottom-nav .bottom-nav-cat {
     position: absolute;
-    /* 기본(cat_today): 중앙 실타래(홈 버튼) 옆 살짝 우측 */
+    /* 기본(cat_today): 중앙 실타래(홈 버튼) 옆 살짝 우측 + 바 윗면 위로 올림 (사용자 명세) */
     left: 62%;
     right: auto;
     transform: translateX(-50%);
-    bottom: 36px;
-    height: 56px;
+    bottom: 64px;
+    height: 78px;
     width: auto;
     pointer-events: none;
     z-index: 52;
