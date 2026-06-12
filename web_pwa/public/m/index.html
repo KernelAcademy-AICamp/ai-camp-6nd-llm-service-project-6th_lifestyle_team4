@@ -422,9 +422,9 @@
     user-select: none;
     -webkit-user-drag: none;
   }
-  /* 피드(cat_pen) · LIBRARY(cat_struck) — 왼쪽으로 (사용자 명세). 카드 상세 는 .right-far 로 더 오른쪽 */
+  /* 피드(cat_pen) · LIBRARY(cat_struck) — 더 왼쪽 (사용자 명세). 카드 상세 는 .right-far 로 더 오른쪽 */
   .bottom-nav .bottom-nav-cat.right {
-    left: 78%;
+    left: 70%;
     right: auto;
     transform: translateX(-50%);
     bottom: 50px;
@@ -1372,8 +1372,8 @@
     /* fab 우측 정렬 + nowrap — left% 로 두면 viewport 끝과 충돌해 '글쓰기' 가 세로로 끊김 */
     position: fixed; right: 16px; left: auto;
     white-space: nowrap;
-    /* cat 머리 ≈ 158px — 더 가깝게(살짝 cat 위에 걸치는 말풍선 느낌) */
-    bottom: calc(148px + env(safe-area-inset-bottom)); z-index: 53;
+    /* cat 머리 ≈ 158px — 더 내려 살짝 겹치는 말풍선 느낌 */
+    bottom: calc(140px + env(safe-area-inset-bottom)); z-index: 53;
     background: var(--paper);
     color: var(--espresso);
     border: 1.5px solid var(--espresso);
