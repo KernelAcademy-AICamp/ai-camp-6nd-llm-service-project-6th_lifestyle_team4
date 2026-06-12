@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Cottage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -112,7 +113,7 @@ fun OzHouseChip(onClick: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            imageVector = androidx.compose.material.icons.Icons.Outlined.Cottage,
+            imageVector = Icons.Outlined.Cottage,
             contentDescription = "OZ's house",
             tint = Espresso,
             modifier = Modifier.size(20.dp),

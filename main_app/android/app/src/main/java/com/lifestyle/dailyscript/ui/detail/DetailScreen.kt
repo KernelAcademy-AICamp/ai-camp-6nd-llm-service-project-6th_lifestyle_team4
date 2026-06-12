@@ -337,7 +337,7 @@ fun DetailScreen(
                         if (isAnonymous) {
                             android.widget.Toast.makeText(
                                 context,
-                                "로그인 후 오늘의 한줄을 남길 수 있어요.",
+                                "로그인 후 나의 감상평을 남길 수 있어요.",
                                 android.widget.Toast.LENGTH_SHORT,
                             ).show()
                         } else {

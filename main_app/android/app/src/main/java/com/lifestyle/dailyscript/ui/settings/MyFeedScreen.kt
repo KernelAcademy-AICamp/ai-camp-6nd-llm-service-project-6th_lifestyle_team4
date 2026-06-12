@@ -150,7 +150,7 @@ fun MyFeedScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) {
             empty && category == CAT_COMMENT -> ActivityEmpty(
                 icon = Icons.Outlined.EditNote,
                 title = "아직 작성한 한줄이 없어요",
-                subtitle = "피드의 + 로 오늘의 한줄을 남겨보세요.",
+                subtitle = "피드의 + 로 나의 감상평을 남겨보세요.",
             )
             empty -> ActivityEmpty(
                 icon = Icons.Outlined.AutoAwesome,

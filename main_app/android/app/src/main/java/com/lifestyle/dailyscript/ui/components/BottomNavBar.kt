@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.ui.nav.Routes
@@ -60,20 +62,55 @@ private val BarElevation = 8.dp            // 그림자
 // 카드 위로 솟는 고양이/홈버튼 영역(TopSpace)은 일부러 제외 → 그 부분은 본문 위에 겹쳐 떠 있다.
 val BottomBarContentInset = BarHeight + BarBottomMargin
 
-// 고양이 장식 (조정 가능)
-// cat_empty.png 은 가로 '면(ledge)' 위에 누운 고양이 — 면 위로 몸통, 면 아래로 앞다리가 늘어짐.
-// 그 ledge 선을 카드 상단에 맞춰야 고양이가 바에 '앉은' 것처럼 보인다(이미지 밑단 X).
-private val CatHeight = 52.dp              // 스케일된 고양이 이미지 전체 높이 (48~60 조정)
-private val CatWidth = CatHeight * 2.3f    // 원본 1143x497 ≈ 2.3:1
-private val CatLedgeFraction = 0.46f       // PNG에서 ledge 선의 위→아래 비율 (대략 중앙)
-private val CatProtrusion = CatHeight * CatLedgeFraction // 바 위로 솟는 몸통 높이(ledge 위쪽)
-private val CatRightInset = 8.dp           // 카드 오른쪽 끝에서 안쪽으로
-private val CatSeat = 0.dp                 // 양수면 고양이를 바 쪽으로 더 내려 앉힘(미세조정)
+// 고양이 장식 (조정 가능) — 탭별로 자세(이미지)·위치·크기가 바뀐다 (PWA updateBottomNavCatForView 미러).
+// '누운' 고양이(cat_empty)는 가로 면(ledge) 위에 몸통을 얹고 앞다리를 늘어뜨린 모양이라 ledge 비율이 낮고,
+// '서 있는' 고양이(cat_today/cat_pen/cat_struck)는 발이 이미지 하단 → 발끝이 바 윗면에 닿도록 ledge 비율을 높게 둔다.
+// (PWA 의 left% 위치는 CSS 전용 → 여기선 BiasAlignment hBias 로 근사, 실기기에서 미세조정 가능.)
+private val CatHeightLying = 52.dp             // 누운 자세(cat_empty) 높이
+private val CatHeightStanding = 60.dp          // 서 있는 자세 높이 (홈)
+private val CatHeightFeed = 92.dp              // 피드(cat_pen) — 책 읽는 고양이, 크게 강조 (조정 가능)
+private val CatHeightLibrary = 90.dp           // LIBRARY(cat_struck) — 책더미 위 고양이, 크게 강조 (조정 가능)
+private val CatLedgeFractionLying = 0.46f      // PNG에서 ledge 선의 위→아래 비율 (대략 중앙)
+private val CatLedgeFractionStanding = 0.72f   // 서 있는 자세: 발끝(하단부)이 바 윗면에 닿도록
+private val CatLedgeFractionFeed = 0.86f       // 피드: 책(이미지 하단)이 바 윗면에 닿게 → 몸통이 위로 크게 솟음
+private val CatLedgeFractionLibrary = 0.86f    // LIBRARY: 책더미(이미지 하단)가 바 윗면에 닿게
+private val CatProtrusionLying = CatHeightLying * CatLedgeFractionLying
+private val CatProtrusionStanding = CatHeightStanding * CatLedgeFractionStanding
+private val CatProtrusionFeed = CatHeightFeed * CatLedgeFractionFeed
+private val CatProtrusionLibrary = CatHeightLibrary * CatLedgeFractionLibrary
+private val MaxCatProtrusion = maxOf(maxOf(CatProtrusionLying, CatProtrusionStanding), maxOf(CatProtrusionFeed, CatProtrusionLibrary))
+private val CatRightInset = 8.dp               // 코너 자세에서 카드 오른쪽 끝에서 안쪽으로
+private val CatSeat = 0.dp                      // 양수면 고양이를 바 쪽으로 더 내려 앉힘(미세조정)
 
-private val CenterLabelNudge = 0.dp        // 가운데 라벨 세로 미세보정(필요 시 음수로 위로)
+// 피드 cat_pen 가로 위치 — hBias 1(박스 우측=화면 우측)에서 xShift 로 더 우측(MY 탭 위)까지 밀어낸다.
+// cat_pen 은 좌우 투명 여백이 있어 xShift 만큼 밀면 투명 여백만 화면 밖으로 잘리고 보이는 고양이가 우측으로 간다.
+private val CatHBiasFeed = 1f
+private val CatXShiftFeed = 20.dp              // 양수 = 더 오른쪽(MY 탭 쪽). 보이는 고양이가 잘리면 ↓ (조정 가능)
 
-// 카드 위로 확보할 공간 = max(원 돌출, 고양이 몸통이 솟는 양)
-private val TopSpace = maxOf(HomeProtrusion, CatProtrusion)
+// LIBRARY cat_struck 가로 위치 — 세로로 긴 이미지라 투명 여백이 거의 없어 hBias 만으로 위치가 잡힌다.
+// 라이브러리 페이지네이션(중앙 정렬, ◀ 1 2 3 ▶) 오른쪽 화살표와 화면 우측 끝 사이에 끼워 넣는다.
+// 0.80 ≈ 화살표를 가리지 않으면서 끝에도 안 붙는 중간 지점.
+// 화살표를 아직 가리면 ↑(0.85~), 화면 끝에 너무 붙으면 ↓(0.75~) (조정 가능)
+private val CatHBiasLibrary = 0.80f
+
+private val CenterLabelNudge = 0.dp            // 가운데 라벨 세로 미세보정(필요 시 음수로 위로)
+
+// 카드 위로 확보할 공간 = max(원 돌출, 가장 크게 솟는 고양이 몸통)
+private val TopSpace = maxOf(HomeProtrusion, MaxCatProtrusion)
+
+// 피드 cat_pen 이미지 상단이 화면 바닥에서 떨어진 높이 — FeedScreen 의 '글쓰기' 말풍선을 고양이 머리 위에
+// 띄우는 데 사용 (두 컴포저블이 다른 레이어라 이 공유 상수로 세로 정렬을 맞춘다).
+val FeedCatImageTopInset = BottomBarContentInset + CatProtrusionFeed
+
+/** 탭별 고양이 자세 — 이미지 · 가로 위치(bias) · 높이 · ledge 비율 · 코너 여부. */
+private data class NavCatPose(
+    val asset: String,
+    val hBias: Float,          // -1=좌, 0=중앙, 1=우 (BiasAlignment 가로 bias)
+    val height: Dp,
+    val ledgeFraction: Float,
+    val corner: Boolean = false,   // true 면 카드 우측 안쪽으로 끌어당김 (cat_empty 코너 자세)
+    val xShift: Dp = 0.dp,         // hBias 배치 후 추가 가로 이동 (양수=오른쪽, 화면 밖 클립 허용)
+)
 
 @Composable
 fun BottomNavBar(
@@ -149,25 +186,35 @@ fun BottomNavBar(
                 .offset(y = TopSpace - HomeProtrusion)
                 .coachAnchor(coach, "nav_home"),
         )
-        // (C) 장식용 고양이 — 카드 우측 상단 모서리에 걸쳐 위로 솟음.
+        // (C) 장식용 고양이 — 탭별로 자세(이미지)·위치·크기가 바뀐다 (PWA updateBottomNavCatForView 미러).
         //     clickable 없음 → 터치는 아래 FEED/LIBRARY/MY 탭으로 통과한다.
-        val catBitmap = rememberAssetBitmap("cat/cat_empty.png")
+        //     피드=cat_pen / LIBRARY=cat_struck / daily·MY=cat_empty(코너) / 홈·그 외=cat_today(중앙 약간 우측).
+        val catPose = when (currentRoute) {
+            Routes.FEED -> NavCatPose("cat/cat_pen.png", hBias = CatHBiasFeed, height = CatHeightFeed, ledgeFraction = CatLedgeFractionFeed, xShift = CatXShiftFeed)
+            Routes.ARCHIVE -> NavCatPose("cat/cat_struck.png", hBias = CatHBiasLibrary, height = CatHeightLibrary, ledgeFraction = CatLedgeFractionLibrary)
+            Routes.DAILY, Routes.SETTINGS -> NavCatPose("cat/cat_empty.png", hBias = 1f, height = CatHeightLying, ledgeFraction = CatLedgeFractionLying, corner = true)
+            else -> NavCatPose("cat/cat_today.png", hBias = 0.3f, height = CatHeightStanding, ledgeFraction = CatLedgeFractionStanding)
+        }
+        val catBitmap = rememberAssetBitmap(catPose.asset)
         if (catBitmap != null) {
+            // PWA 는 height 고정 + width:auto(원본 비율) → 비트맵 실제 비율로 폭 계산 (자세마다 비율 다름).
+            val ratio = catBitmap.width.toFloat() / catBitmap.height.toFloat()
+            // ledge 선(= cat_top + protrusion)이 카드 상단(y = TopSpace)에 오도록 배치.
+            val protrusion = catPose.height * catPose.ledgeFraction
             Image(
                 bitmap = catBitmap,
                 contentDescription = null, // 장식 → null
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    // 카드가 우측으로 BarSideMargin 들어왔으므로 x 보정.
-                    // ledge 선(= cat_top + CatProtrusion)이 카드 상단(y = TopSpace)에 오도록 배치
-                    // → 몸통은 바 위로 솟고, 늘어진 앞다리는 바 윗면으로 드리워진다.
+                    .align(BiasAlignment(horizontalBias = catPose.hBias, verticalBias = -1f))
                     .offset(
-                        x = -(BarSideMargin + CatRightInset),
-                        y = TopSpace - CatProtrusion + CatSeat,
+                        // 코너 자세는 카드가 우측으로 BarSideMargin 들어온 만큼 안쪽으로 보정,
+                        // 그 외는 pose 의 xShift 적용 (피드 cat_pen 을 MY 탭 위까지 우측으로 밀 때).
+                        x = if (catPose.corner) -(BarSideMargin + CatRightInset) else catPose.xShift,
+                        y = TopSpace - protrusion + CatSeat,
                     )
-                    .height(CatHeight)
-                    .width(CatWidth),
+                    .height(catPose.height)
+                    .width(catPose.height * ratio),
             )
         }
     }

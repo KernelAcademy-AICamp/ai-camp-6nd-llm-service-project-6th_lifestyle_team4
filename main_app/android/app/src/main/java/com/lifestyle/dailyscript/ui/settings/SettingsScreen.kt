@@ -45,7 +45,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.BuildConfig
 import com.lifestyle.dailyscript.R
@@ -306,12 +308,19 @@ fun SettingsScreen(
         SettingRow(title = stringResource(R.string.privacy_policy), onClick = onOpenPrivacy, trailingArrow = true)
         SettingRow(title = stringResource(R.string.version_info), trailingText = "v${BuildConfig.VERSION_NAME}")
 
-        Box(modifier = Modifier.height(40.dp))
-        SharpButton(
-            label = stringResource(R.string.sign_out),
-            onClick = onSignOut,
-            variant = SharpButtonVariant.Outline,
-            modifier = Modifier.fillMaxWidth(),
+        // 로그아웃 — outline 블록 버튼 대신 작은 중앙 텍스트 링크 (PWA MY 화면과 동일).
+        Box(modifier = Modifier.height(20.dp))
+        Text(
+            text = stringResource(R.string.sign_out),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.sp,
+                textDecoration = TextDecoration.Underline,
+            ),
+            color = Walnut,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .clickable(onClick = onSignOut)
+                .padding(vertical = 6.dp, horizontal = 12.dp),
         )
         if (!session.isAnonymous) {
             Box(modifier = Modifier.height(16.dp))
