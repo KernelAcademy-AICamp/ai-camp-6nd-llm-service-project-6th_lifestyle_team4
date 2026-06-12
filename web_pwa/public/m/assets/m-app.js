@@ -4577,10 +4577,13 @@ function openOzHouse() {
   ozHouseScreen.style.display = 'flex';
   requestAnimationFrame(() => ozHouseScreen.classList.add('open'));
   document.body.style.overflow = 'hidden';
-  // 고양이 데모(iframe) 진입 시 로드 — 닫혀 있을 때는 about:blank 로 두어 애니메이션 루프가 돌지 않게 한다.
+  // 고양이 데모(iframe) — 닫혀 있을 때는 about:blank 로 두니, 진입 시 dataset.src 로 다시 로드.
   const frame = document.getElementById('oz-house-frame');
-  if (frame && frame.dataset.src && frame.src.endsWith('about:blank')) {
-    frame.src = frame.dataset.src;
+  if (frame) {
+    const target = frame.dataset.src || 'cat-demo.html';
+    if (!frame.src || frame.src === 'about:blank' || !frame.src.includes(target)) {
+      frame.src = target;
+    }
   }
   track('oz_house_opened');
 }
