@@ -215,9 +215,11 @@
   .room.night .topbar .day-night button{ color:#C8C2AE; }
   .room.night .topbar .day-night button.on{ background:var(--paper); color:var(--espresso); }
 
-  /* 트레이 → 하단 팝업창: 기본 접힘(핸들만 노출), .expanded 클래스로 펼침 */
-  .tray{ transition:transform .35s cubic-bezier(0.2, 0.8, 0.2, 1); transform:translateY(calc(100% - 38px)); padding-top:38px !important; }
+  /* 트레이 → 하단 팝업창: 기본 접힘(핸들만 노출), .expanded 클래스로 펼침
+     사용자 명세: 펼침 상태에서 옵션 탭이 화면 끝과 너무 붙어 선택이 어려움 → 높이 +40, 하단 padding 키움 */
+  .tray{ height:172px !important; transition:transform .35s cubic-bezier(0.2, 0.8, 0.2, 1); transform:translateY(calc(100% - 38px)); padding:38px 13px calc(24px + env(safe-area-inset-bottom)) !important; }
   .tray.expanded{ transform:translateY(0); }
+  .tray-options{ padding-bottom:8px !important; }
   .tray-handle{ position:absolute; top:0; left:0; right:0; height:38px; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer; user-select:none; }
   .tray-handle::before{ content:''; width:38px; height:4px; border-radius:2px; background:var(--sand); }
   .tray-handle .label{ font-size:11px; font-weight:700; color:var(--walnut); letter-spacing:0.1em; }
