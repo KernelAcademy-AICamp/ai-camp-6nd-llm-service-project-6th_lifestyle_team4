@@ -205,9 +205,10 @@
   .notch{ display:none !important; }
 
   /* 밤/낮 토글 — 상단바 우측 끝 (spacer 자리) */
-  .topbar{ padding:14px 14px 10px !important; }
-  /* 사용자 명세: 제목 텍스트를 화면 정중앙에 정렬 (좌측 back, 우측 day-night 폭 영향 X) */
-  .topbar .title{ position:absolute; left:50%; transform:translateX(-50%); }
+  .topbar{ padding:14px 14px 10px !important; justify-content:flex-end !important; }
+  /* 사용자 명세: 화면(screen) 안 topbar 의 back 버튼 + 'OZ'S HOUSE / 오즈의 집' 텍스트는 숨김.
+     bar 우측에 밤/낮 토글만 남긴다 (외부 m/index.html oz-house-screen 의 top-bar 는 그대로 유지). */
+  .topbar .back, .topbar .title{ display:none !important; }
   .topbar .day-night{ display:inline-flex; align-items:center; gap:2px; background:rgba(255,255,255,.6); border:1px solid var(--sand); border-radius:999px; padding:3px; }
   .topbar .day-night button{ font-family:var(--sans); font-size:11px; font-weight:700; padding:5px 10px; border-radius:999px; border:none; background:transparent; color:var(--walnut); cursor:pointer; line-height:1; }
   .topbar .day-night button.on{ background:var(--espresso); color:var(--paper); }
