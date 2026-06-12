@@ -7198,12 +7198,13 @@ function showBottomNavCat() {
   if (cat) cat.style.display = '';
 }
 // cat 이미지 preload — 카드 상세 진입 시 cat_today 가 잠깐 보이는 깜빡임 방지
-['cat_today.png', 'cat_pen.png', 'cat_library.png'].forEach((f) => {
+['cat_today.png', 'cat_pen.png', 'cat_library.png', 'cat_struck.png'].forEach((f) => {
   const img = new Image();
   img.src = 'assets/cat/' + f;
 });
 function updateBottomNavCatForView(view) {
   if (view === 'feed') setBottomNavCat('cat_pen.png', 'right');
+  else if (view === 'archive') setBottomNavCat('cat_struck.png', 'right');   // LIBRARY — MY 쪽 가까이
   else setBottomNavCat('cat_today.png', 'center');
 }
 
