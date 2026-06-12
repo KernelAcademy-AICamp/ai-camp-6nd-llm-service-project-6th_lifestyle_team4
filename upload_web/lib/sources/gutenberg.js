@@ -317,9 +317,19 @@ export async function searchGutenberg(query, limit = 8) {
     languages: Array.isArray(b.languages) ? b.languages : [],
     downloadCount: b.download_count ?? null,
     url: `https://www.gutenberg.org/ebooks/${b.book_id}`,
-    plainTextUrl: b.text_url || null,
+    plainTextUrl: normalizeGutenbergTextUrl(b.text_url, b.book_id),
   }));
   return { results, originalQuery: original, effectiveQuery: effective, translatedFrom };
+}
+
+// /ebooks/{id}.txt.utf-8 패턴은 PG가 HTTPS→HTTP 302 redirect 를 건다(Location 헤더가 http://).
+// Node native fetch / Vercel runtime 은 protocol downgrade redirect 를 따라가지 못해 404 처리되는 경우가 많아,
+// 동일 자원을 직접 가리키는 /cache/epub/{id}/pg{id}.txt 로 우회한다. 그 외 URL 은 원본 유지.
+function normalizeGutenbergTextUrl(url, bookId) {
+  if (!url) return null;
+  const m = String(url).match(/\/ebooks\/(\d+)\.txt(?:\.utf-?8)?$/i);
+  if (m) return `https://www.gutenberg.org/cache/epub/${m[1]}/pg${m[1]}.txt`;
+  return url;
 }
 
 function pickPlainTextUrl(formats) {
@@ -357,7 +367,8 @@ export async function fetchGutenbergText({ bookId, plainTextUrl }) {
     }
     // RDF 인덱싱 시 plain-text 메타 못 잡힌 책 — Gutenberg 표준 URL 패턴으로 자동 생성.
     // https://www.gutenberg.org/cache/epub/<id>/pg<id>.txt 가 거의 모든 책에 일관 적용.
-    textUrl = row.text_url || `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.txt`;
+    textUrl = normalizeGutenbergTextUrl(row.text_url, bookId)
+      || `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.txt`;
     metadata = {
       id: row.book_id,
       title: row.title,
