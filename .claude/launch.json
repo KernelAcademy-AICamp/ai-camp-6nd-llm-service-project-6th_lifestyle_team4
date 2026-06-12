@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "serve", "web_pwa/public", "-l", "3210"],
       "port": 3210
+    },
+    {
+      "name": "mockups-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "serve", ".", "-l", "3211"],
+      "port": 3211
     }
   ]
 }
