@@ -1372,8 +1372,8 @@
     /* fab 우측 정렬 + nowrap — left% 로 두면 viewport 끝과 충돌해 '글쓰기' 가 세로로 끊김 */
     position: fixed; right: 16px; left: auto;
     white-space: nowrap;
-    /* cat 머리 ≈ 158px — fab 하단을 그 바로 위에 1px gap 정도로 (가깝게, 안 겹치게) */
-    bottom: calc(160px + env(safe-area-inset-bottom)); z-index: 53;
+    /* cat 머리 ≈ 158px — 더 가깝게(살짝 cat 위에 걸치는 말풍선 느낌) */
+    bottom: calc(148px + env(safe-area-inset-bottom)); z-index: 53;
     background: var(--paper);
     color: var(--espresso);
     border: 1.5px solid var(--espresso);
