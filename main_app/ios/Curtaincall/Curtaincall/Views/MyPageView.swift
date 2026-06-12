@@ -95,9 +95,10 @@ struct MyPageView: View {
                     }
 
                     Spacer().frame(height: 40)
-                    sectionLabel("LEGAL & ABOUT")
-                    settingRow(title: "Terms of Service")
-                    settingRow(title: "Version Info", trailingText: "v2.4.0")
+                    sectionLabel("약관 및 정보")
+                    legalRow(title: "이용약관") { LegalView(doc: .terms) }
+                    legalRow(title: "개인정보 처리방침") { LegalView(doc: .privacy) }
+                    settingRow(title: "버전 정보", trailingText: appVersion)
 
                     Spacer().frame(height: 40)
                     Button {
@@ -169,6 +170,14 @@ struct MyPageView: View {
 
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    /// Real app version from the bundle (CFBundleShortVersionString), so the row
+    /// can never drift from the shipped build. `settingRow` upper-cases trailing
+    /// text, so "v1.0" renders as "V1.0".
+    private var appVersion: String {
+        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        return "v\(v)"
     }
 
     private var tasteProfileText: String {
@@ -299,6 +308,34 @@ struct MyPageView: View {
                         .foregroundStyle(.walnut)
                 }
                 .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Hairline()
+        }
+    }
+
+    /// A settings row that pushes a destination (mirrors Android's trailing-arrow
+    /// rows). Matches `settingRow`'s metrics but is tappable, so the Legal docs
+    /// read as navigable rather than the old dead "Terms of Service" label.
+    private func legalRow<Destination: View>(
+        title: String,
+        @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        VStack(spacing: 0) {
+            NavigationLink {
+                destination()
+            } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    Text(title)
+                        .font(.titleSerif(16))
+                        .foregroundStyle(.espresso)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(.sand)
+                }
+                .padding(.vertical, 18)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

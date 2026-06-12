@@ -44,6 +44,7 @@ struct ArchiveRow: View {
     }
 }
 
+#if DEBUG
 #Preview {
     VStack(spacing: 0) {
         ArchiveRow(card: .sample, date: .now)
@@ -52,3 +53,4 @@ struct ArchiveRow: View {
     .padding(.horizontal, 20)
     .background(Color.paper)
 }
+#endif

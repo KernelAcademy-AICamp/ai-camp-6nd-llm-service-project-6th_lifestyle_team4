@@ -87,37 +87,126 @@
     font-size: 28px;
   }
 
-  /* 고양이 */
-  .cat {
+  /* 고양이 컨테이너 — 좌우 이동 + flip */
+  .cat-wrap {
     position: absolute;
-    bottom: 70px;
-    width: 130px; height: auto;
-    transform-origin: bottom center;
+    bottom: 70px; left: 40px;
+    width: 130px; height: 120px;
     z-index: 5;
     pointer-events: none;
-    user-select: none;
-    -webkit-user-drag: none;
-    /* 움직임 transition — 동적으로 JS가 덮어쓰기 */
     transition: left 6s linear, bottom 0.7s cubic-bezier(0.5, 0, 0.5, 1.6);
+    transform-origin: bottom center;
   }
-  .cat.flip { transform: scaleX(-1); }
-  /* 호흡 — 항상 미세 */
+  .cat-wrap.flip { transform: scaleX(-1); }
+  /* 1) 호흡 + 걷기 bounce 를 줄 inner 레이어 */
   .cat-inner {
+    width: 100%; height: 100%;
+    position: relative;
     animation: catBreathe 3s ease-in-out infinite;
+    transform-origin: bottom center;
   }
   @keyframes catBreathe {
-    0%, 100% { transform: scale(1); filter: brightness(1); }
-    50% { transform: scale(1.015); filter: brightness(1.04); }
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.015); }
   }
-  /* 점프 시 squash-stretch */
-  .cat.jumping .cat-inner {
+  /* 걷기 — 위아래 bounce + 좌우 미세 sway. 빠른 반복. */
+  .cat-wrap.walking .cat-inner {
+    animation: catWalk 0.42s ease-in-out infinite;
+  }
+  @keyframes catWalk {
+    0%, 100% { transform: translateY(0)   rotate(0deg); }
+    25%      { transform: translateY(-4px) rotate(-1.5deg); }
+    50%      { transform: translateY(0)   rotate(0deg); }
+    75%      { transform: translateY(-4px) rotate(1.5deg); }
+  }
+  /* 점프 squash-stretch */
+  .cat-wrap.jumping .cat-inner {
     animation: catJump 0.7s cubic-bezier(0.5, 0, 0.5, 1) 1;
   }
   @keyframes catJump {
     0%   { transform: scaleY(0.85) scaleX(1.1); }
     30%  { transform: scaleY(1.1)  scaleX(0.92); }
     70%  { transform: scaleY(1.05) scaleX(0.95); }
-    100% { transform: scaleY(1) scaleX(1); }
+    100% { transform: scaleY(1)    scaleX(1); }
+  }
+  /* 휴식 시 미세 등판 흔들림 (잠자는 호흡) */
+  .cat-wrap.resting .cat-inner {
+    animation: catSleepBreathe 2.5s ease-in-out infinite;
+  }
+  @keyframes catSleepBreathe {
+    0%, 100% { transform: scaleY(1) scaleX(1); }
+    50%      { transform: scaleY(1.03) scaleX(0.99); }
+  }
+
+  /* 고양이 이미지 — inner 안에서 가득 */
+  .cat-img {
+    width: 100%; height: 100%;
+    object-fit: contain; object-position: bottom center;
+    display: block;
+    user-select: none; -webkit-user-drag: none;
+  }
+
+  /* 꼬리 — CSS로 그린 곡선 (PNG 위 별도 레이어).
+     걷기/휴식 별로 다른 swing */
+  .cat-tail {
+    position: absolute;
+    right: 6px; bottom: 22px;
+    width: 38px; height: 4px;
+    background: linear-gradient(90deg, #2B211A 60%, #5A3A1E 100%);
+    border-radius: 4px;
+    transform-origin: 0% 50%;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .cat-wrap.walking .cat-tail {
+    animation: tailWalk 0.42s ease-in-out infinite;
+  }
+  .cat-wrap.idle .cat-tail,
+  .cat-wrap.looking .cat-tail {
+    animation: tailFlick 1.4s ease-in-out infinite;
+  }
+  .cat-wrap.resting .cat-tail {
+    animation: tailRest 3s ease-in-out infinite;
+  }
+  @keyframes tailWalk {
+    0%, 100% { transform: rotate(-20deg); }
+    50%      { transform: rotate(-5deg); }
+  }
+  @keyframes tailFlick {
+    0%, 70%, 100% { transform: rotate(-10deg); }
+    80%           { transform: rotate(-30deg); }
+    90%           { transform: rotate(5deg); }
+  }
+  @keyframes tailRest {
+    0%, 100% { transform: rotate(0deg); }
+    50%      { transform: rotate(-8deg); }
+  }
+
+  /* 눈 깜빡임 — 작은 검은 가로 막대 두 개를 위에 덧댐 */
+  .cat-blink {
+    position: absolute;
+    top: 18px; left: 50%;
+    transform: translateX(-50%);
+    width: 28px; height: 4px;
+    display: flex; justify-content: space-between;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 3;
+  }
+  .cat-blink::before, .cat-blink::after {
+    content: '';
+    width: 6px; height: 100%;
+    background: #1A1410;
+    border-radius: 4px;
+  }
+  .cat-wrap.idle .cat-blink,
+  .cat-wrap.looking .cat-blink,
+  .cat-wrap.walking .cat-blink {
+    animation: blink 5s linear infinite;
+  }
+  @keyframes blink {
+    0%, 96%, 100% { opacity: 0; }
+    97%, 99%      { opacity: 1; }
   }
 
   /* 상태 표시 */

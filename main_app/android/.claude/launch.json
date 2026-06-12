@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mockups-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "serve", "C:/Users/udown/Desktop/git/ai-camp-6nd-llm-service-project-6th_lifestyle_team4", "-l", "3211"],
+      "port": 3211
+    }
+  ]
+}

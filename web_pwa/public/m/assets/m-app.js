@@ -3726,7 +3726,7 @@ function showEmpty(cat) {
   if (cat === 'comment') {
     if (myfeedEmptyIcon) myfeedEmptyIcon.textContent = 'edit_note';
     if (myfeedEmptyTitle) myfeedEmptyTitle.textContent = '아직 작성한 한줄이 없어요';
-    if (myfeedEmptySub) myfeedEmptySub.textContent = '피드의 + 로 오늘의 한줄을 남겨보세요.';
+    if (myfeedEmptySub) myfeedEmptySub.textContent = '피드의 + 로 나의 감상평을 남겨보세요.';
   } else {
     if (myfeedEmptyIcon) myfeedEmptyIcon.textContent = 'auto_awesome';
     if (myfeedEmptyTitle) myfeedEmptyTitle.textContent = '아직 만든 하이라이트가 없어요';
@@ -4577,12 +4577,36 @@ function openOzHouse() {
   ozHouseScreen.style.display = 'flex';
   requestAnimationFrame(() => ozHouseScreen.classList.add('open'));
   document.body.style.overflow = 'hidden';
+  // OZ's house 진입 시 하단바 자체 + cat / 피드 글쓰기 말풍선 모두 숨김 (사용자 명세)
+  const nav = document.querySelector('.bottom-nav');
+  if (nav) nav.style.display = 'none';
+  if (feedFab) feedFab.style.display = 'none';
+  // OZ's house iframe — 첫 진입은 init 코드의 랜덤 placeCat 으로 자세 결정.
+  // 재진입은 iframe 이 이미 로드된 상태 → 자식의 refreshCat() 직접 호출해 매번 새 자세.
+  const frame = document.getElementById('oz-house-frame');
+  if (frame) {
+    const target = frame.dataset.src || 'oz-house.html';
+    const cw = frame.contentWindow;
+    if (cw && typeof cw.refreshCat === 'function') {
+      try { cw.refreshCat(); } catch {}
+    } else if (!frame.src || frame.src === 'about:blank' || !frame.src.includes(target)) {
+      frame.src = target;
+    }
+  }
   track('oz_house_opened');
 }
 function closeOzHouseInternal() {
   if (!ozHouseScreen) return;
+  // 즉시 닫음 — transition / src=about:blank 둘 다 흰 화면 깜빡임 원인이라 모두 제거 (사용자 명세)
   ozHouseScreen.classList.remove('open');
-  setTimeout(() => { ozHouseScreen.style.display = 'none'; document.body.style.overflow = ''; }, 250);
+  ozHouseScreen.style.display = 'none';
+  document.body.style.overflow = '';
+  // 하단바 / cat / 피드 fab 복귀 — 현재 view 기준
+  const nav = document.querySelector('.bottom-nav');
+  if (nav) nav.style.display = '';
+  updateBottomNavCatForView(state.currentView);
+  if (feedFab) feedFab.style.display = (state.currentView === 'feed') ? 'inline-flex' : 'none';
+  // iframe 은 그대로 둠 — 다음 진입 시 즉시 표시되어 흰 화면 없음 (oz-house.html 은 setInterval 없음)
 }
 function closeOzHouse() {
   if (history.state && history.state.overlay === 'ozHouse') history.back();
@@ -4590,6 +4614,24 @@ function closeOzHouse() {
 }
 if (ozHouseBtn) ozHouseBtn.addEventListener('click', openOzHouse);
 if (ozHouseBack) ozHouseBack.addEventListener('click', closeOzHouse);
+
+// OZ's house 외부 top-bar 의 밤/낮 토글 — iframe 안 .room 의 .night 클래스를 직접 토글
+const ozDayNightBtn = $('#oz-house-day-night');
+if (ozDayNightBtn) {
+  ozDayNightBtn.addEventListener('click', () => {
+    const frame = document.getElementById('oz-house-frame');
+    const doc = frame?.contentDocument;
+    if (!doc) return;
+    const room = doc.getElementById('room');
+    if (!room) return;
+    const isNight = room.classList.toggle('night');
+    ozDayNightBtn.textContent = isNight ? '🌙' : '☀️';
+    // iframe 안에 남아 있는 day-night 버튼(hidden) 의 .on 상태도 동기화
+    doc.querySelectorAll('.day-night button').forEach((b) =>
+      b.classList.toggle('on', b.dataset.val === (isNight ? 'night' : 'day'))
+    );
+  });
+}
 if (yarnTabCharge) yarnTabCharge.addEventListener('click', () => setYarnTab(false));
 if (yarnTabAbout) yarnTabAbout.addEventListener('click', () => setYarnTab(true));
 
@@ -5066,12 +5108,15 @@ function paintAuthIdentity() {
 //   대신 카드 1개당 1번에 한해 처음 열람 시 실타래 +1 지급 (중복 없음).
 function openDetail(card) {
   if (!card) return;
+  // 카드 상세 진입 직후 cat_today 가 잠깐 보이는 깜빡임 방지 — 클릭 즉시 cat 자세 변경
+  setBottomNavCat('cat_library.png', 'right-far', 'large');
   rewardYarnForFirstView(card.card_id);
   openDetailApproved(card);
 }
 
 function openDetailApproved(card) {
   if (!card) return;
+  setBottomNavCat('cat_library.png', 'right-far', 'large');   // 카드 상세 — 책장 앞 자세, 우측 하단 + 크게
   // 카드 열람 누적 카운트 — 임계치 도달 시, 카드를 가리지 않도록 '닫힐 때' 유도 팝업 예약
   if (bumpCardsViewed() >= FEEDBACK_NUDGE_THRESHOLD && !feedbackNudgeSeen()) {
     state._feedbackNudgePending = true;
@@ -5307,6 +5352,7 @@ function closeDetailInternal() {
   detailScreen.classList.remove('open');
   unsubscribeFromDetailComments();
   cancelReply();
+  updateBottomNavCatForView(state.currentView);   // 카드 상세 닫힘 → 탭별 기본 자세 복귀
   setTimeout(() => {
     detailScreen.style.display = 'none';
     document.body.style.overflow = '';
@@ -6125,6 +6171,7 @@ function openFeedPostDetail(post) {
   state.currentFeedPost = post;
   state.currentHighlight = null;
   if (feedFab) feedFab.style.display = 'none';   // 댓글 화면에서는 글쓰기 말풍선 숨김
+  hideBottomNavCat();   // 피드 카드 상세에서는 하단바 cat 숨김
   // 명대사 박스 복원 (하이라이트 모드에서 숨겼던 경우)
   const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
   if (quoteBox) quoteBox.style.display = '';
@@ -6165,6 +6212,7 @@ function openHighlightDetail(highlight) {
   state.detailType = 'highlight';
   state.currentHighlight = highlight;
   state.currentFeedPost = null;
+  hideBottomNavCat();   // 하이라이트 상세에서도 하단바 cat 숨김 (feedFab 은 아래에서 hide)
   // 명대사 박스(card-warm 배경)를 안드 HighlightContentCard 구조로 재구성:
   //   책표지(120x170 cover_url 또는 가죽색 폴백) + selected_text(큰 serif) + 출처 + '카드 보기' 버튼
   const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
@@ -6486,6 +6534,9 @@ async function deleteFeedComment(commentId) {
 function closeFeedPostDetailInternal() {
   if (!feedpostScreen) return;
   feedpostScreen.classList.remove('open');
+  // 하단바 cat 복귀 — view 기준 (피드면 cat_pen, 그 외 cat_today)
+  showBottomNavCat();
+  updateBottomNavCatForView(state.currentView);
   setTimeout(() => {
     feedpostScreen.style.display = 'none';
     document.body.style.overflow = '';
@@ -6529,7 +6580,7 @@ $('#detail-post-oneliner')?.addEventListener('click', async () => {
   if (!isBookmarked) {
     try { await toggleBookmark(card.card_id); } catch {}
   }
-  if (state.isAnonymous) { toast('로그인 후 오늘의 한줄을 남길 수 있어요.'); return; }
+  if (state.isAnonymous) { toast('로그인 후 나의 감상평을 남길 수 있어요.'); return; }
   track('detail_post_oneliner', { card_id: card.card_id });
   openFeedCompose(card);
 });
@@ -7144,6 +7195,42 @@ function renderNotice() {
   paintNoticeBadge();
 }
 
+// 하단바 장식 고양이 — 페이지별로 자세 + 위치를 바꾼다.
+//   default(daily/home/archive/notice/settings) = cat_today  / 중앙 살짝 오른쪽 (실타래 굴리는 자세)
+//   feed                                       = cat_pen    / 우측 하단 (원래 위치)
+//   카드 상세                                   = cat_library / 우측 하단 (원래 위치)
+function setBottomNavCat(srcFile, pos /* 'center' | 'right' | 'right-far' | 'corner' */, size /* 'large'? */) {
+  const cat = document.querySelector('.bottom-nav-cat');
+  if (!cat) return;
+  const target = 'assets/cat/' + srcFile;
+  if (!cat.src.endsWith(srcFile)) cat.src = target;
+  // right-far 는 .right + .right-far 둘 다 적용 — CSS 가 right-far 로 left override
+  cat.classList.toggle('right', pos === 'right' || pos === 'right-far');
+  cat.classList.toggle('right-far', pos === 'right-far');
+  cat.classList.toggle('corner', pos === 'corner');
+  cat.classList.toggle('large', size === 'large');
+  if (cat.style.display === 'none') cat.style.display = '';
+}
+function hideBottomNavCat() {
+  const cat = document.querySelector('.bottom-nav-cat');
+  if (cat) cat.style.display = 'none';
+}
+function showBottomNavCat() {
+  const cat = document.querySelector('.bottom-nav-cat');
+  if (cat) cat.style.display = '';
+}
+// cat 이미지 preload — 카드 상세 진입 시 cat_today 가 잠깐 보이는 깜빡임 방지
+['cat_today.png', 'cat_pen.png', 'cat_library.png', 'cat_struck.png', 'cat_empty.png'].forEach((f) => {
+  const img = new Image();
+  img.src = 'assets/cat/' + f;
+});
+function updateBottomNavCatForView(view) {
+  if (view === 'feed') setBottomNavCat('cat_pen.png', 'right', 'large');             // 피드 — 카드 상세 크기와 동일
+  else if (view === 'archive') setBottomNavCat('cat_struck.png', 'right', 'large');   // LIBRARY — 카드 상세 크기와 동일
+  else if (view === 'daily' || view === 'settings') setBottomNavCat('cat_empty.png', 'corner'); // daily/MY 동일
+  else setBottomNavCat('cat_today.png', 'center');
+}
+
 // ---------- View switching ----------
 function setView(view) {
   // LIBRARY(archive) 탭은 전체 도서 카탈로그 — 누구나 열람(익명 게이트 제거).
@@ -7167,6 +7254,7 @@ function setView(view) {
   });
 
   renderYarnChip();   // 상단바 실타래 칩 — 잔여 무료분+충전분 반영
+  updateBottomNavCatForView(view);  // 하단바 고양이 자세 — feed/그 외
 
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
   if (view === 'feed') {
