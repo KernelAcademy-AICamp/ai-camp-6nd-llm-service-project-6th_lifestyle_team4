@@ -7226,7 +7226,7 @@ function showBottomNavCat() {
 function updateBottomNavCatForView(view) {
   if (view === 'feed') setBottomNavCat('cat_pen.png', 'right', 'large');             // 피드 — 카드 상세 크기와 동일
   else if (view === 'archive') setBottomNavCat('cat_struck.png', 'right', 'large');   // LIBRARY — 카드 상세 크기와 동일
-  else if (view === 'daily') setBottomNavCat('cat_empty.png', 'corner');               // 옛날 default 자리 복원
+  else if (view === 'daily' || view === 'settings') setBottomNavCat('cat_empty.png', 'corner'); // daily/MY 동일
   else setBottomNavCat('cat_today.png', 'center');
 }
 
