@@ -114,6 +114,11 @@ struct HomeView: View {
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
         }
+        // Onboarding finished (prefSelected flips true) → make the first,
+        // preference-weighted today pick that loadOnce held back.
+        .onChange(of: prefs.prefSelected) { _, selected in
+            if selected { Task { await loadOnce() } }
+        }
         .overlay {
             if showAccountPrompt {
                 AccountRequiredPrompt {
@@ -161,6 +166,11 @@ struct HomeView: View {
 
     private func loadOnce() async {
         if hasLoaded { return }
+        // Hold the first today-pick until first-run onboarding finishes — the
+        // picker covers Home while prefs are still empty, so picking now would
+        // produce a non-preference-weighted card. Returning users (prefSelected
+        // already true) fall straight through and pick immediately, as before.
+        guard prefs.prefSelected else { return }
         await reload(deterministic: true)
         hasLoaded = true
     }
@@ -180,14 +190,16 @@ struct HomeView: View {
                 pick = Recommend.pickToday(
                     all: allCards,
                     tasteEnabled: prefs.tasteEnabled,
-                    bookmarkCards: bookmarks.bookmarkCards
+                    bookmarkCards: bookmarks.bookmarkCards,
+                    prefs: prefs.userPrefs
                 )
             } else {
                 pick = Recommend.pickRandom(
                     all: allCards,
                     tasteEnabled: prefs.tasteEnabled,
                     bookmarkCards: bookmarks.bookmarkCards,
-                    recentIds: prefs.recentlyShown
+                    recentIds: prefs.recentlyShown,
+                    prefs: prefs.userPrefs
                 )
             }
             if let pick { prefs.rememberShown(pick.cardId) }
