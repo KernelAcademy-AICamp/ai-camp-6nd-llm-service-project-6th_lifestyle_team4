@@ -4581,11 +4581,15 @@ function openOzHouse() {
   const nav = document.querySelector('.bottom-nav');
   if (nav) nav.style.display = 'none';
   if (feedFab) feedFab.style.display = 'none';
-  // 고양이 데모(iframe) — 닫혀 있을 때는 about:blank 로 두니, 진입 시 dataset.src 로 다시 로드.
+  // OZ's house iframe — 첫 진입은 init 코드의 랜덤 placeCat 으로 자세 결정.
+  // 재진입은 iframe 이 이미 로드된 상태 → 자식의 refreshCat() 직접 호출해 매번 새 자세.
   const frame = document.getElementById('oz-house-frame');
   if (frame) {
-    const target = frame.dataset.src || 'cat-demo.html';
-    if (!frame.src || frame.src === 'about:blank' || !frame.src.includes(target)) {
+    const target = frame.dataset.src || 'oz-house.html';
+    const cw = frame.contentWindow;
+    if (cw && typeof cw.refreshCat === 'function') {
+      try { cw.refreshCat(); } catch {}
+    } else if (!frame.src || frame.src === 'about:blank' || !frame.src.includes(target)) {
       frame.src = target;
     }
   }

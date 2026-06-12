@@ -424,6 +424,8 @@
     catWrap.style.opacity='0'; catShadow.style.opacity='0';
     setTimeout(()=>{ placeCat(i); catWrap.style.opacity='1'; catShadow.style.opacity='1'; }, 160);
   }
+  // 부모(m/index.html) 가 OZ's house 진입 시 직접 호출 → 매번 랜덤 자세
+  window.refreshCat = refreshCat;
   const btnRefresh=$('#btnRefresh');
   btnRefresh.addEventListener('click',()=>{ btnRefresh.classList.add('spin'); setTimeout(()=>btnRefresh.classList.remove('spin'),520); refreshCat(); });
 
