@@ -483,53 +483,192 @@
   /* 밤/낮 */
   document.querySelectorAll('.seg[data-ctrl="time"] button').forEach(b=>b.addEventListener('click',()=>{ document.querySelectorAll('.seg[data-ctrl="time"] button').forEach(x=>x.classList.toggle('on',x===b)); room.classList.toggle('night', b.dataset.val==='night'); }));
 
-  /* 출석 데이터 */
-  const ATTEND={ offset:1, days:30, today:12, set:new Set([1,2,3,4,6,7,8,9,10,11,12]) };
-  function calCells(){ const a=[]; for(let i=0;i<ATTEND.offset;i++) a.push(null); for(let d=1; d<=ATTEND.days; d++) a.push({day:d, on:ATTEND.set.has(d), today:d===ATTEND.today}); while(a.length%7) a.push(null); return a; }
-  function buildWallCal(){ $('#wallCalGrid').innerHTML = calCells().map(c=> !c ? `<b class="empty"></b>` : `<b class="${c.on?'on':''} ${c.today?'today':''}"></b>`).join(''); }
+  /* ───── 부모(m/index.html) 의 실데이터로 매칭 — state / localStorage / Supabase ───── */
+  const P = () => window.parent || {};
+  const parentState = () => (P().state || {});
 
-  /* 시트 콘텐츠 */
-  function sheetAttend(){ const wd=['일','월','화','수','목','금','토'];
-    return `<div class="cal-stats"><div class="stat"><b>11일</b><span>이번 달 출석</span></div><div class="stat"><b>7일 🔥</b><span>연속 출석</span></div><div class="stat"><b>+5 / 일</b><span>실타래 적립</span></div></div>
+  function escapeText(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function todayStrLocal(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  function getAttendanceHistory(){
+    try { const raw = P().localStorage?.getItem('ds.attendance.history'); const arr = JSON.parse(raw || '[]'); return Array.isArray(arr) ? arr : []; }
+    catch { return []; }
+  }
+  function relTime(iso){
+    if (!iso) return '';
+    const d = new Date(iso); const diff = Date.now() - d.getTime();
+    const day = Math.floor(diff / 86400000);
+    if (day <= 0) return '오늘';
+    if (day === 1) return '어제';
+    if (day < 7) return `${day}일 전`;
+    if (day < 30) return `${Math.floor(day/7)}주 전`;
+    return `${d.getMonth()+1}월 ${d.getDate()}일`;
+  }
+  function fmtDate(iso){
+    const d = new Date(iso); return `${d.getMonth()+1}월 ${d.getDate()}일`;
+  }
+  function empty(msg){
+    return `<p style="text-align:center;color:var(--walnut);padding:40px 16px;font-size:13px;line-height:1.6;">${escapeText(msg)}</p>`;
+  }
+
+  /* 벽 달력(작은) — 현재 월 출석 표시 */
+  function buildWallCal(){
+    const el = $('#wallCalGrid'); if (!el) return;
+    const now = new Date();
+    const year = now.getFullYear(), month = now.getMonth(), today = now.getDate();
+    const firstDow = new Date(year, month, 1).getDay();
+    const last = new Date(year, month + 1, 0).getDate();
+    const histSet = new Set(getAttendanceHistory());
+    const cells = [];
+    for (let i = 0; i < firstDow; i++) cells.push(null);
+    for (let d = 1; d <= last; d++) {
+      const k = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells.push({ day:d, on:histSet.has(k), today:d===today });
+    }
+    while (cells.length % 7) cells.push(null);
+    el.innerHTML = cells.map(c => !c ? `<b class="empty"></b>` : `<b class="${c.on?'on':''} ${c.today?'today':''}"></b>`).join('');
+    // 월 라벨도 동기화 (mockup 은 '6월' 고정)
+    const m = el.parentElement?.querySelector('.m'); if (m) m.textContent = `${month+1}월`;
+  }
+
+  /* ───── 출석 시트 — localStorage ds.attendance.history ───── */
+  function sheetAttend(){
+    const wd = ['일','월','화','수','목','금','토'];
+    const now = new Date();
+    const year = now.getFullYear(), month = now.getMonth(), today = now.getDate();
+    const firstDow = new Date(year, month, 1).getDay();
+    const last = new Date(year, month + 1, 0).getDate();
+    const history = getAttendanceHistory();
+    const histSet = new Set(history);
+    const monthPrefix = `${year}-${String(month+1).padStart(2,'0')}`;
+    const monthCount = history.filter(d => typeof d === 'string' && d.startsWith(monthPrefix)).length;
+    // 연속 출석 — 오늘부터 거꾸로
+    let streak = 0;
+    for (let i = 0; i < 366; i++) {
+      const d = new Date(year, month, today - i);
+      const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (histSet.has(k)) streak++; else break;
+    }
+    const cells = [];
+    for (let i = 0; i < firstDow; i++) cells.push(null);
+    for (let d = 1; d <= last; d++) {
+      const k = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells.push({ day:d, on:histSet.has(k), today:d===today });
+    }
+    while (cells.length % 7) cells.push(null);
+    return `<div class="cal-stats">
+        <div class="stat"><b>${monthCount}일</b><span>이번 달 출석</span></div>
+        <div class="stat"><b>${streak}일 🔥</b><span>연속 출석</span></div>
+        <div class="stat"><b>+5 / 일</b><span>실타래 적립</span></div>
+      </div>
       <div class="cal-grid head">${wd.map((w,i)=>`<div class="cal-wd ${i===0?'sun':''}">${w}</div>`).join('')}</div>
-      <div class="cal-grid">${calCells().map(c=> !c ? `<div class="cal-cell"></div>` : `<div class="cal-cell ${c.on?'on':''} ${c.today?'today':''}">${c.day}</div>`).join('')}</div>
-      <p class="sheet-note">매일 OZ의 집에 출석하면 <b>실타래 5개</b>가 적립돼요. 모은 실타래로 소파·러그·캣타워를 꾸밀 수 있어요.</p>`; }
-  function sheetBookmarks(){ const items=[
-      {sp:'#D85A30',t:'위대한 개츠비',a:'F. 스콧 피츠제럴드',q:'우리는 물결을 거스르는 배처럼, 끊임없이 과거로 떠밀려가면서도 앞으로 나아간다.'},
-      {sp:'#6E8C4E',t:'데미안',a:'헤르만 헤세',q:'새는 알에서 나오려고 투쟁한다. 알은 곧 세계다.'},
-      {sp:'#5E7A6B',t:'어린 왕자',a:'생텍쥐페리',q:'가장 중요한 것은 눈에 보이지 않아.'},
-      {sp:'#9C7B92',t:'노인과 바다',a:'어니스트 헤밍웨이',q:'인간은 파멸당할 수는 있어도 패배하지는 않는다.'},
-      {sp:'#C9A24B',t:'1984',a:'조지 오웰',q:'자유란 둘 더하기 둘은 넷이라고 말할 수 있는 자유다.'} ];
-    return items.map(i=>`<div class="bm"><div class="bm-spine" style="background:${i.sp}"></div><div class="bm-txt"><div class="bm-q">&ldquo;${i.q}&rdquo;</div><div class="bm-meta">${i.t} · ${i.a}</div></div><div class="bm-mark">🔖</div></div>`).join('')
-      + `<p class="sheet-note">책 상세에서 마음에 든 한 줄을 <b>북마크</b>하면 벽 책장에 꽂혀요.</p>`; }
-  const REC={ cmt:[
-      {card:'오늘의 한 줄 · 6월 12일',txt:'이 문장 덕분에 하루를 버텼어요. 다시 읽어도 좋네요.',date:'2일 전',likes:3},
-      {card:'데미안 · 명대사',txt:'알을 깨는 게 이렇게 아픈 일인 줄 몰랐다…',date:'5일 전',likes:7},
-      {card:'위대한 개츠비',txt:'초록 불빛 장면이 계속 생각나요.',date:'1주 전',likes:2} ],
-    one:[
-      {date:'6월 12일',txt:'오늘은 한 페이지를 넘기듯 가볍게.'},
-      {date:'6월 11일',txt:'느려도 괜찮아, 멈추지만 않으면.'},
-      {date:'6월 9일',txt:'좋아하는 문장 하나로 하루가 단단해진다.'},
-      {date:'6월 7일',txt:'비 오는 날엔 비 오는 날의 문장이 있다.'} ],
-    hl:[ {q:'가장 중요한 것은 눈에 보이지 않아.',src:'어린 왕자'},
-      {q:'인간은 파멸당할 수는 있어도 패배하지는 않는다.',src:'노인과 바다'},
-      {q:'우리는 물결을 거스르는 배처럼 끊임없이 과거로 떠밀려간다.',src:'위대한 개츠비'} ] };
-  function renderRec(t){ if(t==='cmt') return REC.cmt.map(c=>`<div class="rec-item"><div class="rec-card">${c.card}</div><div class="rec-txt">${c.txt}</div><div class="rec-foot"><span>${c.date}</span><span>♥ ${c.likes}</span></div></div>`).join('');
-    if(t==='one') return REC.one.map(o=>`<div class="rec-item one"><div class="one-date">${o.date}</div><div class="one-line">&ldquo;${o.txt}&rdquo;</div></div>`).join('');
-    return REC.hl.map(h=>`<div class="rec-item hl"><div class="rec-hl">&ldquo;${h.q}&rdquo;</div><div class="rec-src">— ${h.src}</div></div>`).join(''); }
-  function sheetRecords(){ return `<div class="rec-tabs"><button class="rec-tab on" data-rt="cmt">내 댓글</button><button class="rec-tab" data-rt="one">내 한줄</button><button class="rec-tab" data-rt="hl">내 하이라이트</button></div><div id="recBody"></div>`; }
+      <div class="cal-grid">${cells.map(c => !c ? `<div class="cal-cell"></div>` : `<div class="cal-cell ${c.on?'on':''} ${c.today?'today':''}">${c.day}</div>`).join('')}</div>
+      <p class="sheet-note">매일 OZ의 집에 출석하면 <b>실타래 5개</b>가 적립돼요.</p>`;
+  }
+
+  /* ───── 북마크 시트 — parent.state.bookmarks ───── */
+  function sheetBookmarks(){
+    const bookmarks = parentState().bookmarks || [];
+    if (!bookmarks.length) {
+      return empty(parentState().isAnonymous
+        ? '로그인 후 내 북마크를 볼 수 있어요.'
+        : '아직 북마크한 명대사가 없어요.\n책 상세에서 마음에 든 한 줄을 북마크해보세요.');
+    }
+    const colors = ['#D85A30','#6E8C4E','#5E7A6B','#9C7B92','#C9A24B','#B5663B','#5E7A55','#7B5A3C'];
+    return bookmarks.slice(0, 30).map((b, i) => {
+      const card = b.cards || {};
+      const w = card.works || {};
+      const q = String(card.quote || '').slice(0, 140);
+      const sp = colors[i % colors.length];
+      return `<div class="bm">
+        <div class="bm-spine" style="background:${sp}"></div>
+        <div class="bm-txt">
+          <div class="bm-q">&ldquo;${escapeText(q)}&rdquo;</div>
+          <div class="bm-meta">${escapeText(w.title || '')}${w.author ? ' · ' + escapeText(w.author) : ''}</div>
+        </div>
+        <div class="bm-mark">🔖</div>
+      </div>`;
+    }).join('') + `<p class="sheet-note">책 상세에서 마음에 든 한 줄을 <b>북마크</b>하면 벽 책장에 꽂혀요.</p>`;
+  }
+
+  /* ───── 기록 시트 — Supabase 비동기 fetch ───── */
+  function sheetRecordsShell(){
+    return `<div class="rec-tabs">
+      <button class="rec-tab on" data-rt="cmt">내 댓글</button>
+      <button class="rec-tab" data-rt="one">내 감상평</button>
+      <button class="rec-tab" data-rt="hl">내 하이라이트</button>
+    </div><div id="recBody">${empty('로딩중⋯')}</div>`;
+  }
+  async function loadRec(type, rb){
+    const st = parentState();
+    if (st.isAnonymous || !st.userId) { rb.innerHTML = empty('로그인 후 내 기록을 볼 수 있어요.'); return; }
+    let sb;
+    try { sb = await P().getSupabase(); }
+    catch (e) { rb.innerHTML = empty('데이터를 불러오지 못했어요.'); return; }
+    try {
+      if (type === 'cmt') {
+        const { data, error } = await sb.from('card_comments')
+          .select('comment_id, card_id, body, created_at, cards(quote, works(title))')
+          .eq('user_id', st.userId).order('created_at', { ascending: false }).limit(30);
+        if (error) throw error;
+        if (!data?.length) { rb.innerHTML = empty('아직 작성한 댓글이 없어요.'); return; }
+        rb.innerHTML = data.map(c => {
+          const w = c.cards?.works || {}; const head = [w.title, (c.cards?.quote || '').slice(0, 24)].filter(Boolean).join(' · ');
+          return `<div class="rec-item">
+            <div class="rec-card">${escapeText(head)}</div>
+            <div class="rec-txt">${escapeText(c.body || '')}</div>
+            <div class="rec-foot"><span>${relTime(c.created_at)}</span></div>
+          </div>`;
+        }).join('');
+      } else if (type === 'one') {
+        const { data, error } = await sb.from('feed_posts')
+          .select('post_id, body, created_at, cards(quote, works(title))')
+          .eq('user_id', st.userId).order('created_at', { ascending: false }).limit(30);
+        if (error) throw error;
+        if (!data?.length) { rb.innerHTML = empty('아직 작성한 감상평이 없어요.'); return; }
+        rb.innerHTML = data.map(o => `<div class="rec-item one">
+            <div class="one-date">${fmtDate(o.created_at)}</div>
+            <div class="one-line">&ldquo;${escapeText(o.body || '')}&rdquo;</div>
+          </div>`).join('');
+      } else {
+        const { data, error } = await sb.from('card_highlights')
+          .select('highlight_id, selected_text, created_at, cards(works(title))')
+          .eq('user_id', st.userId).order('created_at', { ascending: false }).limit(30);
+        if (error) throw error;
+        if (!data?.length) { rb.innerHTML = empty('아직 만든 하이라이트가 없어요.'); return; }
+        rb.innerHTML = data.map(h => `<div class="rec-item hl">
+            <div class="rec-hl">&ldquo;${escapeText(h.selected_text || '')}&rdquo;</div>
+            <div class="rec-src">— ${escapeText(h.cards?.works?.title || '')}</div>
+          </div>`).join('');
+      }
+    } catch (e) {
+      console.warn('[oz-house] loadRec failed:', e);
+      rb.innerHTML = empty('데이터를 불러오지 못했어요.');
+    }
+  }
 
   const backdrop=$('#backdrop'), sheet=$('#sheet'), sheetTitle=$('#sheetTitle'), sheetBody=$('#sheetBody');
-  function openSheet(type){ let title,body;
-    if(type==='attend'){ title='출석 달력'; body=sheetAttend(); }
-    else if(type==='bookmarks'){ title='내 북마크'; body=sheetBookmarks(); }
-    else { title='나의 기록'; body=sheetRecords(); }
-    sheetTitle.textContent=title; sheetBody.innerHTML=body;
-    if(type==='records'){ const rb=$('#recBody'); rb.innerHTML=renderRec('cmt'); sheetBody.querySelectorAll('.rec-tab').forEach(b=>b.addEventListener('click',()=>{ sheetBody.querySelectorAll('.rec-tab').forEach(x=>x.classList.toggle('on',x===b)); rb.innerHTML=renderRec(b.dataset.rt); })); }
-    sheetBody.scrollTop=0; backdrop.classList.add('open'); sheet.classList.add('open'); }
+  function openSheet(type){
+    let title, body;
+    if (type === 'attend') { title = '출석 달력'; body = sheetAttend(); }
+    else if (type === 'bookmarks') { title = '내 북마크'; body = sheetBookmarks(); }
+    else { title = '나의 기록'; body = sheetRecordsShell(); }
+    sheetTitle.textContent = title;
+    sheetBody.innerHTML = body;
+    if (type === 'records') {
+      const rb = $('#recBody');
+      loadRec('cmt', rb);
+      sheetBody.querySelectorAll('.rec-tab').forEach(b => b.addEventListener('click', () => {
+        sheetBody.querySelectorAll('.rec-tab').forEach(x => x.classList.toggle('on', x === b));
+        rb.innerHTML = empty('로딩중⋯');
+        loadRec(b.dataset.rt, rb);
+      }));
+    }
+    sheetBody.scrollTop = 0;
+    backdrop.classList.add('open'); sheet.classList.add('open');
+  }
   function closeSheet(){ backdrop.classList.remove('open'); sheet.classList.remove('open'); }
-  document.querySelectorAll('[data-open]').forEach(el=>el.addEventListener('click',()=>openSheet(el.dataset.open)));
-  backdrop.addEventListener('click',closeSheet); $('#sheetClose').addEventListener('click',closeSheet);
+  document.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => openSheet(el.dataset.open)));
+  backdrop.addEventListener('click', closeSheet); $('#sheetClose').addEventListener('click', closeSheet);
 
   /* 초기화 */
   apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');

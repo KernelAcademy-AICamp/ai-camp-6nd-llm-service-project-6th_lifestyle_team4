@@ -1,5 +1,7 @@
 // Daily Script SPA — Android HomeScreen/ArchiveScreen/SettingsScreen/DetailScreen port
 import { getSupabase } from '/assets/supabase-client.js';
+/* OZ's house iframe 이 부모의 Supabase 클라이언트에 접근하기 위해 window 에 노출 */
+window.getSupabase = getSupabase;
 import { initAnalytics, track, identify, setUserProps, resetUser } from '/assets/analytics.js';
 // onboarding.js는 선택적 기능 — 정적 import면 파일 누락/404 시 m-app.js 전체가
 // 로드 실패해 "무한 스피너"가 된다. 동적 import + 무해한 폴백으로 부팅을 막지 않게 한다.
@@ -250,6 +252,8 @@ const fpCommentsList = $('#fp-comments-list');
 const toastEl = $('#toast');
 
 // ---------- State ----------
+// m-app.js 는 ES module — state/getSupabase 가 자동으로 window 에 노출되지 않는다.
+// OZ's house iframe(oz-house.html) 이 부모의 데이터에 접근하기 위해 명시적으로 window 에 게시.
 const state = {
   userId: null,
   authUid: null,
@@ -308,6 +312,7 @@ const state = {
   notices: [],                 // 공지사항 (Supabase notices 테이블)
   noticesLoaded: false,
 };
+window.state = state;   // OZ's house iframe 에서 parent.state 로 접근
 let detailCommentsChannel = null;
 
 // 표시용 제목 정규화 — DB 원본은 그대로 두고 화면에만 적용.
