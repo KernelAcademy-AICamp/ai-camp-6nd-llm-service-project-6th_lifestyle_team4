@@ -5086,6 +5086,7 @@ function openDetail(card) {
 
 function openDetailApproved(card) {
   if (!card) return;
+  setBottomNavCat('cat_library.png');   // 카드 상세 — 책장 앞 자세
   // 카드 열람 누적 카운트 — 임계치 도달 시, 카드를 가리지 않도록 '닫힐 때' 유도 팝업 예약
   if (bumpCardsViewed() >= FEEDBACK_NUDGE_THRESHOLD && !feedbackNudgeSeen()) {
     state._feedbackNudgePending = true;
@@ -5321,6 +5322,7 @@ function closeDetailInternal() {
   detailScreen.classList.remove('open');
   unsubscribeFromDetailComments();
   cancelReply();
+  updateBottomNavCatForView(state.currentView);   // 카드 상세 닫힘 → 탭별 기본 자세 복귀
   setTimeout(() => {
     detailScreen.style.display = 'none';
     document.body.style.overflow = '';
@@ -7158,6 +7160,21 @@ function renderNotice() {
   paintNoticeBadge();
 }
 
+// 하단바 장식 고양이 — 페이지별로 자세를 바꾼다.
+//   default(daily/home/archive/notice/settings) = cat_today (실타래 굴리는 자세)
+//   feed                                       = cat_pen   (펜으로 쓰는 자세)
+//   카드 상세                                   = cat_library (책장 앞 자세) — openDetail/closeDetail 에서 직접 호출
+function setBottomNavCat(srcFile) {
+  const cat = document.querySelector('.bottom-nav-cat');
+  if (!cat) return;
+  const target = 'assets/cat/' + srcFile;
+  if (!cat.src.endsWith(srcFile)) cat.src = target;
+}
+function updateBottomNavCatForView(view) {
+  if (view === 'feed') setBottomNavCat('cat_pen.png');
+  else setBottomNavCat('cat_today.png');
+}
+
 // ---------- View switching ----------
 function setView(view) {
   // LIBRARY(archive) 탭은 전체 도서 카탈로그 — 누구나 열람(익명 게이트 제거).
@@ -7181,6 +7198,7 @@ function setView(view) {
   });
 
   renderYarnChip();   // 상단바 실타래 칩 — 잔여 무료분+충전분 반영
+  updateBottomNavCatForView(view);  // 하단바 고양이 자세 — feed/그 외
 
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
   if (view === 'feed') {
