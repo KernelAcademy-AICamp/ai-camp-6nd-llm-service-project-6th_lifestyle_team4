@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OZ's house — 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#FAF8F2; --roast:#2C2620; --walnut:#6B5D4F; --latte:#E8E1D3;
+    --sand:#C9B89A; --espresso:#0E0C0A; --cta:#D85A30; --highlight:#F4C20D;
+    --serif:'Nanum Myeongjo', serif;
+    --sans:'Noto Sans KR', system-ui, sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{
+    font-family:var(--sans); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center; gap:18px;
+    padding:30px 16px 48px;
+    background:radial-gradient(120% 80% at 50% 0%, #efe9dd 0%, #e3ddcf 55%, #d8d1c1 100%);
+    color:var(--espresso);
+  }
+  .board-head{ text-align:center; }
+  .board-head .eyebrow{ font-size:11px; letter-spacing:.34em; text-transform:uppercase; color:var(--walnut); font-weight:700; }
+  .board-head h1{ font-family:var(--serif); font-weight:800; font-size:26px; margin-top:6px; letter-spacing:.01em; }
+  .board-head .sub{ font-size:12.5px; color:var(--walnut); margin-top:5px; }
+
+  /* 폰 + 컨트롤 패널 가로 배치 */
+  .stage{ display:flex; align-items:flex-start; gap:24px; }
+
+  /* ── 폰 프레임 ── */
+  .phone{ position:relative; width:390px; height:844px; border-radius:46px; background:#000; padding:11px;
+    box-shadow:0 40px 80px -28px rgba(60,38,18,.5), 0 8px 22px rgba(0,0,0,.18), inset 0 0 0 2px #2a2622; }
+  .screen{ position:relative; width:100%; height:100%; border-radius:36px; overflow:hidden; background:#FBF6EC; }
+  .notch{ position:absolute; top:0; left:50%; transform:translateX(-50%); width:128px; height:26px; background:#000; border-radius:0 0 16px 16px; z-index:60; }
+
+  /* ════════ ROOM ════════ */
+  .room{ position:absolute; inset:0; }
+  .wall{ position:absolute; top:0; left:0; right:0; height:520px;
+    background:linear-gradient(180deg,#FCF7EE 0%, #F4ECDB 62%, #EFE6D2 100%); transition:background .5s; }
+  .wall::before{ content:''; position:absolute; left:-40px; top:-30px; width:320px; height:340px; border-radius:50%;
+    background:radial-gradient(circle at 40% 40%, rgba(247,201,160,.5) 0%, rgba(247,201,160,0) 68%); transition:background .5s; }
+  .baseboard{ position:absolute; left:0; right:0; top:498px; height:24px;
+    background:linear-gradient(180deg,#EBE0CB 0%, #E0D3B8 100%); border-top:1px solid #F3ECDD;
+    box-shadow:0 2px 4px rgba(90,58,30,.12); z-index:2; transition:background .5s; }
+  .floor{ position:absolute; left:0; right:0; top:520px; bottom:0;
+    background:repeating-linear-gradient(90deg, rgba(90,58,30,0) 0 52px, rgba(90,58,30,.10) 52px 53px),
+      linear-gradient(180deg,#DAC7A3 0%, #CBB58D 55%, #BFA77E 100%); transition:background .5s; }
+  .lightbeam{ position:absolute; left:30px; top:206px; width:230px; height:360px;
+    background:linear-gradient(160deg, rgba(247,210,160,.42) 0%, rgba(247,210,160,0) 60%);
+    transform:skewX(-16deg); transform-origin:top left; z-index:1; pointer-events:none; filter:blur(2px); transition:background .5s; }
+
+  /* ── 창문 ── */
+  .window{ position:absolute; left:24px; top:74px; width:120px; height:142px; border-radius:60px 60px 6px 6px;
+    background:linear-gradient(180deg,#F8C99F 0%, #F6D9B4 46%, #F0E6CE 100%); border:8px solid var(--walnut);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.45), 0 8px 16px rgba(90,58,30,.16); overflow:hidden; z-index:2; transition:background .5s, border-color .5s; }
+  .window .sun{ position:absolute; left:50%; top:30px; transform:translateX(-50%); width:38px; height:38px; border-radius:50%;
+    background:radial-gradient(circle, #FBE9C2 0%, #F6C98C 70%); box-shadow:0 0 22px 8px rgba(246,201,140,.7); transition:all .4s; }
+  .window .hills{ position:absolute; left:-6px; right:-6px; bottom:-2px; height:46px;
+    background:radial-gradient(40px 32px at 24% 100%, #C9A777 0 99%, transparent 100%),
+      radial-gradient(54px 40px at 70% 100%, #BD9A68 0 99%, transparent 100%); transition:filter .5s; }
+  .window .muntin-v{ position:absolute; left:50%; top:0; bottom:0; width:5px; transform:translateX(-50%); background:var(--walnut); }
+  .window .muntin-h{ position:absolute; left:0; right:0; top:54%; height:5px; background:var(--walnut); }
+  .window .stars{ position:absolute; inset:0; opacity:0; transition:opacity .5s; pointer-events:none; }
+  .window .stars i{ position:absolute; width:3px; height:3px; border-radius:50%; background:#FCF7E8; box-shadow:0 0 4px 1px rgba(255,250,230,.7); }
+  .sill{ position:absolute; left:14px; top:212px; width:140px; height:9px; background:linear-gradient(180deg,#7A5A3B,#5A4026); border-radius:3px; box-shadow:0 4px 8px rgba(90,58,30,.18); z-index:3; }
+  .sill-pot{ position:absolute; left:104px; top:188px; width:26px; height:24px; z-index:3; }
+  .sill-pot .p{ position:absolute; bottom:0; left:3px; width:20px; height:14px; background:linear-gradient(180deg,#C56B3E,#A8542C); border-radius:0 0 5px 5px; clip-path:polygon(8% 0,92% 0,82% 100%,18% 100%); }
+  .sill-pot .l{ position:absolute; bottom:11px; left:50%; width:9px; height:18px; background:#7E9B5A; border-radius:60% 60% 0 0; transform-origin:bottom center; }
+  .sill-pot .l.a{ transform:translateX(-90%) rotate(-22deg); } .sill-pot .l.b{ transform:translateX(-10%) rotate(20deg); background:#8FA968; } .sill-pot .l.c{ transform:translateX(-50%) rotate(0); height:21px; }
+
+  /* ── 밤 모드 ── */
+  .room.night .wall{ background:linear-gradient(180deg,#28324c 0%, #303b56 60%, #36415e 100%); }
+  .room.night .wall::before{ background:radial-gradient(circle at 62% 26%, rgba(190,205,255,.20) 0%, rgba(190,205,255,0) 66%); }
+  .room.night .baseboard{ background:linear-gradient(180deg,#2c3550,#242c44); border-top-color:#3b466a; }
+  .room.night .floor{ background:repeating-linear-gradient(90deg, rgba(10,15,35,0) 0 52px, rgba(10,15,35,.16) 52px 53px),
+      linear-gradient(180deg,#6a5f48 0%, #564d3a 55%, #4a4231 100%); }
+  .room.night .lightbeam{ background:linear-gradient(160deg, rgba(150,180,255,.30) 0%, rgba(150,180,255,0) 60%); }
+  .room.night .window{ background:linear-gradient(180deg,#141d38 0%, #1d2c52 52%, #243353 100%); border-color:#4a4234; }
+  .room.night .window .sun{ left:auto; right:20px; top:22px; transform:none; width:32px; height:32px;
+    background:radial-gradient(circle at 38% 38%, #FBF8EC 0%, #E4DEC6 72%); box-shadow:0 0 16px 5px rgba(240,238,210,.45); }
+  .room.night .window .sun::after{ content:''; position:absolute; left:9px; top:7px; width:8px; height:8px; border-radius:50%; background:rgba(205,200,175,.55); }
+  .room.night .window .hills{ filter:brightness(.42) saturate(.8); }
+  .room.night .window .stars{ opacity:1; }
+  .night-veil{ position:absolute; inset:0; z-index:8; pointer-events:none; opacity:0; transition:opacity .5s;
+    background:radial-gradient(120% 90% at 32% 24%, rgba(60,80,140,.03) 0%, rgba(14,20,44,.30) 100%); }
+  .room.night .night-veil{ opacity:1; }
+
+  /* ── 벽 액자 ── */
+  .frame{ position:absolute; right:26px; top:90px; width:96px; height:118px; background:linear-gradient(180deg,#161310,#0E0C0A); padding:8px; border-radius:3px; box-shadow:0 10px 18px rgba(0,0,0,.22), inset 0 0 0 1px rgba(255,255,255,.06); z-index:2; }
+  .frame .mat{ height:100%; background:linear-gradient(180deg,#FCF8EF,#F4ECDC); border-radius:2px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:7px 6px; text-align:center; }
+  .frame .quote{ font-family:var(--serif); font-weight:800; font-size:26px; line-height:.5; color:var(--cta); }
+  .frame .line{ font-family:var(--serif); font-size:11px; line-height:1.4; color:var(--roast); }
+  .frame .tag{ font-size:7px; letter-spacing:.14em; color:var(--walnut); font-weight:700; text-transform:uppercase; white-space:nowrap; }
+  .frame .star{ color:var(--highlight); font-size:10px; letter-spacing:.18em; }
+
+  /* ── 소파 (변형) ── */
+  .sofa{ position:absolute; left:134px; bottom:204px; width:208px; height:118px; z-index:4;
+    --s-frame:#7B5A3C; --s-frame-d:#6E4F30; --s-seat:#8A6A45; --s-seat-d:#6E4F30; --s-cushion:#F1E7D2; --s-cushion-d:#E3D7BC; --s-pa:#F4C20D; --s-pa-d:#D9A800; --s-pb:#E0683E; --s-pb-d:#C44E26; }
+  .sofa .back{ position:absolute; left:18px; right:18px; top:0; height:64px; background:linear-gradient(180deg,var(--s-frame),var(--s-frame-d)); border-radius:18px 18px 8px 8px; box-shadow:inset 0 4px 0 rgba(255,255,255,.07); }
+  .sofa .seat{ position:absolute; left:8px; right:8px; bottom:14px; height:54px; background:linear-gradient(180deg,var(--s-seat),var(--s-seat-d)); border-radius:12px; }
+  .sofa .arm{ position:absolute; bottom:8px; width:30px; height:74px; background:linear-gradient(180deg,var(--s-frame),var(--s-frame-d)); border-radius:14px; }
+  .sofa .arm.l{ left:0; } .sofa .arm.r{ right:0; }
+  .sofa .cushion{ position:absolute; bottom:30px; width:78px; height:46px; background:linear-gradient(180deg,var(--s-cushion),var(--s-cushion-d)); border-radius:12px; box-shadow:inset 0 2px 6px rgba(255,255,255,.5), 0 2px 4px rgba(0,0,0,.12); }
+  .sofa .cushion.l{ left:30px; } .sofa .cushion.r{ right:30px; }
+  .sofa .pillow{ position:absolute; bottom:40px; width:38px; height:38px; border-radius:9px; transform:rotate(8deg); box-shadow:0 3px 6px rgba(0,0,0,.18); }
+  .sofa .pillow.coral{ right:38px; background:linear-gradient(150deg,var(--s-pb),var(--s-pb-d)); }
+  .sofa .pillow.gold{ left:40px; background:linear-gradient(150deg,var(--s-pa),var(--s-pa-d)); transform:rotate(-7deg); }
+  .sofa .legs{ position:absolute; left:14px; right:14px; bottom:0; height:12px; }
+  .sofa .legs::before,.sofa .legs::after{ content:''; position:absolute; bottom:0; width:10px; height:12px; background:#43301C; border-radius:0 0 3px 3px; }
+  .sofa .legs::before{ left:6px; } .sofa .legs::after{ right:6px; }
+
+  /* ── 캣타워 (변형) ── */
+  .tower{ position:absolute; right:12px; bottom:230px; width:96px; height:232px; z-index:3; }
+  .tw-base{ position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:84px; height:16px; background:linear-gradient(180deg,#7B5A3C,#5A4026); border-radius:6px; box-shadow:0 6px 12px rgba(0,0,0,.2); }
+  .tw-post{ position:absolute; left:50%; transform:translateX(-50%); width:18px; background:repeating-linear-gradient(0deg,#DAC79E 0 4px,#C9B184 4px 6px); border-radius:3px; box-shadow:inset -2px 0 0 rgba(0,0,0,.08); }
+  .tw-perch{ position:absolute; left:50%; transform:translateX(-50%); width:64px; height:14px; background:linear-gradient(180deg,#E3D7BC,#CBB88F); border-radius:8px; box-shadow:0 3px 6px rgba(0,0,0,.16); }
+  .tw-perch.sm{ width:48px; }
+  .tw-house{ position:absolute; left:50%; transform:translateX(-50%); width:72px; height:58px; background:linear-gradient(180deg,#8A6A45,#6E4F30); border-radius:12px; box-shadow:inset 0 2px 0 rgba(255,255,255,.08); }
+  .tw-house .hole{ position:absolute; left:50%; top:52%; transform:translate(-50%,-50%); width:30px; height:34px; background:#241C15; border-radius:50%; box-shadow:inset 0 3px 6px rgba(0,0,0,.55); }
+  .tw-cushion{ position:absolute; left:50%; transform:translateX(-50%); width:48px; height:9px; border-radius:6px; background:linear-gradient(180deg,#E0683E,#C44E26); box-shadow:0 2px 4px rgba(0,0,0,.15); }
+  .tw-string{ position:absolute; width:2px; background:#9C8B79; }
+  .tw-ball{ position:absolute; width:13px; height:13px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#F4C20D,#D9A800); box-shadow:0 2px 3px rgba(0,0,0,.2); }
+
+  /* ── 러그 (변형) ── */
+  .rug{ position:absolute; left:70px; bottom:136px; width:252px; height:84px; z-index:3; border-radius:50%; box-shadow:0 8px 16px rgba(90,58,30,.18); }
+  .rug::after{ content:''; position:absolute; inset:-3px; border-radius:50%; border:2px dotted rgba(107,93,79,.4); }
+
+  /* ── 실타래 ── */
+  .yarn{ position:absolute; left:210px; bottom:150px; width:30px; height:30px; z-index:5; }
+  .yarn svg{ display:block; filter:drop-shadow(0 3px 4px rgba(0,0,0,.2)); }
+
+  /* ── 고양이 (동적: 새로고침마다 케이스 변경) ── */
+  .cat-shadow{ position:absolute; height:18px; border-radius:50%; z-index:5;
+    background:radial-gradient(ellipse at center, rgba(60,38,18,.30) 0%, rgba(60,38,18,0) 70%); transition:opacity .18s; }
+  .cat{ position:absolute; z-index:6; transform-origin:bottom center; pointer-events:none;
+    filter:drop-shadow(0 6px 8px rgba(0,0,0,.16)); animation:breathe 3.6s ease-in-out infinite; transition:opacity .18s ease; }
+  .cat img{ display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none; }
+  .cat.flip img{ transform:scaleX(-1); }
+  @keyframes breathe{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.012); } }
+
+  .mote{ position:absolute; width:5px; height:5px; border-radius:50%; background:rgba(255,240,210,.85); box-shadow:0 0 6px 2px rgba(247,210,160,.5); z-index:7; animation:float 7s ease-in-out infinite; }
+  .mote.m1{ left:170px; top:250px; } .mote.m2{ left:96px; top:330px; animation-delay:1.6s; width:4px; height:4px; } .mote.m3{ left:250px; top:300px; animation-delay:3.2s; }
+  @keyframes float{ 0%,100%{ transform:translateY(0); opacity:.2; } 50%{ transform:translateY(-22px); opacity:.9; } }
+
+  /* ── 헤더 ── */
+  .topbar{ position:absolute; top:26px; left:0; right:0; height:48px; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:0 12px; }
+  .topbar .back{ width:40px; height:40px; display:flex; align-items:center; justify-content:center; }
+  .topbar .title{ display:flex; flex-direction:column; align-items:center; }
+  .topbar .title .k{ font-size:10.5px; letter-spacing:.26em; color:var(--walnut); font-weight:700; }
+  .room.night .topbar .title .k{ color:#B9C2DC; }
+  .topbar .title .ko{ font-family:var(--serif); font-size:14px; color:var(--espresso); margin-top:3px; }
+  .room.night .topbar .title .ko, .room.night .topbar .back svg path{ color:#EFE9DA; stroke:#EFE9DA; }
+  .topbar .spacer{ width:40px; }
+
+  /* ── 꾸미기 트레이 ── */
+  .tray{ position:absolute; left:0; right:0; bottom:0; height:120px; z-index:55;
+    background:linear-gradient(180deg, rgba(251,246,236,.97), #FBF6EC); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    border-top:.5px solid var(--sand); border-radius:18px 18px 0 0; box-shadow:0 -8px 24px rgba(90,58,30,.14); padding:11px 13px 12px; }
+  .tray-tabs{ display:flex; align-items:center; gap:6px; }
+  .tab{ font-family:var(--sans); font-size:12px; font-weight:700; padding:5px 13px; border-radius:14px; border:1px solid var(--sand); background:transparent; color:var(--walnut); cursor:pointer; }
+  .tab.active{ background:var(--espresso); color:var(--paper); border-color:var(--espresso); }
+  .yarn-chip{ margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--cta); background:rgba(216,90,48,.1); padding:4px 10px; border-radius:12px; }
+  .yarn-chip i{ width:11px; height:11px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F); display:inline-block; }
+  .tray-options{ display:flex; gap:10px; margin-top:11px; overflow-x:auto; padding-bottom:2px; }
+  .opt{ flex:none; width:64px; cursor:pointer; text-align:center; }
+  .opt .sw{ width:64px; height:46px; border-radius:10px; border:2px solid transparent; overflow:hidden; position:relative; box-shadow:0 2px 5px rgba(0,0,0,.12); background:#F3EAD8; }
+  .opt.active .sw{ border-color:var(--cta); }
+  .opt .nm{ font-size:9.5px; color:var(--walnut); margin-top:4px; font-weight:500; white-space:nowrap; }
+  .opt.active .nm{ color:var(--cta); font-weight:700; }
+
+  /* ── 우측 컨트롤 패널 (폰 밖) ── */
+  .controls{ width:208px; display:flex; flex-direction:column; gap:14px; padding-top:6px; }
+  .controls .panel-title{ font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--walnut); font-weight:700; padding-left:2px; }
+  .ctrl-card{ background:var(--paper); border:.5px solid var(--latte); border-radius:16px; padding:15px 15px 16px; box-shadow:0 8px 20px rgba(90,58,30,.09); }
+  .ctrl-card h3{ font-size:13px; font-weight:700; color:var(--espresso); display:flex; align-items:center; gap:7px; }
+  .ctrl-card p.hint{ font-size:11px; color:var(--walnut); margin-top:5px; line-height:1.5; }
+  .seg{ display:flex; background:var(--latte); border-radius:12px; padding:3px; margin-top:12px; }
+  .seg button{ flex:1; border:none; background:transparent; padding:9px 0; border-radius:9px; font-family:var(--sans); font-weight:700; font-size:12.5px; color:var(--walnut); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; transition:background .2s,color .2s; }
+  .seg button.on{ background:var(--paper); color:var(--espresso); box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  .btn-refresh{ width:100%; margin-top:13px; background:var(--espresso); color:var(--paper); border:none; padding:13px; border-radius:12px; font-family:var(--sans); font-weight:700; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn-refresh:active{ background:var(--roast); }
+  .btn-refresh svg{ transition:transform .5s ease; }
+  .btn-refresh.spin svg{ transform:rotate(360deg); }
+  .pose-now{ font-size:11.5px; color:var(--walnut); margin-top:11px; text-align:center; }
+  .pose-now b{ color:var(--cta); font-weight:700; }
+
+  .board-foot{ font-size:11.5px; color:var(--walnut); text-align:center; max-width:620px; line-height:1.6; }
+  .board-foot code{ font-family:ui-monospace,monospace; font-size:10.5px; background:rgba(107,93,79,.12); padding:1px 5px; border-radius:4px; color:var(--roast); }
+
+  /* ════════ 앱 임베드 오버라이드 — 외부 chrome(액자/컨트롤) 숨기고 폰 화면만 풀스크린 ════════ */
+  body{ padding:0 !important; gap:0 !important; min-height:100dvh; align-items:stretch; background:var(--paper) !important; }
+  .board-head, .controls, .board-foot{ display:none !important; }
+  /* 폰 화면은 390x844 절대 좌표로 디자인된 mockup. 사용자 명세: viewport 에 꽉 차게.
+     .room 자체는 mockup 좌표(390x844)를 유지하고, JS 가 viewport 에 맞춰 transform: scale 로 cover. */
+  .stage{ display:block !important; width:100%; height:100dvh; }
+  .phone{ width:100% !important; height:100% !important; padding:0 !important; background:transparent !important; box-shadow:none !important; border-radius:0 !important; aspect-ratio:auto !important; }
+  .screen{ border-radius:0 !important; width:100% !important; height:100% !important; aspect-ratio:auto !important; overflow:hidden; position:relative; }
+  /* mockup 좌표 그대로 두고 cover scale — 가구가 바닥과 정확히 맞물림 */
+  .room{ position:absolute !important; inset:auto !important; left:50% !important; top:50% !important;
+         width:390px !important; height:844px !important;
+         transform:translate(-50%, -50%) scale(var(--oz-scale, 1)) !important; transform-origin:center; }
+  .notch{ display:none !important; }
+
+  /* 밤/낮 토글 — 상단바 우측 끝 (spacer 자리) */
+  /* 사용자 명세: 화면(screen) 안 topbar 의 back/title/밤낮 토글 모두 숨김.
+     밤/낮 토글은 외부 m/index.html oz-house-screen top-bar 로 이동됨. */
+  .topbar{ display:none !important; }
+  .topbar .day-night{ display:inline-flex; align-items:center; gap:2px; background:rgba(255,255,255,.6); border:1px solid var(--sand); border-radius:999px; padding:3px; }
+  .topbar .day-night button{ font-family:var(--sans); font-size:11px; font-weight:700; padding:5px 10px; border-radius:999px; border:none; background:transparent; color:var(--walnut); cursor:pointer; line-height:1; }
+  .topbar .day-night button.on{ background:var(--espresso); color:var(--paper); }
+  .room.night .topbar .day-night{ background:rgba(20,28,48,.45); border-color:#4a4234; }
+  .room.night .topbar .day-night button{ color:#C8C2AE; }
+  .room.night .topbar .day-night button.on{ background:var(--paper); color:var(--espresso); }
+
+  /* 트레이 → 하단 팝업창: 기본 접힘(핸들만 노출), .expanded 클래스로 펼침 */
+  .tray{ transition:transform .35s cubic-bezier(0.2, 0.8, 0.2, 1); transform:translateY(calc(100% - 38px)); padding-top:38px !important; }
+  .tray.expanded{ transform:translateY(0); }
+  .tray-handle{ position:absolute; top:0; left:0; right:0; height:38px; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer; user-select:none; }
+  .tray-handle::before{ content:''; width:38px; height:4px; border-radius:2px; background:var(--sand); }
+  .tray-handle .label{ font-size:11px; font-weight:700; color:var(--walnut); letter-spacing:0.1em; }
+</style>
+</head>
+<body>
+
+  <div class="board-head">
+    <div class="eyebrow">Design 시안 · 인터랙티브</div>
+    <h1>OZ&rsquo;s house</h1>
+    <div class="sub">고양이 집 · 가구를 고르고 · 밤낮을 바꾸고 · 고양이를 새로 배치해보세요</div>
+  </div>
+
+  <div class="stage">
+    <!-- ═══ 폰 ═══ -->
+    <div class="phone">
+      <div class="screen">
+        <div class="notch"></div>
+
+        <div class="room" id="room">
+          <div class="wall"></div>
+          <div class="baseboard"></div>
+          <div class="floor"></div>
+          <div class="lightbeam"></div>
+
+          <!-- 창문 -->
+          <div class="window">
+            <div class="sun"></div>
+            <div class="stars">
+              <i style="left:18px;top:24px"></i><i style="left:40px;top:14px"></i><i style="left:30px;top:46px"></i>
+              <i style="left:60px;top:34px"></i><i style="left:14px;top:62px"></i><i style="left:80px;top:58px"></i><i style="left:52px;top:72px"></i>
+            </div>
+            <div class="hills"></div>
+            <div class="muntin-v"></div><div class="muntin-h"></div>
+          </div>
+          <div class="sill"></div>
+          <div class="sill-pot"><div class="l a"></div><div class="l b"></div><div class="l c"></div><div class="p"></div></div>
+
+          <!-- 벽 액자 -->
+          <div class="frame"><div class="mat">
+            <div class="quote">&ldquo;</div><div class="line">오늘의<br/>한 줄</div>
+            <div class="star">&#9733; &#9733; &#9733;</div><div class="tag">Daily Script</div>
+          </div></div>
+
+          <!-- 캣타워 -->
+          <div class="tower" id="tower"></div>
+
+          <!-- 소파 -->
+          <div class="sofa" id="sofa">
+            <div class="back"></div><div class="arm l"></div><div class="arm r"></div><div class="seat"></div>
+            <div class="cushion l"></div><div class="cushion r"></div><div class="pillow gold"></div><div class="pillow coral"></div><div class="legs"></div>
+          </div>
+
+          <!-- 러그 + 실타래 -->
+          <div class="rug" id="rug"></div>
+          <div class="yarn">
+            <svg viewBox="0 0 30 30" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="15" cy="15" r="14" fill="#E0683E"/>
+              <g fill="none" stroke="#B8431F" stroke-width="1.5" opacity=".8">
+                <path d="M2 12 C 10 7, 20 7, 28 12"/><path d="M2 18 C 10 23, 20 23, 28 18"/>
+                <path d="M8 3 C 5 12, 5 20, 9 27"/><path d="M22 3 C 25 12, 25 20, 21 27"/>
+              </g>
+              <circle cx="15" cy="15" r="14" fill="none" stroke="#A8391A" stroke-width="1"/>
+            </svg>
+          </div>
+
+          <!-- 고양이 (동적) -->
+          <div class="cat-shadow" id="catShadow"></div>
+          <div class="cat" id="cat"><img id="catImg" src="" alt="OZ" /></div>
+
+          <!-- 먼지빛 -->
+          <div class="mote m1"></div><div class="mote m2"></div><div class="mote m3"></div>
+
+          <!-- 밤 베일 -->
+          <div class="night-veil"></div>
+        </div>
+
+        <!-- 헤더 -->
+        <div class="topbar">
+          <div class="back"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="#0E0C0A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="title"><span class="k">OZ&rsquo;S HOUSE</span><span class="ko">오즈의 집</span></div>
+          <div class="day-night" data-ctrl="time">
+            <button class="on" data-val="day" type="button">☀️</button>
+            <button data-val="night" type="button">🌙</button>
+          </div>
+        </div>
+
+        <!-- 꾸미기 트레이 (하단 팝업) — 기본 접힘, 핸들 탭하면 펼침 -->
+        <div class="tray" id="tray">
+          <div class="tray-handle" id="trayHandle"><span class="label">꾸미기</span></div>
+          <div class="tray-tabs">
+            <button class="tab active" data-cat="sofa">소파</button>
+            <button class="tab" data-cat="rug">러그</button>
+            <button class="tab" data-cat="tower">캣타워</button>
+            <span class="yarn-chip"><i></i> 실타래 5</span>
+          </div>
+          <div class="tray-options" id="trayOptions"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 우측 컨트롤 패널 ═══ -->
+    <div class="controls">
+      <div class="panel-title">환경 설정</div>
+
+      <div class="ctrl-card">
+        <h3>🌗 밤 · 낮</h3>
+        <p class="hint">창밖 풍경과 방 조명이 바뀝니다.</p>
+        <div class="seg" data-ctrl="time">
+          <button class="on" data-val="day">☀️ 낮</button>
+          <button data-val="night">🌙 밤</button>
+        </div>
+      </div>
+
+      <div class="ctrl-card">
+        <h3>🐈‍⬛ 고양이 자리</h3>
+        <p class="hint">새로고침할 때마다 OZ가 방 안 다른 곳에서 다른 포즈로 나타나요.</p>
+        <button class="btn-refresh" id="btnRefresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 9M20 12a8 8 0 0 1-13.7 5.6L4 15" stroke="#FAF8F2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 4v5h-5M4 20v-5h5" stroke="#FAF8F2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          고양이 새로고침
+        </button>
+        <div class="pose-now">지금: <b id="poseLabel">—</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="board-foot">
+    standalone 시안 — 앱에는 아직 반영하지 않음 · 하단 트레이에서 소파·러그·캣타워를 바꾸고, 우측 패널에서 밤/낮 전환·고양이 새로고침 ·
+    고양이는 PWA의 6종 스프라이트(<code>web_pwa/public/m/assets/cat/</code>)를 케이스별로 어울리게 배치합니다.
+  </div>
+
+<script>
+  /* oz-house.html 은 m/ 폴더 기준 — assets/cat/ 직접 참조 (mockups/ 경로의 ../web_pwa/... 가 아님) */
+  const A = 'assets/cat/';
+
+  /* ── 가구 변형 ── */
+  const DECOR = {
+    sofa: [
+      { id:'cream', name:'크림', frame:'#7B5A3C', frameD:'#6E4F30', seat:'#8A6A45', seatD:'#6E4F30', cushion:'#F1E7D2', cushionD:'#E3D7BC', pA:'#F4C20D', pAd:'#D9A800', pB:'#E0683E', pBd:'#C44E26' },
+      { id:'coral', name:'코랄', frame:'#B5663B', frameD:'#9A5230', seat:'#C2774A', seatD:'#A8612F', cushion:'#F6E3D3', cushionD:'#EBCBB2', pA:'#6E8C4E', pAd:'#566F3C', pB:'#D85A30', pBd:'#B8431F' },
+      { id:'sage', name:'세이지', frame:'#5E6E55', frameD:'#4C5A45', seat:'#6E7E63', seatD:'#566048', cushion:'#E6E9D8', cushionD:'#D3D8BE', pA:'#E0683E', pAd:'#C44E26', pB:'#9C8B79', pBd:'#7E6F5E' },
+      { id:'ink', name:'잉크', frame:'#3A332C', frameD:'#2A241F', seat:'#403933', seatD:'#332D27', cushion:'#D8CDBA', cushionD:'#C2B6A0', pA:'#F4C20D', pAd:'#D9A800', pB:'#D85A30', pBd:'#B8431F' },
+    ],
+    rug: [
+      { id:'coral', name:'코랄 링', bg:'radial-gradient(ellipse at center,#EFE7D6 0 30%,#D85A30 30% 35%,#E7DCC6 35% 62%,#6B5D4F 62% 66%,#DED2B8 66%)' },
+      { id:'sand', name:'샌드 줄무늬', bg:'repeating-linear-gradient(120deg,#E9DEC9 0 16px,#D8C9A6 16px 19px)' },
+      { id:'sage', name:'세이지 링', bg:'radial-gradient(ellipse at center,#E9ECDB 0 30%,#8FA968 30% 35%,#E2E6D2 35% 62%,#5E7A55 62% 66%,#DCE2CC 66%)' },
+      { id:'mono', name:'모노', bg:'radial-gradient(ellipse at center,#F1ECE0 0 54%,#2C2620 54% 58%,#E7DECB 58%)' },
+    ],
+    tower: [
+      { id:'mini', name:'미니', html:`<div class="tw-base"></div><div class="tw-post" style="bottom:14px;height:96px;"></div><div class="tw-perch" style="bottom:108px;"></div><div class="tw-cushion" style="bottom:118px;"></div><div class="tw-string" style="bottom:80px;height:28px;right:16px;"></div><div class="tw-ball" style="bottom:68px;right:10px;"></div>` },
+      { id:'cozy', name:'코지', html:`<div class="tw-base"></div><div class="tw-post" style="bottom:14px;height:66px;"></div><div class="tw-house" style="bottom:78px;"><div class="hole"></div></div><div class="tw-perch sm" style="bottom:136px;"></div><div class="tw-cushion" style="bottom:146px;width:40px;"></div>` },
+      { id:'tall', name:'타워', html:`<div class="tw-base"></div><div class="tw-post" style="bottom:14px;height:60px;"></div><div class="tw-perch" style="bottom:70px;"></div><div class="tw-post" style="bottom:84px;height:28px;"></div><div class="tw-house" style="bottom:110px;"><div class="hole"></div></div><div class="tw-perch sm" style="bottom:168px;"></div><div class="tw-cushion" style="bottom:178px;width:40px;"></div><div class="tw-string" style="bottom:128px;height:42px;left:10px;"></div><div class="tw-ball" style="bottom:116px;left:4px;"></div>` },
+    ],
+  };
+
+  /* ── 고양이 배치 케이스 (스프라이트 + 위치 + 그림자) ── */
+  const CATS = [
+    { src:'cat_struck.png',     w:126, x:8,   y:194, flip:false, label:'책 위에서 빤히',   sw:104, sx:18,  sy:190 },
+    { src:'cat_confused.png',   w:124, x:10,  y:194, flip:true,  label:'책 위에서 갸웃',   sw:102, sx:20,  sy:190 },
+    { src:'cat_shelf_many.png', w:126, x:8,   y:194, flip:false, label:'책 탑 꼭대기',     sw:104, sx:18,  sy:190 },
+    { src:'cat_empty.png',      w:226, x:82,  y:120, flip:false, label:'러그에 쭉 뻗고',   sw:152, sx:120, sy:116 },
+    { src:'cat_idle.png',       w:152, x:166, y:248, flip:false, label:'소파에 늘어져',     sw:120, sx:182, sy:246 },
+    { src:'cat_shelf_few.png',  w:150, x:118, y:130, flip:true,  label:'러그에서 식빵',     sw:120, sx:132, sy:126 },
+    { src:'cat_idle.png',       w:158, x:110, y:128, flip:false, label:'러그에 기대',       sw:124, sx:126, sy:124 },
+    { src:'cat_shelf_few.png',  w:148, x:172, y:250, flip:false, label:'소파에서 식빵',     sw:118, sx:188, sy:248 },
+  ];
+
+  const $ = (s)=>document.querySelector(s);
+  const sceneSofa=$('#sofa'), sceneRug=$('#rug'), sceneTower=$('#tower'), trayOptions=$('#trayOptions');
+  const room=$('#room'), catWrap=$('#cat'), catImg=$('#catImg'), catShadow=$('#catShadow'), poseLabel=$('#poseLabel');
+  const state={ sofa:'cream', rug:'coral', tower:'tall' };
+  let activeCat='sofa', curCase=-1;
+
+  /* 가구 적용 */
+  function applySofa(o){ const s=sceneSofa.style; s.setProperty('--s-frame',o.frame); s.setProperty('--s-frame-d',o.frameD); s.setProperty('--s-seat',o.seat); s.setProperty('--s-seat-d',o.seatD); s.setProperty('--s-cushion',o.cushion); s.setProperty('--s-cushion-d',o.cushionD); s.setProperty('--s-pa',o.pA); s.setProperty('--s-pa-d',o.pAd); s.setProperty('--s-pb',o.pB); s.setProperty('--s-pb-d',o.pBd); }
+  function applyRug(o){ sceneRug.style.background=o.bg; }
+  function applyTower(o){ sceneTower.innerHTML=o.html; }
+  function apply(cat,id){ const o=DECOR[cat].find(x=>x.id===id); if(!o) return; state[cat]=id; if(cat==='sofa')applySofa(o); else if(cat==='rug')applyRug(o); else applyTower(o); }
+
+  function swatch(cat,o){
+    if(cat==='sofa') return `<div style="position:absolute;inset:0;background:linear-gradient(180deg,${o.frame},${o.frameD});"><div style="position:absolute;left:7px;right:7px;bottom:6px;height:15px;border-radius:4px;background:${o.cushion};"></div><div style="position:absolute;left:11px;bottom:12px;width:9px;height:9px;border-radius:2px;background:${o.pA};"></div><div style="position:absolute;right:11px;bottom:12px;width:9px;height:9px;border-radius:2px;background:${o.pB};"></div></div>`;
+    if(cat==='rug') return `<div style="position:absolute;inset:7px;border-radius:50%;background:${o.bg};box-shadow:inset 0 0 0 1px rgba(107,93,79,.2);"></div>`;
+    return `<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:9px;height:24px;background:repeating-linear-gradient(0deg,#DAC79E 0 3px,#C9B184 3px 5px);border-radius:2px;"></div><div style="position:absolute;left:50%;bottom:28px;transform:translateX(-50%);width:26px;height:7px;border-radius:4px;background:#8A6A45;"></div><div style="position:absolute;left:50%;bottom:33px;transform:translateX(-50%);width:13px;height:6px;border-radius:3px;background:#E0683E;"></div>`;
+  }
+  function renderOptions(){ trayOptions.innerHTML=DECOR[activeCat].map(o=>`<div class="opt${state[activeCat]===o.id?' active':''}" data-id="${o.id}"><div class="sw">${swatch(activeCat,o)}</div><div class="nm">${o.name}</div></div>`).join(''); }
+
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t)); activeCat=t.dataset.cat; renderOptions(); }));
+  trayOptions.addEventListener('click',e=>{ const opt=e.target.closest('.opt'); if(!opt) return; apply(activeCat,opt.dataset.id); renderOptions(); });
+
+  /* 고양이 배치 */
+  function placeCat(i){
+    const c=CATS[i]; curCase=i;
+    catImg.src=A+c.src;
+    catWrap.style.left=c.x+'px'; catWrap.style.bottom=c.y+'px'; catWrap.style.width=c.w+'px';
+    catWrap.classList.toggle('flip', !!c.flip);
+    catShadow.style.left=c.sx+'px'; catShadow.style.bottom=c.sy+'px'; catShadow.style.width=c.sw+'px';
+    poseLabel.textContent=c.label;
+  }
+  function refreshCat(){
+    let i; do { i=Math.floor(Math.random()*CATS.length); } while(i===curCase && CATS.length>1);
+    catWrap.style.opacity='0'; catShadow.style.opacity='0';
+    setTimeout(()=>{ placeCat(i); catWrap.style.opacity='1'; catShadow.style.opacity='1'; }, 160);
+  }
+  const btnRefresh=$('#btnRefresh');
+  btnRefresh.addEventListener('click',()=>{ btnRefresh.classList.add('spin'); setTimeout(()=>btnRefresh.classList.remove('spin'),520); refreshCat(); });
+
+  /* 밤/낮 */
+  document.querySelectorAll('.seg[data-ctrl="time"] button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.seg[data-ctrl="time"] button').forEach(x=>x.classList.toggle('on',x===b));
+    room.classList.toggle('night', b.dataset.val==='night');
+  }));
+
+  /* viewport 에 맞춰 .room cover scale (mockup 좌표 유지) */
+  function fitOzHouse() {
+    const s = document.querySelector('.screen');
+    if (!s) return;
+    const w = s.clientWidth || window.innerWidth;
+    const h = s.clientHeight || window.innerHeight;
+    const scale = Math.max(w / 390, h / 844);
+    s.style.setProperty('--oz-scale', scale);
+  }
+  fitOzHouse();
+  window.addEventListener('resize', fitOzHouse);
+
+  /* 초기화 */
+  apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');
+  renderOptions();
+  // 사용자 명세: 자세 선택 UI 숨김 + 매 진입 시 랜덤 자세
+  placeCat(Math.floor(Math.random() * CATS.length));
+
+  /* 트레이 하단 팝업 토글 */
+  const tray = document.getElementById('tray');
+  const trayHandle = document.getElementById('trayHandle');
+  if (trayHandle && tray) {
+    trayHandle.addEventListener('click', () => tray.classList.toggle('expanded'));
+  }
+
+  /* 상단바 우측 밤/낮 토글 (controls 의 .seg 와 별도) */
+  document.querySelectorAll('.topbar .day-night button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.topbar .day-night button').forEach((x) => x.classList.toggle('on', x === b));
+    room.classList.toggle('night', b.dataset.val === 'night');
+  }));
+</script>
+</body>
+</html>
