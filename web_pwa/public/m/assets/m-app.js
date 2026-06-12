@@ -4593,20 +4593,18 @@ function openOzHouse() {
 }
 function closeOzHouseInternal() {
   if (!ozHouseScreen) return;
+  // 슬라이드 transition 동안 빈 화면이 잠깐 보이는 문제 — 즉시 닫음 (사용자 명세)
   ozHouseScreen.classList.remove('open');
+  ozHouseScreen.style.display = 'none';
+  document.body.style.overflow = '';
   // 하단바 / cat / 피드 fab 복귀 — 현재 view 기준
   const nav = document.querySelector('.bottom-nav');
   if (nav) nav.style.display = '';
   updateBottomNavCatForView(state.currentView);
-  // feed-fab 은 view 가 feed 인 경우에만 다시 보여짐 (setView 의 분기와 동일)
   if (feedFab) feedFab.style.display = (state.currentView === 'feed') ? 'inline-flex' : 'none';
-  setTimeout(() => {
-    ozHouseScreen.style.display = 'none';
-    document.body.style.overflow = '';
-    // iframe 을 about:blank 로 비워 백그라운드 setInterval/setTimeout 루프 종료
-    const frame = document.getElementById('oz-house-frame');
-    if (frame) frame.src = 'about:blank';
-  }, 250);
+  // iframe 을 about:blank 로 비워 백그라운드 setInterval/setTimeout 루프 종료
+  const frame = document.getElementById('oz-house-frame');
+  if (frame) frame.src = 'about:blank';
 }
 function closeOzHouse() {
   if (history.state && history.state.overlay === 'ozHouse') history.back();
