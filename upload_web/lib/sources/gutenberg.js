@@ -377,7 +377,25 @@ export async function fetchGutenbergText({ bookId, plainTextUrl }) {
     };
   }
 
-  let raw = await getText(textUrl);
+  // www.gutenberg.org 메인 호스트가 일시 장애(Connect Timeout 등)일 때 공식 미러로 자동 fallback.
+  // PGLaF 미러는 메인과 동일한 path 트리를 그대로 서빙한다.
+  let raw;
+  try {
+    raw = await getText(textUrl);
+  } catch (e) {
+    const mirrors = ['aleph.pglaf.org', 'gutenberg.pglaf.org'];
+    let lastErr = e;
+    for (const host of mirrors) {
+      const mirrorUrl = textUrl.replace(/^https?:\/\/www\.gutenberg\.org\//i, `https://${host}/`);
+      if (mirrorUrl === textUrl) continue;
+      try {
+        raw = await getText(mirrorUrl);
+        textUrl = mirrorUrl;
+        break;
+      } catch (e2) { lastErr = e2; }
+    }
+    if (raw == null) throw lastErr;
+  }
   if (raw.length > MAX_FETCH_CHARS) {
     raw = raw.slice(0, MAX_FETCH_CHARS);
   }
