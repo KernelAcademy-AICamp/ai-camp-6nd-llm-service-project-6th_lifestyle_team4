@@ -276,6 +276,22 @@ final class Supa {
 
     // MARK: - Comments + likes
 
+    /// A signed-in member's own comments, newest first, each joined with its
+    /// parent card (for the "내 댓글" screen). Read-only select on card_comments,
+    /// mirroring Android `CommentRepository.loadByUser`. The embedded `cards(...)`
+    /// reuses `cardColumns` so each row's parent decodes straight into `Card`,
+    /// letting a tap reuse the existing CardDetail navigation. Edit/delete reuse
+    /// `updateComment`/`deleteComment` (both already `.eq(user_id)`-guarded).
+    func loadCommentsByUser(userId: Int) async throws -> [MyComment] {
+        try await client.from("card_comments")
+            .select("comment_id, card_id, parent_comment_id, body, created_at, cards(\(cardColumns))")
+            .eq("user_id", value: userId)
+            .order("created_at", ascending: false)
+            .limit(100)
+            .execute()
+            .value
+    }
+
     func loadComments(cardId: Int) async throws -> [Comment] {
         try await client.from("card_comments")
             .select(commentColumns)

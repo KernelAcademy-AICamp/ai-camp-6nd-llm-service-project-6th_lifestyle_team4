@@ -74,6 +74,9 @@ struct MyPageView: View {
                         ) {
                             selectedTab = .archive
                         }
+                        activityLink(title: "내 댓글", subtitle: "내가 남긴 댓글 보기") {
+                            MyCommentsView()
+                        }
                     }
 
                     Spacer().frame(height: 40)
@@ -273,6 +276,39 @@ struct MyPageView: View {
                         .foregroundStyle(.walnut)
                 }
                 .padding(.vertical, 14)
+            }
+            .buttonStyle(.plain)
+            Hairline()
+        }
+    }
+
+    /// Like `activityRow`, but pushes a destination view onto the navigation
+    /// stack (e.g. 내 댓글 → MyCommentsView) instead of switching tabs.
+    private func activityLink<Destination: View>(
+        title: String,
+        subtitle: String,
+        @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        VStack(spacing: 0) {
+            NavigationLink {
+                destination()
+            } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.titleSerif(16))
+                            .foregroundStyle(.espresso)
+                        Text(subtitle)
+                            .font(.bodySans(12))
+                            .foregroundStyle(.walnut)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(.walnut)
+                }
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             Hairline()
