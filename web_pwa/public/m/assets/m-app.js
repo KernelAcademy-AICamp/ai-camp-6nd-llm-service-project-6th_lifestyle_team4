@@ -4614,6 +4614,24 @@ function closeOzHouse() {
 }
 if (ozHouseBtn) ozHouseBtn.addEventListener('click', openOzHouse);
 if (ozHouseBack) ozHouseBack.addEventListener('click', closeOzHouse);
+
+// OZ's house 외부 top-bar 의 밤/낮 토글 — iframe 안 .room 의 .night 클래스를 직접 토글
+const ozDayNightBtn = $('#oz-house-day-night');
+if (ozDayNightBtn) {
+  ozDayNightBtn.addEventListener('click', () => {
+    const frame = document.getElementById('oz-house-frame');
+    const doc = frame?.contentDocument;
+    if (!doc) return;
+    const room = doc.getElementById('room');
+    if (!room) return;
+    const isNight = room.classList.toggle('night');
+    ozDayNightBtn.textContent = isNight ? '🌙' : '☀️';
+    // iframe 안에 남아 있는 day-night 버튼(hidden) 의 .on 상태도 동기화
+    doc.querySelectorAll('.day-night button').forEach((b) =>
+      b.classList.toggle('on', b.dataset.val === (isNight ? 'night' : 'day'))
+    );
+  });
+}
 if (yarnTabCharge) yarnTabCharge.addEventListener('click', () => setYarnTab(false));
 if (yarnTabAbout) yarnTabAbout.addEventListener('click', () => setYarnTab(true));
 

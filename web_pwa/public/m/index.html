@@ -407,29 +407,30 @@
      bottom: 40px = bar 높이 64px - (52*0.54) — PNG ledge 선(위→아래 46%) 이 바 윗면에 정확히 닿음.
      앞다리는 바 안쪽으로 늘어지고 몸통은 바 위로 솟음. */
   /* cat: nav 카드 우측 상단 모서리에 걸침 (안드 CatRightInset 8dp + CatProtrusion ≈ 24dp). */
+  /* 사용자 명세: 모든 cat 을 daily(.corner) 비율로 통일 — bottom 36, 작은 height
+     → 발은 바 안에 살짝 ledge처럼 걸치고 몸은 바 위로 솟아 탭 라벨/아이콘은 안 가림. */
   .bottom-nav .bottom-nav-cat {
     position: absolute;
-    /* 기본(cat_today): 중앙 실타래(홈 버튼) 옆에서 굴리는 자세 — 중앙(50%)에서 살짝 더 오른쪽 */
+    /* 기본(cat_today): 중앙 실타래(홈 버튼) 옆 살짝 우측 */
     left: 62%;
     right: auto;
     transform: translateX(-50%);
-    /* 사용자 명세: 발바닥을 하단바 윗면에 붙임 — PNG 하단 여백 만큼 살짝 안쪽 */
-    bottom: 56px;
-    height: 78px;            /* 더 키움 (이전 62px) */
+    bottom: 36px;
+    height: 56px;
     width: auto;
     pointer-events: none;
     z-index: 52;
     user-select: none;
     -webkit-user-drag: none;
   }
-  /* 피드(cat_pen) · LIBRARY(cat_struck) · 카드 상세(cat_library) — MY 쪽 가까이 + 발바닥 바 윗면에 맞닿게 */
+  /* 피드(cat_pen) · LIBRARY(cat_struck) — MY 쪽 가까이 (대략 LIBRARY-MY 사이) */
   .bottom-nav .bottom-nav-cat.right {
     left: 88%;
     right: auto;
     transform: translateX(-50%);
-    bottom: 20px;
+    bottom: 36px;
   }
-  /* daily(cat_empty) — 옛날 default 자리 복원: 우측 모서리, 작은 사이즈 (사용자 명세) */
+  /* daily(cat_empty) — 옛날 default 자리, 우측 모서리 */
   .bottom-nav .bottom-nav-cat.corner {
     left: auto;
     right: 8px;
@@ -437,11 +438,11 @@
     bottom: 36px;
     height: 52px;
   }
-  /* 카드 상세 — 책장 앞 자세는 더 크게 + 더 우측(MY 탭 가까이) + 발바닥 바에 맞닿게 (사용자 명세) */
+  /* 카드 상세(cat_library) — 더 크고 MY 탭 가까이 */
   .bottom-nav .bottom-nav-cat.large {
-    height: 96px;
+    height: 64px;
     left: 90%;
-    bottom: 16px;
+    bottom: 36px;
   }
 
   /* Main content padding */
@@ -2329,7 +2330,8 @@
       <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">OZ&rsquo;S HOUSE</span>
       <span class="t-body-sm c-espresso" style="margin-top:4px;">오즈의 집</span>
     </div>
-    <span style="width:40px;"></span>
+    <button id="oz-house-day-night" type="button" aria-label="밤/낮 전환"
+            style="background:transparent;border:1px solid var(--latte);border-radius:999px;padding:4px 10px;font-size:14px;line-height:1;cursor:pointer;color:var(--espresso);">☀️</button>
   </header>
   <div class="hairline"></div>
   <div class="detail-body" id="oz-house-body" style="padding:0;flex:1;display:flex;min-height:0;overflow:hidden;">
