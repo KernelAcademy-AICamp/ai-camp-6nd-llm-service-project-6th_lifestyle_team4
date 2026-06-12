@@ -162,6 +162,32 @@ nonisolated struct CommentLike: Codable, Sendable {
     }
 }
 
+/// A signed-in member's own comment joined with its parent card, for the
+/// "내 댓글" screen. Read-only projection of public.card_comments with the
+/// embedded `cards(...)` → `Card` (mirrors Android `MyComment`). `body` is `var`
+/// so an inline edit updates in place without a refetch.
+nonisolated struct MyComment: Decodable, Identifiable, Hashable, Sendable {
+    let commentId: Int
+    let cardId: Int
+    let parentCommentId: Int?
+    var body: String
+    let createdAt: String
+    let card: Card?
+
+    var id: Int { commentId }
+    var createdDate: Date? { parseISODate(createdAt) }
+    var isReply: Bool { parentCommentId != nil }
+
+    enum CodingKeys: String, CodingKey {
+        case commentId = "comment_id"
+        case cardId = "card_id"
+        case parentCommentId = "parent_comment_id"
+        case body
+        case createdAt = "created_at"
+        case card = "cards"
+    }
+}
+
 // MARK: - Feed
 
 nonisolated struct FeedPost: Decodable, Identifiable, Sendable {
