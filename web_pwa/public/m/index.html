@@ -409,11 +409,12 @@
   /* cat: nav 카드 우측 상단 모서리에 걸침 (안드 CatRightInset 8dp + CatProtrusion ≈ 24dp). */
   .bottom-nav .bottom-nav-cat {
     position: absolute;
-    /* 기본(cat_today): 중앙 실타래(홈 버튼) 옆 살짝 우측 + 바 윗면 위로 올림 (사용자 명세) */
+    /* 기본(cat_today): 중앙 살짝 우측. 바 윗면이 바닥 — PNG 하단 투명 padding 보정 후
+       발 끝이 바 윗면에 닿도록 살짝 내려 앉힘 */
     left: 62%;
     right: auto;
     transform: translateX(-50%);
-    bottom: 64px;
+    bottom: 50px;
     height: 78px;
     width: auto;
     pointer-events: none;
