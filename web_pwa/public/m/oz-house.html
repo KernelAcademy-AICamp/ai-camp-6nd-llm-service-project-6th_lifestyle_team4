@@ -42,10 +42,10 @@
     background:linear-gradient(180deg,#FCF7EE 0%, #F4ECDB 62%, #EFE6D2 100%); transition:background .5s; }
   .wall::before{ content:''; position:absolute; left:-40px; top:-30px; width:320px; height:340px; border-radius:50%;
     background:radial-gradient(circle at 40% 40%, rgba(247,201,160,.5) 0%, rgba(247,201,160,0) 68%); transition:background .5s; }
-  .baseboard{ position:absolute; left:0; right:0; top:438px; height:24px;
+  .baseboard{ position:absolute; left:0; right:0; top:498px; height:24px;
     background:linear-gradient(180deg,#EBE0CB 0%, #E0D3B8 100%); border-top:1px solid #F3ECDD;
     box-shadow:0 2px 4px rgba(90,58,30,.12); z-index:2; transition:background .5s; }
-  .floor{ position:absolute; left:0; right:0; top:460px; bottom:0;
+  .floor{ position:absolute; left:0; right:0; top:520px; bottom:0;
     background:repeating-linear-gradient(90deg, rgba(90,58,30,0) 0 52px, rgba(90,58,30,.10) 52px 53px),
       linear-gradient(180deg,#DAC7A3 0%, #CBB58D 55%, #BFA77E 100%); transition:background .5s; }
   .lightbeam{ position:absolute; left:30px; top:206px; width:230px; height:360px;
@@ -193,9 +193,11 @@
   /* ════════ 앱 임베드 오버라이드 — 외부 chrome(액자/컨트롤) 숨기고 폰 화면만 풀스크린 ════════ */
   body{ padding:0 !important; gap:0 !important; min-height:100dvh; align-items:stretch; background:var(--paper) !important; }
   .board-head, .controls, .board-foot{ display:none !important; }
-  .stage{ display:block !important; width:100%; height:100dvh; }
-  .phone{ width:100% !important; height:100% !important; padding:0 !important; background:transparent !important; box-shadow:none !important; border-radius:0 !important; }
-  .screen{ border-radius:0 !important; height:100% !important; }
+  /* 폰 화면은 390x844 절대 좌표로 디자인된 mockup — 비율을 유지해야 가구 위치가 정확.
+     stage 를 flex center 로 두고 screen 에 aspect-ratio 강제. */
+  .stage{ display:flex !important; align-items:center; justify-content:center; width:100%; height:100dvh; }
+  .phone{ width:auto !important; height:100% !important; max-width:100% !important; padding:0 !important; background:transparent !important; box-shadow:none !important; border-radius:0 !important; aspect-ratio:390 / 844; }
+  .screen{ border-radius:0 !important; width:100% !important; height:100% !important; aspect-ratio:390 / 844; }
   .notch{ display:none !important; }
 
   /* 밤/낮 토글 — 상단바 우측 끝 (spacer 자리) */

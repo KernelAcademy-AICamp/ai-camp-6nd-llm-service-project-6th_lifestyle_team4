@@ -422,9 +422,9 @@
     user-select: none;
     -webkit-user-drag: none;
   }
-  /* 피드(cat_pen) · 카드 상세(cat_library) — 하단바 LIBRARY 와 MY 탭 사이로 배치 (사용자 명세) */
+  /* 피드(cat_pen) · 카드 상세(cat_library) — 하단바 MY 탭 쪽 가까이 (사용자 명세) */
   .bottom-nav .bottom-nav-cat.right {
-    left: 80%;
+    left: 88%;
     right: auto;
     transform: translateX(-50%);
     bottom: 60px;
@@ -1357,7 +1357,7 @@
   /* 피드 글쓰기 — 말풍선 모양, cat_pen 머리 위에서 말하는 것처럼 (사용자 명세).
      cat은 하단바 LIBRARY-MY 사이(좌측 80%)에 있으므로 fab 도 같은 80% 에 중앙 정렬. */
   #feed-fab {
-    position: fixed; left: 80%; right: auto; transform: translateX(-50%);
+    position: fixed; left: 88%; right: auto; transform: translateX(-50%);
     bottom: calc(146px + env(safe-area-inset-bottom)); z-index: 53;
     background: var(--paper);
     color: var(--espresso);
