@@ -120,7 +120,7 @@ fun AttendanceDialog(
 }
 
 @Composable
-private fun CalendarGrid(history: Set<String>) {
+internal fun CalendarGrid(history: Set<String>) {
     val today = LocalDate.now()
     val ym = YearMonth.from(today)
     val firstDow = ym.atDay(1).dayOfWeek // MONDAY=1 … SUNDAY=7. 우리는 일요일=0 컬럼.
