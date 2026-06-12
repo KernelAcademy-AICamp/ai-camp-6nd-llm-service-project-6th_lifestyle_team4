@@ -422,17 +422,26 @@
     user-select: none;
     -webkit-user-drag: none;
   }
-  /* 피드(cat_pen) · 카드 상세(cat_library) — 하단바 MY 탭 쪽 가까이 (사용자 명세) */
+  /* 피드(cat_pen) · 카드 상세(cat_library) — 하단바 MY 탭 쪽 가까이 + 발바닥 바 윗면에 맞닿게 */
   .bottom-nav .bottom-nav-cat.right {
     left: 88%;
     right: auto;
     transform: translateX(-50%);
-    bottom: 60px;
+    bottom: 40px;
   }
-  /* 카드 상세 — 책장 앞 자세는 더 크게 + 더 우측(MY 탭 가까이) (사용자 명세) */
+  /* daily(cat_empty) — 옛날 default 자리 복원: 우측 모서리, 작은 사이즈 (사용자 명세) */
+  .bottom-nav .bottom-nav-cat.corner {
+    left: auto;
+    right: 8px;
+    transform: none;
+    bottom: 36px;
+    height: 52px;
+  }
+  /* 카드 상세 — 책장 앞 자세는 더 크게 + 더 우측(MY 탭 가까이) + 더 아래로 (사용자 명세) */
   .bottom-nav .bottom-nav-cat.large {
     height: 96px;
     left: 90%;
+    bottom: 36px;
   }
 
   /* Main content padding */
@@ -1357,7 +1366,9 @@
   /* 피드 글쓰기 — 말풍선 모양, cat_pen 머리 위에서 말하는 것처럼 (사용자 명세).
      cat은 하단바 LIBRARY-MY 사이(좌측 80%)에 있으므로 fab 도 같은 80% 에 중앙 정렬. */
   #feed-fab {
-    position: fixed; left: 88%; right: auto; transform: translateX(-50%);
+    /* fab 우측 정렬 + nowrap — left% 로 두면 viewport 끝과 충돌해 '글쓰기' 가 세로로 끊김 */
+    position: fixed; right: 16px; left: auto;
+    white-space: nowrap;
     bottom: calc(146px + env(safe-area-inset-bottom)); z-index: 53;
     background: var(--paper);
     color: var(--espresso);

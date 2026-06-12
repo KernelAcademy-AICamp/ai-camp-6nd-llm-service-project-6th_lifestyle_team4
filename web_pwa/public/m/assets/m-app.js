@@ -7181,12 +7181,13 @@ function renderNotice() {
 //   default(daily/home/archive/notice/settings) = cat_today  / 중앙 살짝 오른쪽 (실타래 굴리는 자세)
 //   feed                                       = cat_pen    / 우측 하단 (원래 위치)
 //   카드 상세                                   = cat_library / 우측 하단 (원래 위치)
-function setBottomNavCat(srcFile, pos /* 'center' | 'right' */, size /* 'large'? */) {
+function setBottomNavCat(srcFile, pos /* 'center' | 'right' | 'corner' */, size /* 'large'? */) {
   const cat = document.querySelector('.bottom-nav-cat');
   if (!cat) return;
   const target = 'assets/cat/' + srcFile;
   if (!cat.src.endsWith(srcFile)) cat.src = target;
   cat.classList.toggle('right', pos === 'right');
+  cat.classList.toggle('corner', pos === 'corner');
   cat.classList.toggle('large', size === 'large');
 }
 function hideBottomNavCat() {
@@ -7198,13 +7199,14 @@ function showBottomNavCat() {
   if (cat) cat.style.display = '';
 }
 // cat 이미지 preload — 카드 상세 진입 시 cat_today 가 잠깐 보이는 깜빡임 방지
-['cat_today.png', 'cat_pen.png', 'cat_library.png', 'cat_struck.png'].forEach((f) => {
+['cat_today.png', 'cat_pen.png', 'cat_library.png', 'cat_struck.png', 'cat_empty.png'].forEach((f) => {
   const img = new Image();
   img.src = 'assets/cat/' + f;
 });
 function updateBottomNavCatForView(view) {
   if (view === 'feed') setBottomNavCat('cat_pen.png', 'right');
   else if (view === 'archive') setBottomNavCat('cat_struck.png', 'right');   // LIBRARY — MY 쪽 가까이
+  else if (view === 'daily') setBottomNavCat('cat_empty.png', 'corner');     // 옛날 default 자리 복원
   else setBottomNavCat('cat_today.png', 'center');
 }
 
