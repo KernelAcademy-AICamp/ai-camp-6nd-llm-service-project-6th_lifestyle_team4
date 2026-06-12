@@ -14,6 +14,12 @@ struct CardDetailView: View {
     @State private var didIncrementView = false
     @State private var showOriginal = false
     @FocusState private var composerFocused: Bool
+    // Highlight creation (select script text → save passage).
+    @State private var highlightSelection = ""
+    @State private var showHighlightSheet = false
+    @State private var showHighlightLogin = false
+    @State private var highlightSaving = false
+    @State private var highlightToast: String?
 
     init(card: Card, onLoginRequested: (() -> Void)? = nil) {
         self.card = card
@@ -74,10 +80,7 @@ struct CardDetailView: View {
                         Spacer().frame(height: 24)
                     }
 
-                    scriptText
-                        .tracking(0.28)
-                        .lineSpacing(8)
-                        .fixedSize(horizontal: false, vertical: true)
+                    SelectableScriptText(attributed: scriptAttributed, selection: $highlightSelection)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     if showSignificance, let sig = card.displaySignificance(original: showOriginal) {
@@ -165,26 +168,126 @@ struct CardDetailView: View {
                 }
             }
         }
+        // Floating coral pill — appears while script text is selected (Android
+        // #hl-add-btn). Sits above the docked composer for members.
+        .overlay(alignment: .bottomTrailing) {
+            if !highlightSelection.isEmpty {
+                Button {
+                    if session.isAnonymous { showHighlightLogin = true }
+                    else { showHighlightSheet = true }
+                } label: {
+                    Text("하이라이트 추가")
+                        .font(.uiSans(14, weight: .medium))
+                        .tracking(0.8)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 13)
+                        .background(Capsule().fill(Color.cta))
+                        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 18)
+                .padding(.bottom, session.isAnonymous ? 28 : 92)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: highlightSelection.isEmpty)
+        // Members-only: RLS blocks anonymous JWTs from inserting highlights.
+        .overlay {
+            if showHighlightLogin {
+                AccountRequiredPrompt(
+                    title: "하이라이트는 회원 전용",
+                    message: "구절을 저장하려면 로그인이 필요해요."
+                ) {
+                    showHighlightLogin = false
+                    onLoginRequested?()
+                } onClose: {
+                    showHighlightLogin = false
+                }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let highlightToast {
+                Text(highlightToast)
+                    .font(.bodySans(13))
+                    .foregroundStyle(.paper)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(Color.espresso))
+                    .padding(.bottom, 100)
+                    .transition(.opacity)
+            }
+        }
+        .sheet(isPresented: $showHighlightSheet) {
+            HighlightComposeSheet(
+                selectedText: highlightSelection,
+                saving: highlightSaving,
+                onCancel: { showHighlightSheet = false },
+                onSave: { note in Task { await saveHighlight(note: note) } }
+            )
+        }
     }
 
-    /// Script excerpt with speaker lines (matching work.characters) bolded.
-    /// In the ENG view the script is English while characters are Korean names,
-    /// so no line matches and nothing is bolded — content still shows in full.
-    private var scriptText: Text {
+    /// Script excerpt as an NSAttributedString for the selectable text view —
+    /// speaker lines (matching work.characters) bolded, monospaced 14, espresso,
+    /// line-spacing 8, kern 0.28 (matching the previous SwiftUI Text). In the ENG
+    /// view the script is English while characters are Korean names, so no line
+    /// matches and nothing is bolded — content still shows in full.
+    private var scriptAttributed: NSAttributedString {
         let names = Set(card.work.characters.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
         let lines = card.displayScript(original: showOriginal).components(separatedBy: "\n")
-        var result = AttributedString()
+        let para = NSMutableParagraphStyle()
+        para.lineSpacing = 8
+        let result = NSMutableAttributedString()
         for (i, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let namePart = trimmed.components(separatedBy: "(").first?.trimmingCharacters(in: .whitespaces) ?? trimmed
             let isSpeaker = !trimmed.isEmpty && (names.contains(trimmed) || names.contains(namePart))
-            var segment = AttributedString(line)
-            segment.font = .system(size: 14, design: .monospaced).weight(isSpeaker ? .bold : .regular)
-            segment.foregroundColor = .espresso
-            result += segment
-            if i < lines.count - 1 { result += AttributedString("\n") }
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.monospacedSystemFont(ofSize: 14, weight: isSpeaker ? .bold : .regular),
+                .foregroundColor: Self.espressoUIColor,
+                .paragraphStyle: para,
+                .kern: 0.28,
+            ]
+            result.append(NSAttributedString(string: line, attributes: attrs))
+            if i < lines.count - 1 { result.append(NSAttributedString(string: "\n", attributes: attrs)) }
         }
-        return Text(result)
+        return result
+    }
+
+    /// Adaptive espresso ink, matching `Color.espresso` (DesignTokens) for UIKit.
+    private static let espressoUIColor = UIColor { tc in
+        tc.userInterfaceStyle == .dark
+            ? UIColor(red: 0xFA / 255, green: 0xF8 / 255, blue: 0xF2 / 255, alpha: 1)
+            : UIColor(red: 0x0E / 255, green: 0x0C / 255, blue: 0x0A / 255, alpha: 1)
+    }
+
+    private func saveHighlight(note: String) async {
+        guard let uid = session.userId, !highlightSelection.isEmpty, !highlightSaving else { return }
+        highlightSaving = true
+        do {
+            try await Supa.shared.addHighlight(
+                cardId: card.cardId,
+                userId: uid,
+                selectedText: highlightSelection,
+                userNote: note,
+                authorNickname: session.nickname.isEmpty ? nil : session.nickname
+            )
+            showHighlightSheet = false
+            highlightSelection = ""   // collapses the live selection via updateUIView
+            showHighlightToast("하이라이트를 피드에 저장했어요.")
+        } catch {
+            showHighlightToast("저장에 실패했어요.")
+        }
+        highlightSaving = false
+    }
+
+    private func showHighlightToast(_ msg: String) {
+        withAnimation { highlightToast = msg }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            withAnimation { highlightToast = nil }
+        }
     }
 
     private var detailTopBar: some View {

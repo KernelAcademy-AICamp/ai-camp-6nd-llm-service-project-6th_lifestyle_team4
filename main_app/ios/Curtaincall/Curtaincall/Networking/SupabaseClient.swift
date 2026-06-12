@@ -156,6 +156,26 @@ final class Supa {
             .execute()
     }
 
+    /// Saves a highlighted passage (drag-selected from a card's script). Mirrors
+    /// Android `FeedRepository.addHighlight`; surfaces in the Feed 하이라이트 tab.
+    /// RLS blocks anonymous JWTs, so callers must gate on a signed-in member.
+    /// `selectedText` is trimmed to the DB's 1–2000 bound; `userNote` to ≤500.
+    func addHighlight(cardId: Int, userId: Int, selectedText: String, userNote: String?, authorNickname: String?) async throws {
+        let text = String(selectedText.trimmingCharacters(in: .whitespacesAndNewlines).prefix(2000))
+        let note = userNote?.trimmingCharacters(in: .whitespacesAndNewlines)
+        try await client.from("card_highlights")
+            .insert(
+                HighlightInsert(
+                    cardId: cardId,
+                    userId: userId,
+                    authorNickname: authorNickname,
+                    selectedText: text,
+                    userNote: (note?.isEmpty ?? true) ? nil : String(note!.prefix(500))
+                )
+            )
+            .execute()
+    }
+
     // MARK: - Users
 
     func findUser(anonymousId: String) async throws -> UserRow? {
