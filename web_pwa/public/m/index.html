@@ -413,8 +413,9 @@
     left: 56%;
     right: auto;
     transform: translateX(-50%);
-    bottom: 36px;             /* nav body(64px) 안 — 카드 상단 가까이 ledge 선 위치 */
-    height: 52px;
+    /* 사용자 명세: 하단바를 '바닥' 으로 보고 고양이가 그 위에 서 있게 — bar 본체(64px) 위로 올림 */
+    bottom: 64px;
+    height: 62px;            /* 살짝 키움 (이전 52px) */
     width: auto;
     pointer-events: none;
     z-index: 52;
