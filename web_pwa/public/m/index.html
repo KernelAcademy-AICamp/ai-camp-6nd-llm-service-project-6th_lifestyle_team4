@@ -422,11 +422,11 @@
     user-select: none;
     -webkit-user-drag: none;
   }
-  /* 피드(cat_pen) · 카드 상세(cat_library) 자세는 원래 위치(우측 하단)로 복귀 */
+  /* 피드(cat_pen) · 카드 상세(cat_library) — 하단바 LIBRARY 와 MY 탭 사이로 배치 (사용자 명세) */
   .bottom-nav .bottom-nav-cat.right {
-    left: auto;
-    right: 8px;
-    transform: none;
+    left: 80%;
+    right: auto;
+    transform: translateX(-50%);
     bottom: 60px;
   }
   /* 카드 상세 — 책장 앞 자세는 더 크게 (사용자 명세) */
@@ -1353,10 +1353,11 @@
     -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
   }
-  /* 피드 글쓰기 — 말풍선 모양으로 nav 우측 고양이 머리 위에서 말하는 것처럼 (사용자 명세) */
+  /* 피드 글쓰기 — 말풍선 모양, cat_pen 머리 위에서 말하는 것처럼 (사용자 명세).
+     cat은 하단바 LIBRARY-MY 사이(좌측 80%)에 있으므로 fab 도 같은 80% 에 중앙 정렬. */
   #feed-fab {
-    /* cat right:8 + cat 너비(~78) 기준 fab 너비(~80) 의 중심을 cat 위에 정렬 */
-    position: fixed; right: 12px; bottom: calc(146px + env(safe-area-inset-bottom)); z-index: 53;
+    position: fixed; left: 80%; right: auto; transform: translateX(-50%);
+    bottom: calc(146px + env(safe-area-inset-bottom)); z-index: 53;
     background: var(--paper);
     color: var(--espresso);
     border: 1.5px solid var(--espresso);
@@ -2311,7 +2312,7 @@
     </button>
     <div style="display:flex;flex-direction:column;align-items:center;">
       <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">OZ&rsquo;S HOUSE</span>
-      <span class="t-body-sm c-espresso" style="margin-top:4px;">고양이 집</span>
+      <span class="t-body-sm c-espresso" style="margin-top:4px;">오즈의 집</span>
     </div>
     <span style="width:40px;"></span>
   </header>

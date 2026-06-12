@@ -4577,9 +4577,10 @@ function openOzHouse() {
   ozHouseScreen.style.display = 'flex';
   requestAnimationFrame(() => ozHouseScreen.classList.add('open'));
   document.body.style.overflow = 'hidden';
-  // OZ's house 페이지 안에 자체 고양이가 있어 하단바 cat 은 숨김
+  // OZ's house 페이지 안에 자체 고양이가 있어 하단바 cat / 피드 글쓰기 말풍선은 숨김
   const navCat = document.querySelector('.bottom-nav-cat');
   if (navCat) navCat.style.display = 'none';
+  if (feedFab) feedFab.style.display = 'none';
   // 고양이 데모(iframe) — 닫혀 있을 때는 about:blank 로 두니, 진입 시 dataset.src 로 다시 로드.
   const frame = document.getElementById('oz-house-frame');
   if (frame) {
@@ -4593,10 +4594,12 @@ function openOzHouse() {
 function closeOzHouseInternal() {
   if (!ozHouseScreen) return;
   ozHouseScreen.classList.remove('open');
-  // 하단바 cat 복귀 — 현재 view 기준
+  // 하단바 cat / 피드 fab 복귀 — 현재 view 기준
   const navCat = document.querySelector('.bottom-nav-cat');
   if (navCat) navCat.style.display = '';
   updateBottomNavCatForView(state.currentView);
+  // feed-fab 은 view 가 feed 인 경우에만 다시 보여짐 (setView 의 분기와 동일)
+  if (feedFab) feedFab.style.display = (state.currentView === 'feed') ? 'inline-flex' : 'none';
   setTimeout(() => {
     ozHouseScreen.style.display = 'none';
     document.body.style.overflow = '';
