@@ -7203,6 +7203,8 @@ function setBottomNavCat(srcFile, pos /* 'center' | 'right' | 'corner' */, size 
   cat.classList.toggle('right', pos === 'right');
   cat.classList.toggle('corner', pos === 'corner');
   cat.classList.toggle('large', size === 'large');
+  // hideBottomNavCat 으로 inline display:none 이 남은 경우 복원 — 자세 변경 = 항상 표시
+  if (cat.style.display === 'none') cat.style.display = '';
 }
 function hideBottomNavCat() {
   const cat = document.querySelector('.bottom-nav-cat');
@@ -7218,9 +7220,9 @@ function showBottomNavCat() {
   img.src = 'assets/cat/' + f;
 });
 function updateBottomNavCatForView(view) {
-  if (view === 'feed') setBottomNavCat('cat_pen.png', 'right');
-  else if (view === 'archive') setBottomNavCat('cat_struck.png', 'right');   // LIBRARY — MY 쪽 가까이
-  else if (view === 'daily') setBottomNavCat('cat_empty.png', 'corner');     // 옛날 default 자리 복원
+  if (view === 'feed') setBottomNavCat('cat_pen.png', 'right', 'large');             // 피드 — 카드 상세 크기와 동일
+  else if (view === 'archive') setBottomNavCat('cat_struck.png', 'right', 'large');   // LIBRARY — 카드 상세 크기와 동일
+  else if (view === 'daily') setBottomNavCat('cat_empty.png', 'corner');               // 옛날 default 자리 복원
   else setBottomNavCat('cat_today.png', 'center');
 }
 
