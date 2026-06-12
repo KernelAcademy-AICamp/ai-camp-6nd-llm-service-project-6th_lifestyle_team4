@@ -13,28 +13,30 @@ struct OnboardingView: View {
     @State private var themes: Set<String> = []
     @State private var any = false
 
-    private struct Genre { let ko: String; let format: String }
+    // `en` shown under the Korean label (Android onboarding genre buttons).
+    private struct Genre { let ko: String; let en: String; let format: String }
     private let genreOptions: [Genre] = [
-        Genre(ko: "소설", format: "novel"),
-        Genre(ko: "연극(희곡)", format: "play"),
-        Genre(ko: "에세이", format: "essay"),
-        Genre(ko: "오페라(대본)", format: "opera"),
-        Genre(ko: "산문", format: "prose"),
+        Genre(ko: "소설", en: "Novel", format: "novel"),
+        Genre(ko: "연극(희곡)", en: "Play", format: "play"),
+        Genre(ko: "에세이", en: "Essay", format: "essay"),
+        Genre(ko: "오페라(대본)", en: "Opera", format: "opera"),
+        Genre(ko: "산문", en: "Prose", format: "prose"),
     ]
 
     // ko must match CardTheme category names exactly so a saved theme weights cards.
-    private struct Theme { let ko: String; let kw: String }
+    // color = the per-theme swatch, mirroring Android's PrefTheme colors.
+    private struct Theme { let ko: String; let kw: String; let color: Color }
     private let themeOptions: [Theme] = [
-        Theme(ko: "관계·사랑", kw: "사랑 · 연애 · 가족 · 우정"),
-        Theme(ko: "상실·애도", kw: "죽음 · 이별 · 그리움 · 애도"),
-        Theme(ko: "자기·정체성", kw: "자아 · 성장 · 자존 · 양심"),
-        Theme(ko: "결단·행동", kw: "결심 · 선택 · 복수 · 저항"),
-        Theme(ko: "세계관·환멸", kw: "권력 · 사회 · 운명 · 진실"),
-        Theme(ko: "욕망·집착", kw: "욕망 · 유혹 · 소유 · 야망"),
-        Theme(ko: "시간·기억", kw: "시간 · 기억 · 추억 · 회상"),
-        Theme(ko: "희망·구원", kw: "희망 · 구원 · 믿음 · 치유"),
-        Theme(ko: "삶·일상", kw: "삶 · 노동 · 생계 · 생존"),
-        Theme(ko: "정서 상태", kw: "불안 · 분노 · 공허 · 권태"),
+        Theme(ko: "관계·사랑", kw: "사랑 · 연애 · 가족 · 우정", color: Color(hex: 0xC75D4A)),
+        Theme(ko: "상실·애도", kw: "죽음 · 이별 · 그리움 · 애도", color: Color(hex: 0x5E6B7A)),
+        Theme(ko: "자기·정체성", kw: "자아 · 성장 · 자존 · 양심", color: Color(hex: 0xB98A3E)),
+        Theme(ko: "결단·행동", kw: "결심 · 선택 · 복수 · 저항", color: Color(hex: 0xA64238)),
+        Theme(ko: "세계관·환멸", kw: "권력 · 사회 · 운명 · 진실", color: Color(hex: 0x4A5240)),
+        Theme(ko: "욕망·집착", kw: "욕망 · 유혹 · 소유 · 야망", color: Color(hex: 0x8E3B52)),
+        Theme(ko: "시간·기억", kw: "시간 · 기억 · 추억 · 회상", color: Color(hex: 0x6E7B86)),
+        Theme(ko: "희망·구원", kw: "희망 · 구원 · 믿음 · 치유", color: Color(hex: 0xC99A2E)),
+        Theme(ko: "삶·일상", kw: "삶 · 노동 · 생계 · 생존", color: Color(hex: 0x7A6A52)),
+        Theme(ko: "정서 상태", kw: "불안 · 분노 · 공허 · 권태", color: Color(hex: 0x88736B)),
     ]
 
     private var canAdvance: Bool {
@@ -99,7 +101,7 @@ struct OnboardingView: View {
             stepHead(title: "어떤 장르를 좋아하세요?",
                      subtitle: "고른 장르의 명대사를 더 자주 만나요. (복수 선택)")
             ForEach(genreOptions, id: \.format) { g in
-                selectRow(label: g.ko, sublabel: nil, selected: genres.contains(g.format)) {
+                selectRow(label: g.ko, caption: g.en, selected: genres.contains(g.format)) {
                     toggle(&genres, g.format)
                 }
             }
@@ -115,7 +117,7 @@ struct OnboardingView: View {
                 if any { themes.removeAll() }
             }
             ForEach(themeOptions, id: \.ko) { t in
-                selectRow(label: t.ko, sublabel: t.kw, selected: themes.contains(t.ko)) {
+                selectRow(label: t.ko, sublabel: t.kw, swatch: t.color, selected: themes.contains(t.ko)) {
                     if any { any = false }
                     toggle(&themes, t.ko)
                 }
@@ -137,17 +139,36 @@ struct OnboardingView: View {
     }
 
     // Selectable row — filled (espresso) when selected, outlined when not.
-    private func selectRow(label: String, sublabel: String?, selected: Bool, action: @escaping () -> Void) -> some View {
+    //  - caption: small uppercase tracked line under the label (genre English).
+    //  - swatch: leading vertical color bar (theme color), mirroring Android.
+    private func selectRow(
+        label: String,
+        sublabel: String? = nil,
+        caption: String? = nil,
+        swatch: Color? = nil,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             HStack(alignment: .center, spacing: 12) {
+                if let swatch {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(swatch)
+                        .frame(width: 7, height: 38)
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(label)
                         .font(.titleSerif(16))
                         .foregroundStyle(selected ? Color.paper : .espresso)
+                    if let caption {
+                        Text(caption)
+                            .labelCaps(color: selected ? Color.paper.opacity(0.6) : .sand, size: 10)
+                    }
                     if let sublabel {
                         Text(sublabel)
                             .font(.bodySans(12))
                             .foregroundStyle(selected ? Color.paper.opacity(0.7) : .walnut)
+                            .lineLimit(1)
                     }
                 }
                 Spacer()
