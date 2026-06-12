@@ -1370,8 +1370,9 @@
     /* fab 우측 정렬 + nowrap — left% 로 두면 viewport 끝과 충돌해 '글쓰기' 가 세로로 끊김 */
     position: fixed; right: 16px; left: auto;
     white-space: nowrap;
-    /* cat: bottom 64 + height 80 → 머리(상단) = 144px. fab 은 그 위에 10px gap */
-    bottom: calc(154px + env(safe-area-inset-bottom)); z-index: 53;
+    /* cat .large: bottom 50 + height 96 = 146 + bar 카드 bottom 12 → cat 머리 ≈ 158.
+       fab 박스 하단을 그 위 12px gap 으로 (안 겹치고 가깝게) */
+    bottom: calc(180px + env(safe-area-inset-bottom)); z-index: 53;
     background: var(--paper);
     color: var(--espresso);
     border: 1.5px solid var(--espresso);
