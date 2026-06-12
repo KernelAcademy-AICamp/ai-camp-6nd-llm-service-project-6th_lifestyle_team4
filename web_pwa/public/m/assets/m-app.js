@@ -4577,12 +4577,23 @@ function openOzHouse() {
   ozHouseScreen.style.display = 'flex';
   requestAnimationFrame(() => ozHouseScreen.classList.add('open'));
   document.body.style.overflow = 'hidden';
+  // 고양이 데모(iframe) 진입 시 로드 — 닫혀 있을 때는 about:blank 로 두어 애니메이션 루프가 돌지 않게 한다.
+  const frame = document.getElementById('oz-house-frame');
+  if (frame && frame.dataset.src && frame.src.endsWith('about:blank')) {
+    frame.src = frame.dataset.src;
+  }
   track('oz_house_opened');
 }
 function closeOzHouseInternal() {
   if (!ozHouseScreen) return;
   ozHouseScreen.classList.remove('open');
-  setTimeout(() => { ozHouseScreen.style.display = 'none'; document.body.style.overflow = ''; }, 250);
+  setTimeout(() => {
+    ozHouseScreen.style.display = 'none';
+    document.body.style.overflow = '';
+    // iframe 을 about:blank 로 비워 백그라운드 setInterval/setTimeout 루프 종료
+    const frame = document.getElementById('oz-house-frame');
+    if (frame) frame.src = 'about:blank';
+  }, 250);
 }
 function closeOzHouse() {
   if (history.state && history.state.overlay === 'ozHouse') history.back();
