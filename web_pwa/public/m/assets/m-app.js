@@ -4577,6 +4577,9 @@ function openOzHouse() {
   ozHouseScreen.style.display = 'flex';
   requestAnimationFrame(() => ozHouseScreen.classList.add('open'));
   document.body.style.overflow = 'hidden';
+  // OZ's house 페이지 안에 자체 고양이가 있어 하단바 cat 은 숨김
+  const navCat = document.querySelector('.bottom-nav-cat');
+  if (navCat) navCat.style.display = 'none';
   // 고양이 데모(iframe) — 닫혀 있을 때는 about:blank 로 두니, 진입 시 dataset.src 로 다시 로드.
   const frame = document.getElementById('oz-house-frame');
   if (frame) {
@@ -4590,6 +4593,10 @@ function openOzHouse() {
 function closeOzHouseInternal() {
   if (!ozHouseScreen) return;
   ozHouseScreen.classList.remove('open');
+  // 하단바 cat 복귀 — 현재 view 기준
+  const navCat = document.querySelector('.bottom-nav-cat');
+  if (navCat) navCat.style.display = '';
+  updateBottomNavCatForView(state.currentView);
   setTimeout(() => {
     ozHouseScreen.style.display = 'none';
     document.body.style.overflow = '';
@@ -5086,7 +5093,7 @@ function openDetail(card) {
 
 function openDetailApproved(card) {
   if (!card) return;
-  setBottomNavCat('cat_library.png', 'right');   // 카드 상세 — 책장 앞 자세, 원래 위치(우측 하단)
+  setBottomNavCat('cat_library.png', 'right', 'large');   // 카드 상세 — 책장 앞 자세, 우측 하단 + 크게
   // 카드 열람 누적 카운트 — 임계치 도달 시, 카드를 가리지 않도록 '닫힐 때' 유도 팝업 예약
   if (bumpCardsViewed() >= FEEDBACK_NUDGE_THRESHOLD && !feedbackNudgeSeen()) {
     state._feedbackNudgePending = true;
@@ -7164,12 +7171,13 @@ function renderNotice() {
 //   default(daily/home/archive/notice/settings) = cat_today  / 중앙 살짝 오른쪽 (실타래 굴리는 자세)
 //   feed                                       = cat_pen    / 우측 하단 (원래 위치)
 //   카드 상세                                   = cat_library / 우측 하단 (원래 위치)
-function setBottomNavCat(srcFile, pos /* 'center' | 'right' */) {
+function setBottomNavCat(srcFile, pos /* 'center' | 'right' */, size /* 'large'? */) {
   const cat = document.querySelector('.bottom-nav-cat');
   if (!cat) return;
   const target = 'assets/cat/' + srcFile;
   if (!cat.src.endsWith(srcFile)) cat.src = target;
   cat.classList.toggle('right', pos === 'right');
+  cat.classList.toggle('large', size === 'large');
 }
 function updateBottomNavCatForView(view) {
   if (view === 'feed') setBottomNavCat('cat_pen.png', 'right');

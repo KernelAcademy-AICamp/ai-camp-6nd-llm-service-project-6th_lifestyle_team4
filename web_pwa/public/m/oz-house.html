@@ -189,6 +189,30 @@
 
   .board-foot{ font-size:11.5px; color:var(--walnut); text-align:center; max-width:620px; line-height:1.6; }
   .board-foot code{ font-family:ui-monospace,monospace; font-size:10.5px; background:rgba(107,93,79,.12); padding:1px 5px; border-radius:4px; color:var(--roast); }
+
+  /* ════════ 앱 임베드 오버라이드 — 외부 chrome(액자/컨트롤) 숨기고 폰 화면만 풀스크린 ════════ */
+  body{ padding:0 !important; gap:0 !important; min-height:100dvh; align-items:stretch; background:var(--paper) !important; }
+  .board-head, .controls, .board-foot{ display:none !important; }
+  .stage{ display:block !important; width:100%; height:100dvh; }
+  .phone{ width:100% !important; height:100% !important; padding:0 !important; background:transparent !important; box-shadow:none !important; border-radius:0 !important; }
+  .screen{ border-radius:0 !important; height:100% !important; }
+  .notch{ display:none !important; }
+
+  /* 밤/낮 토글 — 상단바 우측 끝 (spacer 자리) */
+  .topbar{ padding:14px 14px 10px !important; }
+  .topbar .day-night{ display:inline-flex; align-items:center; gap:2px; background:rgba(255,255,255,.6); border:1px solid var(--sand); border-radius:999px; padding:3px; }
+  .topbar .day-night button{ font-family:var(--sans); font-size:11px; font-weight:700; padding:5px 10px; border-radius:999px; border:none; background:transparent; color:var(--walnut); cursor:pointer; line-height:1; }
+  .topbar .day-night button.on{ background:var(--espresso); color:var(--paper); }
+  .room.night .topbar .day-night{ background:rgba(20,28,48,.45); border-color:#4a4234; }
+  .room.night .topbar .day-night button{ color:#C8C2AE; }
+  .room.night .topbar .day-night button.on{ background:var(--paper); color:var(--espresso); }
+
+  /* 트레이 → 하단 팝업창: 기본 접힘(핸들만 노출), .expanded 클래스로 펼침 */
+  .tray{ transition:transform .35s cubic-bezier(0.2, 0.8, 0.2, 1); transform:translateY(calc(100% - 38px)); padding-top:38px !important; }
+  .tray.expanded{ transform:translateY(0); }
+  .tray-handle{ position:absolute; top:0; left:0; right:0; height:38px; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer; user-select:none; }
+  .tray-handle::before{ content:''; width:38px; height:4px; border-radius:2px; background:var(--sand); }
+  .tray-handle .label{ font-size:11px; font-weight:700; color:var(--walnut); letter-spacing:0.1em; }
 </style>
 </head>
 <body>
@@ -267,11 +291,15 @@
         <div class="topbar">
           <div class="back"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="#0E0C0A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="title"><span class="k">OZ&rsquo;S HOUSE</span><span class="ko">고양이 집</span></div>
-          <div class="spacer"></div>
+          <div class="day-night" data-ctrl="time">
+            <button class="on" data-val="day" type="button">☀️</button>
+            <button data-val="night" type="button">🌙</button>
+          </div>
         </div>
 
-        <!-- 꾸미기 트레이 -->
-        <div class="tray">
+        <!-- 꾸미기 트레이 (하단 팝업) — 기본 접힘, 핸들 탭하면 펼침 -->
+        <div class="tray" id="tray">
+          <div class="tray-handle" id="trayHandle"><span class="label">꾸미기</span></div>
           <div class="tray-tabs">
             <button class="tab active" data-cat="sofa">소파</button>
             <button class="tab" data-cat="rug">러그</button>
@@ -397,7 +425,21 @@
   /* 초기화 */
   apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');
   renderOptions();
-  placeCat(0);
+  // 사용자 명세: 자세 선택 UI 숨김 + 매 진입 시 랜덤 자세
+  placeCat(Math.floor(Math.random() * CATS.length));
+
+  /* 트레이 하단 팝업 토글 */
+  const tray = document.getElementById('tray');
+  const trayHandle = document.getElementById('trayHandle');
+  if (trayHandle && tray) {
+    trayHandle.addEventListener('click', () => tray.classList.toggle('expanded'));
+  }
+
+  /* 상단바 우측 밤/낮 토글 (controls 의 .seg 와 별도) */
+  document.querySelectorAll('.topbar .day-night button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.topbar .day-night button').forEach((x) => x.classList.toggle('on', x === b));
+    room.classList.toggle('night', b.dataset.val === 'night');
+  }));
 </script>
 </body>
 </html>
