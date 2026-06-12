@@ -310,16 +310,26 @@ export async function searchGutenberg(query, limit = 8) {
     console.warn('[searchGutenberg] rpc failed:', error.message || error);
     return { results: [], originalQuery: original, effectiveQuery: effective, translatedFrom };
   }
-  const results = (Array.isArray(data) ? data : []).map((b) => ({
-    bookId: b.book_id,
-    title: b.title || '',
-    authors: Array.isArray(b.authors) ? b.authors : [],
-    languages: Array.isArray(b.languages) ? b.languages : [],
-    downloadCount: b.download_count ?? null,
-    url: `https://www.gutenberg.org/ebooks/${b.book_id}`,
-    plainTextUrl: normalizeGutenbergTextUrl(b.text_url, b.book_id),
-  }));
+  const results = (Array.isArray(data) ? data : [])
+    // text_url 이 비어있거나 readme 같은 비본문 파일이면 = Sound/오디오북 등 본문이 없는 책 → 검색 결과에서 제외.
+    .filter((b) => isFetchableTextUrl(b.text_url))
+    .map((b) => ({
+      bookId: b.book_id,
+      title: b.title || '',
+      authors: Array.isArray(b.authors) ? b.authors : [],
+      languages: Array.isArray(b.languages) ? b.languages : [],
+      downloadCount: b.download_count ?? null,
+      url: `https://www.gutenberg.org/ebooks/${b.book_id}`,
+      plainTextUrl: normalizeGutenbergTextUrl(b.text_url, b.book_id),
+    }));
   return { results, originalQuery: original, effectiveQuery: effective, translatedFrom };
+}
+
+// 본문(plain-text) 으로 쓸 수 있는 URL 인지 — Sound/오디오북의 readme 같은 비본문 파일은 false.
+function isFetchableTextUrl(url) {
+  if (!url) return false;                // text/plain 메타가 없는 책 = 본문 없음
+  if (/-readme\.txt$/i.test(url)) return false; // Sound 책의 readme 안내문
+  return true;
 }
 
 // /ebooks/{id}.txt.utf-8 패턴은 PG가 HTTPS→HTTP 302 redirect 를 건다(Location 헤더가 http://).

@@ -99,6 +99,14 @@ function keywordForCategory(name) {
   return String(name || '').replace(/&/g, ' ').replace(/[\/,]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// 본문(plain-text) 으로 쓸 수 있는 URL 인지 — Sound/오디오북의 readme 같은 비본문 파일은 false.
+// 두 검색 모드 모두에서 결과 필터에 사용 (lib/sources/gutenberg.js 와 동일 규칙).
+function isFetchableTextUrl(url) {
+  if (!url) return false;
+  if (/-readme\.txt$/i.test(url)) return false;
+  return true;
+}
+
 // gutenberg_books 행 → 클라이언트 응답 형식 (dashboard.js 가 기대하는 모양)
 function rowToWork(row) {
   return {
@@ -178,6 +186,8 @@ export default async function handler(req, res) {
       for (const row of rows) {
         const title = String(row.title || '').trim();
         if (!title) continue;
+        // 본문(plain-text) 이 없는 책 = Sound/오디오북 등 → 검색 결과에서 제외
+        if (!isFetchableTextUrl(row.text_url)) continue;
         const firstAuthor = row.authors?.[0] || '';
         const normTitle = title.toLowerCase()
           .replace(/^(the |a |an )/i, '')
@@ -216,6 +226,8 @@ export default async function handler(req, res) {
     for (const row of rows) {
       const title = String(row.title || '').trim();
       if (!title) continue;
+      // 본문(plain-text) 이 없는 책 = Sound/오디오북 등 → 검색 결과에서 제외
+      if (!isFetchableTextUrl(row.text_url)) continue;
       const firstAuthor = row.authors?.[0] || '';
       const normTitle = title.toLowerCase()
         .replace(/^(the |a |an )/i, '')
