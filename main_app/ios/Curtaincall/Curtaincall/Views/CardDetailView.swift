@@ -168,10 +168,12 @@ struct CardDetailView: View {
                 }
             }
         }
-        // Floating coral pill — appears while script text is selected (Android
-        // #hl-add-btn). Sits above the docked composer for members.
+        // Floating coral pill — appears while a non-blank script range is
+        // selected (Android #hl-add-btn). Sits above the docked composer for
+        // members. Gated on the TRIMMED selection so a whitespace-only drag
+        // never enables save (the DB CHECK requires 1–2000 non-blank chars).
         .overlay(alignment: .bottomTrailing) {
-            if !highlightSelection.isEmpty {
+            if !trimmedHighlight.isEmpty {
                 Button {
                     if session.isAnonymous { showHighlightLogin = true }
                     else { showHighlightSheet = true }
@@ -191,7 +193,7 @@ struct CardDetailView: View {
                 .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: highlightSelection.isEmpty)
+        .animation(.easeInOut(duration: 0.15), value: trimmedHighlight.isEmpty)
         // Members-only: RLS blocks anonymous JWTs from inserting highlights.
         .overlay {
             if showHighlightLogin {
@@ -262,8 +264,14 @@ struct CardDetailView: View {
             : UIColor(red: 0x0E / 255, green: 0x0C / 255, blue: 0x0A / 255, alpha: 1)
     }
 
+    /// The selection with surrounding whitespace removed — the pill and save are
+    /// gated on this being non-empty so a whitespace-only drag can't reach the DB.
+    private var trimmedHighlight: String {
+        highlightSelection.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func saveHighlight(note: String) async {
-        guard let uid = session.userId, !highlightSelection.isEmpty, !highlightSaving else { return }
+        guard let uid = session.userId, !trimmedHighlight.isEmpty, !highlightSaving else { return }
         highlightSaving = true
         do {
             try await Supa.shared.addHighlight(
