@@ -460,13 +460,20 @@
   document.querySelectorAll('.seg[data-ctrl="time"] button').forEach(b=>b.addEventListener('click',()=>{ document.querySelectorAll('.seg[data-ctrl="time"] button').forEach(x=>x.classList.toggle('on',x===b)); room.classList.toggle('night', b.dataset.val==='night'); }));
 
   /* 출석 데이터 */
-  const ATTEND={ offset:1, days:30, today:12, set:new Set([1,2,3,4,6,7,8,9,10,11,12]) };
+  // 실제 오늘 날짜 기준으로 달력 자동 계산 (네이티브: java.time / Calendar 와 동일한 로직)
+  const ATTEND=(function(){ const d=new Date(); const y=d.getFullYear(), m=d.getMonth(), today=d.getDate();
+    const offset=new Date(y,m,1).getDay();               // 1일의 요일 (0=일)
+    const days=new Date(y,m+1,0).getDate();              // 이번 달 일수
+    const gaps = today>7 ? [today-6] : [];               // 데모용 결석 1일
+    const set=new Set(); for(let i=1;i<=today;i++){ if(!gaps.includes(i)) set.add(i); }
+    let streak=0; for(let i=today;i>=1;i--){ if(set.has(i)) streak++; else break; }
+    return { y, m, month:m+1, today, offset, days, set, count:set.size, streak }; })();
   function calCells(){ const a=[]; for(let i=0;i<ATTEND.offset;i++) a.push(null); for(let d=1; d<=ATTEND.days; d++) a.push({day:d, on:ATTEND.set.has(d), today:d===ATTEND.today}); while(a.length%7) a.push(null); return a; }
-  function buildWallCal(){ $('#wallCalGrid').innerHTML = calCells().map(c=> !c ? `<b class="empty"></b>` : `<b class="${c.on?'on':''} ${c.today?'today':''}"></b>`).join(''); }
+  function buildWallCal(){ document.querySelector('.wall-cal .m').textContent = ATTEND.month+'월'; $('#wallCalGrid').innerHTML = calCells().map(c=> !c ? `<b class="empty"></b>` : `<b class="${c.on?'on':''} ${c.today?'today':''}"></b>`).join(''); }
 
   /* 시트 콘텐츠 */
   function sheetAttend(){ const wd=['일','월','화','수','목','금','토'];
-    return `<div class="cal-stats"><div class="stat"><b>11일</b><span>이번 달 출석</span></div><div class="stat"><b>7일 🔥</b><span>연속 출석</span></div><div class="stat"><b>+5 / 일</b><span>실타래 적립</span></div></div>
+    return `<div class="cal-stats"><div class="stat"><b>${ATTEND.count}일</b><span>이번 달 출석</span></div><div class="stat"><b>${ATTEND.streak}일 🔥</b><span>연속 출석</span></div><div class="stat"><b>+5 / 일</b><span>실타래 적립</span></div></div>
       <div class="cal-grid head">${wd.map((w,i)=>`<div class="cal-wd ${i===0?'sun':''}">${w}</div>`).join('')}</div>
       <div class="cal-grid">${calCells().map(c=> !c ? `<div class="cal-cell"></div>` : `<div class="cal-cell ${c.on?'on':''} ${c.today?'today':''}">${c.day}</div>`).join('')}</div>
       <p class="sheet-note">매일 OZ의 집에 출석하면 <b>실타래 5개</b>가 적립돼요. 모은 실타래로 소파·러그·캣타워를 꾸밀 수 있어요.</p>`; }
