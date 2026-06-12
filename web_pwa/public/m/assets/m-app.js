@@ -3726,7 +3726,7 @@ function showEmpty(cat) {
   if (cat === 'comment') {
     if (myfeedEmptyIcon) myfeedEmptyIcon.textContent = 'edit_note';
     if (myfeedEmptyTitle) myfeedEmptyTitle.textContent = '아직 작성한 한줄이 없어요';
-    if (myfeedEmptySub) myfeedEmptySub.textContent = '피드의 + 로 오늘의 한줄을 남겨보세요.';
+    if (myfeedEmptySub) myfeedEmptySub.textContent = '피드의 + 로 나의 감상평을 남겨보세요.';
   } else {
     if (myfeedEmptyIcon) myfeedEmptyIcon.textContent = 'auto_awesome';
     if (myfeedEmptyTitle) myfeedEmptyTitle.textContent = '아직 만든 하이라이트가 없어요';
@@ -4593,7 +4593,7 @@ function openOzHouse() {
 }
 function closeOzHouseInternal() {
   if (!ozHouseScreen) return;
-  // 슬라이드 transition 동안 빈 화면이 잠깐 보이는 문제 — 즉시 닫음 (사용자 명세)
+  // 즉시 닫음 — transition / src=about:blank 둘 다 흰 화면 깜빡임 원인이라 모두 제거 (사용자 명세)
   ozHouseScreen.classList.remove('open');
   ozHouseScreen.style.display = 'none';
   document.body.style.overflow = '';
@@ -4602,9 +4602,7 @@ function closeOzHouseInternal() {
   if (nav) nav.style.display = '';
   updateBottomNavCatForView(state.currentView);
   if (feedFab) feedFab.style.display = (state.currentView === 'feed') ? 'inline-flex' : 'none';
-  // iframe 을 about:blank 로 비워 백그라운드 setInterval/setTimeout 루프 종료
-  const frame = document.getElementById('oz-house-frame');
-  if (frame) frame.src = 'about:blank';
+  // iframe 은 그대로 둠 — 다음 진입 시 즉시 표시되어 흰 화면 없음 (oz-house.html 은 setInterval 없음)
 }
 function closeOzHouse() {
   if (history.state && history.state.overlay === 'ozHouse') history.back();
@@ -6578,7 +6576,7 @@ $('#detail-post-oneliner')?.addEventListener('click', async () => {
   if (!isBookmarked) {
     try { await toggleBookmark(card.card_id); } catch {}
   }
-  if (state.isAnonymous) { toast('로그인 후 오늘의 한줄을 남길 수 있어요.'); return; }
+  if (state.isAnonymous) { toast('로그인 후 나의 감상평을 남길 수 있어요.'); return; }
   track('detail_post_oneliner', { card_id: card.card_id });
   openFeedCompose(card);
 });

@@ -422,12 +422,12 @@
     user-select: none;
     -webkit-user-drag: none;
   }
-  /* 피드(cat_pen) · LIBRARY(cat_struck) — MY 쪽 가까이 + 바 윗면이 바닥 + 사이즈 키움 (사용자 명세) */
+  /* 피드(cat_pen) · LIBRARY(cat_struck) — MY 쪽 가까이 + today 와 동일 비율로 발이 바 윗면에 (사용자 명세) */
   .bottom-nav .bottom-nav-cat.right {
     left: 88%;
     right: auto;
     transform: translateX(-50%);
-    bottom: 64px;
+    bottom: 50px;
     height: 80px;
   }
   /* daily(cat_empty) — 옛날 default 자리, 우측 모서리 */
@@ -438,11 +438,11 @@
     bottom: 36px;
     height: 52px;
   }
-  /* 카드 상세(cat_library) — 더 크고 MY 탭 가까이 + 바 윗면 위로 (사용자 명세: 다시 데려옴) */
+  /* 카드 상세(cat_library) — 더 크고 MY 탭 가까이 + 발이 바 윗면에 닿게 (사용자 명세) */
   .bottom-nav .bottom-nav-cat.large {
     height: 96px;
     left: 90%;
-    bottom: 64px;
+    bottom: 50px;
   }
 
   /* Main content padding */
@@ -1835,7 +1835,7 @@
 
     <!-- Category chips -->
     <div class="archive-chips" id="feed-chips" role="tablist" style="margin-top:18px;">
-      <button class="a-chip active" data-feed-cat="today" role="tab">오늘의 한줄</button>
+      <button class="a-chip active" data-feed-cat="today" role="tab">나의 감상평</button>
       <button class="a-chip" data-feed-cat="highlight" role="tab">하이라이트</button>
     </div>
 
@@ -2494,7 +2494,7 @@
     <div style="height:32px;"></div>
 
     <!-- 안드 DetailScreen 매칭: 북마크하고 오늘의 한줄 작성 + 라이브러리 진입 -->
-    <button id="detail-post-oneliner" class="sharp-btn">북마크하고 오늘의 한줄 작성하기</button>
+    <button id="detail-post-oneliner" class="sharp-btn">북마크하고 나의 감상평 작성하기</button>
     <div style="height:10px;"></div>
     <button id="detail-go-library" class="sharp-btn outline">라이브러리 가서 책 더 읽어보기</button>
 
