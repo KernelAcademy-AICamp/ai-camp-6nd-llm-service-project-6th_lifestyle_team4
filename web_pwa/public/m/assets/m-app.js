@@ -5109,14 +5109,14 @@ function paintAuthIdentity() {
 function openDetail(card) {
   if (!card) return;
   // 카드 상세 진입 직후 cat_today 가 잠깐 보이는 깜빡임 방지 — 클릭 즉시 cat 자세 변경
-  setBottomNavCat('cat_library.png', 'right', 'large');
+  setBottomNavCat('cat_library.png', 'right-far', 'large');
   rewardYarnForFirstView(card.card_id);
   openDetailApproved(card);
 }
 
 function openDetailApproved(card) {
   if (!card) return;
-  setBottomNavCat('cat_library.png', 'right', 'large');   // 카드 상세 — 책장 앞 자세, 우측 하단 + 크게
+  setBottomNavCat('cat_library.png', 'right-far', 'large');   // 카드 상세 — 책장 앞 자세, 우측 하단 + 크게
   // 카드 열람 누적 카운트 — 임계치 도달 시, 카드를 가리지 않도록 '닫힐 때' 유도 팝업 예약
   if (bumpCardsViewed() >= FEEDBACK_NUDGE_THRESHOLD && !feedbackNudgeSeen()) {
     state._feedbackNudgePending = true;
@@ -7199,15 +7199,16 @@ function renderNotice() {
 //   default(daily/home/archive/notice/settings) = cat_today  / 중앙 살짝 오른쪽 (실타래 굴리는 자세)
 //   feed                                       = cat_pen    / 우측 하단 (원래 위치)
 //   카드 상세                                   = cat_library / 우측 하단 (원래 위치)
-function setBottomNavCat(srcFile, pos /* 'center' | 'right' | 'corner' */, size /* 'large'? */) {
+function setBottomNavCat(srcFile, pos /* 'center' | 'right' | 'right-far' | 'corner' */, size /* 'large'? */) {
   const cat = document.querySelector('.bottom-nav-cat');
   if (!cat) return;
   const target = 'assets/cat/' + srcFile;
   if (!cat.src.endsWith(srcFile)) cat.src = target;
-  cat.classList.toggle('right', pos === 'right');
+  // right-far 는 .right + .right-far 둘 다 적용 — CSS 가 right-far 로 left override
+  cat.classList.toggle('right', pos === 'right' || pos === 'right-far');
+  cat.classList.toggle('right-far', pos === 'right-far');
   cat.classList.toggle('corner', pos === 'corner');
   cat.classList.toggle('large', size === 'large');
-  // hideBottomNavCat 으로 inline display:none 이 남은 경우 복원 — 자세 변경 = 항상 표시
   if (cat.style.display === 'none') cat.style.display = '';
 }
 function hideBottomNavCat() {

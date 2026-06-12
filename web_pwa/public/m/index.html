@@ -422,13 +422,16 @@
     user-select: none;
     -webkit-user-drag: none;
   }
-  /* 피드(cat_pen) · LIBRARY(cat_struck) — MY 쪽 가까이 + today 와 동일 비율로 발이 바 윗면에 (사용자 명세) */
+  /* 피드(cat_pen) · LIBRARY(cat_struck) — 왼쪽으로 (사용자 명세). 카드 상세 는 .right-far 로 더 오른쪽 */
   .bottom-nav .bottom-nav-cat.right {
-    left: 88%;
+    left: 78%;
     right: auto;
     transform: translateX(-50%);
     bottom: 50px;
     height: 80px;
+  }
+  .bottom-nav .bottom-nav-cat.right.right-far {
+    left: 90%;
   }
   /* daily(cat_empty) — 옛날 default 자리, 우측 모서리 */
   .bottom-nav .bottom-nav-cat.corner {
@@ -438,10 +441,9 @@
     bottom: 36px;
     height: 52px;
   }
-  /* 카드 상세(cat_library) — 더 크고 MY 탭 가까이 + 발이 바 윗면에 닿게 (사용자 명세) */
+  /* size only — left 는 .right / .right-far 가 결정 (피드·LIBRARY 와 카드 상세 분리) */
   .bottom-nav .bottom-nav-cat.large {
     height: 96px;
-    left: 90%;
     bottom: 50px;
   }
 
@@ -1370,9 +1372,8 @@
     /* fab 우측 정렬 + nowrap — left% 로 두면 viewport 끝과 충돌해 '글쓰기' 가 세로로 끊김 */
     position: fixed; right: 16px; left: auto;
     white-space: nowrap;
-    /* cat .large: bottom 50 + height 96 = 146 + bar 카드 bottom 12 → cat 머리 ≈ 158.
-       fab 박스 하단을 그 위 12px gap 으로 (안 겹치고 가깝게) */
-    bottom: calc(180px + env(safe-area-inset-bottom)); z-index: 53;
+    /* cat 머리 ≈ 158px — fab 하단을 그 바로 위에 1px gap 정도로 (가깝게, 안 겹치게) */
+    bottom: calc(160px + env(safe-area-inset-bottom)); z-index: 53;
     background: var(--paper);
     color: var(--espresso);
     border: 1.5px solid var(--espresso);
