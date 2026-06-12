@@ -5090,6 +5090,8 @@ function paintAuthIdentity() {
 //   대신 카드 1개당 1번에 한해 처음 열람 시 실타래 +1 지급 (중복 없음).
 function openDetail(card) {
   if (!card) return;
+  // 카드 상세 진입 직후 cat_today 가 잠깐 보이는 깜빡임 방지 — 클릭 즉시 cat 자세 변경
+  setBottomNavCat('cat_library.png', 'right', 'large');
   rewardYarnForFirstView(card.card_id);
   openDetailApproved(card);
 }
@@ -6151,6 +6153,7 @@ function openFeedPostDetail(post) {
   state.currentFeedPost = post;
   state.currentHighlight = null;
   if (feedFab) feedFab.style.display = 'none';   // 댓글 화면에서는 글쓰기 말풍선 숨김
+  hideBottomNavCat();   // 피드 카드 상세에서는 하단바 cat 숨김
   // 명대사 박스 복원 (하이라이트 모드에서 숨겼던 경우)
   const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
   if (quoteBox) quoteBox.style.display = '';
@@ -6191,6 +6194,7 @@ function openHighlightDetail(highlight) {
   state.detailType = 'highlight';
   state.currentHighlight = highlight;
   state.currentFeedPost = null;
+  hideBottomNavCat();   // 하이라이트 상세에서도 하단바 cat 숨김 (feedFab 은 아래에서 hide)
   // 명대사 박스(card-warm 배경)를 안드 HighlightContentCard 구조로 재구성:
   //   책표지(120x170 cover_url 또는 가죽색 폴백) + selected_text(큰 serif) + 출처 + '카드 보기' 버튼
   const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
@@ -6512,6 +6516,9 @@ async function deleteFeedComment(commentId) {
 function closeFeedPostDetailInternal() {
   if (!feedpostScreen) return;
   feedpostScreen.classList.remove('open');
+  // 하단바 cat 복귀 — view 기준 (피드면 cat_pen, 그 외 cat_today)
+  showBottomNavCat();
+  updateBottomNavCatForView(state.currentView);
   setTimeout(() => {
     feedpostScreen.style.display = 'none';
     document.body.style.overflow = '';
@@ -7182,6 +7189,19 @@ function setBottomNavCat(srcFile, pos /* 'center' | 'right' */, size /* 'large'?
   cat.classList.toggle('right', pos === 'right');
   cat.classList.toggle('large', size === 'large');
 }
+function hideBottomNavCat() {
+  const cat = document.querySelector('.bottom-nav-cat');
+  if (cat) cat.style.display = 'none';
+}
+function showBottomNavCat() {
+  const cat = document.querySelector('.bottom-nav-cat');
+  if (cat) cat.style.display = '';
+}
+// cat 이미지 preload — 카드 상세 진입 시 cat_today 가 잠깐 보이는 깜빡임 방지
+['cat_today.png', 'cat_pen.png', 'cat_library.png'].forEach((f) => {
+  const img = new Image();
+  img.src = 'assets/cat/' + f;
+});
 function updateBottomNavCatForView(view) {
   if (view === 'feed') setBottomNavCat('cat_pen.png', 'right');
   else setBottomNavCat('cat_today.png', 'center');
