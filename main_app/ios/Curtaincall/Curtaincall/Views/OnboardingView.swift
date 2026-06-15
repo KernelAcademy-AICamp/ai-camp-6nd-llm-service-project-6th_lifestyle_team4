@@ -24,7 +24,7 @@ struct OnboardingView: View {
     ]
 
     // ko must match CardTheme category names exactly so a saved theme weights cards.
-    // color = the per-theme swatch, mirroring Android's PrefTheme colors.
+    // color = the per-theme accent dot, mirroring Android's PrefTheme colors.
     private struct Theme { let ko: String; let kw: String; let color: Color }
     private let themeOptions: [Theme] = [
         Theme(ko: "관계·사랑", kw: "사랑 · 연애 · 가족 · 우정", color: Color(hex: 0xC75D4A)),
@@ -101,7 +101,7 @@ struct OnboardingView: View {
             stepHead(title: "어떤 장르를 좋아하세요?",
                      subtitle: "고른 장르의 명대사를 더 자주 만나요. (복수 선택)")
             ForEach(genreOptions, id: \.format) { g in
-                selectRow(label: g.ko, caption: g.en, selected: genres.contains(g.format)) {
+                selectRow(label: g.ko, sublabel: g.en, selected: genres.contains(g.format)) {
                     toggle(&genres, g.format)
                 }
             }
@@ -117,7 +117,7 @@ struct OnboardingView: View {
                 if any { themes.removeAll() }
             }
             ForEach(themeOptions, id: \.ko) { t in
-                selectRow(label: t.ko, sublabel: t.kw, swatch: t.color, selected: themes.contains(t.ko)) {
+                selectRow(label: t.ko, sublabel: t.kw, accent: t.color, selected: themes.contains(t.ko)) {
                     if any { any = false }
                     toggle(&themes, t.ko)
                 }
@@ -139,31 +139,26 @@ struct OnboardingView: View {
     }
 
     // Selectable row — filled (espresso) when selected, outlined when not.
-    //  - caption: small uppercase tracked line under the label (genre English).
-    //  - swatch: leading vertical color bar (theme color), mirroring Android.
+    //  - sublabel: secondary line under the label (genre English / theme keywords).
+    //  - accent: leading 10pt color dot (theme color), mirroring Android. nil = none.
     private func selectRow(
         label: String,
         sublabel: String? = nil,
-        caption: String? = nil,
-        swatch: Color? = nil,
+        accent: Color? = nil,
         selected: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack(alignment: .center, spacing: 12) {
-                if let swatch {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(swatch)
-                        .frame(width: 7, height: 38)
+                if let accent {
+                    Circle()
+                        .fill(accent)
+                        .frame(width: 10, height: 10)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(label)
                         .font(.titleSerif(16))
                         .foregroundStyle(selected ? Color.paper : .espresso)
-                    if let caption {
-                        Text(caption)
-                            .labelCaps(color: selected ? Color.paper.opacity(0.6) : .sand, size: 10)
-                    }
                     if let sublabel {
                         Text(sublabel)
                             .font(.bodySans(12))
