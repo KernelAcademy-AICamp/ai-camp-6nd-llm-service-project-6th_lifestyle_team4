@@ -3549,7 +3549,7 @@ function renderMyChatsList() {
   }));
   chatsList.querySelectorAll('.mc-delete-btn').forEach((b) => b.addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (!confirm('이 댓글을 삭제할까요?')) return;
+    if (!(await appConfirm({ title: '댓글 삭제', message: '이 댓글을 삭제할까요?', confirmLabel: '삭제' }))) return;
     const id = parseInt(b.dataset.id, 10);
     try {
       const sb = await getSupabase();
@@ -3894,7 +3894,7 @@ function renderMyCommentsList() {
     } catch (err) { console.warn(err); toast('수정 실패: ' + (err.message || '')); }
   }));
   myfeedList.querySelectorAll('.mfc-delete-btn').forEach((b) => b.addEventListener('click', async () => {
-    if (!confirm('이 한줄을 삭제할까요?')) return;
+    if (!(await appConfirm({ title: '감상평 삭제', message: '이 한 줄을 삭제할까요?', confirmLabel: '삭제' }))) return;
     const id = parseInt(b.dataset.id, 10);
     try {
       const sb = await getSupabase();
@@ -3966,7 +3966,7 @@ function renderMyHighlightsList() {
   for (const h of rows) myfeedList.appendChild(buildMyFeedHighlightRow(h));
   // 하이라이트는 Delete 만 (Edit 제거).
   myfeedList.querySelectorAll('.mfh-delete-btn').forEach((b) => b.addEventListener('click', async () => {
-    if (!confirm('이 하이라이트를 삭제할까요?')) return;
+    if (!(await appConfirm({ title: '하이라이트 삭제', message: '이 하이라이트를 삭제할까요?', confirmLabel: '삭제' }))) return;
     const id = parseInt(b.dataset.id, 10);
     try {
       const sb = await getSupabase();
@@ -4231,7 +4231,7 @@ signOutBtn.addEventListener('click', async () => {
   const msg = state.isAnonymous
     ? '익명 세션을 종료할까요? 다시 입장하면 새 익명 ID가 생성됩니다.'
     : '로그아웃할까요? 다음 로그인 전까지 익명 세션으로 동작합니다.';
-  if (!confirm(msg)) return;
+  if (!(await appConfirm({ title: state.isAnonymous ? '세션 종료' : '로그아웃', message: msg, confirmLabel: state.isAnonymous ? '종료' : '로그아웃' }))) return;
   const sb = await getSupabase();
   // 로그인 상태였으면 DB의 session_id도 정리 (다른 기기 알림이 잘못 뜨지 않도록)
   try {
@@ -4304,6 +4304,19 @@ let _promptOnDismiss = null;
 
 // OZ's house iframe 에서도 호출 가능하게 window 에 게시 (테마 해금 안내/구매 확인 등)
 window.openPromptModal = (...args) => openPromptModal(...args);
+/* 브라우저 기본 confirm() 대체 — PWA 공용 모달(openPromptModal) 기반 Promise wrapper.
+   기존 `if (!confirm(...)) return;` 를 `if (!(await appConfirm({...}))) return;` 로 1줄 치환 가능. */
+function appConfirm({ title = '확인', message, confirmLabel = '확인', dismissLabel = '취소' }) {
+  return new Promise((resolve) => {
+    openPromptModal({
+      title, message, confirmLabel, dismissLabel,
+      openSigninOnConfirm: false,
+      onConfirm: () => resolve(true),
+      onDismiss: () => resolve(false),
+    });
+  });
+}
+window.appConfirm = appConfirm;
 function openPromptModal({ title, message, confirmLabel = '로그인', dismissLabel = '닫기', subNote = '', dismissAsButton = false, onConfirm = null, onDismiss = null, openSigninOnConfirm = true }) {
   if (!promptModal) return;
   promptModalTitle.textContent = title;
@@ -5850,7 +5863,7 @@ async function saveEditComment(commentId, rawBody) {
 
 async function deleteComment(commentId) {
   if (state.isAnonymous || !state.userId) return;
-  if (!confirm('이 댓글을 삭제할까요?')) return;
+  if (!(await appConfirm({ title: '댓글 삭제', message: '이 댓글을 삭제할까요?', confirmLabel: '삭제' }))) return;
   try {
     const sb = await getSupabase();
     const { error } = await sb.from('card_comments')
@@ -6664,7 +6677,7 @@ async function submitFeedComment() {
 
 async function deleteFeedComment(commentId) {
   if (state.isAnonymous || !state.userId) return;
-  if (!confirm('이 댓글을 삭제할까요?')) return;
+  if (!(await appConfirm({ title: '댓글 삭제', message: '이 댓글을 삭제할까요?', confirmLabel: '삭제' }))) return;
   const isHighlight = state.detailType === 'highlight';
   const table = isHighlight ? 'card_highlight_comments' : 'feed_post_comments';
   try {
