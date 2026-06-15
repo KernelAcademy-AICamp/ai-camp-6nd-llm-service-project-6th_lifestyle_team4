@@ -4637,6 +4637,15 @@ if (ozDayNightBtn) {
     );
   });
 }
+// OZ's house 외부 top-bar 의 편집 토글 — iframe 안 window.toggleOzEdit() 호출
+const ozEditBtn = $('#oz-house-edit');
+if (ozEditBtn) {
+  ozEditBtn.addEventListener('click', () => {
+    const frame = document.getElementById('oz-house-frame');
+    try { frame?.contentWindow?.toggleOzEdit?.(); } catch {}
+  });
+}
+
 if (yarnTabCharge) yarnTabCharge.addEventListener('click', () => setYarnTab(false));
 if (yarnTabAbout) yarnTabAbout.addEventListener('click', () => setYarnTab(true));
 

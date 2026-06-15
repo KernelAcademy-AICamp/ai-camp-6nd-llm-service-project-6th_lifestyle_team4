@@ -160,18 +160,7 @@
   .tab{ font-family:var(--sans); font-size:12px; font-weight:700; padding:5px 13px; border-radius:14px; border:1px solid var(--sand); background:transparent; color:var(--walnut); cursor:pointer; }
   .tab.active{ background:var(--espresso); color:var(--paper); border-color:var(--espresso); }
   .yarn-chip{ margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--cta); background:rgba(216,90,48,.1); padding:4px 10px; border-radius:12px; }
-  /* 편집 토글 — 우측 상단 floating (트레이가 가려도 항상 노출, z-index 트레이/시트 위) */
-  .oz-edit-fab{
-    position:fixed; top:12px; right:12px; z-index:210;
-    display:inline-flex; align-items:center; gap:6px;
-    font-family:var(--sans); font-size:12px; font-weight:700; letter-spacing:0.02em;
-    padding:8px 14px; border-radius:999px; border:1.5px solid var(--cta);
-    background:rgba(251,246,236,.92); color:var(--cta); cursor:pointer;
-    box-shadow:0 4px 12px rgba(216,90,48,.18); backdrop-filter:blur(6px);
-    -webkit-backdrop-filter:blur(6px);
-  }
-  .oz-edit-fab[aria-pressed="true"]{ background:var(--cta); color:var(--paper); }
-  .oz-edit-fab:active{ transform:scale(0.96); }
+  /* (편집 토글은 외부 m/index.html top-bar 로 이동 — 여기서는 스타일 불필요) */
   .yarn-chip i{ width:11px; height:11px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F); display:inline-block; }
   .tray-options{ display:flex; gap:10px; margin-top:11px; overflow-x:auto; padding-bottom:2px; }
   .opt{ flex:none; width:64px; cursor:pointer; text-align:center; }
@@ -712,17 +701,13 @@
   const trayHandle = document.getElementById('trayHandle');
   if (trayHandle && tray) trayHandle.addEventListener('click', () => tray.classList.toggle('expanded'));
 
-  /* ════════ 가구 배치 편집 — 우측 상단 '편집' 토글로 진입 (소파/캣타워/러그) ════════ */
-  const EDIT_SELECTORS = ['.sofa', '.tower', '.rug'];
-  const LAYOUT_KEY = 'ds.ozhouse.layout';
+  /* ════════ 가구·벽 소품 배치 편집 — 우측 상단 '편집' 토글로 진입 ════════ */
+  /* 소파/캣타워/러그 + 벽 책장(내 북마크)/벽 달력(출석)/벽 액자(나의 기록) + 창문 */
+  const EDIT_SELECTORS = ['.sofa', '.tower', '.rug', '.wall-books', '.wall-cal', '.frame', '.window'];
+  const LAYOUT_KEY = 'ds.ozhouse.layout.v2';   /* v2 = left/top 통합 형식 (기존 left/bottom 과 호환 안 됨) */
 
-  /* 우측 상단 floating 편집 토글 — 트레이 위에 항상 표시 */
-  const editFab = document.createElement('button');
-  editFab.type = 'button';
-  editFab.className = 'oz-edit-fab';
-  editFab.setAttribute('aria-pressed', 'false');
-  editFab.innerHTML = '<span style="font-size:13px;line-height:1;">✏️</span><span>편집</span>';
-  document.body.appendChild(editFab);
+  /* 편집 토글은 외부 m/index.html oz-house-screen top-bar 의 ☀️ 옆 버튼이 담당.
+     iframe 안에서는 별도 fab 없음 — window.toggleOzEdit() 함수만 노출. */
 
   /* 편집 모드 = 가구에 두꺼운 cta 외곽선 + 그림자 = '블록' 표시 + 즉시 드래그 가능 */
   const editStyle = document.createElement('style');
@@ -742,48 +727,82 @@
     catch {}
   }
 
-  /* 저장된 layout 복원 */
+  /* 저장된 layout 복원 — 모두 left/top 기준으로 통일 */
   function applyLayout(){
     const layout = readLayout();
     EDIT_SELECTORS.forEach(sel => {
       const el = document.querySelector(sel);
       if (!el) return;
       const saved = layout[sel];
-      if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.bottom)) {
+      if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
         el.style.left = saved.left + 'px';
-        el.style.bottom = saved.bottom + 'px';
+        el.style.top = saved.top + 'px';
         el.style.right = 'auto';
-        el.style.top = 'auto';
+        el.style.bottom = 'auto';
+        el.dataset.ozNormalized = '1';
       }
     });
   }
   applyLayout();
 
+  /* 한 번 좌표를 left/top 으로 정규화 — right/bottom 으로 정렬된 요소(.wall-cal/.frame/소파/캣타워/러그) 를
+     첫 드래그 직전에 현재 시각 위치 그대로 left/top px 로 변환. */
+  function normalizePos(el){
+    if (el.dataset.ozNormalized) return;
+    const roomEl = document.getElementById('room');
+    if (!roomEl) return;
+    const scale = getRoomScale() || 1;
+    const roomRect = roomEl.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    const left = (rect.left - roomRect.left) / scale;
+    const top  = (rect.top  - roomRect.top ) / scale;
+    el.style.left = left + 'px';
+    el.style.top  = top  + 'px';
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+    el.dataset.ozNormalized = '1';
+  }
+
   let editMode = false;
-  function syncFab(){
-    editFab.setAttribute('aria-pressed', editMode ? 'true' : 'false');
-    editFab.innerHTML = editMode
-      ? '<span style="font-size:13px;line-height:1;">✓</span><span>완료</span>'
-      : '<span style="font-size:13px;line-height:1;">✏️</span><span>편집</span>';
+  function syncParentBtn(){
+    /* 외부(top-bar) ✏️ 버튼의 active 표시 동기화 — inline style 토글 */
+    try {
+      const b = window.parent.document.getElementById('oz-house-edit');
+      if (!b) return;
+      b.classList.toggle('on', editMode);
+      b.style.background = editMode ? 'var(--cta)' : 'transparent';
+      b.style.borderColor = editMode ? 'var(--cta)' : 'var(--latte)';
+      b.style.color = editMode ? 'var(--paper)' : 'var(--espresso)';
+      b.textContent = editMode ? '✓' : '✏️';
+    } catch {}
   }
   function enterEdit(){
     if (editMode) return;
     editMode = true;
-    EDIT_SELECTORS.forEach(sel => document.querySelector(sel)?.classList.add('oz-editing'));
-    /* 편집 중에는 트레이 자동 접기 — 화면 가려서 가구 안 보임 방지 */
+    EDIT_SELECTORS.forEach(sel => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      normalizePos(el);
+      el.classList.add('oz-editing');
+    });
     document.getElementById('tray')?.classList.remove('expanded');
-    syncFab();
+    syncParentBtn();
   }
   function exitEdit(){
     if (!editMode) return;
     editMode = false;
     EDIT_SELECTORS.forEach(sel => document.querySelector(sel)?.classList.remove('oz-editing'));
     saveAll();
-    syncFab();
+    syncParentBtn();
   }
-  editFab.addEventListener('click', (e) => {
-    e.stopPropagation();
-    editMode ? exitEdit() : enterEdit();
+  /* 외부 top-bar 버튼에서 호출 — 단일 토글 함수 */
+  window.toggleOzEdit = () => { editMode ? exitEdit() : enterEdit(); };
+
+  /* 편집 모드일 때 sheet 열기 차단 — wall-books/wall-cal/.frame 의 data-open 클릭 무력화 */
+  document.querySelectorAll('[data-open]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      if (editMode) { e.stopImmediatePropagation(); e.preventDefault(); }
+    }, true);
   });
   function saveAll(){
     const layout = {};
@@ -791,8 +810,8 @@
       const el = document.querySelector(sel); if (!el) return;
       const cs = getComputedStyle(el);
       const left = parseFloat(el.style.left || cs.left);
-      const bottom = parseFloat(el.style.bottom || cs.bottom);
-      if (Number.isFinite(left) && Number.isFinite(bottom)) layout[sel] = { left, bottom };
+      const top  = parseFloat(el.style.top  || cs.top );
+      if (Number.isFinite(left) && Number.isFinite(top)) layout[sel] = { left, top };
     });
     writeLayout(layout);
   }
@@ -816,18 +835,18 @@
     const el = document.querySelector(sel);
     if (!el) return;
     let dragging = false;
-    let startX = 0, startY = 0, origLeft = 0, origBottom = 0, scaleFactor = 1;
+    let startX = 0, startY = 0, origLeft = 0, origTop = 0, scaleFactor = 1;
 
     el.addEventListener('pointerdown', (e) => {
-      if (!editMode) return;   // 편집 모드에서만 드래그
-      e.preventDefault();
-      e.stopPropagation();
+      if (!editMode) return;
+      e.preventDefault(); e.stopPropagation();
+      normalizePos(el);
       dragging = true;
       startX = e.clientX; startY = e.clientY;
       scaleFactor = getRoomScale() || 1;
       const cs = getComputedStyle(el);
       origLeft = parseFloat(el.style.left || cs.left) || 0;
-      origBottom = parseFloat(el.style.bottom || cs.bottom) || 0;
+      origTop  = parseFloat(el.style.top  || cs.top ) || 0;
       try { el.setPointerCapture(e.pointerId); } catch {}
     });
     el.addEventListener('pointermove', (e) => {
@@ -835,8 +854,8 @@
       const dx = (e.clientX - startX) / scaleFactor;
       const dy = (e.clientY - startY) / scaleFactor;
       el.style.left = (origLeft + dx) + 'px';
-      el.style.bottom = (origBottom - dy) + 'px';
-      el.style.right = 'auto'; el.style.top = 'auto';
+      el.style.top  = (origTop  + dy) + 'px';
+      el.style.right = 'auto'; el.style.bottom = 'auto';
     });
     const endDrag = () => { if (dragging) { dragging = false; saveAll(); } };
     el.addEventListener('pointerup', endDrag);
