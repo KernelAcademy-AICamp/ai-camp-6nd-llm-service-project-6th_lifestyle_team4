@@ -50,6 +50,16 @@
   .sill-pot .l{ position:absolute; bottom:10px; left:50%; width:8px; height:16px; background:#7E9B5A; border-radius:60% 60% 0 0; transform-origin:bottom center; }
   .sill-pot .l.a{ transform:translateX(-90%) rotate(-22deg); } .sill-pot .l.b{ transform:translateX(-10%) rotate(20deg); background:#8FA968; } .sill-pot .l.c{ transform:translateX(-50%) rotate(0); height:19px; }
 
+  /* ── 테마: 모비딕 (안개 낀 바다 + 데크 우드) ── */
+  .room.theme-moby-dick .wall{ background:linear-gradient(180deg,#DDE6E8 0%, #C4D2D9 62%, #ADBCC3 100%); }
+  .room.theme-moby-dick .wall::before{ background:radial-gradient(circle at 40% 40%, rgba(184,210,220,.55) 0%, rgba(184,210,220,0) 68%); }
+  .room.theme-moby-dick .baseboard{ background:linear-gradient(180deg,#5A4530 0%, #4A3825 100%); border-top-color:#6B5436; }
+  .room.theme-moby-dick .floor{ background:repeating-linear-gradient(90deg, rgba(20,15,8,0) 0 52px, rgba(20,15,8,.16) 52px 53px), linear-gradient(180deg,#8A6F4A 0%, #6B5436 55%, #5A4530 100%); }
+  .room.theme-moby-dick .lightbeam{ background:linear-gradient(160deg, rgba(184,210,220,.42) 0%, rgba(184,210,220,0) 60%); }
+  .room.theme-moby-dick .window{ background:linear-gradient(180deg,#9CBDD2 0%, #B6CFDD 46%, #DCE6EA 100%); }
+  .room.theme-moby-dick .window .hills{ background:radial-gradient(40px 32px at 24% 100%, #6B7E8F 0 99%, transparent 100%), radial-gradient(54px 40px at 70% 100%, #5A6E80 0 99%, transparent 100%); }
+  .room.theme-moby-dick .window .sun{ background:radial-gradient(circle, #F2E9C7 0%, #DDC890 70%); box-shadow:0 0 22px 8px rgba(240,228,170,.55); }
+
   /* ── 밤 모드 ── */
   .room.night .wall{ background:linear-gradient(180deg,#28324c 0%, #303b56 60%, #36415e 100%); }
   .room.night .wall::before{ background:radial-gradient(circle at 62% 26%, rgba(190,205,255,.20) 0%, rgba(190,205,255,0) 66%); }
@@ -435,7 +445,8 @@
   const DECOR = {
     theme: [
       { id:'default',   name:'기본', locked:false, price:0,   hint:'기본 테마' },
-      { id:'moby-dick', name:'모비딕', locked:true, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
+      /* 모비딕 — 안개 낀 바다 + 데크 우드. 미리보기용으로 일단 잠금 해제. 잠그려면 locked:true 로 */
+      { id:'moby-dick', name:'모비딕', locked:false, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
       { id:'demian',    name:'데미안', locked:true, price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
       { id:'gatsby',    name:'위대한 개츠비', locked:true, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
     ],
@@ -479,7 +490,21 @@
   function applySofa(o){ const s=sceneSofa.style; s.setProperty('--s-frame',o.frame); s.setProperty('--s-frame-d',o.frameD); s.setProperty('--s-seat',o.seat); s.setProperty('--s-seat-d',o.seatD); s.setProperty('--s-cushion',o.cushion); s.setProperty('--s-cushion-d',o.cushionD); s.setProperty('--s-pa',o.pA); s.setProperty('--s-pa-d',o.pAd); s.setProperty('--s-pb',o.pB); s.setProperty('--s-pb-d',o.pBd); }
   function applyRug(o){ sceneRug.style.background=o.bg; }
   function applyTower(o){ sceneTower.innerHTML=o.html; }
-  function applyTheme(o){ /* 추후 업데이트: 작품별 배경 이미지/팔레트 교체. 지금은 default 만 활성 */ }
+  /* 테마 적용 — .room 의 theme-* 클래스 토글 + 로컬에 영속 저장 */
+  const OZ_THEME_KEY = 'ds.ozhouse.theme';
+  function applyTheme(o){
+    const roomEl = document.getElementById('room');
+    if (!roomEl) return;
+    roomEl.className = roomEl.className.replace(/\btheme-\S+/g, '').replace(/\s+/g, ' ').trim();
+    if (o.id !== 'default') roomEl.classList.add('theme-' + o.id);
+    try { (window.parent.localStorage || localStorage).setItem(OZ_THEME_KEY, o.id); } catch {}
+  }
+  function loadSavedTheme(){
+    try {
+      const id = (window.parent.localStorage || localStorage).getItem(OZ_THEME_KEY);
+      if (id && DECOR.theme.find(t => t.id === id && !t.locked)) state.theme = id;
+    } catch {}
+  }
   function apply(cat,id){
     const o=DECOR[cat].find(x=>x.id===id); if(!o) return;
     if (o.locked) return;   // 잠긴 항목은 적용 불가
@@ -723,7 +748,8 @@
   });
 
   /* 초기화 */
-  apply('theme','default'); apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');
+  loadSavedTheme();
+  apply('theme', state.theme || 'default'); apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');
   renderOptions(); buildWallCal();
   /* 사용자 명세: 진입마다 랜덤 자세 */
   placeCat(Math.floor(Math.random() * CATS.length));
