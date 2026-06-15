@@ -66,6 +66,19 @@
   .room.theme-moby-dick .lightbeam{ background:none !important; box-shadow:none !important; }
   .room.theme-moby-dick .wall::before{ background:none !important; }
 
+  /* ── 테마: 위대한 개츠비 ── 야간 무도회 + 호수 풍경 한 장으로 룸 전체를 대체 */
+  .room.theme-gatsby{
+    background-image: url('assets/oz-themes/Gatsby.png');
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+  .room.theme-gatsby .wall,
+  .room.theme-gatsby .baseboard,
+  .room.theme-gatsby .floor,
+  .room.theme-gatsby .lightbeam{ background:none !important; box-shadow:none !important; }
+  .room.theme-gatsby .wall::before{ background:none !important; }
+
   /* ── 밤 모드 ── */
   .room.night .wall{ background:linear-gradient(180deg,#28324c 0%, #303b56 60%, #36415e 100%); }
   .room.night .wall::before{ background:radial-gradient(circle at 62% 26%, rgba(190,205,255,.20) 0%, rgba(190,205,255,0) 66%); }
@@ -230,7 +243,8 @@
     pointer-events:none; user-select:none;
   }
   .room.night .oz-theme-label,
-  .room.theme-moby-dick .oz-theme-label{ color:rgba(255,255,255,.92); text-shadow:0 1px 3px rgba(0,0,0,.4); }
+  .room.theme-moby-dick .oz-theme-label,
+  .room.theme-gatsby .oz-theme-label{ color:rgba(255,255,255,.92); text-shadow:0 1px 3px rgba(0,0,0,.4); }
   .yarn-chip i{ width:11px; height:11px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F); display:inline-block; }
   .tray-options{ display:flex; gap:10px; margin-top:11px; overflow-x:auto; padding-bottom:2px; }
   .opt{ flex:none; width:64px; cursor:pointer; text-align:center; }
@@ -517,7 +531,8 @@
       { id:'default',   name:'기본',          nameEn:'Normal',            locked:false, price:0,   hint:'기본 테마' },
       { id:'moby-dick', name:'모비딕',         nameEn:'Moby-Dick',         locked:false, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
       { id:'demian',    name:'데미안',         nameEn:'Demian',            locked:true,  price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
-      { id:'gatsby',    name:'위대한 개츠비',  nameEn:'The Great Gatsby',  locked:true,  price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      /* 위대한 개츠비 — 미리보기 잠금 해제 */
+      { id:'gatsby',    name:'위대한 개츠비',  nameEn:'The Great Gatsby',  locked:false, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
     ],
     sofa: [
       { id:'none', name:'적용 안함' },
