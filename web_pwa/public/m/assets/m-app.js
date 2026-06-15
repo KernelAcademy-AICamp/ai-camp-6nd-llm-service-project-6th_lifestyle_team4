@@ -3308,7 +3308,12 @@ function renderDailyOzPick() {
 }
 
 // 랜덤 고양이 spawn — 오즈 카드 클릭 시 view-daily 안 랜덤 위치에 생성, 10초 후 페이드아웃.
-const RANDOM_CAT_FILES = ['cat_confused.png', 'cat_empty.png', 'cat_idle.png', 'cat_shelf_few.png', 'cat_shelf_many.png', 'cat_struck.png'];
+const RANDOM_CAT_FILES = [
+  'cat_confused.png', 'cat_empty.png', 'cat_idle.png',
+  'cat_shelf_few.png', 'cat_shelf_many.png', 'cat_struck.png',
+  /* 추가된 새 자세 — TODAY/피드/LIBRARY/카드 상세 등에 쓰이던 이미지도 랜덤 풀에 포함 */
+  'cat_today.png', 'cat_pen.png', 'cat_library.png', 'library-cat-2.png',
+];
 function spawnRandomCat() {
   const file = RANDOM_CAT_FILES[Math.floor(Math.random() * RANDOM_CAT_FILES.length)];
   const img = document.createElement('img');
