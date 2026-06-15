@@ -699,6 +699,146 @@
   const tray = document.getElementById('tray');
   const trayHandle = document.getElementById('trayHandle');
   if (trayHandle && tray) trayHandle.addEventListener('click', () => tray.classList.toggle('expanded'));
+
+  /* ════════ 가구 배치 편집 — 길게 눌러 위치 변경 (소파/캣타워/러그) ════════ */
+  const EDIT_SELECTORS = ['.sofa', '.tower', '.rug'];
+  const LAYOUT_KEY = 'ds.ozhouse.layout';
+  const LONG_PRESS_MS = 450;
+
+  /* edit 모드 인디케이터 — 화면 상단 토스트 + 빈 곳 탭하면 종료 안내 */
+  const editToast = document.createElement('div');
+  editToast.textContent = '편집 모드 · 빈 곳을 탭하면 종료';
+  editToast.style.cssText =
+    'position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--cta);color:#fff;' +
+    'font-size:11px;font-weight:700;padding:7px 14px;border-radius:999px;z-index:200;' +
+    'box-shadow:0 4px 12px rgba(216,90,48,.4);display:none;';
+  document.body.appendChild(editToast);
+
+  /* 편집 모드일 때 가구에 점선 outline + grab 커서 */
+  const editStyle = document.createElement('style');
+  editStyle.textContent =
+    '.oz-editing{ outline:2px dashed var(--cta) !important; outline-offset:2px; cursor:grab; }' +
+    '.oz-editing:active{ cursor:grabbing; }';
+  document.head.appendChild(editStyle);
+
+  function readLayout(){
+    try { return JSON.parse((window.parent.localStorage || localStorage).getItem(LAYOUT_KEY) || '{}') || {}; }
+    catch { return {}; }
+  }
+  function writeLayout(layout){
+    try { (window.parent.localStorage || localStorage).setItem(LAYOUT_KEY, JSON.stringify(layout)); }
+    catch {}
+  }
+
+  /* 저장된 layout 복원 */
+  function applyLayout(){
+    const layout = readLayout();
+    EDIT_SELECTORS.forEach(sel => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      const saved = layout[sel];
+      if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.bottom)) {
+        el.style.left = saved.left + 'px';
+        el.style.bottom = saved.bottom + 'px';
+        el.style.right = 'auto';
+        el.style.top = 'auto';
+      }
+    });
+  }
+  applyLayout();
+
+  let editMode = false;
+  function enterEdit(){
+    if (editMode) return;
+    editMode = true;
+    editToast.style.display = 'block';
+    EDIT_SELECTORS.forEach(sel => document.querySelector(sel)?.classList.add('oz-editing'));
+  }
+  function exitEdit(){
+    if (!editMode) return;
+    editMode = false;
+    editToast.style.display = 'none';
+    EDIT_SELECTORS.forEach(sel => document.querySelector(sel)?.classList.remove('oz-editing'));
+    saveAll();
+  }
+  function saveAll(){
+    const layout = {};
+    EDIT_SELECTORS.forEach(sel => {
+      const el = document.querySelector(sel); if (!el) return;
+      const cs = getComputedStyle(el);
+      const left = parseFloat(el.style.left || cs.left);
+      const bottom = parseFloat(el.style.bottom || cs.bottom);
+      if (Number.isFinite(left) && Number.isFinite(bottom)) layout[sel] = { left, bottom };
+    });
+    writeLayout(layout);
+  }
+
+  /* .room transform: translate(-50%,-50%) scale(s) — scale 값을 추출해 드래그 거리 보정 */
+  function getRoomScale(){
+    const roomEl = document.getElementById('room');
+    if (!roomEl) return 1;
+    const m = getComputedStyle(roomEl).transform;
+    if (!m || m === 'none') return 1;
+    /* matrix(a,b,c,d,e,f) — a = scale */
+    const mm = m.match(/matrix\(([^)]+)\)/);
+    if (mm) {
+      const parts = mm[1].split(',').map(s => parseFloat(s.trim()));
+      return parts[0] || 1;
+    }
+    return 1;
+  }
+
+  EDIT_SELECTORS.forEach(sel => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    let pressTimer = null;
+    let dragging = false;
+    let startX = 0, startY = 0, origLeft = 0, origBottom = 0, scaleFactor = 1;
+
+    function beginDrag(e){
+      dragging = true;
+      startX = e.clientX; startY = e.clientY;
+      scaleFactor = getRoomScale() || 1;
+      const cs = getComputedStyle(el);
+      origLeft = parseFloat(el.style.left || cs.left) || 0;
+      origBottom = parseFloat(el.style.bottom || cs.bottom) || 0;
+      try { el.setPointerCapture(e.pointerId); } catch {}
+    }
+    function endDrag(){
+      if (!dragging) return;
+      dragging = false;
+      saveAll();
+    }
+
+    el.addEventListener('pointerdown', (e) => {
+      if (editMode) { beginDrag(e); return; }
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        enterEdit();
+        beginDrag(e);
+      }, LONG_PRESS_MS);
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (pressTimer && (Math.abs(e.movementX) > 6 || Math.abs(e.movementY) > 6)) {
+        clearTimeout(pressTimer); pressTimer = null;
+      }
+      if (!dragging) return;
+      const dx = (e.clientX - startX) / scaleFactor;
+      const dy = (e.clientY - startY) / scaleFactor;
+      el.style.left = (origLeft + dx) + 'px';
+      el.style.bottom = (origBottom - dy) + 'px';
+      el.style.right = 'auto'; el.style.top = 'auto';
+    });
+    el.addEventListener('pointerup', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } endDrag(); });
+    el.addEventListener('pointercancel', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } endDrag(); });
+  });
+
+  /* 빈 곳 탭하면 편집 모드 종료 (편집 대상 위 탭은 그 핸들러가 가져감) */
+  document.addEventListener('pointerdown', (e) => {
+    if (!editMode) return;
+    if (EDIT_SELECTORS.some(sel => e.target.closest(sel))) return;
+    exitEdit();
+  }, true);
 </script>
 </body>
 </html>
