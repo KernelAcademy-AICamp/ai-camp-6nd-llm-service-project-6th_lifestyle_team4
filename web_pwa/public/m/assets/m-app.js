@@ -2744,46 +2744,6 @@ function dailyBookCoverHTML(work, opts = {}) {
   </div>`;
 }
 
-// 온도/강도 → 한국어 정서 라벨. 데이터 범위 자동 정규화 (0~1 / 0~10 / 0~100 어느 것이든).
-// 카드별로 다양한 라벨이 나오게 5단계 매핑.
-function _normTone(n) {
-  if (!Number.isFinite(n)) return null;
-  // 0~1, 0~10, 0~100 자동 추정
-  if (n > 10) return Math.min(1, n / 100);
-  if (n > 1)  return Math.min(1, n / 10);
-  return Math.max(0, Math.min(1, n));
-}
-function toneLabels(card) {
-  if (!card) return null;
-  const t = _normTone(Number(card.temperature));
-  const i = _normTone(Number(card.intensity));
-  // 온도 — 차가움/차분함/따스함/뜨거움/뜨거움
-  const tempLabel = t == null ? null
-    : t < 0.2 ? '차가움'
-    : t < 0.4 ? '차분함'
-    : t < 0.6 ? '미지근'
-    : t < 0.8 ? '따스함'
-    : '뜨거움';
-  // 감도 — 잔잔/조용/적당/짙음/강렬
-  const intensityLabel = i == null ? null
-    : i < 0.2 ? '잔잔'
-    : i < 0.4 ? '조용'
-    : i < 0.6 ? '적당'
-    : i < 0.8 ? '짙음'
-    : '강렬';
-  // 여운 — significance 길이 기반. 데이터 없으면 카드 본문 길이 fallback.
-  const sigLen = String(card.significance || '').length;
-  const excerptLen = String(card.script_excerpt || '').length;
-  const baseLen = sigLen || Math.floor(excerptLen / 8);
-  const aftertasteLabel = baseLen <= 0 ? null
-    : baseLen < 40  ? '짧음'
-    : baseLen < 80  ? '담백'
-    : baseLen < 140 ? '보통'
-    : baseLen < 220 ? '깊음'
-    : '길음';
-  return { tempLabel, intensityLabel, aftertasteLabel };
-}
-
 function renderDailyDate() {
   const el = document.getElementById('daily-date');
   if (!el) return;
@@ -2995,15 +2955,12 @@ function renderDailyNewBooks() {
 }
 
 // 섹션 3: 이럴 땐, 이런 문장
-// 추천은 카드의 구조화된 keywords(LLM 추출 3개)만으로 매칭한다.
-// 온도/감도는 매칭에 쓰지 않음(카드에는 표시용으로만 남음) — 주제와 무관한
-// 오매칭(예: '설레는 날'에 파우스트)을 막기 위함.
+// 추천·표시 모두 카드의 구조화된 keywords(LLM 추출 3개) 기준.
+// 온도/감도는 모호해서 매칭·표시에서 모두 뺐다(주제 무관 오매칭 방지).
+// '설레는 날'은 우리 카탈로그(고전) 결과 잘 안 맞아 카테고리에서 제외.
 const CONTEXT_CATEGORIES = [
   { id: 'comfort', label: '위로가 필요할 때',
     keywords: ['위로', '슬픔', '아픔', '상처', '눈물', '치유', '회복', '안식', '위안', '평온', '평화', '포근', '온기', '따뜻', '따스', '용서', '연민', '공감', '고통'] },
-  { id: 'flutter', label: '설레는 날',
-    // '고백'·'만남'처럼 맥락 따라 정반대가 되는 단어는 제외(예: 살인 고백) → 설렘 전용어만.
-    keywords: ['사랑', '설렘', '설레', '첫사랑', '두근', '떨림', '봄날', '청춘', '달콤', '연애', '연인', '키스', '입맞춤', '눈빛', '두근거림', '풋사랑', '낭만', '짝사랑'] },
   { id: 'lonely',  label: '먹먹한 밤',
     keywords: ['외로움', '그리움', '고독', '적막', '침묵', '회상', '공허', '먹먹', '쓸쓸', '회한', '이별', '상실', '그늘', '밤', '혼자', '홀로', '추억', '미련', '허무'] },
   { id: 'resolve', label: '결심이 필요할 때',
@@ -3072,12 +3029,12 @@ function renderDailyContextual() {
       return;
     }
     const card = cards[_contextualCardIdx % cards.length];
-    const labels = toneLabels(card);
-    const chipsHtml = labels && (labels.tempLabel || labels.intensityLabel || labels.aftertasteLabel)
-      ? `<div style="display:flex;gap:14px;justify-content:center;margin-top:14px;flex-wrap:wrap;">
-          ${labels.tempLabel ? `<span style="font-size:11px;color:var(--walnut);">온도 <strong style="color:var(--cta);font-weight:600;margin-left:4px;">${escapeHtml(labels.tempLabel)}</strong></span>` : ''}
-          ${labels.intensityLabel ? `<span style="font-size:11px;color:var(--walnut);">감도 <strong style="color:var(--cta);font-weight:600;margin-left:4px;">${escapeHtml(labels.intensityLabel)}</strong></span>` : ''}
-          ${labels.aftertasteLabel ? `<span style="font-size:11px;color:var(--walnut);">여운 <strong style="color:var(--cta);font-weight:600;margin-left:4px;">${escapeHtml(labels.aftertasteLabel)}</strong></span>` : ''}
+    // 하단 메타 — 온도/감도/여운 대신 카드 키워드를 보여줘 큐레이션 의도를 또렷하게.
+    const kws = (Array.isArray(card.keywords) ? card.keywords : [])
+      .map((k) => String(k || '').trim()).filter(Boolean).slice(0, 3);
+    const chipsHtml = kws.length
+      ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap;">
+          ${kws.map((k) => `<span style="font-size:11px;color:var(--cta);font-weight:600;background:var(--latte);border-radius:999px;padding:4px 11px;">#${escapeHtml(k)}</span>`).join('')}
         </div>`
       : '';
     host.innerHTML = `
