@@ -434,10 +434,10 @@
   /* 가구 변형 */
   const DECOR = {
     theme: [
-      { id:'default', name:'기본', locked:false, hint:'기본 테마' },
-      { id:'moby-dick', name:'모비딕', locked:true, hint:"책 '모비딕'의 모든 카드를 다 읽으면 해금" },
-      { id:'demian',    name:'데미안', locked:true, hint:"책 '데미안'의 모든 카드를 다 읽으면 해금" },
-      { id:'gatsby',    name:'위대한 개츠비', locked:true, hint:"책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      { id:'default',   name:'기본', locked:false, price:0,   hint:'기본 테마' },
+      { id:'moby-dick', name:'모비딕', locked:true, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
+      { id:'demian',    name:'데미안', locked:true, price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
+      { id:'gatsby',    name:'위대한 개츠비', locked:true, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
     ],
     sofa: [
       { id:'cream', name:'크림', frame:'#7B5A3C', frameD:'#6E4F30', seat:'#8A6A45', seatD:'#6E4F30', cushion:'#F1E7D2', cushionD:'#E3D7BC', pA:'#F4C20D', pAd:'#D9A800', pB:'#E0683E', pBd:'#C44E26' },
@@ -491,9 +491,13 @@
   }
   function swatch(cat,o){
     if(cat==='theme'){
-      /* 잠긴 테마는 자물쇠 + 어두운 표지 — 기본 테마는 라이트 페이퍼 */
+      /* 잠긴 테마는 자물쇠 + 어두운 표지 + 가격(실타래 PNG + 숫자). 기본 테마는 라이트 페이퍼. */
       if (o.id === 'default') return `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#FBF6EC,#EFE6D2);border-radius:8px;"></div>`;
-      return `<div style="position:absolute;inset:0;background:rgba(60,38,18,.18);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;">🔒</div>`;
+      return `
+        <div style="position:absolute;inset:0;background:rgba(60,38,18,.18);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">🔒</div>
+        <div style="position:absolute;left:50%;bottom:3px;transform:translateX(-50%);display:inline-flex;align-items:center;gap:3px;background:rgba(14,12,10,.78);color:#FBF6EC;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;line-height:1;">
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F);"></span>${o.price}
+        </div>`;
     }
     if(cat==='sofa') return `<div style="position:absolute;inset:0;background:linear-gradient(180deg,${o.frame},${o.frameD});"><div style="position:absolute;left:7px;right:7px;bottom:6px;height:15px;border-radius:4px;background:${o.cushion};"></div><div style="position:absolute;left:11px;bottom:12px;width:9px;height:9px;border-radius:2px;background:${o.pA};"></div><div style="position:absolute;right:11px;bottom:12px;width:9px;height:9px;border-radius:2px;background:${o.pB};"></div></div>`;
     if(cat==='rug') return `<div style="position:absolute;inset:7px;border-radius:50%;background:${o.bg};box-shadow:inset 0 0 0 1px rgba(107,93,79,.2);"></div>`;
