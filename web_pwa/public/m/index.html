@@ -451,6 +451,14 @@
   /* main 영역(home/library/feed/notice/settings) padding-bottom 으로 bottom-nav 가림 방지 */
   /* main 하단 여백 — 마지막 섹션 안 36 spacer + 이 padding 30 + safe 합이 nav body 회피 */
   main { padding: 0 20px calc(30px + env(safe-area-inset-bottom)); }
+  /* 브라우저(스탠드얼론 PWA 아님)에서는 env(safe-area-inset-bottom)=0 이라
+     bottom-nav / feed-fab / cat 위치가 PWA 웹앱보다 아래로 보임.
+     iOS 홈 인디케이터 영역(약 36px) 만큼 동일 보정해 두 모드 시각이 같아지도록. */
+  @media (display-mode: browser) {
+    .bottom-nav { bottom: calc(48px + env(safe-area-inset-bottom)) !important; }
+    main { padding-bottom: calc(66px + env(safe-area-inset-bottom)) !important; }
+    #feed-fab { bottom: calc(196px + env(safe-area-inset-bottom)) !important; }
+  }
 
   /* Bookmark row spacing */
   .bookmark-row {
@@ -2309,8 +2317,8 @@
       <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">OZ&rsquo;S HOUSE</span>
       <span class="t-body-sm c-espresso" style="margin-top:4px;">오즈의 집</span>
     </div>
-    <button id="oz-house-day-night" type="button" aria-label="밤/낮 전환"
-            style="background:transparent;border:1px solid var(--latte);border-radius:999px;padding:4px 10px;font-size:14px;line-height:1;cursor:pointer;color:var(--espresso);">☀️</button>
+    <button id="oz-house-edit" type="button" aria-label="편집"
+            style="background:transparent;border:1px solid var(--latte);border-radius:999px;padding:4px 10px;font-size:14px;line-height:1;cursor:pointer;color:var(--espresso);">✏️</button>
   </header>
   <div class="hairline"></div>
   <div class="detail-body" id="oz-house-body" style="padding:0;flex:1;display:flex;min-height:0;overflow:hidden;">

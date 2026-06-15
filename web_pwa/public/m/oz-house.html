@@ -99,6 +99,13 @@
 
   /* ── 벽 소품 라벨(시안용) ── */
   .placard{ position:absolute; transform:translateX(-50%); background:rgba(251,246,236,.92); border:.5px solid var(--sand); border-radius:8px; padding:2px 6px; font-size:7.5px; font-weight:700; color:var(--walnut); white-space:nowrap; z-index:5; pointer-events:none; box-shadow:0 2px 4px rgba(90,58,30,.1); }
+  /* placard-attached — 부모 가구의 바로 아래 중앙. 부모가 어디로 옮겨가도 항상 정확히 따라옴.
+     wall-books/wall-cal/frame 이 transform:scale 적용된 상태라 placard 도 같이 작게 보이는데,
+     보정 scale 로 원본 크기 가깝게 복원 (1/.85, 1/.86 등). */
+  .placard.placard-attached{ left:50%; top:100%; margin-top:6px; font-size:10px; padding:3px 8px; }
+  .wall-books .placard-attached{ transform:translateX(-50%) scale(1.176); transform-origin:top center; }
+  .wall-cal   .placard-attached{ transform:translateX(-50%) scale(1.163); transform-origin:top center; }
+  .frame      .placard-attached{ transform:translateX(-50%) scale(1.163); transform-origin:top center; }
   .room.night .placard{ background:rgba(40,50,75,.85); color:#C9D2E6; border-color:#46527a; }
 
   /* ── 소파 ── */
@@ -160,6 +167,7 @@
   .tab{ font-family:var(--sans); font-size:12px; font-weight:700; padding:5px 13px; border-radius:14px; border:1px solid var(--sand); background:transparent; color:var(--walnut); cursor:pointer; }
   .tab.active{ background:var(--espresso); color:var(--paper); border-color:var(--espresso); }
   .yarn-chip{ margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--cta); background:rgba(216,90,48,.1); padding:4px 10px; border-radius:12px; }
+  /* (편집 토글은 외부 m/index.html top-bar 로 이동 — 여기서는 스타일 불필요) */
   .yarn-chip i{ width:11px; height:11px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F); display:inline-block; }
   .tray-options{ display:flex; gap:10px; margin-top:11px; overflow-x:auto; padding-bottom:2px; }
   .opt{ flex:none; width:64px; cursor:pointer; text-align:center; }
@@ -167,6 +175,8 @@
   .opt.active .sw{ border-color:var(--cta); }
   .opt .nm{ font-size:9.5px; color:var(--walnut); margin-top:4px; font-weight:500; white-space:nowrap; }
   .opt.active .nm{ color:var(--cta); font-weight:700; }
+  .opt.locked{ opacity:0.55; cursor:not-allowed; }
+  .opt.locked .nm{ color:var(--walnut); }
 
   /* ── 바텀시트 (출석/북마크/기록) ── */
   .sheet-backdrop{ position:absolute; inset:0; background:rgba(20,14,8,.40); opacity:0; pointer-events:none; transition:opacity .25s; z-index:65; }
@@ -303,12 +313,14 @@
               <div class="bk lean" style="height:30px;background:#B5663B"></div>
             </div>
             <div class="plank p2"></div>
+            <div class="placard placard-attached" data-for="bookmarks">내 북마크</div>
           </div>
 
           <!-- 벽 달력 (출석) -->
           <div class="wall-cal wall-item" data-open="attend" title="출석 달력">
             <div class="hook"></div>
             <div class="body"><div class="m">6월</div><div class="grid" id="wallCalGrid"></div></div>
+            <div class="placard placard-attached" data-for="attend">출석 달력</div>
           </div>
 
           <!-- 벽 액자 (오늘의 한 줄 → 댓글·하이라이트) -->
@@ -327,12 +339,10 @@
               <div class="rec-title">나의 기록</div>
               <div class="rec-sub">댓글 · 하이라이트</div>
             </div>
+            <div class="placard placard-attached" data-for="records">나의 기록</div>
           </div>
 
-          <!-- 라벨(시안용) -->
-          <div class="placard" style="left:184px;top:160px">내 북마크</div>
-          <div class="placard" style="left:327px;top:171px">출석 달력</div>
-          <div class="placard" style="left:327px;top:303px">나의 기록</div>
+          <!-- 라벨(시안용) — 형제 placard 는 제거. 부모 가구 안 자식 .placard-attached 로 옮겨서 항상 자동 정렬 (아래 가구 markup 안 참조). -->
 
           <!-- 캣타워 -->
           <div class="tower" id="tower"></div>
@@ -366,7 +376,8 @@
         <div class="tray" id="tray">
           <div class="tray-handle" id="trayHandle"><span class="label">꾸미기</span></div>
           <div class="tray-tabs">
-            <button class="tab active" data-cat="sofa">소파</button>
+            <button class="tab active" data-cat="theme">테마</button>
+            <button class="tab" data-cat="sofa">소파</button>
             <button class="tab" data-cat="rug">러그</button>
             <button class="tab" data-cat="tower">캣타워</button>
             <span class="yarn-chip"><i></i> 실타래 5</span>
@@ -422,6 +433,12 @@
 
   /* 가구 변형 */
   const DECOR = {
+    theme: [
+      { id:'default',   name:'기본', locked:false, price:0,   hint:'기본 테마' },
+      { id:'moby-dick', name:'모비딕', locked:true, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
+      { id:'demian',    name:'데미안', locked:true, price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
+      { id:'gatsby',    name:'위대한 개츠비', locked:true, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+    ],
     sofa: [
       { id:'cream', name:'크림', frame:'#7B5A3C', frameD:'#6E4F30', seat:'#8A6A45', seatD:'#6E4F30', cushion:'#F1E7D2', cushionD:'#E3D7BC', pA:'#F4C20D', pAd:'#D9A800', pB:'#E0683E', pBd:'#C44E26' },
       { id:'coral', name:'코랄', frame:'#B5663B', frameD:'#9A5230', seat:'#C2774A', seatD:'#A8612F', cushion:'#F6E3D3', cushionD:'#EBCBB2', pA:'#6E8C4E', pAd:'#566F3C', pB:'#D85A30', pBd:'#B8431F' },
@@ -456,19 +473,43 @@
   const $=(s)=>document.querySelector(s);
   const sceneSofa=$('#sofa'), sceneRug=$('#rug'), sceneTower=$('#tower'), trayOptions=$('#trayOptions');
   const room=$('#room'), catWrap=$('#cat'), catImg=$('#catImg'), catShadow=$('#catShadow'), poseLabel=$('#poseLabel');
-  const state={ sofa:'cream', rug:'coral', tower:'tall' };
-  let activeCat='sofa', curCase=-1;
+  const state={ theme:'default', sofa:'cream', rug:'coral', tower:'tall' };
+  let activeCat='theme', curCase=-1;
 
   function applySofa(o){ const s=sceneSofa.style; s.setProperty('--s-frame',o.frame); s.setProperty('--s-frame-d',o.frameD); s.setProperty('--s-seat',o.seat); s.setProperty('--s-seat-d',o.seatD); s.setProperty('--s-cushion',o.cushion); s.setProperty('--s-cushion-d',o.cushionD); s.setProperty('--s-pa',o.pA); s.setProperty('--s-pa-d',o.pAd); s.setProperty('--s-pb',o.pB); s.setProperty('--s-pb-d',o.pBd); }
   function applyRug(o){ sceneRug.style.background=o.bg; }
   function applyTower(o){ sceneTower.innerHTML=o.html; }
-  function apply(cat,id){ const o=DECOR[cat].find(x=>x.id===id); if(!o) return; state[cat]=id; if(cat==='sofa')applySofa(o); else if(cat==='rug')applyRug(o); else applyTower(o); }
+  function applyTheme(o){ /* 추후 업데이트: 작품별 배경 이미지/팔레트 교체. 지금은 default 만 활성 */ }
+  function apply(cat,id){
+    const o=DECOR[cat].find(x=>x.id===id); if(!o) return;
+    if (o.locked) return;   // 잠긴 항목은 적용 불가
+    state[cat]=id;
+    if(cat==='sofa') applySofa(o);
+    else if(cat==='rug') applyRug(o);
+    else if(cat==='tower') applyTower(o);
+    else if(cat==='theme') applyTheme(o);
+  }
   function swatch(cat,o){
+    if(cat==='theme'){
+      /* 잠긴 테마는 자물쇠 + 어두운 표지 + 가격(실타래 PNG + 숫자). 기본 테마는 라이트 페이퍼. */
+      if (o.id === 'default') return `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#FBF6EC,#EFE6D2);border-radius:8px;"></div>`;
+      return `
+        <div style="position:absolute;inset:0;background:rgba(60,38,18,.18);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">🔒</div>
+        <div style="position:absolute;left:50%;bottom:3px;transform:translateX(-50%);display:inline-flex;align-items:center;gap:3px;background:rgba(14,12,10,.78);color:#FBF6EC;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;line-height:1;">
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F);"></span>${o.price}
+        </div>`;
+    }
     if(cat==='sofa') return `<div style="position:absolute;inset:0;background:linear-gradient(180deg,${o.frame},${o.frameD});"><div style="position:absolute;left:7px;right:7px;bottom:6px;height:15px;border-radius:4px;background:${o.cushion};"></div><div style="position:absolute;left:11px;bottom:12px;width:9px;height:9px;border-radius:2px;background:${o.pA};"></div><div style="position:absolute;right:11px;bottom:12px;width:9px;height:9px;border-radius:2px;background:${o.pB};"></div></div>`;
     if(cat==='rug') return `<div style="position:absolute;inset:7px;border-radius:50%;background:${o.bg};box-shadow:inset 0 0 0 1px rgba(107,93,79,.2);"></div>`;
     return `<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:9px;height:24px;background:repeating-linear-gradient(0deg,#DAC79E 0 3px,#C9B184 3px 5px);border-radius:2px;"></div><div style="position:absolute;left:50%;bottom:28px;transform:translateX(-50%);width:26px;height:7px;border-radius:4px;background:#8A6A45;"></div><div style="position:absolute;left:50%;bottom:33px;transform:translateX(-50%);width:13px;height:6px;border-radius:3px;background:#E0683E;"></div>`;
   }
-  function renderOptions(){ trayOptions.innerHTML=DECOR[activeCat].map(o=>`<div class="opt${state[activeCat]===o.id?' active':''}" data-id="${o.id}"><div class="sw">${swatch(activeCat,o)}</div><div class="nm">${o.name}</div></div>`).join(''); }
+  function renderOptions(){
+    trayOptions.innerHTML = DECOR[activeCat].map(o => `
+      <div class="opt${state[activeCat]===o.id?' active':''}${o.locked?' locked':''}" data-id="${o.id}" title="${o.hint||''}">
+        <div class="sw">${swatch(activeCat,o)}</div>
+        <div class="nm">${o.name}${o.locked?' 🔒':''}</div>
+      </div>`).join('');
+  }
   document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t)); activeCat=t.dataset.cat; renderOptions(); }));
   trayOptions.addEventListener('click',e=>{ const opt=e.target.closest('.opt'); if(!opt) return; apply(activeCat,opt.dataset.id); renderOptions(); });
 
@@ -671,7 +712,7 @@
   backdrop.addEventListener('click', closeSheet); $('#sheetClose').addEventListener('click', closeSheet);
 
   /* 초기화 */
-  apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');
+  apply('theme','default'); apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');
   renderOptions(); buildWallCal();
   /* 사용자 명세: 진입마다 랜덤 자세 */
   placeCat(Math.floor(Math.random() * CATS.length));
@@ -699,6 +740,203 @@
   const tray = document.getElementById('tray');
   const trayHandle = document.getElementById('trayHandle');
   if (trayHandle && tray) trayHandle.addEventListener('click', () => tray.classList.toggle('expanded'));
+
+  /* ════════ 가구·벽 소품 배치 편집 — 우측 상단 '편집' 토글로 진입 ════════ */
+  const EDIT_SELECTORS = ['.sofa', '.tower', '.rug', '.wall-books', '.wall-cal', '.frame', '.window'];
+  /* 부모 이동 시 같이 따라가는 자식들.
+     placard 는 부모 가구 안 자식으로 옮겨졌으므로 그룹 매핑에 안 적어도 자동으로 따라옴. */
+  const EDIT_GROUPS = {
+    '.window': ['.sill', '.sill-pot'],
+  };
+  const LAYOUT_KEY = 'ds.ozhouse.layout.v3';   /* v3 — 옛 placard 좌표 데이터 무시(강제 reset) */
+
+  /* 편집 토글은 외부 m/index.html oz-house-screen top-bar 의 ☀️ 옆 버튼이 담당.
+     iframe 안에서는 별도 fab 없음 — window.toggleOzEdit() 함수만 노출. */
+
+  /* 편집 모드 = 가구에 두꺼운 cta 외곽선 + 그림자 = '블록' 표시 + 즉시 드래그 가능 */
+  const editStyle = document.createElement('style');
+  editStyle.textContent =
+    '.oz-editing{ outline:3px solid var(--cta) !important; outline-offset:3px; ' +
+    'box-shadow:0 0 0 5px rgba(216,90,48,.18), 0 8px 22px rgba(0,0,0,.18) !important; ' +
+    'cursor:grab; touch-action:none; transition:transform .15s ease; }' +
+    '.oz-editing:active{ cursor:grabbing; transform:scale(1.02); }';
+  document.head.appendChild(editStyle);
+
+  function readLayout(){
+    try { return JSON.parse((window.parent.localStorage || localStorage).getItem(LAYOUT_KEY) || '{}') || {}; }
+    catch { return {}; }
+  }
+  function writeLayout(layout){
+    try { (window.parent.localStorage || localStorage).setItem(LAYOUT_KEY, JSON.stringify(layout)); }
+    catch {}
+  }
+
+  /* 부모 + 그룹 자식 모두 풀어서 한 번에 처리 */
+  function withGroup(sel){
+    const out = [sel, ...(EDIT_GROUPS[sel] || [])];
+    return out;
+  }
+  /* 저장된 layout 복원 — 부모 + 그룹 자식 모두 left/top 기준 */
+  function applyLayout(){
+    const layout = readLayout();
+    EDIT_SELECTORS.forEach(sel => {
+      withGroup(sel).forEach(s => {
+        const el = document.querySelector(s);
+        if (!el) return;
+        const saved = layout[s];
+        if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+          el.style.left = saved.left + 'px';
+          el.style.top = saved.top + 'px';
+          el.style.right = 'auto';
+          el.style.bottom = 'auto';
+          el.dataset.ozNormalized = '1';
+        }
+      });
+    });
+  }
+  applyLayout();
+
+  /* 한 번 좌표를 left/top 으로 정규화 — right/bottom 으로 정렬된 요소(.wall-cal/.frame/소파/캣타워/러그) 를
+     첫 드래그 직전에 현재 시각 위치 그대로 left/top px 로 변환. */
+  function normalizePos(el){
+    if (el.dataset.ozNormalized) return;
+    const roomEl = document.getElementById('room');
+    if (!roomEl) return;
+    const scale = getRoomScale() || 1;
+    const roomRect = roomEl.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    const left = (rect.left - roomRect.left) / scale;
+    const top  = (rect.top  - roomRect.top ) / scale;
+    el.style.left = left + 'px';
+    el.style.top  = top  + 'px';
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+    el.dataset.ozNormalized = '1';
+  }
+
+  let editMode = false;
+  function syncParentBtn(){
+    /* 외부(top-bar) ✏️ 버튼의 active 표시 동기화 — inline style 토글 */
+    try {
+      const b = window.parent.document.getElementById('oz-house-edit');
+      if (!b) return;
+      b.classList.toggle('on', editMode);
+      b.style.background = editMode ? 'var(--cta)' : 'transparent';
+      b.style.borderColor = editMode ? 'var(--cta)' : 'var(--latte)';
+      b.style.color = editMode ? 'var(--paper)' : 'var(--espresso)';
+      b.textContent = editMode ? '✓' : '✏️';
+    } catch {}
+  }
+  function enterEdit(){
+    if (editMode) return;
+    editMode = true;
+    EDIT_SELECTORS.forEach(sel => {
+      withGroup(sel).forEach(s => {
+        const el = document.querySelector(s);
+        if (!el) return;
+        normalizePos(el);
+        el.classList.add('oz-editing');
+      });
+    });
+    document.getElementById('tray')?.classList.remove('expanded');
+    syncParentBtn();
+  }
+  function exitEdit(){
+    if (!editMode) return;
+    editMode = false;
+    EDIT_SELECTORS.forEach(sel => {
+      withGroup(sel).forEach(s => document.querySelector(s)?.classList.remove('oz-editing'));
+    });
+    saveAll();
+    syncParentBtn();
+  }
+  /* 외부 top-bar 버튼에서 호출 — 단일 토글 함수 */
+  window.toggleOzEdit = () => { editMode ? exitEdit() : enterEdit(); };
+
+  /* 편집 모드일 때 sheet 열기 차단 — wall-books/wall-cal/.frame 의 data-open 클릭 무력화 */
+  document.querySelectorAll('[data-open]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      if (editMode) { e.stopImmediatePropagation(); e.preventDefault(); }
+    }, true);
+  });
+
+  /* 창문 클릭 → 밤/낮 전환 (편집 모드 아닐 때만) — 외부 ☀️ 토글 대체 */
+  document.querySelector('.window')?.addEventListener('click', (e) => {
+    if (editMode) return;
+    e.stopPropagation();
+    document.getElementById('room')?.classList.toggle('night');
+  });
+  document.querySelector('.window').style.cursor = 'pointer';
+  function saveAll(){
+    const layout = {};
+    EDIT_SELECTORS.forEach(sel => {
+      withGroup(sel).forEach(s => {
+        const el = document.querySelector(s); if (!el) return;
+        const cs = getComputedStyle(el);
+        const left = parseFloat(el.style.left || cs.left);
+        const top  = parseFloat(el.style.top  || cs.top );
+        if (Number.isFinite(left) && Number.isFinite(top)) layout[s] = { left, top };
+      });
+    });
+    writeLayout(layout);
+  }
+
+  /* .room transform: translate(-50%,-50%) scale(s) — scale 값을 추출해 드래그 거리 보정 */
+  function getRoomScale(){
+    const roomEl = document.getElementById('room');
+    if (!roomEl) return 1;
+    const m = getComputedStyle(roomEl).transform;
+    if (!m || m === 'none') return 1;
+    /* matrix(a,b,c,d,e,f) — a = scale */
+    const mm = m.match(/matrix\(([^)]+)\)/);
+    if (mm) {
+      const parts = mm[1].split(',').map(s => parseFloat(s.trim()));
+      return parts[0] || 1;
+    }
+    return 1;
+  }
+
+  EDIT_SELECTORS.forEach(sel => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    let dragging = false;
+    let startX = 0, startY = 0, scaleFactor = 1;
+    /* 부모 + 그룹 자식 각각의 원래 left/top 을 저장해 동일 dx/dy 적용 */
+    let group = [];
+
+    el.addEventListener('pointerdown', (e) => {
+      if (!editMode) return;
+      e.preventDefault(); e.stopPropagation();
+      scaleFactor = getRoomScale() || 1;
+      group = withGroup(sel).map(s => document.querySelector(s)).filter(Boolean);
+      group.forEach(g => { normalizePos(g); g.classList.add('oz-editing'); });
+      group = group.map(g => {
+        const cs = getComputedStyle(g);
+        return {
+          el: g,
+          origLeft: parseFloat(g.style.left || cs.left) || 0,
+          origTop:  parseFloat(g.style.top  || cs.top ) || 0,
+        };
+      });
+      dragging = true;
+      startX = e.clientX; startY = e.clientY;
+      try { el.setPointerCapture(e.pointerId); } catch {}
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const dx = (e.clientX - startX) / scaleFactor;
+      const dy = (e.clientY - startY) / scaleFactor;
+      group.forEach(({ el: g, origLeft, origTop }) => {
+        g.style.left = (origLeft + dx) + 'px';
+        g.style.top  = (origTop  + dy) + 'px';
+        g.style.right = 'auto'; g.style.bottom = 'auto';
+      });
+    });
+    const endDrag = () => { if (dragging) { dragging = false; saveAll(); } };
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+    el.addEventListener('lostpointercapture', endDrag);
+  });
 </script>
 </body>
 </html>
