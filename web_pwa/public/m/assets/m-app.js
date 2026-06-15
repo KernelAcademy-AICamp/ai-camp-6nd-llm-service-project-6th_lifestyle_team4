@@ -208,6 +208,29 @@ const feedbackEntry = $('#feedback-entry');
 
 const detailScreen = $('#detail-screen');
 const detailBody = detailScreen?.querySelector('.detail-body');
+/* 카드 상세 — 스크롤 80% 이상이면 왼쪽 하단 '맨 위로' fab 노출. 클릭 시 최상단. */
+(function () {
+  const fab = document.getElementById('detail-scroll-top-fab');
+  if (!fab || !detailBody) return;
+  function onScroll() {
+    const max = detailBody.scrollHeight - detailBody.clientHeight;
+    if (max <= 0) { hide(); return; }
+    const ratio = detailBody.scrollTop / max;
+    if (ratio >= 0.8) show(); else hide();
+  }
+  function show() {
+    fab.style.display = 'flex';
+    requestAnimationFrame(() => { fab.style.opacity = '1'; fab.style.transform = 'translateY(0)'; });
+  }
+  function hide() {
+    fab.style.opacity = '0'; fab.style.transform = 'translateY(8px)';
+    setTimeout(() => { if (fab.style.opacity === '0') fab.style.display = 'none'; }, 220);
+  }
+  detailBody.addEventListener('scroll', onScroll, { passive: true });
+  fab.addEventListener('click', () => {
+    detailBody.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+})();
 const detailBack = $('#detail-back');
 const detailWorkTitle = $('#detail-work-title');
 const detailBookmark = $('#detail-bookmark');
@@ -1605,6 +1628,11 @@ async function toggleBookmark(cardId) {
   const wasBookmarked = state.bookmarkedIds.has(cardId);
   if (wasBookmarked) state.bookmarkedIds.delete(cardId);
   else state.bookmarkedIds.add(cardId);
+  /* 사용자 명세: 북마크 수 카운트도 즉시 +1/-1 반영(서버 응답 기다리지 않고) */
+  if (state.bookmarkCounts instanceof Map) {
+    const cur = state.bookmarkCounts.get(cardId) || 0;
+    state.bookmarkCounts.set(cardId, wasBookmarked ? Math.max(0, cur - 1) : cur + 1);
+  }
   paintAllBookmarkButtons(cardId);
 
   try {
@@ -1646,13 +1674,18 @@ async function toggleBookmark(cardId) {
 
 function paintAllBookmarkButtons(cardId) {
   const isBookmarked = state.bookmarkedIds.has(cardId);
+  const count = (state.bookmarkCounts instanceof Map ? state.bookmarkCounts.get(cardId) : null) || 0;
   if (state.todayCard?.card_id === cardId) {
     paintBookmarkBtn(todayBookmark, isBookmarked);
     state.todayBookmarked = isBookmarked;
+    const c = document.getElementById('today-bookmark-count');
+    if (c) c.textContent = String(count);
   }
   if (state.detailCardId === cardId) {
     paintBookmarkBtn(detailBookmark, isBookmarked);
     paintDetailCollectBtn(isBookmarked);
+    const c = document.getElementById('detail-bookmark-count');
+    if (c) c.textContent = String(count);
   }
 }
 

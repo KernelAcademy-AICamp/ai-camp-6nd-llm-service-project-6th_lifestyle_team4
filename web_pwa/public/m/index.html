@@ -2475,6 +2475,12 @@
   </header>
   <div class="hairline"></div>
 
+  <!-- 스크롤 80% 이상에서 노출되는 '맨 위로' fab — 왼쪽 하단, 클릭 시 detailBody 최상단 -->
+  <button id="detail-scroll-top-fab" aria-label="맨 위로"
+          style="position:absolute;left:16px;bottom:calc(24px + env(safe-area-inset-bottom));z-index:55;display:none;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:var(--espresso);color:var(--paper);border:none;cursor:pointer;box-shadow:0 6px 16px rgba(14,12,10,.28);opacity:0;transition:opacity .2s, transform .2s;transform:translateY(8px);">
+    <span class="material-symbols-outlined" style="font-size:22px;">arrow_upward</span>
+  </button>
+
   <div class="detail-body">
     <div id="detail-meta" style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;"></div>
     <div style="height:24px;"></div>

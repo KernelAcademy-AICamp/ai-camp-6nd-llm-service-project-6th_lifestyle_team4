@@ -671,6 +671,11 @@
 
   function apply(cat,id){
     const o=DECOR[cat].find(x=>x.id===id); if(!o) return;
+    /* 사용자 명세: 비-default 테마에서는 가구(소파/러그/캣타워) 변경 불가 — 항상 '적용 안함' 강제.
+       사용자가 가구 옵션을 눌러도 무시. 가구를 바꾸려면 기본 테마로 돌아가야 함. */
+    if ((cat === 'sofa' || cat === 'rug' || cat === 'tower') && state.theme && state.theme !== 'default') {
+      return;
+    }
     /* 테마: 해금/구매 흐름 — PWA 공용 모달(openPromptModal) 사용. 브라우저 alert/confirm 대체. */
     if (cat === 'theme') {
       if (o.id === 'default') { state[cat] = id; applyTheme(o); return; }
