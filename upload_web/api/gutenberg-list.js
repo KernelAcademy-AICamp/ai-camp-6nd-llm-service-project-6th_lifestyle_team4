@@ -245,11 +245,16 @@ export default async function handler(req, res) {
       return an.localeCompare(bn, 'en');
     });
 
-    // 카테고리 결과는 거의 안 변함 → CDN/브라우저 24h 캐싱
-    res.setHeader(
-      'Cache-Control',
-      'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800'
-    );
+    // 빈 결과는 캐싱하지 않는다 — RPC 일시 장애/필터 과적용으로 0개가 나왔을 때
+    // CDN(24h) 에 굳어 사용자에게 계속 '0개 작품' 만 보이는 문제 방지.
+    if (works.length === 0) {
+      res.setHeader('Cache-Control', 'no-store');
+    } else {
+      res.setHeader(
+        'Cache-Control',
+        'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800'
+      );
+    }
     return res.status(200).json({
       category: cat,
       topic,
