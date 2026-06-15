@@ -37,7 +37,9 @@
   .lightbeam{ position:absolute; left:20px; top:200px; width:250px; height:300px; background:linear-gradient(160deg, rgba(247,210,160,.40) 0%, rgba(247,210,160,0) 62%); clip-path:polygon(30% 0, 100% 0, 70% 100%, 0 100%); z-index:1; pointer-events:none; transition:background .5s; }
 
   /* ── 창문 ── */
-  .window{ position:absolute; left:18px; top:72px; width:108px; height:126px; border-radius:54px 54px 6px 6px; background:linear-gradient(180deg,#F8C99F 0%, #F6D9B4 46%, #F0E6CE 100%); border:8px solid var(--walnut); box-shadow:inset 0 0 0 2px rgba(255,255,255,.45), 0 8px 16px rgba(90,58,30,.16); overflow:hidden; z-index:2; transform:scale(.88); transform-origin:top left; transition:background .5s, border-color .5s; }
+  /* 창문도 우측 일렬 아이콘 — 4번째 자리. sill/sill-pot 은 hide 처리 */
+  .window{ position:absolute; right:14px; top:320px; left:auto; width:108px; height:126px; border-radius:54px 54px 6px 6px; background:linear-gradient(180deg,#F8C99F 0%, #F6D9B4 46%, #F0E6CE 100%); border:8px solid var(--walnut); box-shadow:inset 0 0 0 2px rgba(255,255,255,.45), 0 8px 16px rgba(90,58,30,.16); overflow:hidden; z-index:2; cursor:pointer; transform:scale(.55); transform-origin:top right; transition:background .5s, border-color .5s; }
+  .sill, .sill-pot { display:none !important; }
   .window .sun{ position:absolute; left:50%; top:26px; transform:translateX(-50%); width:34px; height:34px; border-radius:50%; background:radial-gradient(circle, #FBE9C2 0%, #F6C98C 70%); box-shadow:0 0 22px 8px rgba(246,201,140,.7); transition:all .4s; }
   .window .hills{ position:absolute; left:-6px; right:-6px; bottom:-2px; height:42px; background:radial-gradient(38px 30px at 24% 100%, #C9A777 0 99%, transparent 100%), radial-gradient(50px 36px at 70% 100%, #BD9A68 0 99%, transparent 100%); transition:filter .5s; }
   .window .muntin-v{ position:absolute; left:50%; top:0; bottom:0; width:5px; transform:translateX(-50%); background:var(--walnut); }
@@ -50,15 +52,19 @@
   .sill-pot .l{ position:absolute; bottom:10px; left:50%; width:8px; height:16px; background:#7E9B5A; border-radius:60% 60% 0 0; transform-origin:bottom center; }
   .sill-pot .l.a{ transform:translateX(-90%) rotate(-22deg); } .sill-pot .l.b{ transform:translateX(-10%) rotate(20deg); background:#8FA968; } .sill-pot .l.c{ transform:translateX(-50%) rotate(0); height:19px; }
 
-  /* ── 테마: 모비딕 (안개 낀 바다 + 데크 우드) ── */
-  .room.theme-moby-dick .wall{ background:linear-gradient(180deg,#DDE6E8 0%, #C4D2D9 62%, #ADBCC3 100%); }
-  .room.theme-moby-dick .wall::before{ background:radial-gradient(circle at 40% 40%, rgba(184,210,220,.55) 0%, rgba(184,210,220,0) 68%); }
-  .room.theme-moby-dick .baseboard{ background:linear-gradient(180deg,#5A4530 0%, #4A3825 100%); border-top-color:#6B5436; }
-  .room.theme-moby-dick .floor{ background:repeating-linear-gradient(90deg, rgba(20,15,8,0) 0 52px, rgba(20,15,8,.16) 52px 53px), linear-gradient(180deg,#8A6F4A 0%, #6B5436 55%, #5A4530 100%); }
-  .room.theme-moby-dick .lightbeam{ background:linear-gradient(160deg, rgba(184,210,220,.42) 0%, rgba(184,210,220,0) 60%); }
-  .room.theme-moby-dick .window{ background:linear-gradient(180deg,#9CBDD2 0%, #B6CFDD 46%, #DCE6EA 100%); }
-  .room.theme-moby-dick .window .hills{ background:radial-gradient(40px 32px at 24% 100%, #6B7E8F 0 99%, transparent 100%), radial-gradient(54px 40px at 70% 100%, #5A6E80 0 99%, transparent 100%); }
-  .room.theme-moby-dick .window .sun{ background:radial-gradient(circle, #F2E9C7 0%, #DDC890 70%); box-shadow:0 0 22px 8px rgba(240,228,170,.55); }
+  /* ── 테마: 모비딕 ── 배경 이미지(데크 + 바다 + 고래) 한 장으로 룸 전체를 대체 */
+  .room.theme-moby-dick{
+    background-image: url('assets/oz-themes/moby-dick.jpg');
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+  /* 기존 룸 레이어(벽/바닥/베이스보드/빛/wall::before)는 모비딕 테마에서 모두 투명화 */
+  .room.theme-moby-dick .wall,
+  .room.theme-moby-dick .baseboard,
+  .room.theme-moby-dick .floor,
+  .room.theme-moby-dick .lightbeam{ background:none !important; box-shadow:none !important; }
+  .room.theme-moby-dick .wall::before{ background:none !important; }
 
   /* ── 밤 모드 ── */
   .room.night .wall{ background:linear-gradient(180deg,#28324c 0%, #303b56 60%, #36415e 100%); }
@@ -75,8 +81,9 @@
   .room.night .night-veil{ opacity:1; }
 
   /* ── 벽 책장 (내 북마크) ── */
-  .wall-books{ position:absolute; left:138px; top:78px; width:108px; height:92px; cursor:pointer; z-index:4; transform:scale(.65); transform-origin:top left; transition:transform .15s; }
-  .wall-books:hover{ transform:scale(.65) translateY(-4px); }
+  /* 우측 세로 일렬 아이콘 — 4개를 같은 가로 위치(right:14) + 정사각형에 가깝게 통일 (사용자 명세) */
+  .wall-books{ position:absolute; right:14px; top:80px; left:auto; width:108px; height:92px; cursor:pointer; z-index:4; transform:scale(.55); transform-origin:top right; transition:transform .15s; }
+  .wall-books:hover{ transform:scale(.55) translateY(-4px); }
   .wall-books .row{ position:absolute; left:6px; right:6px; display:flex; align-items:flex-end; gap:2.5px; }
   .wall-books .r1{ top:2px; height:38px; } .wall-books .r2{ top:48px; height:38px; }
   .wall-books .bk{ flex:1; border-radius:1.5px 1.5px 0 0; box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12); align-self:flex-end; }
@@ -88,8 +95,8 @@
   .wall-books .ribbon{ position:absolute; top:1px; left:34px; width:8px; height:24px; background:var(--cta); clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%); z-index:2; }
 
   /* ── 벽 달력 (출석) ── */
-  .wall-cal{ position:absolute; right:18px; top:76px; width:104px; height:106px; cursor:pointer; z-index:4; transform:scale(.66); transform-origin:top right; transition:transform .15s; }
-  .wall-cal:hover{ transform:scale(.66) translateY(-4px); }
+  .wall-cal{ position:absolute; right:14px; top:160px; width:104px; height:106px; cursor:pointer; z-index:4; transform:scale(.55); transform-origin:top right; transition:transform .15s; }
+  .wall-cal:hover{ transform:scale(.55) translateY(-4px); }
   .wall-cal .hook{ position:absolute; top:-7px; left:50%; transform:translateX(-50%); width:14px; height:7px; border:2px solid #A89272; border-bottom:none; border-radius:7px 7px 0 0; }
   .wall-cal .body{ position:absolute; inset:0; background:var(--paper); border-radius:9px; border:.5px solid var(--latte); box-shadow:0 7px 14px rgba(90,58,30,.16); overflow:hidden; }
   .wall-cal .m{ height:26px; background:var(--cta); color:#FBF6EC; display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-weight:800; font-size:12px; letter-spacing:.05em; }
@@ -100,8 +107,8 @@
   .wall-cal .grid b.empty{ background:transparent; }
 
   /* ── 벽 액자 (오늘의 한 줄 → 댓글·하이라이트) ── */
-  .frame{ position:absolute; right:18px; top:206px; width:104px; height:108px; background:linear-gradient(180deg,#161310,#0E0C0A); padding:8px; border-radius:3px; box-shadow:0 10px 18px rgba(0,0,0,.22), inset 0 0 0 1px rgba(255,255,255,.06); z-index:4; cursor:pointer; transform:scale(.66); transform-origin:top right; transition:transform .15s; }
-  .frame:hover{ transform:scale(.66) translateY(-4px); }
+  .frame{ position:absolute; right:14px; top:240px; width:104px; height:108px; background:linear-gradient(180deg,#161310,#0E0C0A); padding:8px; border-radius:3px; box-shadow:0 10px 18px rgba(0,0,0,.22), inset 0 0 0 1px rgba(255,255,255,.06); z-index:4; cursor:pointer; transform:scale(.55); transform-origin:top right; transition:transform .15s; }
+  .frame:hover{ transform:scale(.55) translateY(-4px); }
   .frame .mat{ height:100%; background:linear-gradient(180deg,#FCF8EF,#F4ECDC); border-radius:2px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:7px 5px; text-align:center; }
   .frame .rec-pen{ display:block; filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.18)); }
   .frame .rec-title{ font-family:var(--serif); font-weight:800; font-size:12.5px; line-height:1; color:var(--roast); letter-spacing:.02em; }
@@ -113,9 +120,9 @@
      wall-books/wall-cal/frame 이 transform:scale 적용된 상태라 placard 도 같이 작게 보이는데,
      보정 scale 로 원본 크기 가깝게 복원 (1/.85, 1/.86 등). */
   .placard.placard-attached{ left:50%; top:100%; margin-top:6px; font-size:10px; padding:3px 8px; }
-  .wall-books .placard-attached{ transform:translateX(-50%) scale(1.538); transform-origin:top center; }
-  .wall-cal   .placard-attached{ transform:translateX(-50%) scale(1.515); transform-origin:top center; }
-  .frame      .placard-attached{ transform:translateX(-50%) scale(1.515); transform-origin:top center; }
+  .wall-books .placard-attached{ transform:translateX(-50%) scale(1.818); transform-origin:top center; }
+  .wall-cal   .placard-attached{ transform:translateX(-50%) scale(1.818); transform-origin:top center; }
+  .frame      .placard-attached{ transform:translateX(-50%) scale(1.818); transform-origin:top center; }
   .room.night .placard{ background:rgba(40,50,75,.85); color:#C9D2E6; border-color:#46527a; }
 
   /* ── 소파 ── */
