@@ -604,22 +604,47 @@
   function applyTower(o){ sceneTower.innerHTML=o.html; }
   /* 테마 적용 — .room 의 theme-* 클래스 토글 + 로컬에 영속 저장 */
   const OZ_THEME_KEY = 'ds.ozhouse.theme';
+  /* default 테마에서의 마지막 가구 선택 보존 — 비-default 갔다 돌아오면 복원 */
+  let lastDefaultFurniture = { sofa:'cream', rug:'coral', tower:'tall' };
   function applyTheme(o){
     const roomEl = document.getElementById('room');
     if (!roomEl) return;
+    const prevWasDefault = !roomEl.className.match(/\btheme-/);
     roomEl.className = roomEl.className.replace(/\btheme-\S+/g, '').replace(/\s+/g, ' ').trim();
     if (o.id !== 'default') roomEl.classList.add('theme-' + o.id);
     /* 좌측 상단 영문 라벨 */
     const lb = document.getElementById('ozThemeLabel');
     if (lb) lb.textContent = o.nameEn || o.name || '';
     try { (window.parent.localStorage || localStorage).setItem(OZ_THEME_KEY, o.id); } catch {}
-    /* 사용자 명세: 비-default 테마 적용 시 소파/러그/캣타워 기본적으로 hide.
-       default 로 돌아오면 state 선택 다시 노출(또는 'none' 이면 hide 유지). */
-    const hideFurniture = (o.id !== 'default');
-    if (typeof sceneSofa  !== 'undefined' && sceneSofa)  sceneSofa.style.display  = (hideFurniture || state.sofa  === 'none') ? 'none' : '';
-    if (typeof sceneRug   !== 'undefined' && sceneRug)   sceneRug.style.display   = (hideFurniture || state.rug   === 'none') ? 'none' : '';
-    if (typeof sceneTower !== 'undefined' && sceneTower) sceneTower.style.display = (hideFurniture || state.tower === 'none') ? 'none' : '';
-    /* 테마 변경 후 현재 자세의 새 테마용 저장 위치 적용 */
+    /* 사용자 명세: 비-default 테마 = 가구 기본 '적용 안함'. default 로 돌아오면 마지막 선택 복원 */
+    if (o.id !== 'default') {
+      if (prevWasDefault) {
+        lastDefaultFurniture = { sofa: state.sofa, rug: state.rug, tower: state.tower };
+      }
+      state.sofa = 'none'; state.rug = 'none'; state.tower = 'none';
+      if (typeof sceneSofa  !== 'undefined' && sceneSofa)  sceneSofa.style.display  = 'none';
+      if (typeof sceneRug   !== 'undefined' && sceneRug)   sceneRug.style.display   = 'none';
+      if (typeof sceneTower !== 'undefined' && sceneTower) sceneTower.style.display = 'none';
+    } else {
+      const r = lastDefaultFurniture;
+      const sf = DECOR.sofa.find(x => x.id === r.sofa);
+      const rg = DECOR.rug.find(x  => x.id === r.rug);
+      const tw = DECOR.tower.find(x=> x.id === r.tower);
+      state.sofa = r.sofa; state.rug = r.rug; state.tower = r.tower;
+      if (typeof sceneSofa !== 'undefined' && sceneSofa) {
+        if (r.sofa === 'none' || !sf) sceneSofa.style.display = 'none';
+        else { sceneSofa.style.display = ''; applySofa(sf); }
+      }
+      if (typeof sceneRug !== 'undefined' && sceneRug) {
+        if (r.rug === 'none' || !rg) sceneRug.style.display = 'none';
+        else { sceneRug.style.display = ''; applyRug(rg); }
+      }
+      if (typeof sceneTower !== 'undefined' && sceneTower) {
+        if (r.tower === 'none' || !tw) sceneTower.style.display = 'none';
+        else { sceneTower.style.display = ''; applyTower(tw); }
+      }
+    }
+    if (typeof renderOptions === 'function') { try { renderOptions(); } catch {} }
     try { applyCatPosForCurrent(); } catch {}
   }
   function loadSavedTheme(){
