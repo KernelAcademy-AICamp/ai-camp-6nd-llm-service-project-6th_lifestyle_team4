@@ -37,9 +37,8 @@
   .lightbeam{ position:absolute; left:20px; top:200px; width:250px; height:300px; background:linear-gradient(160deg, rgba(247,210,160,.40) 0%, rgba(247,210,160,0) 62%); clip-path:polygon(30% 0, 100% 0, 70% 100%, 0 100%); z-index:1; pointer-events:none; transition:background .5s; }
 
   /* ── 창문 ── */
-  /* 창문도 우측 일렬 아이콘 — 4번째 자리. sill/sill-pot 은 hide 처리 */
-  .window{ position:absolute; right:14px; top:320px; left:auto; width:108px; height:126px; border-radius:54px 54px 6px 6px; background:linear-gradient(180deg,#F8C99F 0%, #F6D9B4 46%, #F0E6CE 100%); border:8px solid var(--walnut); box-shadow:inset 0 0 0 2px rgba(255,255,255,.45), 0 8px 16px rgba(90,58,30,.16); overflow:hidden; z-index:2; cursor:pointer; transform:scale(.55); transform-origin:top right; transition:background .5s, border-color .5s; }
-  .sill, .sill-pot { display:none !important; }
+  /* 창문 — mockup 원본 좌표 (좌상단, scale .88 origin top-left). 기본 테마에서만 보이고 다른 테마는 위 CSS 가 hide */
+  .window{ position:absolute; left:18px; top:72px; width:108px; height:126px; border-radius:54px 54px 6px 6px; background:linear-gradient(180deg,#F8C99F 0%, #F6D9B4 46%, #F0E6CE 100%); border:8px solid var(--walnut); box-shadow:inset 0 0 0 2px rgba(255,255,255,.45), 0 8px 16px rgba(90,58,30,.16); overflow:hidden; z-index:2; transform:scale(.88); transform-origin:top left; transition:background .5s, border-color .5s; }
   .window .sun{ position:absolute; left:50%; top:26px; transform:translateX(-50%); width:34px; height:34px; border-radius:50%; background:radial-gradient(circle, #FBE9C2 0%, #F6C98C 70%); box-shadow:0 0 22px 8px rgba(246,201,140,.7); transition:all .4s; }
   .window .hills{ position:absolute; left:-6px; right:-6px; bottom:-2px; height:42px; background:radial-gradient(38px 30px at 24% 100%, #C9A777 0 99%, transparent 100%), radial-gradient(50px 36px at 70% 100%, #BD9A68 0 99%, transparent 100%); transition:filter .5s; }
   .window .muntin-v{ position:absolute; left:50%; top:0; bottom:0; width:5px; transform:translateX(-50%); background:var(--walnut); }
@@ -156,6 +155,8 @@
   .rug{ position:absolute; left:84px; bottom:138px; width:224px; height:76px; z-index:3; border-radius:50%; box-shadow:0 8px 16px rgba(90,58,30,.18); }
   .rug::after{ content:''; position:absolute; inset:-3px; border-radius:50%; border:2px dotted rgba(107,93,79,.4); }
   .yarn{ position:absolute; left:210px; bottom:150px; width:30px; height:30px; z-index:5; }
+  .yarn img{ width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; box-shadow:0 2px 6px rgba(60,38,18,.25); }
+  .yarn-chip img{ width:18px; height:18px; object-fit:cover; border-radius:50%; display:block; }
   .yarn svg{ display:block; filter:drop-shadow(0 3px 4px rgba(0,0,0,.2)); }
 
   /* ── 고양이 (동적) ── */
@@ -187,7 +188,12 @@
   /* (편집 토글은 외부 m/index.html top-bar 로 이동 — 여기서는 스타일 불필요) */
 
   /* ── 우측 세로 이모지 패널 — 내 북마크/출석/나의 기록/창문(낮밤). 편집 불가, 시트/토글만 ── */
-  .wall-books, .wall-cal, .frame, .window, .sill, .sill-pot { display:none !important; }
+  /* 벽 책장/달력/액자 그림 자체는 모든 테마에서 hide. 창문(.window) 과 창턱/화분은 기본 테마에서 그대로 보이게 둠.
+     모비딕 등 다른 테마는 배경 이미지가 룸 전체를 덮으므로 .window/.sill/.sill-pot 도 같이 hide. */
+  .wall-books, .wall-cal, .frame { display:none !important; }
+  .room[class*="theme-"] .window,
+  .room[class*="theme-"] .sill,
+  .room[class*="theme-"] .sill-pot { display:none !important; }
   /* 벽과 바닥 경계선 hide (사용자 명세) */
   .baseboard { display:none !important; }
   /* 고양이도 편집 모드일 때 드래그 — 평소엔 pointer-events:none */
@@ -212,6 +218,17 @@
   .room.night .wall-icon .lb{ color:#C9D2E6; }
   /* 밤/낮 토글(창문 이모지)은 기본 테마에서만 (사용자 명세). 다른 theme-* 클래스 있으면 hide */
   .room[class*="theme-"] #wallWindowBtn{ display:none !important; }
+
+  /* 좌측 상단 현재 테마 영문 라벨 */
+  .oz-theme-label{
+    position:absolute; top:14px; left:14px; z-index:55;
+    font-family:var(--serif); font-size:13px; font-weight:800;
+    letter-spacing:0.08em; color:rgba(14,12,10,.72);
+    text-shadow:0 1px 2px rgba(255,255,255,.5);
+    pointer-events:none; user-select:none;
+  }
+  .room.night .oz-theme-label,
+  .room.theme-moby-dick .oz-theme-label{ color:rgba(255,255,255,.92); text-shadow:0 1px 3px rgba(0,0,0,.4); }
   .yarn-chip i{ width:11px; height:11px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F); display:inline-block; }
   .tray-options{ display:flex; gap:10px; margin-top:11px; overflow-x:auto; padding-bottom:2px; }
   .opt{ flex:none; width:64px; cursor:pointer; text-align:center; }
@@ -399,7 +416,7 @@
 
           <!-- 러그 + 실타래 -->
           <div class="rug" id="rug"></div>
-          <div class="yarn"><svg viewBox="0 0 30 30" width="30" height="30" xmlns="http://www.w3.org/2000/svg"><circle cx="15" cy="15" r="14" fill="#E0683E"/><g fill="none" stroke="#B8431F" stroke-width="1.5" opacity=".8"><path d="M2 12 C 10 7, 20 7, 28 12"/><path d="M2 18 C 10 23, 20 23, 28 18"/><path d="M8 3 C 5 12, 5 20, 9 27"/><path d="M22 3 C 25 12, 25 20, 21 27"/></g><circle cx="15" cy="15" r="14" fill="none" stroke="#A8391A" stroke-width="1"/></svg></div>
+          <div class="yarn"><img src="assets/daily-script-bar.png" alt="실타래" /></div>
 
           <!-- 고양이 (동적) -->
           <div class="cat-shadow" id="catShadow"></div>
@@ -407,6 +424,9 @@
 
           <div class="mote m1"></div><div class="mote m2"></div><div class="mote m3"></div>
           <div class="night-veil"></div>
+
+          <!-- 좌측 상단 현재 테마 영문 라벨 -->
+          <div class="oz-theme-label" id="ozThemeLabel">Default</div>
 
           <!-- 우측 세로 이모지 패널 — 시트/토글 진입점 (편집 불가) -->
           <div class="wall-icons">
@@ -440,7 +460,7 @@
             <button class="tab" data-cat="sofa">소파</button>
             <button class="tab" data-cat="rug">러그</button>
             <button class="tab" data-cat="tower">캣타워</button>
-            <span class="yarn-chip"><i></i> 실타래 5</span>
+            <span class="yarn-chip"><img src="assets/daily-script-bar.png" alt="" /> 실타래 5</span>
           </div>
           <div class="tray-options" id="trayOptions"></div>
         </div>
@@ -494,11 +514,10 @@
   /* 가구 변형 */
   const DECOR = {
     theme: [
-      { id:'default',   name:'기본', locked:false, price:0,   hint:'기본 테마' },
-      /* 모비딕 — 안개 낀 바다 + 데크 우드. 미리보기용으로 일단 잠금 해제. 잠그려면 locked:true 로 */
-      { id:'moby-dick', name:'모비딕', locked:false, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
-      { id:'demian',    name:'데미안', locked:true, price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
-      { id:'gatsby',    name:'위대한 개츠비', locked:true, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      { id:'default',   name:'기본',          nameEn:'Default',           locked:false, price:0,   hint:'기본 테마' },
+      { id:'moby-dick', name:'모비딕',         nameEn:'Moby-Dick',         locked:false, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
+      { id:'demian',    name:'데미안',         nameEn:'Demian',            locked:true,  price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
+      { id:'gatsby',    name:'위대한 개츠비',  nameEn:'The Great Gatsby',  locked:true,  price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
     ],
     sofa: [
       { id:'none', name:'적용 안함' },
@@ -550,6 +569,9 @@
     if (!roomEl) return;
     roomEl.className = roomEl.className.replace(/\btheme-\S+/g, '').replace(/\s+/g, ' ').trim();
     if (o.id !== 'default') roomEl.classList.add('theme-' + o.id);
+    /* 좌측 상단 영문 라벨 갱신 */
+    const lb = document.getElementById('ozThemeLabel');
+    if (lb) lb.textContent = o.nameEn || o.name || '';
     try { (window.parent.localStorage || localStorage).setItem(OZ_THEME_KEY, o.id); } catch {}
   }
   function loadSavedTheme(){
