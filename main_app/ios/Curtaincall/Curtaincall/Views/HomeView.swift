@@ -141,6 +141,14 @@ struct HomeView: View {
         .onChange(of: prefs.prefSelected) { _, selected in
             if selected { Task { await loadOnce() } }
         }
+        // Bookmarks load separately from reload(), so the first Oz pick can be
+        // computed (and cached for the day) before taste exists — picking a
+        // non-personalized fallback. Recompute once bookmarks arrive; chooseOzPick
+        // re-promotes the cached fallback to a taste-matched card.
+        .onChange(of: bookmarks.bookmarks.map(\.cardId)) { _, _ in
+            guard !allCards.isEmpty else { return }
+            Task { await loadDiscoveryData() }
+        }
         .overlay {
             if showAccountPrompt {
                 AccountRequiredPrompt {
