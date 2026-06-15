@@ -96,6 +96,7 @@ struct MyPageView: View {
 
                     Spacer().frame(height: 40)
                     sectionLabel("약관 및 정보")
+                    legalRow(title: "공지사항") { NoticeView() }
                     legalRow(title: "이용약관") { LegalView(doc: .terms) }
                     legalRow(title: "개인정보 처리방침") { LegalView(doc: .privacy) }
                     settingRow(title: "버전 정보", trailingText: appVersion)

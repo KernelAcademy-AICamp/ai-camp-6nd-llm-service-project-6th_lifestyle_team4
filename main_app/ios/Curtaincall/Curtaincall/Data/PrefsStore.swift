@@ -20,6 +20,8 @@ final class PrefsStore: ObservableObject {
         // Daily Oz pick cache (PWA/Android AppPreferences.ozDailyCardId).
         static let ozDailyDate = "ds.ozDailyDate"
         static let ozDailyCardId = "ds.ozDailyCardId"
+        // Highest notice id the user has seen (Android noticeLastSeenId).
+        static let noticeLastSeen = "ds.noticeLastSeen"
     }
 
     @Published var pushEnabled: Bool { didSet { d.set(pushEnabled, forKey: Key.push) } }
@@ -30,11 +32,21 @@ final class PrefsStore: ObservableObject {
     /// @Published so finishing onboarding dismisses the overlay live.
     @Published var prefSelected: Bool { didSet { d.set(prefSelected, forKey: Key.prefSelected) } }
 
+    /// Highest notice id seen — drives the MY-tab unread dot. @Published so the
+    /// dot clears live when the user opens the Notice screen.
+    @Published var noticeLastSeenId: Int { didSet { d.set(noticeLastSeenId, forKey: Key.noticeLastSeen) } }
+
     init() {
         pushEnabled = d.object(forKey: Key.push) as? Bool ?? true
         tasteEnabled = d.bool(forKey: Key.taste)
         darkTheme = d.bool(forKey: Key.dark)
         prefSelected = d.bool(forKey: Key.prefSelected)
+        noticeLastSeenId = d.integer(forKey: Key.noticeLastSeen)
+    }
+
+    /// Mark notices up to `latestId` as seen (clears the unread dot).
+    func markNoticesSeen(_ latestId: Int) {
+        if latestId > noticeLastSeenId { noticeLastSeenId = latestId }
     }
 
     /// The saved onboarding picks (empty when not yet chosen).

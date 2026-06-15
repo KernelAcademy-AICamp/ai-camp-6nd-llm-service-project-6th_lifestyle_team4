@@ -1,13 +1,14 @@
 import SwiftUI
 
 struct NoticeView: View {
-    @Binding var selectedTab: Tab
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var prefs: PrefsStore
     @State private var notices: [Notice] = []
     @State private var isLoading = false
 
     var body: some View {
         VStack(spacing: 0) {
-            AppMasthead(onMyPage: { selectedTab = .settings })
+            topBar
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 24)
@@ -50,12 +51,28 @@ struct NoticeView: View {
         .task { await load() }
     }
 
+    private var topBar: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(.espresso)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 44)
+    }
+
     private func load() async {
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
         do {
             notices = try await Supa.shared.fetchNotices()
+            prefs.markNoticesSeen(notices.map(\.noticeId).max() ?? 0)
         } catch {
             notices = []
         }

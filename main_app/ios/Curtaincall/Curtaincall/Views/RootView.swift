@@ -1,24 +1,30 @@
 import SwiftUI
 
+/// Bottom-nav tabs, in PWA order: DAILY · FEED · TODAY(center) · LIBRARY · MY.
+/// Notice is no longer a tab — it's reached from the Daily notice carousel and
+/// the MyPage entry. `allCases` order drives the tab-bar layout.
 enum Tab: Hashable, CaseIterable {
-    case home, archive, feed, notice, settings
+    case daily, feed, home, archive, settings
+
+    /// The visually prominent center tab.
+    var isCenter: Bool { self == .home }
 
     var title: String {
         switch self {
-        case .home: return "Home"
-        case .archive: return "Library"
+        case .daily: return "Daily"
         case .feed: return "Feed"
-        case .notice: return "Notice"
+        case .home: return "Today"
+        case .archive: return "Library"
         case .settings: return "My"
         }
     }
 
     var iconName: String {
         switch self {
-        case .home: return "house"
-        case .archive: return "books.vertical"
+        case .daily: return "safari"               // explore (PWA)
         case .feed: return "rectangle.stack"
-        case .notice: return "megaphone"
+        case .home: return "quote.bubble.fill"     // placeholder; yarn-ball graphic next PR
+        case .archive: return "books.vertical"
         case .settings: return "person.crop.circle"
         }
     }
@@ -30,13 +36,15 @@ struct RootView: View {
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
 
-    @State private var selectedTab: Tab = .home
+    @State private var selectedTab: Tab = .daily
+    @State private var dailyPath = NavigationPath()
     @State private var homePath = NavigationPath()
     @State private var archivePath = NavigationPath()
     @State private var feedPath = NavigationPath()
     @State private var showArchivePrompt = false
     @State private var composerActive = false
     @State private var feedReselect = 0
+    @State private var latestNoticeId: Int?
 
     var body: some View {
         Group {
@@ -69,13 +77,14 @@ struct RootView: View {
         }
         .onChange(of: selectedTab) { _, newValue in
             if newValue == .archive && session.isAnonymous {
-                selectedTab = .home
+                selectedTab = .daily
                 showArchivePrompt = true
             }
         }
         .task {
             if let id = pendingCardId { await resolveAndPush(id: id) }
         }
+        .task { latestNoticeId = (try? await Supa.shared.fetchLatestNotice())?.noticeId }
         .onChange(of: pendingCardId) { _, newValue in
             if let id = newValue {
                 Task { await resolveAndPush(id: id) }
@@ -101,6 +110,14 @@ struct RootView: View {
 
     private var tabs: some View {
         TabView(selection: $selectedTab) {
+            NavigationStack(path: $dailyPath) {
+                DailyView(selectedTab: $selectedTab)
+            }
+            .tag(Tab.daily)
+            NavigationStack(path: $feedPath) {
+                FeedView(selectedTab: $selectedTab, reselect: feedReselect)
+            }
+            .tag(Tab.feed)
             NavigationStack(path: $homePath) {
                 HomeView(selectedTab: $selectedTab)
             }
@@ -109,12 +126,6 @@ struct RootView: View {
                 ArchiveView(selectedTab: $selectedTab, path: $archivePath)
             }
             .tag(Tab.archive)
-            NavigationStack(path: $feedPath) {
-                FeedView(selectedTab: $selectedTab, reselect: feedReselect)
-            }
-            .tag(Tab.feed)
-            NavigationStack { NoticeView(selectedTab: $selectedTab) }
-                .tag(Tab.notice)
             NavigationStack { MyPageView(selectedTab: $selectedTab) }
                 .tag(Tab.settings)
         }
@@ -126,7 +137,7 @@ struct RootView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !composerActive {
-                EditorialTabBar(selection: $selectedTab, onReselect: popToRoot)
+                EditorialTabBar(selection: $selectedTab, noticeUnread: hasUnreadNotice, onReselect: popToRoot)
                     .transition(.move(edge: .bottom))
             }
         }
@@ -145,15 +156,22 @@ struct RootView: View {
         }
     }
 
+    /// Unread notice → dot on the MY tab (Notice is no longer its own tab).
+    private var hasUnreadNotice: Bool {
+        guard let latestNoticeId else { return false }
+        return latestNoticeId > prefs.noticeLastSeenId
+    }
+
     /// Re-tapping the active tab pops that tab's navigation stack back to root.
     private func popToRoot(_ tab: Tab) {
         switch tab {
+        case .daily: dailyPath = NavigationPath()
         case .home: homePath = NavigationPath()
         case .archive: archivePath = NavigationPath()
         case .feed:
             feedPath = NavigationPath()
             feedReselect += 1  // scroll Feed to top + refresh
-        case .notice, .settings: break
+        case .settings: break
         }
     }
 
