@@ -15,9 +15,8 @@ struct HomeView: View {
     @State private var fetchFailed = false
     @State private var showAccountPrompt = false
     @State private var latestNotice: Notice?
+    @State private var showNotice = false
     @State private var bookmarkCounts: [Int: Int] = [:]
-    @State private var trendingCounts: [Int: Int] = [:]
-    @State private var ozCard: Card?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,7 +28,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 32)
                     if let latestNotice {
-                        NoticeBanner(notice: latestNotice) { selectedTab = .notice }
+                        NoticeBanner(notice: latestNotice) { showNotice = true }
                         Spacer().frame(height: 24)
                     }
                     Text(Self.formattedToday)
@@ -66,26 +65,6 @@ struct HomeView: View {
                         todayCardView(card)
                     } else if isLoading {
                         TodayCardBody(card: nil, isLoading: true, bookmarkCount: 0, showOriginal: false)
-                    }
-
-                    // Discovery sections over the full loaded card set (no new
-                    // fetch): New Books, then Contextual. Hidden until cards load.
-                    if !allCards.isEmpty {
-                        Spacer().frame(height: 48)
-                        DailyNewBooksSection(cards: allCards)
-                        Spacer().frame(height: 36)
-                        DailyContextualSection(cards: allCards)
-                        Spacer().frame(height: 36)
-                        DailyTrendingSection(cards: allCards, bookmarkCounts: trendingCounts) {
-                            selectedTab = .archive
-                        }
-                        if let ozCard {
-                            Spacer().frame(height: 36)
-                            DailyOzPickSection(
-                                card: ozCard,
-                                taste: Set(bookmarks.bookmarkCards.flatMap { $0.keywords })
-                            )
-                        }
                     }
 
                     Spacer().frame(height: 56)
@@ -130,6 +109,7 @@ struct HomeView: View {
                 selectedTab = .settings
             }
         }
+        .navigationDestination(isPresented: $showNotice) { NoticeView() }
         .task { await loadOnce() }
         .task { await loadLatestNotice() }
         .task { await bookmarks.load(userId: session.userId) }
@@ -140,14 +120,6 @@ struct HomeView: View {
         // preference-weighted today pick that loadOnce held back.
         .onChange(of: prefs.prefSelected) { _, selected in
             if selected { Task { await loadOnce() } }
-        }
-        // Bookmarks load separately from reload(), so the first Oz pick can be
-        // computed (and cached for the day) before taste exists — picking a
-        // non-personalized fallback. Recompute once bookmarks arrive; chooseOzPick
-        // re-promotes the cached fallback to a taste-matched card.
-        .onChange(of: bookmarks.bookmarks.map(\.cardId)) { _, _ in
-            guard !allCards.isEmpty else { return }
-            Task { await loadDiscoveryData() }
         }
         .overlay {
             if showAccountPrompt {
@@ -237,28 +209,9 @@ struct HomeView: View {
             todayShowOriginal = false  // 새 카드는 항상 한국어부터 (PWA와 동일)
             recent = buildRecent()
             await refreshBookmarkCounts(for: [pick].compactMap { $0 } + recent)
-            await loadDiscoveryData()
         } catch {
             fetchFailed = true
         }
-    }
-
-    /// Discovery data: bookmark counts across the full set (for Trending) and the
-    /// daily Oz pick. Reuses the existing `fetchBookmarkCounts` — no new fetch.
-    private func loadDiscoveryData() async {
-        if trendingCounts.isEmpty, !allCards.isEmpty {
-            trendingCounts = (try? await Supa.shared.fetchBookmarkCounts(cardIds: allCards.map(\.cardId))) ?? [:]
-        }
-        let taste = Set(bookmarks.bookmarkCards.flatMap { $0.keywords })
-        ozCard = chooseOzPick(cards: allCards, taste: taste, prefs: prefs, today: Self.todayKey)
-    }
-
-    /// yyyy-MM-dd key for the per-day Oz cache (matches Android's LocalDate key).
-    private static var todayKey: String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: .now)
     }
 
     private func toggleBookmark(cardId: Int) {

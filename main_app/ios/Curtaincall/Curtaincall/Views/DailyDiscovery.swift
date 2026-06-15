@@ -563,3 +563,102 @@ struct DailyOzPickSection: View {
         }
     }
 }
+
+// MARK: - Notice carousel
+
+/// Top-of-Daily notice strip — up to 3 notices, auto-rotating every 10s
+/// (Android `DailyNoticeRow`). Tapping opens the full Notice screen.
+struct DailyNoticeCarousel: View {
+    let notices: [Notice]
+
+    var body: some View {
+        let items = Array(notices.prefix(3))
+        if !items.isEmpty {
+            NavigationLink {
+                NoticeView()
+            } label: {
+                TimelineView(.periodic(from: .now, by: 10)) { context in
+                    let idx = items.count > 1
+                        ? Int(context.date.timeIntervalSince1970 / 10) % items.count
+                        : 0
+                    HStack(spacing: 10) {
+                        Image(systemName: "megaphone")
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundStyle(Color.cta)
+                        Text(items[min(idx, items.count - 1)].title)
+                            .font(.bodySans(13))
+                            .fontWeight(.medium)
+                            .foregroundStyle(.espresso)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text("›")
+                            .font(.titleSerif(16))
+                            .foregroundStyle(.walnut)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.latte))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.sand, lineWidth: 0.5))
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - Recent (다시 만나기)
+
+/// Re-surface the most recently bookmarked card (Android `DailyRecent`).
+struct DailyRecentSection: View {
+    let card: Card
+    let bookmarkedAt: Date?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("다시 만나기")
+                .font(.headlineSerif(20))
+                .foregroundStyle(.espresso)
+            Spacer().frame(height: 6)
+            Text("지난주 담아둔 문장, 다시 읽어볼까요")
+                .font(.bodySans(13))
+                .foregroundStyle(.walnut)
+            Spacer().frame(height: 14)
+            NavigationLink(value: card) {
+                HStack(alignment: .top, spacing: 14) {
+                    HighlightBookCover(work: card.work)
+                        .scaleEffect(64.0 / 132.0, anchor: .center)
+                        .frame(width: 64, height: 188 * 64 / 132)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("\"\(cleanDiscoveryQuote(card.quote))\"")
+                            .font(.titleSerif(14))
+                            .foregroundStyle(.espresso)
+                            .bookLeading(size: 14)
+                            .lineLimit(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("\(card.work.title.isEmpty ? "—" : card.work.title) · \(bookmarkAgeText(bookmarkedAt)) 북마크")
+                            .labelCaps(color: .walnut, size: 11)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color.paper))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+/// Coarse relative age for the recent bookmark line (Android `bookmarkAge`).
+func bookmarkAgeText(_ date: Date?) -> String {
+    guard let date else { return "" }
+    let days = Calendar.current.dateComponents([.day], from: date, to: .now).day ?? 0
+    if days <= 0 { return "오늘" }
+    if days == 1 { return "어제" }
+    if days < 7 { return "\(days)일 전" }
+    return "\(days / 7)주 전"
+}
