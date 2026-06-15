@@ -37,16 +37,17 @@
   .lightbeam{ position:absolute; left:20px; top:200px; width:250px; height:300px; background:linear-gradient(160deg, rgba(247,210,160,.40) 0%, rgba(247,210,160,0) 62%); clip-path:polygon(30% 0, 100% 0, 70% 100%, 0 100%); z-index:1; pointer-events:none; transition:background .5s; }
 
   /* ── 창문 ── */
-  /* 창문 — mockup 원본 좌표 (좌상단, scale .88 origin top-left). 기본 테마에서만 보이고 다른 테마는 위 CSS 가 hide */
-  .window{ position:absolute; left:18px; top:72px; width:108px; height:126px; border-radius:54px 54px 6px 6px; background:linear-gradient(180deg,#F8C99F 0%, #F6D9B4 46%, #F0E6CE 100%); border:8px solid var(--walnut); box-shadow:inset 0 0 0 2px rgba(255,255,255,.45), 0 8px 16px rgba(90,58,30,.16); overflow:hidden; z-index:2; transform:scale(.88); transform-origin:top left; transition:background .5s, border-color .5s; }
+  /* 창문 — 화면 중앙 상단. 클릭하면 낮/밤 토글 (사용자 명세). 기본 테마에서만 보임. */
+  .window{ position:absolute; left:50%; top:60px; width:108px; height:126px; border-radius:54px 54px 6px 6px; background:linear-gradient(180deg,#F8C99F 0%, #F6D9B4 46%, #F0E6CE 100%); border:8px solid var(--walnut); box-shadow:inset 0 0 0 2px rgba(255,255,255,.45), 0 8px 16px rgba(90,58,30,.16); overflow:hidden; z-index:2; cursor:pointer; transform:translateX(-50%) scale(.88); transform-origin:top center; transition:background .5s, border-color .5s; }
   .window .sun{ position:absolute; left:50%; top:26px; transform:translateX(-50%); width:34px; height:34px; border-radius:50%; background:radial-gradient(circle, #FBE9C2 0%, #F6C98C 70%); box-shadow:0 0 22px 8px rgba(246,201,140,.7); transition:all .4s; }
   .window .hills{ position:absolute; left:-6px; right:-6px; bottom:-2px; height:42px; background:radial-gradient(38px 30px at 24% 100%, #C9A777 0 99%, transparent 100%), radial-gradient(50px 36px at 70% 100%, #BD9A68 0 99%, transparent 100%); transition:filter .5s; }
   .window .muntin-v{ position:absolute; left:50%; top:0; bottom:0; width:5px; transform:translateX(-50%); background:var(--walnut); }
   .window .muntin-h{ position:absolute; left:0; right:0; top:54%; height:5px; background:var(--walnut); }
   .window .stars{ position:absolute; inset:0; opacity:0; transition:opacity .5s; pointer-events:none; }
   .window .stars i{ position:absolute; width:3px; height:3px; border-radius:50%; background:#FCF7E8; box-shadow:0 0 4px 1px rgba(255,250,230,.7); }
-  .sill{ position:absolute; left:12px; top:182px; width:106px; height:8px; background:linear-gradient(180deg,#7A5A3B,#5A4026); border-radius:3px; box-shadow:0 4px 8px rgba(90,58,30,.18); z-index:3; }
-  .sill-pot{ position:absolute; left:86px; top:160px; width:24px; height:22px; z-index:3; }
+  /* 창턱·화분 — 창문 중앙 정렬에 맞춰 같이 중앙으로 (창문 visual width 약 95) */
+  .sill{ position:absolute; left:50%; transform:translateX(-50%); top:178px; width:124px; height:8px; background:linear-gradient(180deg,#7A5A3B,#5A4026); border-radius:3px; box-shadow:0 4px 8px rgba(90,58,30,.18); z-index:3; }
+  .sill-pot{ position:absolute; left:calc(50% + 32px); top:156px; width:22px; height:22px; z-index:3; }
   .sill-pot .p{ position:absolute; bottom:0; left:3px; width:18px; height:13px; background:linear-gradient(180deg,#C56B3E,#A8542C); border-radius:0 0 5px 5px; clip-path:polygon(8% 0,92% 0,82% 100%,18% 100%); }
   .sill-pot .l{ position:absolute; bottom:10px; left:50%; width:8px; height:16px; background:#7E9B5A; border-radius:60% 60% 0 0; transform-origin:bottom center; }
   .sill-pot .l.a{ transform:translateX(-90%) rotate(-22deg); } .sill-pot .l.b{ transform:translateX(-10%) rotate(20deg); background:#8FA968; } .sill-pot .l.c{ transform:translateX(-50%) rotate(0); height:19px; }
@@ -188,16 +189,17 @@
   /* (편집 토글은 외부 m/index.html top-bar 로 이동 — 여기서는 스타일 불필요) */
 
   /* ── 우측 세로 이모지 패널 — 내 북마크/출석/나의 기록/창문(낮밤). 편집 불가, 시트/토글만 ── */
-  /* 벽 책장/달력/액자 그림 자체는 모든 테마에서 hide. 창문(.window) 과 창턱/화분은 기본 테마에서 그대로 보이게 둠.
-     모비딕 등 다른 테마는 배경 이미지가 룸 전체를 덮으므로 .window/.sill/.sill-pot 도 같이 hide. */
+  /* 벽 책장/달력/액자 그림은 모든 테마에서 hide. 창문/창턱/화분은 기본 테마에서만 그대로 (낮밤 변화 보장).
+     모비딕 등 theme-* 적용 시는 배경 이미지가 룸 전체를 덮으므로 .window/.sill/.sill-pot + .baseboard 까지 hide. */
   .wall-books, .wall-cal, .frame { display:none !important; }
   .room[class*="theme-"] .window,
   .room[class*="theme-"] .sill,
-  .room[class*="theme-"] .sill-pot { display:none !important; }
-  /* 벽과 바닥 경계선 hide (사용자 명세) */
-  .baseboard { display:none !important; }
+  .room[class*="theme-"] .sill-pot,
+  .room[class*="theme-"] .baseboard { display:none !important; }
   /* 고양이도 편집 모드일 때 드래그 — 평소엔 pointer-events:none */
   .cat.oz-editing { pointer-events:auto !important; cursor:grab; touch-action:none; }
+  /* 고양이 그림자 제거 (사용자 명세) */
+  .cat-shadow { display:none !important; }
   .wall-icons{
     position:absolute; right:12px; top:64px; z-index:6;
     display:flex; flex-direction:column; gap:14px;
@@ -439,9 +441,7 @@
             <button type="button" class="wall-icon" data-open="records" aria-label="나의 기록">
               <span class="ic">📝</span><span class="lb">나의 기록</span>
             </button>
-            <button type="button" class="wall-icon" id="wallWindowBtn" aria-label="낮/밤 전환">
-              <span class="ic">🪟</span><span class="lb">낮/밤</span>
-            </button>
+            <!-- 🪟 낮/밤 버튼은 제거 — 기본 테마에서 창문 그림을 직접 누름 (사용자 명세) -->
           </div>
         </div>
 
@@ -514,7 +514,7 @@
   /* 가구 변형 */
   const DECOR = {
     theme: [
-      { id:'default',   name:'기본',          nameEn:'Default',           locked:false, price:0,   hint:'기본 테마' },
+      { id:'default',   name:'기본',          nameEn:'Normal',            locked:false, price:0,   hint:'기본 테마' },
       { id:'moby-dick', name:'모비딕',         nameEn:'Moby-Dick',         locked:false, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
       { id:'demian',    name:'데미안',         nameEn:'Demian',            locked:true,  price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
       { id:'gatsby',    name:'위대한 개츠비',  nameEn:'The Great Gatsby',  locked:true,  price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
@@ -998,8 +998,8 @@
     }, true);
   });
 
-  /* 우측 이모지 창문 클릭 → 밤/낮 전환. 기본 테마에서만 노출(CSS) — 다른 테마면 hide 라 호출 X */
-  document.getElementById('wallWindowBtn')?.addEventListener('click', (e) => {
+  /* 창문 그림(.window) 클릭 → 밤/낮 전환. 기본 테마에서만 보이므로 다른 테마에서는 호출 X */
+  document.querySelector('.window')?.addEventListener('click', (e) => {
     if (editMode) return;
     e.stopPropagation();
     document.getElementById('room')?.classList.toggle('night');
