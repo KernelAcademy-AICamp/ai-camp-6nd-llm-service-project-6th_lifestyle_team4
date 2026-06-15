@@ -75,8 +75,8 @@
   .room.night .night-veil{ opacity:1; }
 
   /* ── 벽 책장 (내 북마크) ── */
-  .wall-books{ position:absolute; left:138px; top:78px; width:108px; height:92px; cursor:pointer; z-index:4; transform:scale(.85); transform-origin:top left; transition:transform .15s; }
-  .wall-books:hover{ transform:scale(.85) translateY(-4px); }
+  .wall-books{ position:absolute; left:138px; top:78px; width:108px; height:92px; cursor:pointer; z-index:4; transform:scale(.65); transform-origin:top left; transition:transform .15s; }
+  .wall-books:hover{ transform:scale(.65) translateY(-4px); }
   .wall-books .row{ position:absolute; left:6px; right:6px; display:flex; align-items:flex-end; gap:2.5px; }
   .wall-books .r1{ top:2px; height:38px; } .wall-books .r2{ top:48px; height:38px; }
   .wall-books .bk{ flex:1; border-radius:1.5px 1.5px 0 0; box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12); align-self:flex-end; }
@@ -88,8 +88,8 @@
   .wall-books .ribbon{ position:absolute; top:1px; left:34px; width:8px; height:24px; background:var(--cta); clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%); z-index:2; }
 
   /* ── 벽 달력 (출석) ── */
-  .wall-cal{ position:absolute; right:18px; top:76px; width:104px; height:106px; cursor:pointer; z-index:4; transform:scale(.86); transform-origin:top right; transition:transform .15s; }
-  .wall-cal:hover{ transform:scale(.86) translateY(-4px); }
+  .wall-cal{ position:absolute; right:18px; top:76px; width:104px; height:106px; cursor:pointer; z-index:4; transform:scale(.66); transform-origin:top right; transition:transform .15s; }
+  .wall-cal:hover{ transform:scale(.66) translateY(-4px); }
   .wall-cal .hook{ position:absolute; top:-7px; left:50%; transform:translateX(-50%); width:14px; height:7px; border:2px solid #A89272; border-bottom:none; border-radius:7px 7px 0 0; }
   .wall-cal .body{ position:absolute; inset:0; background:var(--paper); border-radius:9px; border:.5px solid var(--latte); box-shadow:0 7px 14px rgba(90,58,30,.16); overflow:hidden; }
   .wall-cal .m{ height:26px; background:var(--cta); color:#FBF6EC; display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-weight:800; font-size:12px; letter-spacing:.05em; }
@@ -100,8 +100,8 @@
   .wall-cal .grid b.empty{ background:transparent; }
 
   /* ── 벽 액자 (오늘의 한 줄 → 댓글·하이라이트) ── */
-  .frame{ position:absolute; right:18px; top:206px; width:104px; height:108px; background:linear-gradient(180deg,#161310,#0E0C0A); padding:8px; border-radius:3px; box-shadow:0 10px 18px rgba(0,0,0,.22), inset 0 0 0 1px rgba(255,255,255,.06); z-index:4; cursor:pointer; transform:scale(.86); transform-origin:top right; transition:transform .15s; }
-  .frame:hover{ transform:scale(.86) translateY(-4px); }
+  .frame{ position:absolute; right:18px; top:206px; width:104px; height:108px; background:linear-gradient(180deg,#161310,#0E0C0A); padding:8px; border-radius:3px; box-shadow:0 10px 18px rgba(0,0,0,.22), inset 0 0 0 1px rgba(255,255,255,.06); z-index:4; cursor:pointer; transform:scale(.66); transform-origin:top right; transition:transform .15s; }
+  .frame:hover{ transform:scale(.66) translateY(-4px); }
   .frame .mat{ height:100%; background:linear-gradient(180deg,#FCF8EF,#F4ECDC); border-radius:2px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:7px 5px; text-align:center; }
   .frame .rec-pen{ display:block; filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.18)); }
   .frame .rec-title{ font-family:var(--serif); font-weight:800; font-size:12.5px; line-height:1; color:var(--roast); letter-spacing:.02em; }
@@ -113,9 +113,9 @@
      wall-books/wall-cal/frame 이 transform:scale 적용된 상태라 placard 도 같이 작게 보이는데,
      보정 scale 로 원본 크기 가깝게 복원 (1/.85, 1/.86 등). */
   .placard.placard-attached{ left:50%; top:100%; margin-top:6px; font-size:10px; padding:3px 8px; }
-  .wall-books .placard-attached{ transform:translateX(-50%) scale(1.176); transform-origin:top center; }
-  .wall-cal   .placard-attached{ transform:translateX(-50%) scale(1.163); transform-origin:top center; }
-  .frame      .placard-attached{ transform:translateX(-50%) scale(1.163); transform-origin:top center; }
+  .wall-books .placard-attached{ transform:translateX(-50%) scale(1.538); transform-origin:top center; }
+  .wall-cal   .placard-attached{ transform:translateX(-50%) scale(1.515); transform-origin:top center; }
+  .frame      .placard-attached{ transform:translateX(-50%) scale(1.515); transform-origin:top center; }
   .room.night .placard{ background:rgba(40,50,75,.85); color:#C9D2E6; border-color:#46527a; }
 
   /* ── 소파 ── */
