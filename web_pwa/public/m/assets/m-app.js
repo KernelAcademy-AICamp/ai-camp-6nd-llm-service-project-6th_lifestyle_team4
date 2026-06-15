@@ -4347,13 +4347,29 @@ function markCardRewarded(cardId) {
   safeStorageSet(YARN_REWARDED_KEY, JSON.stringify(map));
 }
 async function rewardYarnForFirstView(cardId) {
-  if (!cardId || isCardRewarded(cardId)) return;
-  markCardRewarded(cardId);   // 우선 마킹해 중복 호출 차단 (RPC 전)
+  if (!cardId) return;
+  if (!state.userId) return;
+  /* 클라이언트 측 빠른 중복 차단(같은 세션 안에서). 서버 dedup 이 진실. */
+  if (isCardRewarded(cardId)) return;
+  markCardRewarded(cardId);
   try {
-    const balance = await grantYarnRpc(1);
-    state.yarnPurchased = balance;
-    renderYarnChip();
-    try { toast('실타래 +1 (카드 첫 열람)'); } catch {}
+    /* 서버 RPC — (user_id, card_id) UNIQUE 로 영구 dedup. 이미 받았으면 잔액 그대로. */
+    const sb = await getSupabase();
+    const { data, error } = await sb.rpc('reward_yarn_first_view', {
+      p_user_id: state.userId,
+      p_card_id: cardId,
+    });
+    if (error) throw error;
+    const newBalance = typeof data === 'number' ? data : parseInt(data, 10);
+    const prev = state.yarnPurchased || 0;
+    if (Number.isFinite(newBalance) && newBalance >= 0) {
+      state.yarnPurchased = newBalance;
+      renderYarnChip();
+      /* 잔액이 실제로 늘었을 때만 토스트 — 이미 보상 받은 카드면 노이즈 X */
+      if (newBalance > prev) {
+        try { toast('실타래 +1 (카드 첫 열람)'); } catch {}
+      }
+    }
   } catch (e) {
     console.warn('[m] rewardYarnForFirstView failed:', e);
   }
