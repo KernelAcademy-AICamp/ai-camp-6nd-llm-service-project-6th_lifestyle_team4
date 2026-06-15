@@ -620,7 +620,8 @@
       const w = card.works || {};
       const q = String(card.quote || '').slice(0, 140);
       const sp = colors[i % colors.length];
-      return `<div class="bm">
+      const cid = b.card_id || card.card_id || '';
+      return `<div class="bm" data-card-id="${cid}" style="cursor:pointer;">
         <div class="bm-spine" style="background:${sp}"></div>
         <div class="bm-txt">
           <div class="bm-q">&ldquo;${escapeText(q)}&rdquo;</div>
@@ -654,7 +655,7 @@
         if (!data?.length) { rb.innerHTML = empty('아직 작성한 댓글이 없어요.'); return; }
         rb.innerHTML = data.map(c => {
           const w = c.cards?.works || {}; const head = [w.title, (c.cards?.quote || '').slice(0, 24)].filter(Boolean).join(' · ');
-          return `<div class="rec-item">
+          return `<div class="rec-item" data-card-id="${c.card_id || ''}" style="cursor:pointer;">
             <div class="rec-card">${escapeText(head)}</div>
             <div class="rec-txt">${escapeText(c.body || '')}</div>
             <div class="rec-foot"><span>${relTime(c.created_at)}</span></div>
@@ -662,21 +663,21 @@
         }).join('');
       } else if (type === 'one') {
         const { data, error } = await sb.from('feed_posts')
-          .select('post_id, body, created_at, cards(quote, works(title))')
+          .select('post_id, card_id, body, created_at, cards(quote, works(title))')
           .eq('user_id', st.userId).order('created_at', { ascending: false }).limit(30);
         if (error) throw error;
         if (!data?.length) { rb.innerHTML = empty('아직 작성한 감상평이 없어요.'); return; }
-        rb.innerHTML = data.map(o => `<div class="rec-item one">
+        rb.innerHTML = data.map(o => `<div class="rec-item one" data-card-id="${o.card_id || ''}" style="cursor:pointer;">
             <div class="one-date">${fmtDate(o.created_at)}</div>
             <div class="one-line">&ldquo;${escapeText(o.body || '')}&rdquo;</div>
           </div>`).join('');
       } else {
         const { data, error } = await sb.from('card_highlights')
-          .select('highlight_id, selected_text, created_at, cards(works(title))')
+          .select('highlight_id, card_id, selected_text, created_at, cards(works(title))')
           .eq('user_id', st.userId).order('created_at', { ascending: false }).limit(30);
         if (error) throw error;
         if (!data?.length) { rb.innerHTML = empty('아직 만든 하이라이트가 없어요.'); return; }
-        rb.innerHTML = data.map(h => `<div class="rec-item hl">
+        rb.innerHTML = data.map(h => `<div class="rec-item hl" data-card-id="${h.card_id || ''}" style="cursor:pointer;">
             <div class="rec-hl">&ldquo;${escapeText(h.selected_text || '')}&rdquo;</div>
             <div class="rec-src">— ${escapeText(h.cards?.works?.title || '')}</div>
           </div>`).join('');
@@ -710,6 +711,16 @@
   function closeSheet(){ backdrop.classList.remove('open'); sheet.classList.remove('open'); }
   document.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => openSheet(el.dataset.open)));
   backdrop.addEventListener('click', closeSheet); $('#sheetClose').addEventListener('click', closeSheet);
+
+  /* 시트 안 항목(북마크/댓글/감상평/하이라이트) 클릭 → 시트 닫고 부모의 카드 상세 열기 */
+  sheetBody.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-card-id]');
+    if (!item) return;
+    const cid = parseInt(item.dataset.cardId, 10);
+    if (!Number.isFinite(cid) || cid <= 0) return;
+    closeSheet();
+    try { window.parent.openCardById?.(cid); } catch (err) { console.warn('[oz-house] openCardById failed:', err); }
+  });
 
   /* 초기화 */
   apply('theme','default'); apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');

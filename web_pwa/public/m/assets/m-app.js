@@ -2,6 +2,17 @@
 import { getSupabase } from '/assets/supabase-client.js';
 /* OZ's house iframe 이 부모의 Supabase 클라이언트에 접근하기 위해 window 에 노출 */
 window.getSupabase = getSupabase;
+/* OZ's house 시트 항목(북마크/댓글/감상평/하이라이트) 클릭 시 부모의 카드 상세로 이동 */
+window.openCardById = (cardId) => {
+  const cid = Number(cardId);
+  if (!Number.isFinite(cid) || cid <= 0) return;
+  const card = (state.allCards || []).find((c) => c && Number(c.card_id) === cid);
+  if (!card) return;
+  if (typeof closeOzHouseInternal === 'function') {
+    try { closeOzHouseInternal(); } catch {}
+  }
+  try { openDetail(card); } catch (e) { console.warn('[m] openCardById failed:', e); }
+};
 import { initAnalytics, track, identify, setUserProps, resetUser } from '/assets/analytics.js';
 // onboarding.js는 선택적 기능 — 정적 import면 파일 누락/404 시 m-app.js 전체가
 // 로드 실패해 "무한 스피너"가 된다. 동적 import + 무해한 폴백으로 부팅을 막지 않게 한다.
