@@ -185,6 +185,33 @@
   .tab.active{ background:var(--espresso); color:var(--paper); border-color:var(--espresso); }
   .yarn-chip{ margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--cta); background:rgba(216,90,48,.1); padding:4px 10px; border-radius:12px; }
   /* (편집 토글은 외부 m/index.html top-bar 로 이동 — 여기서는 스타일 불필요) */
+
+  /* ── 우측 세로 이모지 패널 — 내 북마크/출석/나의 기록/창문(낮밤). 편집 불가, 시트/토글만 ── */
+  .wall-books, .wall-cal, .frame, .window, .sill, .sill-pot { display:none !important; }
+  /* 벽과 바닥 경계선 hide (사용자 명세) */
+  .baseboard { display:none !important; }
+  /* 고양이도 편집 모드일 때 드래그 — 평소엔 pointer-events:none */
+  .cat.oz-editing { pointer-events:auto !important; cursor:grab; touch-action:none; }
+  .wall-icons{
+    position:absolute; right:12px; top:64px; z-index:6;
+    display:flex; flex-direction:column; gap:14px;
+    pointer-events:auto;
+  }
+  .wall-icon{
+    width:54px; height:54px; border-radius:14px;
+    background:rgba(251,246,236,.94); border:1px solid var(--sand);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    cursor:pointer; padding:0; line-height:1;
+    box-shadow:0 4px 10px rgba(60,38,18,.18);
+    font-family:var(--sans);
+  }
+  .wall-icon .ic{ font-size:22px; line-height:1; }
+  .wall-icon .lb{ font-size:7.5px; font-weight:700; color:var(--walnut); letter-spacing:0.02em; }
+  .wall-icon:active{ transform:scale(.94); }
+  .room.night .wall-icon{ background:rgba(40,50,75,.85); border-color:#46527a; }
+  .room.night .wall-icon .lb{ color:#C9D2E6; }
+  /* 밤/낮 토글(창문 이모지)은 기본 테마에서만 (사용자 명세). 다른 theme-* 클래스 있으면 hide */
+  .room[class*="theme-"] #wallWindowBtn{ display:none !important; }
   .yarn-chip i{ width:11px; height:11px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F); display:inline-block; }
   .tray-options{ display:flex; gap:10px; margin-top:11px; overflow-x:auto; padding-bottom:2px; }
   .opt{ flex:none; width:64px; cursor:pointer; text-align:center; }
@@ -380,6 +407,22 @@
 
           <div class="mote m1"></div><div class="mote m2"></div><div class="mote m3"></div>
           <div class="night-veil"></div>
+
+          <!-- 우측 세로 이모지 패널 — 시트/토글 진입점 (편집 불가) -->
+          <div class="wall-icons">
+            <button type="button" class="wall-icon" data-open="bookmarks" aria-label="내 북마크">
+              <span class="ic">📚</span><span class="lb">내 북마크</span>
+            </button>
+            <button type="button" class="wall-icon" data-open="attend" aria-label="출석 달력">
+              <span class="ic">📅</span><span class="lb">출석 달력</span>
+            </button>
+            <button type="button" class="wall-icon" data-open="records" aria-label="나의 기록">
+              <span class="ic">📝</span><span class="lb">나의 기록</span>
+            </button>
+            <button type="button" class="wall-icon" id="wallWindowBtn" aria-label="낮/밤 전환">
+              <span class="ic">🪟</span><span class="lb">낮/밤</span>
+            </button>
+          </div>
         </div>
 
         <!-- 헤더 -->
@@ -458,18 +501,21 @@
       { id:'gatsby',    name:'위대한 개츠비', locked:true, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
     ],
     sofa: [
+      { id:'none', name:'적용 안함' },
       { id:'cream', name:'크림', frame:'#7B5A3C', frameD:'#6E4F30', seat:'#8A6A45', seatD:'#6E4F30', cushion:'#F1E7D2', cushionD:'#E3D7BC', pA:'#F4C20D', pAd:'#D9A800', pB:'#E0683E', pBd:'#C44E26' },
       { id:'coral', name:'코랄', frame:'#B5663B', frameD:'#9A5230', seat:'#C2774A', seatD:'#A8612F', cushion:'#F6E3D3', cushionD:'#EBCBB2', pA:'#6E8C4E', pAd:'#566F3C', pB:'#D85A30', pBd:'#B8431F' },
       { id:'sage', name:'세이지', frame:'#5E6E55', frameD:'#4C5A45', seat:'#6E7E63', seatD:'#566048', cushion:'#E6E9D8', cushionD:'#D3D8BE', pA:'#E0683E', pAd:'#C44E26', pB:'#9C8B79', pBd:'#7E6F5E' },
       { id:'ink', name:'잉크', frame:'#3A332C', frameD:'#2A241F', seat:'#403933', seatD:'#332D27', cushion:'#D8CDBA', cushionD:'#C2B6A0', pA:'#F4C20D', pAd:'#D9A800', pB:'#D85A30', pBd:'#B8431F' },
     ],
     rug: [
+      { id:'none', name:'적용 안함' },
       { id:'coral', name:'코랄 링', bg:'radial-gradient(ellipse at center,#EFE7D6 0 30%,#D85A30 30% 35%,#E7DCC6 35% 62%,#6B5D4F 62% 66%,#DED2B8 66%)' },
       { id:'sand', name:'샌드 줄무늬', bg:'repeating-linear-gradient(120deg,#E9DEC9 0 16px,#D8C9A6 16px 19px)' },
       { id:'sage', name:'세이지 링', bg:'radial-gradient(ellipse at center,#E9ECDB 0 30%,#8FA968 30% 35%,#E2E6D2 35% 62%,#5E7A55 62% 66%,#DCE2CC 66%)' },
       { id:'mono', name:'모노', bg:'radial-gradient(ellipse at center,#F1ECE0 0 54%,#2C2620 54% 58%,#E7DECB 58%)' },
     ],
     tower: [
+      { id:'none', name:'적용 안함' },
       { id:'mini', name:'미니', html:`<div class="tw-base"></div><div class="tw-post" style="bottom:14px;height:96px;"></div><div class="tw-perch" style="bottom:108px;"></div><div class="tw-cushion" style="bottom:118px;"></div><div class="tw-string" style="bottom:80px;height:28px;right:16px;"></div><div class="tw-ball" style="bottom:68px;right:10px;"></div>` },
       { id:'cozy', name:'코지', html:`<div class="tw-base"></div><div class="tw-post" style="bottom:14px;height:66px;"></div><div class="tw-house" style="bottom:78px;"><div class="hole"></div></div><div class="tw-perch sm" style="bottom:136px;"></div><div class="tw-cushion" style="bottom:146px;width:40px;"></div>` },
       { id:'tall', name:'타워', html:`<div class="tw-base"></div><div class="tw-post" style="bottom:14px;height:60px;"></div><div class="tw-perch" style="bottom:70px;"></div><div class="tw-post" style="bottom:84px;height:28px;"></div><div class="tw-house" style="bottom:110px;"><div class="hole"></div></div><div class="tw-perch sm" style="bottom:168px;"></div><div class="tw-cushion" style="bottom:178px;width:40px;"></div><div class="tw-string" style="bottom:128px;height:42px;left:10px;"></div><div class="tw-ball" style="bottom:116px;left:4px;"></div>` },
@@ -514,14 +560,17 @@
   }
   function apply(cat,id){
     const o=DECOR[cat].find(x=>x.id===id); if(!o) return;
-    if (o.locked) return;   // 잠긴 항목은 적용 불가
+    if (o.locked) return;
     state[cat]=id;
-    if(cat==='sofa') applySofa(o);
-    else if(cat==='rug') applyRug(o);
-    else if(cat==='tower') applyTower(o);
-    else if(cat==='theme') applyTheme(o);
+    /* 'none' = 가구 전체 hide. 그 외 id 면 show + 변형 적용. */
+    if (cat==='sofa')  { if (id==='none') sceneSofa.style.display='none';  else { sceneSofa.style.display='';  applySofa(o); } }
+    else if (cat==='rug')   { if (id==='none') sceneRug.style.display='none';   else { sceneRug.style.display='';   applyRug(o); } }
+    else if (cat==='tower') { if (id==='none') sceneTower.style.display='none'; else { sceneTower.style.display=''; applyTower(o); } }
+    else if (cat==='theme') applyTheme(o);
   }
   function swatch(cat,o){
+    /* '적용 안함' — 빈 박스 + 슬래시 (모든 가구 카테고리 공통) */
+    if (o.id === 'none') return `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(107,93,79,.06);border-radius:8px;font-size:22px;color:var(--walnut);">⊘</div>`;
     if(cat==='theme'){
       /* 잠긴 테마는 자물쇠 + 어두운 표지 + 가격(실타래 PNG + 숫자). 기본 테마는 라이트 페이퍼. */
       if (o.id === 'default') return `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#FBF6EC,#EFE6D2);border-radius:8px;"></div>`;
@@ -546,7 +595,32 @@
   trayOptions.addEventListener('click',e=>{ const opt=e.target.closest('.opt'); if(!opt) return; apply(activeCat,opt.dataset.id); renderOptions(); });
 
   /* 고양이 배치 */
-  function placeCat(i){ const c=CATS[i]; curCase=i; catImg.src=A+c.src; catWrap.style.left=c.x+'px'; catWrap.style.bottom=c.y+'px'; catWrap.style.width=c.w+'px'; catWrap.classList.toggle('flip',!!c.flip); catShadow.style.left=c.sx+'px'; catShadow.style.bottom=c.sy+'px'; catShadow.style.width=c.sw+'px'; poseLabel.textContent=c.label; }
+  function placeCat(i){
+    const c=CATS[i]; curCase=i;
+    catImg.src=A+c.src;
+    catWrap.style.left=c.x+'px'; catWrap.style.bottom=c.y+'px'; catWrap.style.top='auto';
+    catWrap.style.width=c.w+'px'; catWrap.classList.toggle('flip',!!c.flip);
+    catShadow.style.left=c.sx+'px'; catShadow.style.bottom=c.sy+'px'; catShadow.style.top='auto';
+    catShadow.style.width=c.sw+'px';
+    poseLabel.textContent=c.label;
+    /* normalize 마크 리셋 — 다음 편집 진입 시 새 위치 기준으로 정규화 */
+    delete catWrap.dataset.ozNormalized;
+    delete catShadow.dataset.ozNormalized;
+    /* 사용자 편집 layout 이 있으면 placeCat 의 기본 위치를 덮어씀 */
+    const layout = readLayout();
+    if (layout['.cat'] && Number.isFinite(layout['.cat'].left) && Number.isFinite(layout['.cat'].top)) {
+      catWrap.style.left = layout['.cat'].left + 'px';
+      catWrap.style.top  = layout['.cat'].top + 'px';
+      catWrap.style.bottom = 'auto';
+      catWrap.dataset.ozNormalized = '1';
+    }
+    if (layout['.cat-shadow'] && Number.isFinite(layout['.cat-shadow'].left) && Number.isFinite(layout['.cat-shadow'].top)) {
+      catShadow.style.left = layout['.cat-shadow'].left + 'px';
+      catShadow.style.top  = layout['.cat-shadow'].top + 'px';
+      catShadow.style.bottom = 'auto';
+      catShadow.dataset.ozNormalized = '1';
+    }
+  }
   function refreshCat(){ let i; do{ i=Math.floor(Math.random()*CATS.length); }while(i===curCase && CATS.length>1); catWrap.style.opacity='0'; catShadow.style.opacity='0'; setTimeout(()=>{ placeCat(i); catWrap.style.opacity='1'; catShadow.style.opacity='1'; },160); }
   /* 부모(m/index.html) 가 OZ's house 진입 시 직접 호출 → 매번 랜덤 자세 */
   window.refreshCat = refreshCat;
@@ -786,12 +860,10 @@
   if (trayHandle && tray) trayHandle.addEventListener('click', () => tray.classList.toggle('expanded'));
 
   /* ════════ 가구·벽 소품 배치 편집 — 우측 상단 '편집' 토글로 진입 ════════ */
-  const EDIT_SELECTORS = ['.sofa', '.tower', '.rug', '.wall-books', '.wall-cal', '.frame', '.window'];
-  /* 부모 이동 시 같이 따라가는 자식들.
-     placard 는 부모 가구 안 자식으로 옮겨졌으므로 그룹 매핑에 안 적어도 자동으로 따라옴. */
-  const EDIT_GROUPS = {
-    '.window': ['.sill', '.sill-pot'],
-  };
+  /* 편집 대상 — 소파/캣타워/러그 + 고양이. 우측 이모지 패널(.wall-icons) 은 편집 불가. */
+  const EDIT_SELECTORS = ['.sofa', '.tower', '.rug', '.cat'];
+  /* 고양이 이동 시 그림자도 같이 */
+  const EDIT_GROUPS = { '.cat': ['.cat-shadow'] };
   const LAYOUT_KEY = 'ds.ozhouse.layout.v3';   /* v3 — 옛 placard 좌표 데이터 무시(강제 reset) */
 
   /* 편집 토글은 외부 m/index.html oz-house-screen top-bar 의 ☀️ 옆 버튼이 담당.
@@ -904,13 +976,12 @@
     }, true);
   });
 
-  /* 창문 클릭 → 밤/낮 전환 (편집 모드 아닐 때만) — 외부 ☀️ 토글 대체 */
-  document.querySelector('.window')?.addEventListener('click', (e) => {
+  /* 우측 이모지 창문 클릭 → 밤/낮 전환. 기본 테마에서만 노출(CSS) — 다른 테마면 hide 라 호출 X */
+  document.getElementById('wallWindowBtn')?.addEventListener('click', (e) => {
     if (editMode) return;
     e.stopPropagation();
     document.getElementById('room')?.classList.toggle('night');
   });
-  document.querySelector('.window').style.cursor = 'pointer';
   function saveAll(){
     const layout = {};
     EDIT_SELECTORS.forEach(sel => {
