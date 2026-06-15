@@ -10,6 +10,7 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
     let temperature: Int
     let intensity: Int
     let viewCount: Int?
+    let commentCount: Int?
     let work: Work
 
     // Original-language source text (typically English), mirroring the PWA's
@@ -62,6 +63,7 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
         case temperature
         case intensity
         case viewCount = "view_count"
+        case commentCount = "comment_count"
         case work
         case quoteOriginal = "quote_original"
         case scriptExcerptOriginal = "script_excerpt_original"
@@ -121,6 +123,7 @@ extension Card {
         temperature: 5,
         intensity: 4,
         viewCount: 12,
+        commentCount: 3,
         work: Work(
             title: "타이타닉",
             format: .movie,
