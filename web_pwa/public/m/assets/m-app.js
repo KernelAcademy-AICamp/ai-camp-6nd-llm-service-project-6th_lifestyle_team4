@@ -2757,7 +2757,8 @@ function renderDailyDate() {
   if (!el) return;
   const d = new Date();
   const days = ['일','월','화','수','목','금','토'];
-  el.textContent = `${d.getFullYear()} · ${String(d.getMonth()+1).padStart(2,'0')} · ${String(d.getDate()).padStart(2,'0')} · ${days[d.getDay()]}`;
+  const ymd = `${d.getFullYear()} · ${String(d.getMonth()+1).padStart(2,'0')} · ${String(d.getDate()).padStart(2,'0')}`;
+  el.innerHTML = `${ymd} · <span style="color:var(--cta);">${days[d.getDay()]}</span>`;
 }
 
 const NOTICE_TAG_LABEL_DAILY = { update: 'UPDATE', notice: 'NOTICE', event: 'EVENT' };
@@ -3141,11 +3142,14 @@ function renderDailyOzPick() {
     sec.style.display = 'block';
     const guestName = state.userNickname || '게스트';
     sec.innerHTML = `
-      <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">당신을 위한 Daily Script</h2>
+      <h2 class="c-espresso" style="margin:0 0 14px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
+        <span style="font-size:17px;">당신을 위한</span>
+        <span class="brand-logo" style="font-size:24px;"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
+      </h2>
       <article class="sharp-card" style="padding:20px;">
         <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
           <img src="assets/cat/library-cat-2.png" alt="오즈"
-            style="width:64px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
+            style="width:100px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
           <div style="flex:1;min-width:0;">
             <p style="margin:0 0 6px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(guestName)}</p>
             <p style="margin:0;font-size:12px;color:var(--walnut);line-height:1.6;">아직 당신의 취향을 몰라요</p>
@@ -3226,12 +3230,15 @@ function renderDailyOzPick() {
 
   sec.style.display = 'block';
   sec.innerHTML = `
-    <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">당신을 위한 Daily Script</h2>
+    <h2 class="c-espresso" style="margin:0 0 14px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
+      <span style="font-size:17px;">당신을 위한</span>
+      <span class="brand-logo" style="font-size:24px;"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
+    </h2>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
       <!-- 헤더 — 고양이 + 닉네임 + 선호(장르/주제) 메타 -->
       <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
         <img src="assets/cat/library-cat-2.png" alt="오즈"
-          style="width:64px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
+          style="width:100px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
           <p style="margin:0 0 8px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(userName)}</p>
           <p style="margin:0;font-size:11px;color:var(--walnut);line-height:1.9;">
