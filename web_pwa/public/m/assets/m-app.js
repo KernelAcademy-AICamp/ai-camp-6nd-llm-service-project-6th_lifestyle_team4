@@ -3112,15 +3112,60 @@ function renderDailyTrending() {
 function renderDailyOzPick() {
   const sec = document.getElementById('daily-section-oz');
   if (!sec) return;
+  const allCards = state.allCards || [];
+  if (allCards.length === 0) { sec.style.display = 'none'; return; }
+
+  // 행동 취향(북마크 키워드) — 선호 미설정 시 폴백용.
   const taste = new Set();
-  if (Array.isArray(state.userTasteKeywords)) state.userTasteKeywords.forEach((k) => taste.add(k));
-  if (Array.isArray(state.tasteKeywords)) state.tasteKeywords.forEach((k) => taste.add(k));
   for (const b of (state.bookmarks || [])) {
     const card = b?.cards;
     if (card?.keywords && Array.isArray(card.keywords)) card.keywords.forEach((k) => taste.add(k));
   }
-  const allCards = state.allCards || [];
-  if (allCards.length === 0) { sec.style.display = 'none'; return; }
+
+  // 사용자가 온보딩에서 직접 고른 선호.
+  const prefs = getPrefs() || {};
+  const chosenThemes = (!prefs.any && Array.isArray(prefs.themes)) ? prefs.themes.filter(Boolean) : [];
+  const chosenThemeSet = new Set(chosenThemes);
+  const chosenGenres = new Set(Array.isArray(prefs.genres) ? prefs.genres : []);
+  const userName = state.userNickname || state.userLoginId || '오즈';
+
+  // 가입 안 한 첫 방문자(익명) + 선호 미설정 → 개인화 창으로 유도.
+  if (state.isAnonymous && !hasActivePrefs(prefs)) {
+    sec.style.display = 'block';
+    const guestName = state.userNickname || '게스트';
+    sec.innerHTML = `
+      <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">당신을 위한 Daily Script</h2>
+      <article class="sharp-card" style="padding:20px;">
+        <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
+          <img src="assets/cat/library-cat-2.png" alt="오즈"
+            style="width:64px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
+          <div style="flex:1;min-width:0;">
+            <p style="margin:0 0 6px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(guestName)}</p>
+            <p style="margin:0;font-size:12px;color:var(--walnut);line-height:1.6;">아직 당신의 취향을 몰라요</p>
+          </div>
+        </div>
+        <div style="background:var(--latte);border:0.5px solid var(--sand);padding:14px 16px;margin-bottom:16px;border-radius:8px;">
+          <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.6;">좋아하는 장르와 주제만 알려주시면, 오즈가 매일 딱 맞는 한 문장을 골라드려요.</p>
+        </div>
+        <button id="oz-personalize-btn" type="button"
+          style="width:100%;padding:13px;background:var(--cta);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">취향 알려주기</button>
+      </article>
+      <div style="height:36px;"></div>
+    `;
+    sec.querySelector('#oz-personalize-btn')?.addEventListener('click', () => {
+      track('oz_personalize_cta');
+      runPreferenceFlow();
+    });
+    return;
+  }
+
+  // 카드가 사용자가 고른 주제에 닿는지 — card-theme 분류기로 카드 키워드→주제 집합 후 교집합.
+  const matchedChosenTheme = (card) => {
+    if (!chosenThemeSet.size || typeof cardThemeSet !== 'function') return null;
+    const themes = cardThemeSet(card.keywords || []);
+    for (const t of themes) if (chosenThemeSet.has(t)) return t;
+    return null;
+  };
 
   // 하루 1개 — localStorage 에 date+card_id 캐시. 같은 날짜면 같은 카드, 0시에 갱신.
   const OZ_DAILY_KEY = 'ds.oz.daily';
@@ -3133,48 +3178,56 @@ function renderDailyOzPick() {
     }
   } catch { /* ignore */ }
 
-  // 취향(북마크 키워드)이 생긴 뒤엔 취향과 겹치는 카드로 한 번 승급 — 취향이 없던 시점에
-  // 캐시된 비매칭 카드가 그날 내내 고정돼 "당신이라면" 개인화 문구가 안 뜨던 문제 방지.
-  if (pick && taste.size > 0 && !(pick.keywords || []).some((k) => taste.has(k))) {
-    pick = null;
+  // 캐시 검증 — 고른 주제가 있는데 캐시 카드가 그 주제에 안 닿으면(또는 취향 키워드 불일치) 다시 뽑는다.
+  if (pick) {
+    if (chosenThemeSet.size) { if (!matchedChosenTheme(pick)) pick = null; }
+    else if (taste.size > 0 && !(pick.keywords || []).some((k) => taste.has(k))) pick = null;
   }
 
   if (!pick) {
-    const matched = allCards.filter((card) => {
-      const kws = Array.isArray(card.keywords) ? card.keywords : [];
-      return kws.some((k) => taste.has(k));
-    });
-    const pool = matched.length > 0 ? matched : allCards;
+    let pool;
+    if (chosenThemeSet.size) {
+      let matched = allCards.filter((c) => matchedChosenTheme(c));
+      if (chosenGenres.size) {
+        const both = matched.filter((c) => chosenGenres.has(c.works && c.works.format));
+        if (both.length) matched = both;  // 주제+장르 둘 다 맞으면 우선
+      }
+      pool = matched.length ? matched : allCards;
+    } else if (taste.size > 0) {
+      const matched = allCards.filter((c) => (c.keywords || []).some((k) => taste.has(k)));
+      pool = matched.length ? matched : allCards;
+    } else {
+      pool = allCards;
+    }
     pick = pool[Math.floor(Math.random() * pool.length)];
     if (pick) safeStorageSet(OZ_DAILY_KEY, JSON.stringify({ date: todayKey, cardId: pick.card_id }));
   }
   if (!pick) { sec.style.display = 'none'; return; }
-  const matchedKw = (pick.keywords || []).find((k) => taste.has(k));
-  const reason = matchedKw
-    ? `'${matchedKw}'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
-    : '오즈가 오늘 골라드린 한 문장이에요.';
+
+  // 추천 한마디 — 고른 주제 > 행동 취향 > 일반 순으로 개인화.
+  const themeHit = matchedChosenTheme(pick);
+  const tasteHit = (pick.keywords || []).find((k) => taste.has(k));
+  const reason = themeHit
+    ? `'${themeHit}' 주제를 고르신 당신을 위해 오즈가 골랐어요.`
+    : tasteHit
+      ? `'${tasteHit}'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
+      : '오즈가 오늘 골라드린 한 문장이에요.';
   const work = pick.works || {};
-  // 사용자 선호 메타 — 온보딩에서 직접 고른 장르/주제를 보여준다(뽑힌 작품 속성 아님).
-  const prefs = getPrefs() || {};
-  const genreText = (Array.isArray(prefs.genres) && prefs.genres.length)
-    ? prefs.genres.map((g) => GENRE_LABEL[g] || g).join(', ')
-    : '상관없음';
-  const themeText = prefs.any
-    ? '상관없음'
-    : (Array.isArray(prefs.themes) && prefs.themes.length ? prefs.themes.join(', ') : '상관없음');
-  const userName = state.userLoginId || state.userNickname || '오즈';
+  // 선호 메타 표시용 — 고른 장르/주제(없으면 상관없음).
+  const genreText = chosenGenres.size ? [...chosenGenres].map((g) => GENRE_LABEL[g] || g).join(', ') : '상관없음';
+  const themeText = prefs.any ? '상관없음' : (chosenThemes.length ? chosenThemes.join(', ') : '상관없음');
 
   sec.style.display = 'block';
   sec.innerHTML = `
     <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">당신을 위한 Daily Script</h2>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
-      <!-- 헤더 — 고양이 + 사용자 아이디 + 선호(장르/주제) 메타 -->
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-        <img src="assets/cat/cat_shelf_few.png" alt="오즈"
-          style="width:72px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
+      <!-- 헤더 — 고양이 + 닉네임 + 선호(장르/주제) 메타 -->
+      <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
+        <img src="assets/cat/library-cat-2.png" alt="오즈"
+          style="width:64px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
-          <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(userName)}</p>
-          <p style="margin:6px 0 0;font-size:11px;color:var(--walnut);line-height:1.7;">
+          <p style="margin:0 0 8px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(userName)}</p>
+          <p style="margin:0;font-size:11px;color:var(--walnut);line-height:1.9;">
             <strong style="color:var(--espresso);">당신의 취향</strong><br>
             <strong style="color:var(--espresso);">장르</strong> : ${escapeHtml(genreText)}<br>
             <strong style="color:var(--espresso);">주제</strong> : ${escapeHtml(themeText)}
@@ -4812,6 +4865,24 @@ async function maybeShowPreferences() {
     skipped: !!result.skipped,
   });
   return true;
+}
+
+// 온디맨드 개인화 — 오즈 카드의 '취향 알려주기' CTA 에서 호출. 결과 저장 후 섹션 재렌더.
+async function runPreferenceFlow() {
+  if (!document.getElementById('pref-screen')) return;
+  await preferencesReady;
+  const result = await startPreferenceFlow();
+  if (!result) return;
+  const pref = { genres: result.genres || [], themes: result.themes || [], any: !!result.any };
+  try { safeStorageSet(PREF_DATA_KEY, JSON.stringify({ ...pref, ts: Date.now() })); }
+  catch (e) { console.warn('[m] pref save failed:', e); }
+  safeStorageSet(PREF_SELECTED_KEY, '1');
+  savePreferencesToDb(pref);  // 로그인 상태면 서버에도 저장(익명이면 로컬만)
+  track('preferences_set', {
+    genreCount: pref.genres.length, themeCount: pref.themes.length,
+    any: pref.any, skipped: !!result.skipped, source: 'oz_cta',
+  });
+  renderDailyOzPick();
 }
 
 // 첫 진입 시 1회 자동 노출. 띄웠으면 true 반환 → 같은 부팅에서 랜딩 로그인 유도는 미룬다.
