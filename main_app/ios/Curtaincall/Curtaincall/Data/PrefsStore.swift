@@ -17,6 +17,9 @@ final class PrefsStore: ObservableObject {
         static let prefGenres = "ds.prefGenres"
         static let prefThemes = "ds.prefThemes"
         static let prefAny = "ds.prefAny"
+        // Daily Oz pick cache (PWA/Android AppPreferences.ozDailyCardId).
+        static let ozDailyDate = "ds.ozDailyDate"
+        static let ozDailyCardId = "ds.ozDailyCardId"
     }
 
     @Published var pushEnabled: Bool { didSet { d.set(pushEnabled, forKey: Key.push) } }
@@ -65,5 +68,18 @@ final class PrefsStore: ObservableObject {
         cur.append(cardId)
         if cur.count > 10 { cur.removeFirst(cur.count - 10) }
         recentlyShown = cur
+    }
+
+    // Daily Oz pick — one card cached per calendar day (keyed by a yyyy-MM-dd
+    // string), mirroring Android `AppPreferences.ozDailyCardId/setOzDailyCard`.
+    func ozDailyCardId(today: String) -> Int? {
+        guard d.string(forKey: Key.ozDailyDate) == today else { return nil }
+        let id = d.integer(forKey: Key.ozDailyCardId)
+        return id == 0 ? nil : id
+    }
+
+    func setOzDailyCard(today: String, cardId: Int) {
+        d.set(today, forKey: Key.ozDailyDate)
+        d.set(cardId, forKey: Key.ozDailyCardId)
     }
 }

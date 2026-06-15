@@ -372,3 +372,194 @@ struct DailyContextualSection: View {
         }
     }
 }
+
+// MARK: - Trending
+
+/// Compact count formatting (Android `formatCount`): raw under 1000, else "k"
+/// with one decimal below 10k.
+func formatCount(_ n: Int?) -> String {
+    let v = max(0, n ?? 0)
+    if v < 1000 { return String(v) }
+    let k = Double(v) / 1000.0
+    if k >= 10 { return "\(Int(k.rounded()))k" }
+    return "\((k * 10).rounded() / 10.0)k"
+}
+
+struct DailyTrendingSection: View {
+    let cards: [Card]
+    /// Bookmark counts for the full set (existing `fetchBookmarkCounts`).
+    let bookmarkCounts: [Int: Int]
+    /// Open the full library/list — reuses existing navigation (tab switch).
+    let onOpenAll: () -> Void
+
+    private struct Ranked: Identifiable {
+        let card: Card
+        let bookmarks: Int
+        let comments: Int
+        let views: Int
+        let score: Int
+        var id: Int { card.cardId }
+    }
+
+    var body: some View {
+        let scored: [Ranked] = cards
+            .filter { !$0.quote.isEmpty }
+            .map { card in
+                let bm = bookmarkCounts[card.cardId] ?? 0
+                let cm = card.commentCount ?? 0
+                let vw = card.viewCount ?? 0
+                return Ranked(card: card, bookmarks: bm, comments: cm, views: vw, score: bm * 10 + cm * 5 + vw)
+            }
+            .sorted { $0.score != $1.score ? $0.score > $1.score : $0.card.cardId > $1.card.cardId }
+        let top = Array(scored.prefix(3))
+        if !top.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("이번 주 인기 대사")
+                        .font(.headlineSerif(22))
+                        .foregroundStyle(.espresso)
+                    Spacer()
+                    Button(action: onOpenAll) {
+                        Text("전체 ›")
+                            .font(.bodySans(13))
+                            .foregroundStyle(.walnut)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer().frame(height: 14)
+                ForEach(Array(top.enumerated()), id: \.element.id) { index, item in
+                    NavigationLink(value: item.card) {
+                        HStack(alignment: .top, spacing: 14) {
+                            Text("\(index + 1)")
+                                .font(.headlineSerif(22))
+                                .foregroundStyle(.espresso)
+                                .frame(width: 20, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("\"\(String(cleanDiscoveryQuote(item.card.quote).prefix(80)))\"")
+                                    .font(.titleSerif(14))
+                                    .foregroundStyle(.espresso)
+                                    .bookLeading(size: 14)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text("북마크 \(formatCount(item.bookmarks))   조회 \(formatCount(item.views))   댓글 \(formatCount(item.comments))")
+                                    .font(.bodySans(12))
+                                    .foregroundStyle(.walnut)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 14)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Rectangle().fill(Color.latte).frame(height: 0.5)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Oz Pick
+
+/// Choose the daily Oz card: prefer a card whose keywords intersect the user's
+/// bookmark-keyword "taste", else any card. Cached once per calendar day, but
+/// re-promoted to a taste-matching card once taste exists (Android
+/// `DailyViewModel.chooseOzPick`). `today` is a yyyy-MM-dd string.
+@MainActor
+func chooseOzPick(cards: [Card], taste: Set<String>, prefs: PrefsStore, today: String) -> Card? {
+    guard !cards.isEmpty else { return nil }
+    if let id = prefs.ozDailyCardId(today: today),
+       let cached = cards.first(where: { $0.cardId == id }),
+       taste.isEmpty || cached.keywords.contains(where: { taste.contains($0) }) {
+        return cached
+    }
+    let matched = taste.isEmpty ? [] : cards.filter { card in card.keywords.contains { taste.contains($0) } }
+    let pick = (matched.isEmpty ? cards : matched).randomElement()
+    if let pick { prefs.setOzDailyCard(today: today, cardId: pick.cardId) }
+    return pick
+}
+
+struct DailyOzPickSection: View {
+    let card: Card
+    /// The user's bookmark-keyword taste — drives the personalized reason line.
+    let taste: Set<String>
+
+    var body: some View {
+        let matched = card.keywords.first { taste.contains($0) }
+        let reason = matched.map { "'\($0)'에 자주 머무는 당신이라면, 좋아할 한 문장이에요." }
+            ?? "오즈가 오늘 골라드린 한 문장이에요."
+        let work = card.work
+        let meta = ["당신의 취향", work.format.displayName.isEmpty ? nil : work.format.displayName, matched]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+
+        VStack(alignment: .leading, spacing: 0) {
+            Text("오즈의 오늘의 추천")
+                .font(.headlineSerif(22))
+                .foregroundStyle(.espresso)
+            Spacer().frame(height: 14)
+            NavigationLink(value: card) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Header — 오즈 label + meta. The Android cat image is optional
+                    // and not bundled on iOS, so it's simply omitted.
+                    HStack(spacing: 12) {
+                        if let catImage = UIImage(named: "cat_shelf_few") {
+                            Image(uiImage: catImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 72)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("오즈")
+                                .font(.bodySans(14))
+                                .fontWeight(.bold)
+                                .foregroundStyle(.espresso)
+                            Text(meta)
+                                .font(.bodySans(11))
+                                .foregroundStyle(.walnut)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    Spacer().frame(height: 14)
+                    Text(reason)
+                        .font(.titleSerif(13))
+                        .foregroundStyle(.espresso)
+                        .bookLeading(size: 13)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.latte))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.sand, lineWidth: 0.5))
+                    Spacer().frame(height: 14)
+                    HStack(alignment: .top, spacing: 12) {
+                        HighlightBookCover(work: work)
+                            .scaleEffect(56.0 / 132.0, anchor: .center)
+                            .frame(width: 56, height: 188 * 56 / 132)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(work.title.isEmpty ? "—" : work.title)
+                                .font(.titleSerif(15))
+                                .fontWeight(.bold)
+                                .foregroundStyle(.espresso)
+                                .lineLimit(2)
+                            let line = [work.author, work.releaseYear.map(String.init)]
+                                .compactMap { $0 }
+                                .filter { !$0.isEmpty }
+                                .joined(separator: " · ")
+                            if !line.isEmpty {
+                                Text(line)
+                                    .font(.bodySans(13))
+                                    .foregroundStyle(.walnut)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color.paper))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
