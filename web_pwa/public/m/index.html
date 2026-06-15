@@ -312,7 +312,7 @@
     -webkit-user-drag: none;
   }
   .bottom-nav .nav-item.nav-home-center.active { color: var(--espresso); }
-  .bottom-nav .nav-item.nav-home-center.active .nav-home-circle { border-color: var(--cta); }
+  /* active 주황 링 제거 — 노른자 둘레 테두리 항상 투명 */
   .bottom-nav .nav-item.nav-home-center .nav-dot { display: none; }
 
   /* LIBRARY 4열 그리드 (안드 LibraryScreen BookGrid GridCells.Fixed(4) 매칭).
@@ -1374,40 +1374,19 @@
     white-space: nowrap;
     /* cat 머리(≈ 158px) 바로 위에 붙는 말풍선 — gap ~2px */
     bottom: calc(160px + env(safe-area-inset-bottom)); z-index: 53;
-    background: var(--paper);
-    color: var(--espresso);
-    border: 1.5px solid var(--espresso);
+    background: var(--cta);
+    color: #FFFDF7;
+    border: none;
     cursor: pointer;
+    width: 52px; height: 52px;
     display: none; align-items: center; justify-content: center;
-    padding: 7px 14px;
-    border-radius: 18px;
-    font-family: 'Noto Sans KR', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    box-shadow: 0 4px 12px rgba(14,12,10,0.18);
+    padding: 0;
+    border-radius: 50%;
+    box-shadow: 0 4px 14px rgba(216,90,48,0.38);
     transition: transform 120ms;
   }
-  #feed-fab:active { transform: scale(0.96); }
-  /* 말풍선 꼬리 — 우측 아래(고양이 방향)로 향하는 작은 삼각 */
-  #feed-fab::after {
-    content: '';
-    position: absolute;
-    right: 14px; bottom: -8px;
-    width: 0; height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-top: 8px solid var(--espresso);
-  }
-  #feed-fab::before {
-    content: '';
-    position: absolute;
-    right: 15px; bottom: -6px;
-    width: 0; height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 7px solid var(--paper);
-    z-index: 1;
-  }
+  #feed-fab .material-symbols-outlined { font-size: 24px; line-height: 1; }
+  #feed-fab:active { transform: scale(0.94); }
   /* Feed overlays (picker + compose) — modal pattern */
   .feed-sheet {
     background: var(--paper); width: 100%; max-width: 460px;
@@ -1856,8 +1835,8 @@
     <div style="height:40px;"></div>
   </section>
 
-  <!-- Feed 글쓰기 — 말풍선 + nav 고양이가 말하는 것처럼 (사용자 명세) -->
-  <button id="feed-fab" aria-label="글쓰기">글쓰기</button>
+  <!-- Feed 글쓰기 — 원형 연필 FAB -->
+  <button id="feed-fab" aria-label="글쓰기"><span class="material-symbols-outlined">edit</span></button>
 
   <!-- ===== Notice view (공지사항) ===== -->
   <section id="view-notice" style="display:none;">
