@@ -676,17 +676,24 @@
   /* 사용자 명세: 진입마다 랜덤 자세 */
   placeCat(Math.floor(Math.random() * CATS.length));
 
-  /* viewport 에 맞춰 .room cover scale */
+  /* viewport 에 맞춰 .room scale.
+     사용자 명세: 브라우저(주소창 포함) 에서 비율 깨짐 → cover 대신 contain 으로 변경.
+     - contain(Math.min) = 가구/UI 비율 그대로 보존, 빈 영역은 paper 색
+     - cover(Math.max) 였을 때는 height 가 비표준이면 가구가 너무 크게 확대돼 잘려 보임 */
   function fitOzHouse(){
     const s = document.querySelector('.screen');
     if (!s) return;
     const w = s.clientWidth || window.innerWidth;
     const h = s.clientHeight || window.innerHeight;
-    const scale = Math.max(w / 390, h / 844);
+    const scale = Math.min(w / 390, h / 844);
     s.style.setProperty('--oz-scale', scale);
   }
   fitOzHouse();
   window.addEventListener('resize', fitOzHouse);
+  /* 브라우저 주소창 토글/크기 변경/지연 레이아웃 대응 — 여러 시점에 한 번 더 보정 */
+  window.addEventListener('orientationchange', () => setTimeout(fitOzHouse, 80));
+  window.addEventListener('load', () => setTimeout(fitOzHouse, 60));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) fitOzHouse(); });
 
   /* 트레이 핸들 토글 */
   const tray = document.getElementById('tray');
