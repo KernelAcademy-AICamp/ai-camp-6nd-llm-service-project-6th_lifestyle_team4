@@ -2,6 +2,13 @@
 import { getSupabase } from '/assets/supabase-client.js';
 /* OZ's house iframe 이 부모의 Supabase 클라이언트에 접근하기 위해 window 에 노출 */
 window.getSupabase = getSupabase;
+/* 이미지 다운로드 방지 — 우클릭(contextmenu) + 드래그 차단. 완벽한 보호는 아님(DevTools/네트워크 캐시로는 추출 가능) */
+document.addEventListener('contextmenu', (e) => {
+  if (e.target && (e.target.tagName === 'IMG' || (e.target.closest && e.target.closest('img')))) e.preventDefault();
+}, true);
+document.addEventListener('dragstart', (e) => {
+  if (e.target && e.target.tagName === 'IMG') e.preventDefault();
+}, true);
 /* OZ's house 시트 항목(북마크/댓글/감상평/하이라이트) 클릭 시 부모의 카드 상세로 이동 */
 window.openCardById = (cardId) => {
   const cid = Number(cardId);

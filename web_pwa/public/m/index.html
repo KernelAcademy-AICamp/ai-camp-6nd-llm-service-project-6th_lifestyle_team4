@@ -477,6 +477,8 @@
   /* main 영역(home/library/feed/notice/settings) padding-bottom 으로 bottom-nav 가림 방지 */
   /* main 하단 여백 — 마지막 섹션 안 36 spacer + 이 padding 30 + safe 합이 nav body 회피 */
   main { padding: 0 20px calc(30px + env(safe-area-inset-bottom)); }
+  /* 이미지 다운로드 방지 — 드래그/길게 누르기 메뉴/선택 차단 (DevTools 우회는 막을 수 없음) */
+  img { -webkit-user-drag: none !important; user-drag: none !important; -webkit-touch-callout: none !important; user-select: none !important; -webkit-user-select: none !important; }
   /* 브라우저(스탠드얼론 PWA 아님)에서는 env(safe-area-inset-bottom)=0 이라
      bottom-nav / feed-fab / cat 위치가 PWA 웹앱보다 아래로 보임.
      iOS 홈 인디케이터 영역(약 36px) 만큼 동일 보정해 두 모드 시각이 같아지도록. */

@@ -66,6 +66,19 @@
   .room.theme-moby-dick .lightbeam{ background:none !important; box-shadow:none !important; }
   .room.theme-moby-dick .wall::before{ background:none !important; }
 
+  /* ── 테마: 위대한 개츠비 ── 야간 무도회 + 호수 풍경 한 장으로 룸 전체를 대체 */
+  .room.theme-gatsby{
+    background-image: url('assets/oz-themes/Gatsby.png');
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+  .room.theme-gatsby .wall,
+  .room.theme-gatsby .baseboard,
+  .room.theme-gatsby .floor,
+  .room.theme-gatsby .lightbeam{ background:none !important; box-shadow:none !important; }
+  .room.theme-gatsby .wall::before{ background:none !important; }
+
   /* ── 밤 모드 ── */
   .room.night .wall{ background:linear-gradient(180deg,#28324c 0%, #303b56 60%, #36415e 100%); }
   .room.night .wall::before{ background:radial-gradient(circle at 62% 26%, rgba(190,205,255,.20) 0%, rgba(190,205,255,0) 66%); }
@@ -158,6 +171,8 @@
   .yarn{ position:absolute; left:210px; bottom:150px; width:30px; height:30px; z-index:5; }
   .yarn img{ width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; box-shadow:0 2px 6px rgba(60,38,18,.25); }
   .yarn-chip img{ width:18px; height:18px; object-fit:cover; border-radius:50%; display:block; }
+  /* 이미지 다운로드 방지 — 드래그/선택/길게 누르기 메뉴 차단 */
+  img { -webkit-user-drag:none !important; user-drag:none !important; -webkit-touch-callout:none !important; user-select:none !important; -webkit-user-select:none !important; }
   .yarn svg{ display:block; filter:drop-shadow(0 3px 4px rgba(0,0,0,.2)); }
 
   /* ── 고양이 (동적) ── */
@@ -230,7 +245,8 @@
     pointer-events:none; user-select:none;
   }
   .room.night .oz-theme-label,
-  .room.theme-moby-dick .oz-theme-label{ color:rgba(255,255,255,.92); text-shadow:0 1px 3px rgba(0,0,0,.4); }
+  .room.theme-moby-dick .oz-theme-label,
+  .room.theme-gatsby .oz-theme-label{ color:rgba(255,255,255,.92); text-shadow:0 1px 3px rgba(0,0,0,.4); }
   .yarn-chip i{ width:11px; height:11px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F); display:inline-block; }
   .tray-options{ display:flex; gap:10px; margin-top:11px; overflow-x:auto; padding-bottom:2px; }
   .opt{ flex:none; width:64px; cursor:pointer; text-align:center; }
@@ -511,13 +527,37 @@
   /* m/ 폴더 기준 직접 참조 (mockups/ 경로의 ../web_pwa/... 가 아님) */
   const A = 'assets/cat/';
 
+  /* 이미지 다운로드 방지 — 우클릭/드래그 차단 (iframe 안 별도 document) */
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target && (e.target.tagName === 'IMG' || (e.target.closest && e.target.closest('img')))) e.preventDefault();
+  }, true);
+  document.addEventListener('dragstart', (e) => {
+    if (e.target && e.target.tagName === 'IMG') e.preventDefault();
+  }, true);
+
   /* 가구 변형 */
   const DECOR = {
     theme: [
       { id:'default',   name:'기본',          nameEn:'Normal',            locked:false, price:0,   hint:'기본 테마' },
       { id:'moby-dick', name:'모비딕',         nameEn:'Moby-Dick',         locked:false, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
       { id:'demian',    name:'데미안',         nameEn:'Demian',            locked:true,  price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
-      { id:'gatsby',    name:'위대한 개츠비',  nameEn:'The Great Gatsby',  locked:true,  price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      { id:'gatsby',         name:'위대한 개츠비',           nameEn:'The Great Gatsby',                 locked:true, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      /* ── 이미지 추가 예정. 모두 잠김 + 실타래 200 ── */
+      { id:'around-world',   name:'80일 간의 세계일주',       nameEn:'Around the World in Eighty Days',  locked:true, price:200, hint:"실타래 200개 / 또는 책 '80일 간의 세계일주'의 모든 카드를 다 읽으면 해금" },
+      { id:'gullivers',      name:'걸리버 여행기',            nameEn:"Gulliver's Travels",               locked:true, price:200, hint:"실타래 200개 / 또는 책 '걸리버 여행기'의 모든 카드를 다 읽으면 해금" },
+      { id:'notre-dame',     name:'노트르담 드 파리',         nameEn:'Notre-Dame de Paris',              locked:true, price:200, hint:"실타래 200개 / 또는 책 '노트르담 드 파리'의 모든 카드를 다 읽으면 해금" },
+      { id:'metamorphosis',  name:'변신',                     nameEn:'The Metamorphosis',                locked:true, price:200, hint:"실타래 200개 / 또는 책 '변신'의 모든 카드를 다 읽으면 해금" },
+      { id:'sherlock',       name:'셜록 홈즈',                nameEn:'Sherlock Holmes',                  locked:true, price:200, hint:"실타래 200개 / 또는 책 '셜록 홈즈'의 모든 카드를 다 읽으면 해금" },
+      { id:'divine-comedy',  name:'신곡',                     nameEn:'Divine Comedy',                    locked:true, price:200, hint:"실타래 200개 / 또는 책 '신곡'의 모든 카드를 다 읽으면 해금" },
+      { id:'siddhartha',     name:'싯다르타',                 nameEn:'Siddhartha',                       locked:true, price:200, hint:"실타래 200개 / 또는 책 '싯다르타'의 모든 카드를 다 읽으면 해금" },
+      { id:'phantom-opera',  name:'오페라의 유령',            nameEn:'The Phantom of the Opera',         locked:true, price:200, hint:"실타래 200개 / 또는 책 '오페라의 유령'의 모든 카드를 다 읽으면 해금" },
+      { id:'romeo-juliet',   name:'로미오와 줄리엣',          nameEn:'Romeo and Juliet',                 locked:true, price:200, hint:"실타래 200개 / 또는 책 '로미오와 줄리엣'의 모든 카드를 다 읽으면 해금" },
+      { id:'alice',          name:'이상한 나라의 앨리스',     nameEn:"Alice's Adventures in Wonderland", locked:true, price:200, hint:"실타래 200개 / 또는 책 '이상한 나라의 앨리스'의 모든 카드를 다 읽으면 해금" },
+      { id:'jungle-book',    name:'정글북',                   nameEn:'The Jungle Book',                  locked:true, price:200, hint:"실타래 200개 / 또는 책 '정글북'의 모든 카드를 다 읽으면 해금" },
+      { id:'king-arthur',    name:'아서왕',                   nameEn:'King Arthur',                      locked:true, price:200, hint:"실타래 200개 / 또는 책 '아서왕'의 모든 카드를 다 읽으면 해금" },
+      { id:'frankenstein',   name:'프랑켄슈타인',             nameEn:'Frankenstein',                     locked:true, price:200, hint:"실타래 200개 / 또는 책 '프랑켄슈타인'의 모든 카드를 다 읽으면 해금" },
+      { id:'peter-pan',      name:'피터 팬',                  nameEn:'Peter Pan',                        locked:true, price:200, hint:"실타래 200개 / 또는 책 '피터 팬'의 모든 카드를 다 읽으면 해금" },
+      { id:'midsummer',      name:'한여름 밤의 꿈',           nameEn:"A Midsummer Night's Dream",        locked:true, price:200, hint:"실타래 200개 / 또는 책 '한여름 밤의 꿈'의 모든 카드를 다 읽으면 해금" },
     ],
     sofa: [
       { id:'none', name:'적용 안함' },
@@ -582,22 +622,67 @@
       if (id && DECOR.theme.find(t => t.id === id && !t.locked)) state.theme = id;
     } catch {}
   }
+  /* 테마 구매 기록 — 'default' 는 기본 보유, 사용자가 200실타래로 구매하면 추가 */
+  const THEME_PURCHASED_KEY = 'ds.ozhouse.theme.purchased';
+  function getPurchasedThemes(){
+    try {
+      const raw = JSON.parse((window.parent.localStorage || localStorage).getItem(THEME_PURCHASED_KEY) || '["default"]');
+      return Array.isArray(raw) && raw.length ? raw : ['default'];
+    } catch { return ['default']; }
+  }
+  function addPurchasedTheme(id){
+    const list = getPurchasedThemes();
+    if (!list.includes(id)) {
+      list.push(id);
+      try { (window.parent.localStorage || localStorage).setItem(THEME_PURCHASED_KEY, JSON.stringify(list)); } catch {}
+    }
+  }
+
   function apply(cat,id){
     const o=DECOR[cat].find(x=>x.id===id); if(!o) return;
+    /* 테마: 해금/구매 흐름 — locked(미해금) → 안내. 해금(미구매) → 구매 팝업. 구매됨 → 즉시 적용. */
+    if (cat === 'theme') {
+      if (o.id === 'default') { state[cat] = id; applyTheme(o); return; }
+      if (o.locked) {
+        alert(`'${o.name}' 은(는) 아직 해금되지 않았어요.\n책의 모든 카드를 다 읽으면 해금돼요.`);
+        return;
+      }
+      const purchased = getPurchasedThemes();
+      if (!purchased.includes(o.id)) {
+        const ok = confirm(`'${o.name}' 을(를) 구매하시겠습니까?\n실타래 ${o.price}개가 사용됩니다.`);
+        if (!ok) return;
+        addPurchasedTheme(o.id);
+        /* TODO: 실타래 차감(parent.state.yarnPurchased -= price + Supabase RPC) — 서버 RPC 준비 시 연결 */
+      }
+      state[cat] = id;
+      applyTheme(o);
+      return;
+    }
     if (o.locked) return;
     state[cat]=id;
     /* 'none' = 가구 전체 hide. 그 외 id 면 show + 변형 적용. */
     if (cat==='sofa')  { if (id==='none') sceneSofa.style.display='none';  else { sceneSofa.style.display='';  applySofa(o); } }
     else if (cat==='rug')   { if (id==='none') sceneRug.style.display='none';   else { sceneRug.style.display='';   applyRug(o); } }
     else if (cat==='tower') { if (id==='none') sceneTower.style.display='none'; else { sceneTower.style.display=''; applyTower(o); } }
-    else if (cat==='theme') applyTheme(o);
   }
+  /* 테마 id → swatch/배경 미니어처 이미지 경로. 등록 안 된 id 는 이미지 없음(자물쇠 표시). */
+  const THEME_IMG = {
+    'moby-dick': 'assets/oz-themes/Mobydick.png',
+    'gatsby':    'assets/oz-themes/Gatsby.png',
+  };
+
   function swatch(cat,o){
-    /* '적용 안함' — 빈 박스 + 슬래시 (모든 가구 카테고리 공통) */
     if (o.id === 'none') return `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(107,93,79,.06);border-radius:8px;font-size:22px;color:var(--walnut);">⊘</div>`;
     if(cat==='theme'){
-      /* 잠긴 테마는 자물쇠 + 어두운 표지 + 가격(실타래 PNG + 숫자). 기본 테마는 라이트 페이퍼. */
+      /* 기본 — 라이트 페이퍼 */
       if (o.id === 'default') return `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#FBF6EC,#EFE6D2);border-radius:8px;"></div>`;
+      /* 해금됨(locked:false) — 자물쇠/가격 칩 제거하고 테마 이미지 미니어처만 (이미지 없으면 라이트 폴백) */
+      if (!o.locked) {
+        const img = THEME_IMG[o.id];
+        if (img) return `<div style="position:absolute;inset:0;background-image:url('${img}');background-size:cover;background-position:center;border-radius:8px;"></div>`;
+        return `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#EFE6D2,#DDD2B8);border-radius:8px;"></div>`;
+      }
+      /* 잠김 — 어두운 표지 + 🔒 + 가격(실타래) 칩 */
       return `
         <div style="position:absolute;inset:0;background:rgba(60,38,18,.18);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">🔒</div>
         <div style="position:absolute;left:50%;bottom:3px;transform:translateX(-50%);display:inline-flex;align-items:center;gap:3px;background:rgba(14,12,10,.78);color:#FBF6EC;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;line-height:1;">
