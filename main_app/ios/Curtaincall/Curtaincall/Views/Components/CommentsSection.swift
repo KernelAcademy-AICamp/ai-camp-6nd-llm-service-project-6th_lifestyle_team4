@@ -10,6 +10,41 @@ struct ComposerFocusedPreferenceKey: PreferenceKey {
     }
 }
 
+/// Pluggable comment data source so the comment model + UI serve both
+/// `card_comments` (CardDetail) and `card_highlight_comments` (HighlightDetail)
+/// with no duplication. The `.card` factory calls the exact same `Supa` methods
+/// with the same args as before, so existing CardDetail comments are unchanged.
+struct CommentBackend {
+    let load: () async throws -> [Comment]
+    let loadLikes: (_ commentIds: [Int]) async throws -> [CommentLike]
+    let add: (_ userId: Int, _ body: String, _ nickname: String?, _ parentId: Int?) async throws -> Comment
+    let setLike: (_ commentId: Int, _ userId: Int, _ liked: Bool) async throws -> Void
+    let delete: (_ commentId: Int, _ userId: Int) async throws -> Void
+    let update: (_ commentId: Int, _ userId: Int, _ body: String) async throws -> Comment
+
+    static func card(_ cardId: Int) -> CommentBackend {
+        CommentBackend(
+            load: { try await Supa.shared.loadComments(cardId: cardId) },
+            loadLikes: { try await Supa.shared.loadLikes(commentIds: $0) },
+            add: { try await Supa.shared.addComment(cardId: cardId, userId: $0, body: $1, authorNickname: $2, parentCommentId: $3) },
+            setLike: { try await Supa.shared.setLike(commentId: $0, userId: $1, liked: $2) },
+            delete: { try await Supa.shared.deleteComment(commentId: $0, userId: $1) },
+            update: { try await Supa.shared.updateComment(commentId: $0, userId: $1, body: $2) }
+        )
+    }
+
+    static func highlight(_ highlightId: Int) -> CommentBackend {
+        CommentBackend(
+            load: { try await Supa.shared.loadHighlightComments(highlightId: highlightId) },
+            loadLikes: { try await Supa.shared.loadHighlightCommentLikes(commentIds: $0) },
+            add: { try await Supa.shared.addHighlightComment(highlightId: highlightId, userId: $0, body: $1, authorNickname: $2, parentCommentId: $3) },
+            setLike: { try await Supa.shared.setHighlightCommentLike(commentId: $0, userId: $1, liked: $2) },
+            delete: { try await Supa.shared.deleteHighlightComment(commentId: $0, userId: $1) },
+            update: { try await Supa.shared.updateHighlightComment(commentId: $0, userId: $1, body: $2) }
+        )
+    }
+}
+
 @MainActor
 final class CommentsModel: ObservableObject {
     @Published var comments: [Comment] = []
@@ -19,14 +54,14 @@ final class CommentsModel: ObservableObject {
     @Published var replyingTo: Comment?
     @Published var editingCommentId: Int?
 
-    private let cardId: Int
-    init(cardId: Int) { self.cardId = cardId }
+    private let backend: CommentBackend
+    init(backend: CommentBackend) { self.backend = backend }
 
     func load() async {
         do {
-            let cs = try await Supa.shared.loadComments(cardId: cardId)
+            let cs = try await backend.load()
             comments = cs
-            let rows = try await Supa.shared.loadLikes(commentIds: cs.map { $0.commentId })
+            let rows = try await backend.loadLikes(cs.map { $0.commentId })
             var map: [Int: Set<Int>] = [:]
             for r in rows { map[r.commentId, default: []].insert(r.userId) }
             likes = map
@@ -41,12 +76,11 @@ final class CommentsModel: ObservableObject {
         guard !trimmed.isEmpty, !submitting else { return }
         submitting = true
         do {
-            let added = try await Supa.shared.addComment(
-                cardId: cardId,
-                userId: userId,
-                body: trimmed,
-                authorNickname: nickname.isEmpty ? nil : nickname,
-                parentCommentId: replyingTo?.commentId
+            let added = try await backend.add(
+                userId,
+                trimmed,
+                nickname.isEmpty ? nil : nickname,
+                replyingTo?.commentId
             )
             if !comments.contains(where: { $0.commentId == added.commentId }) {
                 comments.append(added)
@@ -65,7 +99,7 @@ final class CommentsModel: ObservableObject {
         if wasLiked { updated.remove(userId) } else { updated.insert(userId) }
         likes[commentId] = updated
         do {
-            try await Supa.shared.setLike(commentId: commentId, userId: userId, liked: !wasLiked)
+            try await backend.setLike(commentId, userId, !wasLiked)
         } catch {
             likes[commentId] = original
             errorMessage = "반응 처리 실패: \(error.localizedDescription)"
@@ -74,7 +108,7 @@ final class CommentsModel: ObservableObject {
 
     func delete(userId: Int, commentId: Int) async {
         do {
-            try await Supa.shared.deleteComment(commentId: commentId, userId: userId)
+            try await backend.delete(commentId, userId)
             comments.removeAll { $0.commentId == commentId || $0.parentCommentId == commentId }
             if replyingTo?.commentId == commentId { replyingTo = nil }
             if editingCommentId == commentId { editingCommentId = nil }
@@ -88,7 +122,7 @@ final class CommentsModel: ObservableObject {
         guard !trimmed.isEmpty, !submitting else { return }
         submitting = true
         do {
-            let updated = try await Supa.shared.updateComment(commentId: commentId, userId: userId, body: trimmed)
+            let updated = try await backend.update(commentId, userId, trimmed)
             if let index = comments.firstIndex(where: { $0.commentId == commentId }) {
                 comments[index] = updated
             }

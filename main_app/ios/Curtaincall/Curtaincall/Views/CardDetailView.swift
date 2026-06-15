@@ -24,7 +24,7 @@ struct CardDetailView: View {
     init(card: Card, onLoginRequested: (() -> Void)? = nil) {
         self.card = card
         self.onLoginRequested = onLoginRequested
-        _comments = StateObject(wrappedValue: CommentsModel(cardId: card.cardId))
+        _comments = StateObject(wrappedValue: CommentsModel(backend: .card(card.cardId)))
         _displayedViewCount = State(initialValue: card.viewCount ?? 0)
     }
 

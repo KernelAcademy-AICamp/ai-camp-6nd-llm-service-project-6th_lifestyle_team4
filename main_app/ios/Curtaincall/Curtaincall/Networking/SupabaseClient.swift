@@ -391,4 +391,88 @@ final class Supa {
                 .execute()
         }
     }
+
+    // MARK: - Highlight comments + likes
+    //
+    // Mirror the card-comment methods above onto card_highlight_comments /
+    // card_highlight_comment_likes (schema 08/09). The `card_id:highlight_id`
+    // alias decodes each row straight into the shared `Comment` (its `cardId`
+    // then carries highlight_id — internal only, unused in the comment UI), so
+    // the whole comment model + UI is reused. RLS blocks anonymous JWTs from
+    // writing, matching the gate in CommentsSection/CommentComposer.
+
+    private let highlightCommentColumns =
+        "comment_id, card_id:highlight_id, user_id, parent_comment_id, author_nickname, body, created_at"
+
+    func loadHighlightComments(highlightId: Int) async throws -> [Comment] {
+        try await client.from("card_highlight_comments")
+            .select(highlightCommentColumns)
+            .eq("highlight_id", value: highlightId)
+            .order("created_at", ascending: true)
+            .execute()
+            .value
+    }
+
+    func loadHighlightCommentLikes(commentIds: [Int]) async throws -> [CommentLike] {
+        guard !commentIds.isEmpty else { return [] }
+        return try await client.from("card_highlight_comment_likes")
+            .select("comment_id, user_id")
+            .in("comment_id", values: commentIds)
+            .execute()
+            .value
+    }
+
+    func addHighlightComment(
+        highlightId: Int,
+        userId: Int,
+        body: String,
+        authorNickname: String?,
+        parentCommentId: Int?
+    ) async throws -> Comment {
+        try await client.from("card_highlight_comments")
+            .insert(
+                HighlightCommentInsert(
+                    highlightId: highlightId,
+                    userId: userId,
+                    parentCommentId: parentCommentId,
+                    authorNickname: authorNickname,
+                    body: body
+                )
+            )
+            .select(highlightCommentColumns)
+            .single()
+            .execute()
+            .value
+    }
+
+    func deleteHighlightComment(commentId: Int, userId: Int) async throws {
+        try await client.from("card_highlight_comments").delete()
+            .eq("comment_id", value: commentId)
+            .eq("user_id", value: userId)
+            .execute()
+    }
+
+    func updateHighlightComment(commentId: Int, userId: Int, body: String) async throws -> Comment {
+        try await client.from("card_highlight_comments")
+            .update(CommentUpdate(body: body))
+            .eq("comment_id", value: commentId)
+            .eq("user_id", value: userId)
+            .select(highlightCommentColumns)
+            .single()
+            .execute()
+            .value
+    }
+
+    func setHighlightCommentLike(commentId: Int, userId: Int, liked: Bool) async throws {
+        if liked {
+            try await client.from("card_highlight_comment_likes")
+                .insert(CommentLike(commentId: commentId, userId: userId))
+                .execute()
+        } else {
+            try await client.from("card_highlight_comment_likes").delete()
+                .eq("comment_id", value: commentId)
+                .eq("user_id", value: userId)
+                .execute()
+        }
+    }
 }
