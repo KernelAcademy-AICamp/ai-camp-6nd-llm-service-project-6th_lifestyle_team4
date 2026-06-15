@@ -531,8 +531,23 @@
       { id:'default',   name:'기본',          nameEn:'Normal',            locked:false, price:0,   hint:'기본 테마' },
       { id:'moby-dick', name:'모비딕',         nameEn:'Moby-Dick',         locked:false, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
       { id:'demian',    name:'데미안',         nameEn:'Demian',            locked:true,  price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
-      /* 위대한 개츠비 — 미리보기 잠금 해제 */
-      { id:'gatsby',    name:'위대한 개츠비',  nameEn:'The Great Gatsby',  locked:false, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      { id:'gatsby',         name:'위대한 개츠비',           nameEn:'The Great Gatsby',                 locked:true, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      /* ── 이미지 추가 예정. 모두 잠김 + 실타래 200 ── */
+      { id:'around-world',   name:'80일 간의 세계일주',       nameEn:'Around the World in Eighty Days',  locked:true, price:200, hint:"실타래 200개 / 또는 책 '80일 간의 세계일주'의 모든 카드를 다 읽으면 해금" },
+      { id:'gullivers',      name:'걸리버 여행기',            nameEn:"Gulliver's Travels",               locked:true, price:200, hint:"실타래 200개 / 또는 책 '걸리버 여행기'의 모든 카드를 다 읽으면 해금" },
+      { id:'notre-dame',     name:'노트르담 드 파리',         nameEn:'Notre-Dame de Paris',              locked:true, price:200, hint:"실타래 200개 / 또는 책 '노트르담 드 파리'의 모든 카드를 다 읽으면 해금" },
+      { id:'metamorphosis',  name:'변신',                     nameEn:'The Metamorphosis',                locked:true, price:200, hint:"실타래 200개 / 또는 책 '변신'의 모든 카드를 다 읽으면 해금" },
+      { id:'sherlock',       name:'셜록 홈즈',                nameEn:'Sherlock Holmes',                  locked:true, price:200, hint:"실타래 200개 / 또는 책 '셜록 홈즈'의 모든 카드를 다 읽으면 해금" },
+      { id:'divine-comedy',  name:'신곡',                     nameEn:'Divine Comedy',                    locked:true, price:200, hint:"실타래 200개 / 또는 책 '신곡'의 모든 카드를 다 읽으면 해금" },
+      { id:'siddhartha',     name:'싯다르타',                 nameEn:'Siddhartha',                       locked:true, price:200, hint:"실타래 200개 / 또는 책 '싯다르타'의 모든 카드를 다 읽으면 해금" },
+      { id:'phantom-opera',  name:'오페라의 유령',            nameEn:'The Phantom of the Opera',         locked:true, price:200, hint:"실타래 200개 / 또는 책 '오페라의 유령'의 모든 카드를 다 읽으면 해금" },
+      { id:'romeo-juliet',   name:'로미오와 줄리엣',          nameEn:'Romeo and Juliet',                 locked:true, price:200, hint:"실타래 200개 / 또는 책 '로미오와 줄리엣'의 모든 카드를 다 읽으면 해금" },
+      { id:'alice',          name:'이상한 나라의 앨리스',     nameEn:"Alice's Adventures in Wonderland", locked:true, price:200, hint:"실타래 200개 / 또는 책 '이상한 나라의 앨리스'의 모든 카드를 다 읽으면 해금" },
+      { id:'jungle-book',    name:'정글북',                   nameEn:'The Jungle Book',                  locked:true, price:200, hint:"실타래 200개 / 또는 책 '정글북'의 모든 카드를 다 읽으면 해금" },
+      { id:'king-arthur',    name:'아서왕',                   nameEn:'King Arthur',                      locked:true, price:200, hint:"실타래 200개 / 또는 책 '아서왕'의 모든 카드를 다 읽으면 해금" },
+      { id:'frankenstein',   name:'프랑켄슈타인',             nameEn:'Frankenstein',                     locked:true, price:200, hint:"실타래 200개 / 또는 책 '프랑켄슈타인'의 모든 카드를 다 읽으면 해금" },
+      { id:'peter-pan',      name:'피터 팬',                  nameEn:'Peter Pan',                        locked:true, price:200, hint:"실타래 200개 / 또는 책 '피터 팬'의 모든 카드를 다 읽으면 해금" },
+      { id:'midsummer',      name:'한여름 밤의 꿈',           nameEn:"A Midsummer Night's Dream",        locked:true, price:200, hint:"실타래 200개 / 또는 책 '한여름 밤의 꿈'의 모든 카드를 다 읽으면 해금" },
     ],
     sofa: [
       { id:'none', name:'적용 안함' },
@@ -597,15 +612,48 @@
       if (id && DECOR.theme.find(t => t.id === id && !t.locked)) state.theme = id;
     } catch {}
   }
+  /* 테마 구매 기록 — 'default' 는 기본 보유, 사용자가 200실타래로 구매하면 추가 */
+  const THEME_PURCHASED_KEY = 'ds.ozhouse.theme.purchased';
+  function getPurchasedThemes(){
+    try {
+      const raw = JSON.parse((window.parent.localStorage || localStorage).getItem(THEME_PURCHASED_KEY) || '["default"]');
+      return Array.isArray(raw) && raw.length ? raw : ['default'];
+    } catch { return ['default']; }
+  }
+  function addPurchasedTheme(id){
+    const list = getPurchasedThemes();
+    if (!list.includes(id)) {
+      list.push(id);
+      try { (window.parent.localStorage || localStorage).setItem(THEME_PURCHASED_KEY, JSON.stringify(list)); } catch {}
+    }
+  }
+
   function apply(cat,id){
     const o=DECOR[cat].find(x=>x.id===id); if(!o) return;
+    /* 테마: 해금/구매 흐름 — locked(미해금) → 안내. 해금(미구매) → 구매 팝업. 구매됨 → 즉시 적용. */
+    if (cat === 'theme') {
+      if (o.id === 'default') { state[cat] = id; applyTheme(o); return; }
+      if (o.locked) {
+        alert(`'${o.name}' 은(는) 아직 해금되지 않았어요.\n책의 모든 카드를 다 읽으면 해금돼요.`);
+        return;
+      }
+      const purchased = getPurchasedThemes();
+      if (!purchased.includes(o.id)) {
+        const ok = confirm(`'${o.name}' 을(를) 구매하시겠습니까?\n실타래 ${o.price}개가 사용됩니다.`);
+        if (!ok) return;
+        addPurchasedTheme(o.id);
+        /* TODO: 실타래 차감(parent.state.yarnPurchased -= price + Supabase RPC) — 서버 RPC 준비 시 연결 */
+      }
+      state[cat] = id;
+      applyTheme(o);
+      return;
+    }
     if (o.locked) return;
     state[cat]=id;
     /* 'none' = 가구 전체 hide. 그 외 id 면 show + 변형 적용. */
     if (cat==='sofa')  { if (id==='none') sceneSofa.style.display='none';  else { sceneSofa.style.display='';  applySofa(o); } }
     else if (cat==='rug')   { if (id==='none') sceneRug.style.display='none';   else { sceneRug.style.display='';   applyRug(o); } }
     else if (cat==='tower') { if (id==='none') sceneTower.style.display='none'; else { sceneTower.style.display=''; applyTower(o); } }
-    else if (cat==='theme') applyTheme(o);
   }
   function swatch(cat,o){
     /* '적용 안함' — 빈 박스 + 슬래시 (모든 가구 카테고리 공통) */
