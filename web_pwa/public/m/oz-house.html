@@ -332,10 +332,11 @@
             </div>
           </div>
 
-          <!-- 라벨(시안용) — data-for 로 부모 가구와 그룹 이동 매핑 -->
+          <!-- 라벨(시안용) — data-for 로 부모 가구와 그룹 이동 매핑. 좌표 = 각 이미지 시각 중심 아래 -->
           <div class="placard" data-for="bookmarks" style="left:184px;top:160px">내 북마크</div>
-          <div class="placard" data-for="attend" style="left:327px;top:171px">출석 달력</div>
-          <div class="placard" data-for="records" style="left:327px;top:303px">나의 기록</div>
+          <div class="placard" data-for="attend"    style="left:327px;top:170px">출석 달력</div>
+          <div class="placard" data-for="records"  style="left:319px;top:303px">나의 기록</div>
+          <div class="placard" data-for="window"   style="left:66px;top:198px">화분이있는 걸이</div>
 
           <!-- 캣타워 -->
           <div class="tower" id="tower"></div>
@@ -737,7 +738,7 @@
     '.wall-books': ['.placard[data-for="bookmarks"]'],
     '.wall-cal':   ['.placard[data-for="attend"]'],
     '.frame':      ['.placard[data-for="records"]'],
-    '.window':     ['.sill', '.sill-pot'],
+    '.window':     ['.sill', '.sill-pot', '.placard[data-for="window"]'],
   };
   const LAYOUT_KEY = 'ds.ozhouse.layout.v2';   /* v2 = left/top 통합 형식 */
 
