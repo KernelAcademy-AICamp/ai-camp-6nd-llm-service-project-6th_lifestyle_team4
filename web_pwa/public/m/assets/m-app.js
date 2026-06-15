@@ -2041,6 +2041,7 @@ function refreshTodayCard() {
     bumpRefreshCount();
   }
   track('today_refreshed');
+  spinYarn();             // 실뭉치 한 바퀴 굴리기 + 힌트 흔들림 정지
   applyTodayCard(pickRandomCard());
   renderHomeBookmarks();  // '지난 기록' 갱신 (직전 카드가 추가됨)
 }
@@ -7332,6 +7333,26 @@ function updateBottomNavCatForView(view) {
   else setBottomNavCat('cat_today.png', 'center');
 }
 
+// ---------- 실뭉치 힌트 (TODAY 재탭 = 새 명대사) ----------
+// TODAY 화면에서 가운데 실뭉치를 몇 초마다 톡톡 흔들어 '눌러봐' 신호를 준다.
+// 한 번이라도 새 명대사를 받아보면(refreshTodayCard) 제스처를 익힌 것으로 보고 흔들림 정지.
+const navYarn = document.querySelector('.nav-home-center .nav-home-yarn');
+function yarnHinted() {
+  try { return localStorage.getItem('today_yarn_hinted') === '1'; } catch { return false; }
+}
+function updateYarnHint(view) {
+  if (!navYarn) return;
+  navYarn.classList.toggle('yarn-hint', view === 'home' && !yarnHinted());
+}
+function spinYarn() {
+  if (!navYarn) return;
+  navYarn.classList.remove('yarn-hint', 'yarn-spin');
+  void navYarn.offsetWidth;   // reflow — 연타해도 회전 재시작
+  navYarn.classList.add('yarn-spin');
+  navYarn.addEventListener('animationend', () => navYarn.classList.remove('yarn-spin'), { once: true });
+  try { localStorage.setItem('today_yarn_hinted', '1'); } catch { /* noop */ }
+}
+
 // ---------- View switching ----------
 function setView(view) {
   // LIBRARY(archive) 탭은 전체 도서 카탈로그 — 누구나 열람(익명 게이트 제거).
@@ -7356,6 +7377,7 @@ function setView(view) {
 
   renderYarnChip();   // 상단바 실타래 칩 — 잔여 무료분+충전분 반영
   updateBottomNavCatForView(view);  // 하단바 고양이 자세 — feed/그 외
+  updateYarnHint(view);  // 실뭉치 톡톡 힌트 — TODAY에서만, 아직 안 눌러봤으면
 
   if (view === 'archive') { renderArchiveChips(); renderArchive(); }
   if (view === 'feed') {

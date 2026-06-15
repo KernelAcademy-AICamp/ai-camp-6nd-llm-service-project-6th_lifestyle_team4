@@ -315,6 +315,32 @@
   /* active 주황 링 제거 — 노른자 둘레 테두리 항상 투명 */
   .bottom-nav .nav-item.nav-home-center .nav-dot { display: none; }
 
+  /* 실뭉치 힌트 — TODAY 재탭 = 새 명대사. 몇 초마다 한 번 톡톡 흔들려 '눌러봐' 신호.
+     (고양이가 실뭉치 건드린 듯) 한 번 눌러보면 멈춤(JS에서 yarn-hint 제거). */
+  @keyframes yarnWobble {
+    0%, 80%, 100% { transform: rotate(0deg); }
+    83% { transform: rotate(-11deg); }
+    87% { transform: rotate(9deg); }
+    91% { transform: rotate(-6deg); }
+    95% { transform: rotate(3deg); }
+  }
+  .bottom-nav .nav-home-center .nav-home-yarn.yarn-hint {
+    animation: yarnWobble 3s ease-in-out infinite;
+    transform-origin: 50% 48%;
+  }
+  /* 누르면 한 바퀴 굴러 새 명대사 — 살짝 튕기는 ease */
+  @keyframes yarnSpin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .bottom-nav .nav-home-center .nav-home-yarn.yarn-spin {
+    animation: yarnSpin 0.6s cubic-bezier(0.34, 1.4, 0.5, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bottom-nav .nav-home-center .nav-home-yarn.yarn-hint,
+    .bottom-nav .nav-home-center .nav-home-yarn.yarn-spin { animation: none; }
+  }
+
   /* LIBRARY 4열 그리드 (안드 LibraryScreen BookGrid GridCells.Fixed(4) 매칭).
        모든 책 박스 크기 완전 동일 — aspect-ratio + grid-auto-rows + 고정 padding. */
   #archive-grid {
