@@ -4295,6 +4295,8 @@ const promptModalSubnote = $('#prompt-modal-subnote');
 const DISMISS_LINK_STYLE = 'width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);';
 let _promptOnDismiss = null;
 
+// OZ's house iframe 에서도 호출 가능하게 window 에 게시 (테마 해금 안내/구매 확인 등)
+window.openPromptModal = (...args) => openPromptModal(...args);
 function openPromptModal({ title, message, confirmLabel = '로그인', dismissLabel = '닫기', subNote = '', dismissAsButton = false, onConfirm = null, onDismiss = null, openSigninOnConfirm = true }) {
   if (!promptModal) return;
   promptModalTitle.textContent = title;

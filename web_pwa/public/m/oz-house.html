@@ -609,11 +609,17 @@
     if (!roomEl) return;
     roomEl.className = roomEl.className.replace(/\btheme-\S+/g, '').replace(/\s+/g, ' ').trim();
     if (o.id !== 'default') roomEl.classList.add('theme-' + o.id);
-    /* 좌측 상단 영문 라벨 갱신 */
+    /* 좌측 상단 영문 라벨 */
     const lb = document.getElementById('ozThemeLabel');
     if (lb) lb.textContent = o.nameEn || o.name || '';
     try { (window.parent.localStorage || localStorage).setItem(OZ_THEME_KEY, o.id); } catch {}
-    /* 테마 변경 후 현재 자세의 새 테마용 저장 위치 적용 (CATS 초기화 전 호출 시 noop) */
+    /* 사용자 명세: 비-default 테마 적용 시 소파/러그/캣타워 기본적으로 hide.
+       default 로 돌아오면 state 선택 다시 노출(또는 'none' 이면 hide 유지). */
+    const hideFurniture = (o.id !== 'default');
+    if (typeof sceneSofa  !== 'undefined' && sceneSofa)  sceneSofa.style.display  = (hideFurniture || state.sofa  === 'none') ? 'none' : '';
+    if (typeof sceneRug   !== 'undefined' && sceneRug)   sceneRug.style.display   = (hideFurniture || state.rug   === 'none') ? 'none' : '';
+    if (typeof sceneTower !== 'undefined' && sceneTower) sceneTower.style.display = (hideFurniture || state.tower === 'none') ? 'none' : '';
+    /* 테마 변경 후 현재 자세의 새 테마용 저장 위치 적용 */
     try { applyCatPosForCurrent(); } catch {}
   }
   function loadSavedTheme(){
@@ -640,19 +646,42 @@
 
   function apply(cat,id){
     const o=DECOR[cat].find(x=>x.id===id); if(!o) return;
-    /* 테마: 해금/구매 흐름 — locked(미해금) → 안내. 해금(미구매) → 구매 팝업. 구매됨 → 즉시 적용. */
+    /* 테마: 해금/구매 흐름 — PWA 공용 모달(openPromptModal) 사용. 브라우저 alert/confirm 대체. */
     if (cat === 'theme') {
       if (o.id === 'default') { state[cat] = id; applyTheme(o); return; }
       if (o.locked) {
-        alert(`'${o.name}' 은(는) 아직 해금되지 않았어요.\n책의 모든 카드를 다 읽으면 해금돼요.`);
+        const fn = window.parent && window.parent.openPromptModal;
+        if (typeof fn === 'function') {
+          fn({
+            title: '해금 안내',
+            message: `'${o.name}' 은(는) 아직 해금되지 않았어요.\n책의 모든 카드를 다 읽으면 해금돼요.`,
+            confirmLabel: '확인',
+            dismissLabel: '',
+            openSigninOnConfirm: false,
+          });
+        }
         return;
       }
       const purchased = getPurchasedThemes();
       if (!purchased.includes(o.id)) {
-        const ok = confirm(`'${o.name}' 을(를) 구매하시겠습니까?\n실타래 ${o.price}개가 사용됩니다.`);
-        if (!ok) return;
-        addPurchasedTheme(o.id);
-        /* TODO: 실타래 차감(parent.state.yarnPurchased -= price + Supabase RPC) — 서버 RPC 준비 시 연결 */
+        const fn = window.parent && window.parent.openPromptModal;
+        if (typeof fn === 'function') {
+          fn({
+            title: '테마 구매',
+            message: `'${o.name}' 을(를) 구매하시겠습니까?\n실타래 ${o.price}개가 사용됩니다.`,
+            confirmLabel: '구매하기',
+            dismissLabel: '취소',
+            openSigninOnConfirm: false,
+            onConfirm: () => {
+              addPurchasedTheme(o.id);
+              state[cat] = id;
+              applyTheme(o);
+              renderOptions();
+              /* TODO: 서버 실타래 차감 RPC 연결 */
+            },
+          });
+        }
+        return;
       }
       state[cat] = id;
       applyTheme(o);
