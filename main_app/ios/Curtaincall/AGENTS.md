@@ -38,6 +38,9 @@ Don'ts:
 - No skeuomorphic texture soup — the wood/leather Archive is the cautionary example; reconcile toward refined editorial.
 - Keep view trees sane (avoid deeply nested unbounded stacks that tank layout performance).
 
+### Cross-platform brand/visual parity (carve-out)
+This app prioritizes **cross-platform brand/visual parity** with the Android and PWA clients. Where Android/PWA use character or decorative elements that are **core to the product's identity** — e.g. the bottom-nav cat with per-tab poses, the yarn (실타래) graphics, the Oz House room — iOS **matches them** rather than reducing them to editorial-minimalism. The minimalist / anti-skeuomorphic guidance above still applies as the **default for net-new, non-parity UI**, but **parity with Android/PWA wins when the two conflict**.
+
 **Reviewer (Codex) should flag:** off-token colors/fonts, decoration that fights the editorial calm, inconsistent spacing/type, non-calm motion, and accessibility regressions.
 
 ## Build & verify (use the local toolchain)
