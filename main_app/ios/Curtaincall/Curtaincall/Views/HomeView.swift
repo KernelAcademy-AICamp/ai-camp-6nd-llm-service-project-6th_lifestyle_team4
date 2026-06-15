@@ -66,6 +66,15 @@ struct HomeView: View {
                         TodayCardBody(card: nil, isLoading: true, bookmarkCount: 0, showOriginal: false)
                     }
 
+                    // Discovery sections over the full loaded card set (no new
+                    // fetch): New Books, then Contextual. Hidden until cards load.
+                    if !allCards.isEmpty {
+                        Spacer().frame(height: 48)
+                        DailyNewBooksSection(cards: allCards)
+                        Spacer().frame(height: 36)
+                        DailyContextualSection(cards: allCards)
+                    }
+
                     Spacer().frame(height: 56)
                     Hairline()
 
