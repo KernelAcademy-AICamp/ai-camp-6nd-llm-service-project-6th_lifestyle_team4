@@ -18,6 +18,7 @@ struct FeedView: View {
     @State private var showPicker = false
     @State private var composeCard: Card?
     @State private var selectedCard: Card?
+    @State private var selectedHighlight: CardHighlight?
     @State private var quotePopupCard: Card?
     @State private var isSubmitting = false
     @State private var composeError: String?
@@ -68,6 +69,7 @@ struct FeedView: View {
                 // the top, and re-fetch — the same refresh as pull-to-refresh.
                 .onChange(of: reselect) { _, _ in
                     selectedCard = nil
+                    selectedHighlight = nil
                     withAnimation { proxy.scrollTo(Self.topID, anchor: .top) }
                     Task { await reload() }
                 }
@@ -91,6 +93,14 @@ struct FeedView: View {
         .navigationDestination(item: $selectedCard) { card in
             CardDetailView(card: card) {
                 selectedTab = .settings
+            }
+        }
+        // Tapping a highlight opens its detail (comments/replies/likes); "카드 보기"
+        // inside routes back through selectedCard so the card push reuses the
+        // destination above (one Card destination per stack).
+        .navigationDestination(item: $selectedHighlight) { highlight in
+            HighlightDetailView(highlight: highlight) { card in
+                selectedCard = card
             }
         }
         .task {
@@ -164,7 +174,7 @@ struct FeedView: View {
             case .highlight:
                 ForEach(highlights) { highlight in
                     HighlightFeedCard(highlight: highlight) {
-                        if let card = highlight.card { selectedCard = card }
+                        selectedHighlight = highlight
                     }
                 }
             }
@@ -450,7 +460,7 @@ private struct HighlightFeedCard: View {
     }
 }
 
-private struct HighlightBookCover: View {
+struct HighlightBookCover: View {
     let work: Work?
 
     var body: some View {

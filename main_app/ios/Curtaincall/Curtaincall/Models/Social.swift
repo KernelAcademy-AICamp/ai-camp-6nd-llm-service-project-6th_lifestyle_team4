@@ -152,6 +152,25 @@ nonisolated struct CommentUpdate: Encodable, Sendable {
     let body: String
 }
 
+/// Insert payload for a highlight comment (card_highlight_comments). Same shape
+/// as CommentInsert but keyed on highlight_id. The select after insert aliases
+/// highlight_id→card_id so the returned row decodes into the shared `Comment`.
+nonisolated struct HighlightCommentInsert: Encodable, Sendable {
+    let highlightId: Int
+    let userId: Int
+    let parentCommentId: Int?
+    let authorNickname: String?
+    let body: String
+
+    enum CodingKeys: String, CodingKey {
+        case highlightId = "highlight_id"
+        case userId = "user_id"
+        case parentCommentId = "parent_comment_id"
+        case authorNickname = "author_nickname"
+        case body
+    }
+}
+
 nonisolated struct CommentLike: Codable, Sendable {
     let commentId: Int
     let userId: Int
@@ -227,7 +246,7 @@ nonisolated struct FeedPostInsert: Encodable, Sendable {
     }
 }
 
-nonisolated struct CardHighlight: Decodable, Identifiable, Sendable {
+nonisolated struct CardHighlight: Decodable, Identifiable, Hashable, Sendable {
     let highlightId: Int
     let cardId: Int
     let userId: Int
