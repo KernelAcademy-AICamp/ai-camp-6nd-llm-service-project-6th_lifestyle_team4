@@ -4431,7 +4431,7 @@ function buildAttendanceCalendarHTML() {
   while (cells.length % 7 !== 0) cells.push('<div></div>');
   return `
     <p style="text-align:center;font-family:'Noto Serif KR',serif;font-size:18px;color:var(--espresso);font-weight:700;margin:0 0 12px;">${year}년 ${month + 1}월</p>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">${head}${cells.join('')}</div>
+    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;width:100%;">${head}${cells.join('')}</div>
   `;
 }
 
