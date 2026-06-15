@@ -2041,7 +2041,8 @@ function refreshTodayCard() {
     bumpRefreshCount();
   }
   track('today_refreshed');
-  spinYarn();             // 실뭉치 한 바퀴 굴리기 + 힌트 흔들림 정지
+  try { localStorage.setItem('today_yarn_hinted', '1'); } catch { /* noop */ }  // 새 명대사 받아봄 = 제스처 익힘 → 흔들림 영구 정지
+  spinYarn();             // 실뭉치 한 바퀴 굴리기
   applyTodayCard(pickRandomCard());
   renderHomeBookmarks();  // '지난 기록' 갱신 (직전 카드가 추가됨)
 }
@@ -2780,12 +2781,12 @@ function renderDailyNotice() {
 
   sec.innerHTML = `
     <button type="button" class="daily-notice-row" aria-label="공지사항 자세히"
-      style="display:flex;align-items:center;width:100%;background:var(--latte);border:0.5px solid var(--sand);padding:12px 14px;cursor:pointer;text-align:left;">
+      style="display:flex;align-items:center;width:100%;background:var(--latte);border:0.5px solid var(--sand);border-radius:12px;padding:11px 14px;cursor:pointer;text-align:left;">
       <span class="material-symbols-outlined" style="font-size:18px;color:var(--cta);margin-right:10px;flex-shrink:0;">campaign</span>
       <span class="daily-notice-title-line" style="flex:1;min-width:0;font-size:13px;color:var(--espresso);font-weight:500;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:opacity 200ms;">${renderTitle(0)}</span>
       <span class="material-symbols-outlined" style="font-size:16px;color:var(--walnut);margin-left:8px;flex-shrink:0;">chevron_right</span>
     </button>
-    <div style="height:28px;"></div>
+    <div style="height:16px;"></div>
   `;
   sec.querySelector('.daily-notice-row')?.addEventListener('click', () => {
     stopNoticeCarousel();
@@ -3153,25 +3154,31 @@ function renderDailyOzPick() {
     ? `'${matchedKw}'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
     : '오즈가 오늘 골라드린 한 문장이에요.';
   const work = pick.works || {};
-  // 사용자 선호 메타 — "당신의 취향 · 비극 · 운명" 형식
-  const tasteMeta = [];
-  tasteMeta.push('당신의 취향');
-  const formatLabel = GENRE_LABEL[work.format];
-  if (formatLabel) tasteMeta.push(formatLabel);
-  if (matchedKw) tasteMeta.push(matchedKw);
-  const metaText = tasteMeta.join(' · ');
+  // 사용자 선호 메타 — 온보딩에서 직접 고른 장르/주제를 보여준다(뽑힌 작품 속성 아님).
+  const prefs = getPrefs() || {};
+  const genreText = (Array.isArray(prefs.genres) && prefs.genres.length)
+    ? prefs.genres.map((g) => GENRE_LABEL[g] || g).join(', ')
+    : '상관없음';
+  const themeText = prefs.any
+    ? '상관없음'
+    : (Array.isArray(prefs.themes) && prefs.themes.length ? prefs.themes.join(', ') : '상관없음');
+  const userName = state.userLoginId || state.userNickname || '오즈';
 
   sec.style.display = 'block';
   sec.innerHTML = `
-    <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">오즈의 오늘의 추천</h2>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">당신을 위한 Daily Script</h2>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
-      <!-- 오즈 헤더 — 책 위 고양이 + 이름 + 메타 -->
+      <!-- 헤더 — 고양이 + 사용자 아이디 + 선호(장르/주제) 메타 -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
         <img src="assets/cat/cat_shelf_few.png" alt="오즈"
           style="width:72px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
-          <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">오즈</p>
-          <p style="margin:2px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(metaText)}</p>
+          <p style="margin:0;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(userName)}</p>
+          <p style="margin:6px 0 0;font-size:11px;color:var(--walnut);line-height:1.7;">
+            <strong style="color:var(--espresso);">당신의 취향</strong><br>
+            <strong style="color:var(--espresso);">장르</strong> : ${escapeHtml(genreText)}<br>
+            <strong style="color:var(--espresso);">주제</strong> : ${escapeHtml(themeText)}
+          </p>
         </div>
       </div>
       <!-- 추천 한마디 박스 (별도) -->
@@ -7306,8 +7313,10 @@ function spinYarn() {
   navYarn.classList.remove('yarn-hint', 'yarn-spin');
   void navYarn.offsetWidth;   // reflow — 연타해도 회전 재시작
   navYarn.classList.add('yarn-spin');
-  navYarn.addEventListener('animationend', () => navYarn.classList.remove('yarn-spin'), { once: true });
-  try { localStorage.setItem('today_yarn_hinted', '1'); } catch { /* noop */ }
+  navYarn.addEventListener('animationend', () => {
+    navYarn.classList.remove('yarn-spin');
+    updateYarnHint(state.currentView);  // 회전 후, 아직 새 명대사 안 받아봤고 TODAY면 흔들림 복귀
+  }, { once: true });
 }
 
 // ---------- View switching ----------
@@ -7438,6 +7447,8 @@ $$('[data-nav]').forEach((btn) => {
     }
     closeAllOpenOverlays();
     setView(nav);
+    // 다른 탭에서 실뭉치를 눌러 TODAY로 들어올 때도 한 바퀴 회전 — 첫 탭부터 '누르면 반응한다'를 인지.
+    if (nav === 'home') spinYarn();
   });
 });
 
