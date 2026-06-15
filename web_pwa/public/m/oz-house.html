@@ -665,12 +665,24 @@
     else if (cat==='rug')   { if (id==='none') sceneRug.style.display='none';   else { sceneRug.style.display='';   applyRug(o); } }
     else if (cat==='tower') { if (id==='none') sceneTower.style.display='none'; else { sceneTower.style.display=''; applyTower(o); } }
   }
+  /* 테마 id → swatch/배경 미니어처 이미지 경로. 등록 안 된 id 는 이미지 없음(자물쇠 표시). */
+  const THEME_IMG = {
+    'moby-dick': 'assets/oz-themes/Mobydick.png',
+    'gatsby':    'assets/oz-themes/Gatsby.png',
+  };
+
   function swatch(cat,o){
-    /* '적용 안함' — 빈 박스 + 슬래시 (모든 가구 카테고리 공통) */
     if (o.id === 'none') return `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(107,93,79,.06);border-radius:8px;font-size:22px;color:var(--walnut);">⊘</div>`;
     if(cat==='theme'){
-      /* 잠긴 테마는 자물쇠 + 어두운 표지 + 가격(실타래 PNG + 숫자). 기본 테마는 라이트 페이퍼. */
+      /* 기본 — 라이트 페이퍼 */
       if (o.id === 'default') return `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#FBF6EC,#EFE6D2);border-radius:8px;"></div>`;
+      /* 해금됨(locked:false) — 자물쇠/가격 칩 제거하고 테마 이미지 미니어처만 (이미지 없으면 라이트 폴백) */
+      if (!o.locked) {
+        const img = THEME_IMG[o.id];
+        if (img) return `<div style="position:absolute;inset:0;background-image:url('${img}');background-size:cover;background-position:center;border-radius:8px;"></div>`;
+        return `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#EFE6D2,#DDD2B8);border-radius:8px;"></div>`;
+      }
+      /* 잠김 — 어두운 표지 + 🔒 + 가격(실타래) 칩 */
       return `
         <div style="position:absolute;inset:0;background:rgba(60,38,18,.18);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">🔒</div>
         <div style="position:absolute;left:50%;bottom:3px;transform:translateX(-50%);display:inline-flex;align-items:center;gap:3px;background:rgba(14,12,10,.78);color:#FBF6EC;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;line-height:1;">
