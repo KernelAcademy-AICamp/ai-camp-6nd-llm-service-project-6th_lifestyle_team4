@@ -168,6 +168,8 @@
   .opt.active .sw{ border-color:var(--cta); }
   .opt .nm{ font-size:9.5px; color:var(--walnut); margin-top:4px; font-weight:500; white-space:nowrap; }
   .opt.active .nm{ color:var(--cta); font-weight:700; }
+  .opt.locked{ opacity:0.55; cursor:not-allowed; }
+  .opt.locked .nm{ color:var(--walnut); }
 
   /* ── 바텀시트 (출석/북마크/기록) ── */
   .sheet-backdrop{ position:absolute; inset:0; background:rgba(20,14,8,.40); opacity:0; pointer-events:none; transition:opacity .25s; z-index:65; }
@@ -330,10 +332,10 @@
             </div>
           </div>
 
-          <!-- 라벨(시안용) -->
-          <div class="placard" style="left:184px;top:160px">내 북마크</div>
-          <div class="placard" style="left:327px;top:171px">출석 달력</div>
-          <div class="placard" style="left:327px;top:303px">나의 기록</div>
+          <!-- 라벨(시안용) — data-for 로 부모 가구와 그룹 이동 매핑 -->
+          <div class="placard" data-for="bookmarks" style="left:184px;top:160px">내 북마크</div>
+          <div class="placard" data-for="attend" style="left:327px;top:171px">출석 달력</div>
+          <div class="placard" data-for="records" style="left:327px;top:303px">나의 기록</div>
 
           <!-- 캣타워 -->
           <div class="tower" id="tower"></div>
@@ -367,7 +369,8 @@
         <div class="tray" id="tray">
           <div class="tray-handle" id="trayHandle"><span class="label">꾸미기</span></div>
           <div class="tray-tabs">
-            <button class="tab active" data-cat="sofa">소파</button>
+            <button class="tab active" data-cat="theme">테마</button>
+            <button class="tab" data-cat="sofa">소파</button>
             <button class="tab" data-cat="rug">러그</button>
             <button class="tab" data-cat="tower">캣타워</button>
             <span class="yarn-chip"><i></i> 실타래 5</span>
@@ -423,6 +426,12 @@
 
   /* 가구 변형 */
   const DECOR = {
+    theme: [
+      { id:'default', name:'기본', locked:false, hint:'기본 테마' },
+      { id:'moby-dick', name:'모비딕', locked:true, hint:"책 '모비딕'의 모든 카드를 다 읽으면 해금" },
+      { id:'demian',    name:'데미안', locked:true, hint:"책 '데미안'의 모든 카드를 다 읽으면 해금" },
+      { id:'gatsby',    name:'위대한 개츠비', locked:true, hint:"책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+    ],
     sofa: [
       { id:'cream', name:'크림', frame:'#7B5A3C', frameD:'#6E4F30', seat:'#8A6A45', seatD:'#6E4F30', cushion:'#F1E7D2', cushionD:'#E3D7BC', pA:'#F4C20D', pAd:'#D9A800', pB:'#E0683E', pBd:'#C44E26' },
       { id:'coral', name:'코랄', frame:'#B5663B', frameD:'#9A5230', seat:'#C2774A', seatD:'#A8612F', cushion:'#F6E3D3', cushionD:'#EBCBB2', pA:'#6E8C4E', pAd:'#566F3C', pB:'#D85A30', pBd:'#B8431F' },
@@ -457,19 +466,39 @@
   const $=(s)=>document.querySelector(s);
   const sceneSofa=$('#sofa'), sceneRug=$('#rug'), sceneTower=$('#tower'), trayOptions=$('#trayOptions');
   const room=$('#room'), catWrap=$('#cat'), catImg=$('#catImg'), catShadow=$('#catShadow'), poseLabel=$('#poseLabel');
-  const state={ sofa:'cream', rug:'coral', tower:'tall' };
-  let activeCat='sofa', curCase=-1;
+  const state={ theme:'default', sofa:'cream', rug:'coral', tower:'tall' };
+  let activeCat='theme', curCase=-1;
 
   function applySofa(o){ const s=sceneSofa.style; s.setProperty('--s-frame',o.frame); s.setProperty('--s-frame-d',o.frameD); s.setProperty('--s-seat',o.seat); s.setProperty('--s-seat-d',o.seatD); s.setProperty('--s-cushion',o.cushion); s.setProperty('--s-cushion-d',o.cushionD); s.setProperty('--s-pa',o.pA); s.setProperty('--s-pa-d',o.pAd); s.setProperty('--s-pb',o.pB); s.setProperty('--s-pb-d',o.pBd); }
   function applyRug(o){ sceneRug.style.background=o.bg; }
   function applyTower(o){ sceneTower.innerHTML=o.html; }
-  function apply(cat,id){ const o=DECOR[cat].find(x=>x.id===id); if(!o) return; state[cat]=id; if(cat==='sofa')applySofa(o); else if(cat==='rug')applyRug(o); else applyTower(o); }
+  function applyTheme(o){ /* 추후 업데이트: 작품별 배경 이미지/팔레트 교체. 지금은 default 만 활성 */ }
+  function apply(cat,id){
+    const o=DECOR[cat].find(x=>x.id===id); if(!o) return;
+    if (o.locked) return;   // 잠긴 항목은 적용 불가
+    state[cat]=id;
+    if(cat==='sofa') applySofa(o);
+    else if(cat==='rug') applyRug(o);
+    else if(cat==='tower') applyTower(o);
+    else if(cat==='theme') applyTheme(o);
+  }
   function swatch(cat,o){
+    if(cat==='theme'){
+      /* 잠긴 테마는 자물쇠 + 어두운 표지 — 기본 테마는 라이트 페이퍼 */
+      if (o.id === 'default') return `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#FBF6EC,#EFE6D2);border-radius:8px;"></div>`;
+      return `<div style="position:absolute;inset:0;background:rgba(60,38,18,.18);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;">🔒</div>`;
+    }
     if(cat==='sofa') return `<div style="position:absolute;inset:0;background:linear-gradient(180deg,${o.frame},${o.frameD});"><div style="position:absolute;left:7px;right:7px;bottom:6px;height:15px;border-radius:4px;background:${o.cushion};"></div><div style="position:absolute;left:11px;bottom:12px;width:9px;height:9px;border-radius:2px;background:${o.pA};"></div><div style="position:absolute;right:11px;bottom:12px;width:9px;height:9px;border-radius:2px;background:${o.pB};"></div></div>`;
     if(cat==='rug') return `<div style="position:absolute;inset:7px;border-radius:50%;background:${o.bg};box-shadow:inset 0 0 0 1px rgba(107,93,79,.2);"></div>`;
     return `<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:9px;height:24px;background:repeating-linear-gradient(0deg,#DAC79E 0 3px,#C9B184 3px 5px);border-radius:2px;"></div><div style="position:absolute;left:50%;bottom:28px;transform:translateX(-50%);width:26px;height:7px;border-radius:4px;background:#8A6A45;"></div><div style="position:absolute;left:50%;bottom:33px;transform:translateX(-50%);width:13px;height:6px;border-radius:3px;background:#E0683E;"></div>`;
   }
-  function renderOptions(){ trayOptions.innerHTML=DECOR[activeCat].map(o=>`<div class="opt${state[activeCat]===o.id?' active':''}" data-id="${o.id}"><div class="sw">${swatch(activeCat,o)}</div><div class="nm">${o.name}</div></div>`).join(''); }
+  function renderOptions(){
+    trayOptions.innerHTML = DECOR[activeCat].map(o => `
+      <div class="opt${state[activeCat]===o.id?' active':''}${o.locked?' locked':''}" data-id="${o.id}" title="${o.hint||''}">
+        <div class="sw">${swatch(activeCat,o)}</div>
+        <div class="nm">${o.name}${o.locked?' 🔒':''}</div>
+      </div>`).join('');
+  }
   document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t)); activeCat=t.dataset.cat; renderOptions(); }));
   trayOptions.addEventListener('click',e=>{ const opt=e.target.closest('.opt'); if(!opt) return; apply(activeCat,opt.dataset.id); renderOptions(); });
 
@@ -672,7 +701,7 @@
   backdrop.addEventListener('click', closeSheet); $('#sheetClose').addEventListener('click', closeSheet);
 
   /* 초기화 */
-  apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');
+  apply('theme','default'); apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');
   renderOptions(); buildWallCal();
   /* 사용자 명세: 진입마다 랜덤 자세 */
   placeCat(Math.floor(Math.random() * CATS.length));
@@ -702,9 +731,15 @@
   if (trayHandle && tray) trayHandle.addEventListener('click', () => tray.classList.toggle('expanded'));
 
   /* ════════ 가구·벽 소품 배치 편집 — 우측 상단 '편집' 토글로 진입 ════════ */
-  /* 소파/캣타워/러그 + 벽 책장(내 북마크)/벽 달력(출석)/벽 액자(나의 기록) + 창문 */
   const EDIT_SELECTORS = ['.sofa', '.tower', '.rug', '.wall-books', '.wall-cal', '.frame', '.window'];
-  const LAYOUT_KEY = 'ds.ozhouse.layout.v2';   /* v2 = left/top 통합 형식 (기존 left/bottom 과 호환 안 됨) */
+  /* 부모 이동 시 같이 따라가는 자식들 (라벨·창턱·화분 등) */
+  const EDIT_GROUPS = {
+    '.wall-books': ['.placard[data-for="bookmarks"]'],
+    '.wall-cal':   ['.placard[data-for="attend"]'],
+    '.frame':      ['.placard[data-for="records"]'],
+    '.window':     ['.sill', '.sill-pot'],
+  };
+  const LAYOUT_KEY = 'ds.ozhouse.layout.v2';   /* v2 = left/top 통합 형식 */
 
   /* 편집 토글은 외부 m/index.html oz-house-screen top-bar 의 ☀️ 옆 버튼이 담당.
      iframe 안에서는 별도 fab 없음 — window.toggleOzEdit() 함수만 노출. */
@@ -727,20 +762,27 @@
     catch {}
   }
 
-  /* 저장된 layout 복원 — 모두 left/top 기준으로 통일 */
+  /* 부모 + 그룹 자식 모두 풀어서 한 번에 처리 */
+  function withGroup(sel){
+    const out = [sel, ...(EDIT_GROUPS[sel] || [])];
+    return out;
+  }
+  /* 저장된 layout 복원 — 부모 + 그룹 자식 모두 left/top 기준 */
   function applyLayout(){
     const layout = readLayout();
     EDIT_SELECTORS.forEach(sel => {
-      const el = document.querySelector(sel);
-      if (!el) return;
-      const saved = layout[sel];
-      if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
-        el.style.left = saved.left + 'px';
-        el.style.top = saved.top + 'px';
-        el.style.right = 'auto';
-        el.style.bottom = 'auto';
-        el.dataset.ozNormalized = '1';
-      }
+      withGroup(sel).forEach(s => {
+        const el = document.querySelector(s);
+        if (!el) return;
+        const saved = layout[s];
+        if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+          el.style.left = saved.left + 'px';
+          el.style.top = saved.top + 'px';
+          el.style.right = 'auto';
+          el.style.bottom = 'auto';
+          el.dataset.ozNormalized = '1';
+        }
+      });
     });
   }
   applyLayout();
@@ -780,10 +822,12 @@
     if (editMode) return;
     editMode = true;
     EDIT_SELECTORS.forEach(sel => {
-      const el = document.querySelector(sel);
-      if (!el) return;
-      normalizePos(el);
-      el.classList.add('oz-editing');
+      withGroup(sel).forEach(s => {
+        const el = document.querySelector(s);
+        if (!el) return;
+        normalizePos(el);
+        el.classList.add('oz-editing');
+      });
     });
     document.getElementById('tray')?.classList.remove('expanded');
     syncParentBtn();
@@ -791,7 +835,9 @@
   function exitEdit(){
     if (!editMode) return;
     editMode = false;
-    EDIT_SELECTORS.forEach(sel => document.querySelector(sel)?.classList.remove('oz-editing'));
+    EDIT_SELECTORS.forEach(sel => {
+      withGroup(sel).forEach(s => document.querySelector(s)?.classList.remove('oz-editing'));
+    });
     saveAll();
     syncParentBtn();
   }
@@ -804,14 +850,24 @@
       if (editMode) { e.stopImmediatePropagation(); e.preventDefault(); }
     }, true);
   });
+
+  /* 창문 클릭 → 밤/낮 전환 (편집 모드 아닐 때만) — 외부 ☀️ 토글 대체 */
+  document.querySelector('.window')?.addEventListener('click', (e) => {
+    if (editMode) return;
+    e.stopPropagation();
+    document.getElementById('room')?.classList.toggle('night');
+  });
+  document.querySelector('.window').style.cursor = 'pointer';
   function saveAll(){
     const layout = {};
     EDIT_SELECTORS.forEach(sel => {
-      const el = document.querySelector(sel); if (!el) return;
-      const cs = getComputedStyle(el);
-      const left = parseFloat(el.style.left || cs.left);
-      const top  = parseFloat(el.style.top  || cs.top );
-      if (Number.isFinite(left) && Number.isFinite(top)) layout[sel] = { left, top };
+      withGroup(sel).forEach(s => {
+        const el = document.querySelector(s); if (!el) return;
+        const cs = getComputedStyle(el);
+        const left = parseFloat(el.style.left || cs.left);
+        const top  = parseFloat(el.style.top  || cs.top );
+        if (Number.isFinite(left) && Number.isFinite(top)) layout[s] = { left, top };
+      });
     });
     writeLayout(layout);
   }
@@ -835,27 +891,37 @@
     const el = document.querySelector(sel);
     if (!el) return;
     let dragging = false;
-    let startX = 0, startY = 0, origLeft = 0, origTop = 0, scaleFactor = 1;
+    let startX = 0, startY = 0, scaleFactor = 1;
+    /* 부모 + 그룹 자식 각각의 원래 left/top 을 저장해 동일 dx/dy 적용 */
+    let group = [];
 
     el.addEventListener('pointerdown', (e) => {
       if (!editMode) return;
       e.preventDefault(); e.stopPropagation();
-      normalizePos(el);
+      scaleFactor = getRoomScale() || 1;
+      group = withGroup(sel).map(s => document.querySelector(s)).filter(Boolean);
+      group.forEach(g => { normalizePos(g); g.classList.add('oz-editing'); });
+      group = group.map(g => {
+        const cs = getComputedStyle(g);
+        return {
+          el: g,
+          origLeft: parseFloat(g.style.left || cs.left) || 0,
+          origTop:  parseFloat(g.style.top  || cs.top ) || 0,
+        };
+      });
       dragging = true;
       startX = e.clientX; startY = e.clientY;
-      scaleFactor = getRoomScale() || 1;
-      const cs = getComputedStyle(el);
-      origLeft = parseFloat(el.style.left || cs.left) || 0;
-      origTop  = parseFloat(el.style.top  || cs.top ) || 0;
       try { el.setPointerCapture(e.pointerId); } catch {}
     });
     el.addEventListener('pointermove', (e) => {
       if (!dragging) return;
       const dx = (e.clientX - startX) / scaleFactor;
       const dy = (e.clientY - startY) / scaleFactor;
-      el.style.left = (origLeft + dx) + 'px';
-      el.style.top  = (origTop  + dy) + 'px';
-      el.style.right = 'auto'; el.style.bottom = 'auto';
+      group.forEach(({ el: g, origLeft, origTop }) => {
+        g.style.left = (origLeft + dx) + 'px';
+        g.style.top  = (origTop  + dy) + 'px';
+        g.style.right = 'auto'; g.style.bottom = 'auto';
+      });
     });
     const endDrag = () => { if (dragging) { dragging = false; saveAll(); } };
     el.addEventListener('pointerup', endDrag);
