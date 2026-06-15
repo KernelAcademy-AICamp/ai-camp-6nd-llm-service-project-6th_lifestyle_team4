@@ -573,6 +573,8 @@
     const lb = document.getElementById('ozThemeLabel');
     if (lb) lb.textContent = o.nameEn || o.name || '';
     try { (window.parent.localStorage || localStorage).setItem(OZ_THEME_KEY, o.id); } catch {}
+    /* 테마 변경 후 현재 자세의 새 테마용 저장 위치 적용 (CATS 초기화 전 호출 시 noop) */
+    try { applyCatPosForCurrent(); } catch {}
   }
   function loadSavedTheme(){
     try {
@@ -627,21 +629,8 @@
     poseLabel.textContent=c.label;
     /* normalize 마크 리셋 — 다음 편집 진입 시 새 위치 기준으로 정규화 */
     delete catWrap.dataset.ozNormalized;
-    delete catShadow.dataset.ozNormalized;
-    /* 사용자 편집 layout 이 있으면 placeCat 의 기본 위치를 덮어씀 */
-    const layout = readLayout();
-    if (layout['.cat'] && Number.isFinite(layout['.cat'].left) && Number.isFinite(layout['.cat'].top)) {
-      catWrap.style.left = layout['.cat'].left + 'px';
-      catWrap.style.top  = layout['.cat'].top + 'px';
-      catWrap.style.bottom = 'auto';
-      catWrap.dataset.ozNormalized = '1';
-    }
-    if (layout['.cat-shadow'] && Number.isFinite(layout['.cat-shadow'].left) && Number.isFinite(layout['.cat-shadow'].top)) {
-      catShadow.style.left = layout['.cat-shadow'].left + 'px';
-      catShadow.style.top  = layout['.cat-shadow'].top + 'px';
-      catShadow.style.bottom = 'auto';
-      catShadow.dataset.ozNormalized = '1';
-    }
+    /* (theme + 자세) 별 저장된 편집 위치가 있으면 덮어씀 */
+    applyCatPosForCurrent();
   }
   function refreshCat(){ let i; do{ i=Math.floor(Math.random()*CATS.length); }while(i===curCase && CATS.length>1); catWrap.style.opacity='0'; catShadow.style.opacity='0'; setTimeout(()=>{ placeCat(i); catWrap.style.opacity='1'; catShadow.style.opacity='1'; },160); }
   /* 부모(m/index.html) 가 OZ's house 진입 시 직접 호출 → 매번 랜덤 자세 */
@@ -884,8 +873,46 @@
   /* ════════ 가구·벽 소품 배치 편집 — 우측 상단 '편집' 토글로 진입 ════════ */
   /* 편집 대상 — 소파/캣타워/러그 + 고양이. 우측 이모지 패널(.wall-icons) 은 편집 불가. */
   const EDIT_SELECTORS = ['.sofa', '.tower', '.rug', '.cat'];
-  /* 고양이 이동 시 그림자도 같이 */
-  const EDIT_GROUPS = { '.cat': ['.cat-shadow'] };
+  /* 고양이 그림자는 hide 상태이므로 그룹 동반 제거 */
+  const EDIT_GROUPS = {};
+  /* 고양이는 (테마 + 자세 파일명) 매트릭스 별도 저장 — 그 조합일 때만 저장 위치 적용 */
+  const CAT_LAYOUT_KEY = 'ds.ozhouse.cat-layout.v1';
+  function readCatLayout(){
+    try { return JSON.parse((window.parent.localStorage || localStorage).getItem(CAT_LAYOUT_KEY) || '{}') || {}; }
+    catch { return {}; }
+  }
+  function writeCatLayout(o){
+    try { (window.parent.localStorage || localStorage).setItem(CAT_LAYOUT_KEY, JSON.stringify(o)); } catch {}
+  }
+  function currentThemeId(){
+    const r = document.getElementById('room');
+    const m = r?.className.match(/theme-(\S+)/);
+    return m ? m[1] : 'default';
+  }
+  function currentCatSrc(){ return (typeof CATS !== 'undefined' && CATS[curCase]?.src) || ''; }
+  function saveCatPos(){
+    const src = currentCatSrc(); if (!src) return;
+    const cs = getComputedStyle(catWrap);
+    const left = parseFloat(catWrap.style.left || cs.left);
+    const top  = parseFloat(catWrap.style.top  || cs.top );
+    if (!Number.isFinite(left) || !Number.isFinite(top)) return;
+    const layout = readCatLayout();
+    const theme = currentThemeId();
+    layout[theme] = layout[theme] || {};
+    layout[theme][src] = { left, top };
+    writeCatLayout(layout);
+  }
+  function applyCatPosForCurrent(){
+    if (!catWrap) return;
+    const layout = readCatLayout();
+    const saved = layout?.[currentThemeId()]?.[currentCatSrc()];
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+      catWrap.style.left = saved.left + 'px';
+      catWrap.style.top  = saved.top + 'px';
+      catWrap.style.bottom = 'auto';
+      catWrap.dataset.ozNormalized = '1';
+    }
+  }
   const LAYOUT_KEY = 'ds.ozhouse.layout.v3';   /* v3 — 옛 placard 좌표 데이터 무시(강제 reset) */
 
   /* 편집 토글은 외부 m/index.html oz-house-screen top-bar 의 ☀️ 옆 버튼이 담당.
@@ -1007,6 +1034,7 @@
   function saveAll(){
     const layout = {};
     EDIT_SELECTORS.forEach(sel => {
+      if (sel === '.cat') { saveCatPos(); return; }   // 고양이는 (theme + 자세) 별도 저장소
       withGroup(sel).forEach(s => {
         const el = document.querySelector(s); if (!el) return;
         const cs = getComputedStyle(el);
