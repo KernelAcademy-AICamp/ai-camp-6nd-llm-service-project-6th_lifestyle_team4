@@ -160,6 +160,11 @@
   .tab{ font-family:var(--sans); font-size:12px; font-weight:700; padding:5px 13px; border-radius:14px; border:1px solid var(--sand); background:transparent; color:var(--walnut); cursor:pointer; }
   .tab.active{ background:var(--espresso); color:var(--paper); border-color:var(--espresso); }
   .yarn-chip{ margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--cta); background:rgba(216,90,48,.1); padding:4px 10px; border-radius:12px; }
+  /* 편집 토글 — 트레이 탭 형태 + 활성 시 cta 강조 */
+  .tab.edit-toggle{ border-color:var(--cta); color:var(--cta); margin-left:auto; }
+  .tab.edit-toggle[aria-pressed="true"]{ background:var(--cta); color:var(--paper); border-color:var(--cta); }
+  /* 편집 토글이 끝에 정렬되도록 yarn-chip 의 margin-left:auto 를 무력화 (둘 다 있으면 토글이 먼저, 칩이 그 다음) */
+  .tray-tabs .tab.edit-toggle ~ .yarn-chip{ margin-left:8px; }
   .yarn-chip i{ width:11px; height:11px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#E0683E,#B8431F); display:inline-block; }
   .tray-options{ display:flex; gap:10px; margin-top:11px; overflow-x:auto; padding-bottom:2px; }
   .opt{ flex:none; width:64px; cursor:pointer; text-align:center; }
@@ -369,6 +374,7 @@
             <button class="tab active" data-cat="sofa">소파</button>
             <button class="tab" data-cat="rug">러그</button>
             <button class="tab" data-cat="tower">캣타워</button>
+            <button class="tab edit-toggle" id="editToggle" type="button" aria-pressed="false">✏️ 편집</button>
             <span class="yarn-chip"><i></i> 실타래 5</span>
           </div>
           <div class="tray-options" id="trayOptions"></div>
@@ -748,11 +754,18 @@
   applyLayout();
 
   let editMode = false;
+  const editToggleBtn = document.getElementById('editToggle');
+  function syncEditToggle(){
+    if (!editToggleBtn) return;
+    editToggleBtn.setAttribute('aria-pressed', editMode ? 'true' : 'false');
+    editToggleBtn.textContent = editMode ? '✓ 완료' : '✏️ 편집';
+  }
   function enterEdit(){
     if (editMode) return;
     editMode = true;
     editToast.style.display = 'block';
     EDIT_SELECTORS.forEach(sel => document.querySelector(sel)?.classList.add('oz-editing'));
+    syncEditToggle();
   }
   function exitEdit(){
     if (!editMode) return;
@@ -760,7 +773,13 @@
     editToast.style.display = 'none';
     EDIT_SELECTORS.forEach(sel => document.querySelector(sel)?.classList.remove('oz-editing'));
     saveAll();
+    syncEditToggle();
   }
+  /* 트레이 '편집' 토글 — long-press 안 해도 즉시 편집 진입/종료 */
+  editToggleBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();   // 빈 곳 탭으로 인식돼 다시 종료되는 걸 방지
+    editMode ? exitEdit() : enterEdit();
+  });
   function saveAll(){
     const layout = {};
     EDIT_SELECTORS.forEach(sel => {
@@ -833,10 +852,11 @@
     el.addEventListener('pointercancel', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } endDrag(); });
   });
 
-  /* 빈 곳 탭하면 편집 모드 종료 (편집 대상 위 탭은 그 핸들러가 가져감) */
+  /* 빈 곳 탭하면 편집 모드 종료 (편집 대상 / 트레이 / topbar 위 탭은 무시) */
   document.addEventListener('pointerdown', (e) => {
     if (!editMode) return;
     if (EDIT_SELECTORS.some(sel => e.target.closest(sel))) return;
+    if (e.target.closest('.tray, .topbar')) return;
     exitEdit();
   }, true);
 </script>
