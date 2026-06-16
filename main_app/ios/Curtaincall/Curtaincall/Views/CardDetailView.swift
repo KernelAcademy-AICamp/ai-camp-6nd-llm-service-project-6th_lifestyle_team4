@@ -13,6 +13,8 @@ struct CardDetailView: View {
     /// 실타래 게이트 — 잔액 부족이면 카드 내용을 가리고 충전을 유도한다.
     @State private var gate: GateState = .checking
     @State private var showYarnPurchase = false
+    /// 공유용 명대사 카드 이미지 — 콘텐츠 표시 시 1회 렌더해 캐시.
+    @State private var shareCardImage: Image?
     @State private var displayedViewCount: Int
     @State private var bookmarkCount = 0
     @State private var didIncrementView = false
@@ -374,6 +376,20 @@ struct CardDetailView: View {
             }
             Spacer()
 
+            // 타이포 명대사 카드 이미지 공유 (#10). 이미지는 .task 에서 1회 렌더해 캐시
+            // (탑바 재평가마다 ImageRenderer 가 도는 것을 피한다). 렌더 전엔 흐린 자리표시.
+            Group {
+                if let shareCardImage {
+                    ShareLink(item: shareCardImage,
+                              preview: SharePreview(QuoteCardView.shareTitle(card), image: shareCardImage)) {
+                        shareIcon
+                    }
+                } else {
+                    shareIcon.opacity(0.4)
+                }
+            }
+            .buttonStyle(.plain)
+
             Button {
                 toggleBookmark()
             } label: {
@@ -387,6 +403,13 @@ struct CardDetailView: View {
         .padding(.horizontal, 20)
         .frame(height: 64)
         .background(Color.paper)
+    }
+
+    private var shareIcon: some View {
+        Image(systemName: "square.and.arrow.up")
+            .font(.system(size: 18, weight: .regular))
+            .foregroundStyle(.walnut)
+            .frame(width: 40, height: 40)
     }
 
     private func toggleBookmark() {
@@ -415,6 +438,7 @@ struct CardDetailView: View {
         switch decision {
         case .allowed:
             gate = .open
+            shareCardImage = QuoteCardView.shareImage(for: card)   // 콘텐츠 열릴 때 1회 렌더
             await loadCountsAndIncrementView()
         case .blocked:
             gate = .locked
