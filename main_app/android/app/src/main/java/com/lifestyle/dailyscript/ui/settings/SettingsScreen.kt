@@ -500,15 +500,6 @@ private fun SignInDialog(
                     borderColor = Color(0xFFDADCE0),
                     onClick = { onSocialSignIn(SocialProvider.GOOGLE) },
                 )
-                Box(modifier = Modifier.height(8.dp))
-                SocialLoginButton(
-                    text = "카카오로 로그인 (준비 중)",
-                    iconRes = R.drawable.ic_kakao_symbol,
-                    background = Color(0xFFFEE500),
-                    contentColor = Color(0xFF000000),
-                    alpha = 0.55f,
-                    onClick = { onSocialSignIn(SocialProvider.KAKAO) },
-                )
                 Box(modifier = Modifier.height(14.dp))
                 Text(
                     text = "소셜 로그인은 회원 식별 및 로그인 목적으로만 사용되며, 소셜 계정의 프로필 정보는 사용하지 않습니다.",
