@@ -43,24 +43,20 @@ final class YarnStore: ObservableObject {
         defaults.set(map, forKey: rewardedKey)
     }
 
-    private func unmarkCardRewarded(_ cardId: Int) {
-        var map = rewardedMap()
-        map[String(cardId)] = nil
-        defaults.set(map, forKey: rewardedKey)
-    }
-
     // MARK: - Reward
 
-    /// 카드 첫 열람 보상 — 카드당 1회 +1. 로컬 `ds.yarnRewarded` 로 중복 차단.
-    /// (PWA 는 서버 dedup RPC `reward_yarn_first_view` 사용 — 06_yarn.sql 미포함이라
-    ///  여기선 grant_yarn(1) + 로컬 dedup. 재설치 시 재지급 가능 — PR 에 플래그.)
-    func rewardFirstOpen(cardId: Int) async {
-        guard !isCardRewarded(cardId) else { return }
-        markCardRewarded(cardId)   // optimistic — 빠른 중복 차단
+    /// 카드 첫 열람 보상 — 카드당 1회 +1. **서버가 영구 dedup** 한다
+    /// (`reward_yarn_first_view`, `(user_id, card_id)` UNIQUE) — 재설치/기기 변경에도
+    /// 재지급되지 않는다. 로컬 `ds.yarnRewarded` 는 같은 세션의 불필요한 RPC 재호출을
+    /// 막는 빠른 캐시일 뿐, 진실은 서버다. 익명도 `userId` 가 있으면 보상받는다(PWA 동일).
+    func rewardFirstOpen(cardId: Int, userId: Int?) async {
+        guard let userId else { return }
+        guard !isCardRewarded(cardId) else { return }   // 로컬 빠른 차단
         do {
-            balance = try await Supa.shared.grantYarn(1)
+            balance = try await Supa.shared.rewardFirstView(userId: userId, cardId: cardId)
+            markCardRewarded(cardId)   // 성공 후 기록(서버가 진짜 dedup). 실패 시 다음 열람에 재시도.
         } catch {
-            unmarkCardRewarded(cardId)   // 실패 시 재시도 가능하도록 롤백
+            // 네트워크 오류 — 기록하지 않음 → 다음 열람에 재시도(서버 dedup 이 중복 적립 방지).
         }
     }
 
