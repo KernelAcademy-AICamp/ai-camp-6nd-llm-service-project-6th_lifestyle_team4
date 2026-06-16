@@ -36,8 +36,12 @@ struct RootView: View {
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
+    @EnvironmentObject private var attendance: AttendanceStore
 
     @State private var selectedTab: Tab = .daily
+    @State private var showAttendance = false
+    @State private var attendanceRewarded = false
+    @State private var attendanceChecked = false   // 앱 실행당 1회만 자동 체크
     @State private var dailyPath = NavigationPath()
     @State private var homePath = NavigationPath()
     @State private var archivePath = NavigationPath()
@@ -76,6 +80,13 @@ struct RootView: View {
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
             yarn.sync(serverBalance: session.yarnBalance)   // 로그인/로그아웃 시 잔액 재시드
+        }
+        // 출석체크 — 그날 첫 진입 1회 모달 + 첫 출석이면 실타래 +5. 온보딩 이후에 띄운다.
+        .task { checkAttendance() }
+        .onChange(of: session.ready) { _, _ in checkAttendance() }
+        .onChange(of: prefs.prefSelected) { _, _ in checkAttendance() }
+        .sheet(isPresented: $showAttendance) {
+            AttendanceView(rewarded: attendanceRewarded)
         }
         .onChange(of: selectedTab) { _, newValue in
             if newValue == .archive && session.isAnonymous {
@@ -156,6 +167,19 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    /// 그날 첫 진입이면 출석 모달을 띄우고, 첫 출석이면 실타래 +5 지급.
+    /// 세션 준비 + 온보딩 완료 후에만, 앱 실행당 1회 실행(`attendanceChecked`).
+    private func checkAttendance() {
+        guard session.ready, prefs.prefSelected, !attendanceChecked else { return }
+        attendanceChecked = true
+        guard attendance.shouldAutoShowToday() else { return }
+        attendance.markAutoShown()
+        let isNew = attendance.registerToday()
+        attendanceRewarded = isNew
+        if isNew { Task { await yarn.grant(AttendanceStore.reward) } }
+        showAttendance = true
     }
 
     /// Unread notice → dot on the MY tab (Notice is no longer its own tab).
