@@ -126,7 +126,7 @@ private val CAT_CASES = listOf(
 
 // ════════════════ 꾸미기 카탈로그 (PWA oz-house DECOR) ════════════════
 
-/** 테마 — 'default' 는 기본 보유, 'moby-dick' 은 구매(이미지) 가능, 나머지는 잠금(책 완독 해금). */
+/** 테마 — 'default' 는 기본 보유, 이미지가 있는 테마(모비딕·개츠비·걸리버·셜록·로미오와 줄리엣)는 구매 가능, 나머지는 잠금(책 완독 해금). PWA oz-house DECOR.theme 와 동기화. */
 private data class OzThemeOpt(
     val id: String, val name: String, val nameEn: String,
     val locked: Boolean, val price: Int, val image: String? = null,
@@ -136,16 +136,16 @@ private val OZ_THEMES = listOf(
     OzThemeOpt("default", "기본", "Normal", false, 0),
     OzThemeOpt("moby-dick", "모비딕", "Moby-Dick", false, 200, "oz-themes/Mobydick.png"),
     OzThemeOpt("demian", "데미안", "Demian", true, 200),
-    OzThemeOpt("gatsby", "위대한 개츠비", "The Great Gatsby", true, 200),
+    OzThemeOpt("gatsby", "위대한 개츠비", "The Great Gatsby", false, 200, "oz-themes/Gatsby.png"),
     OzThemeOpt("around-world", "80일 간의 세계일주", "Around the World in 80 Days", true, 200),
-    OzThemeOpt("gullivers", "걸리버 여행기", "Gulliver's Travels", true, 200),
+    OzThemeOpt("gullivers", "걸리버 여행기", "Gulliver's Travels", false, 200, "oz-themes/Gullivers.png"),
     OzThemeOpt("notre-dame", "노트르담 드 파리", "Notre-Dame de Paris", true, 200),
     OzThemeOpt("metamorphosis", "변신", "The Metamorphosis", true, 200),
-    OzThemeOpt("sherlock", "셜록 홈즈", "Sherlock Holmes", true, 200),
+    OzThemeOpt("sherlock", "셜록 홈즈", "Sherlock Holmes", false, 200, "oz-themes/Sherlock.png"),
     OzThemeOpt("divine-comedy", "신곡", "Divine Comedy", true, 200),
     OzThemeOpt("siddhartha", "싯다르타", "Siddhartha", true, 200),
     OzThemeOpt("phantom-opera", "오페라의 유령", "The Phantom of the Opera", true, 200),
-    OzThemeOpt("romeo-juliet", "로미오와 줄리엣", "Romeo and Juliet", true, 200),
+    OzThemeOpt("romeo-juliet", "로미오와 줄리엣", "Romeo and Juliet", false, 200, "oz-themes/RomeoJuliet.png"),
     OzThemeOpt("alice", "이상한 나라의 앨리스", "Alice in Wonderland", true, 200),
     OzThemeOpt("jungle-book", "정글북", "The Jungle Book", true, 200),
     OzThemeOpt("king-arthur", "아서왕", "King Arthur", true, 200),
@@ -234,9 +234,6 @@ fun OzHouseScreen(userId: Long, yarnVm: YarnViewModel, onBack: () -> Unit, onOpe
     var sheet by remember { mutableStateOf<OzSheet?>(null) }
     var themeDialog by remember { mutableStateOf<OzThemeOpt?>(null) }
 
-    // 트레이 테마 스와치용 모비딕 미니어처 — 편집 중에만 로드.
-    val mobyBmp = if (editing) rememberAssetImage("oz-themes/Mobydick.png") else null
-
     val showFurniture = !themed
     val sofaOptScene = if (showFurniture) OZ_SOFAS.firstOrNull { it.id == state.sofa } else null
     val rugKindScene = if (showFurniture) OZ_RUGS.firstOrNull { it.first == state.rug }?.third else null
@@ -313,7 +310,6 @@ fun OzHouseScreen(userId: Long, yarnVm: YarnViewModel, onBack: () -> Unit, onOpe
                 state = state,
                 activeTab = activeTab,
                 onTab = { activeTab = it },
-                mobyBmp = mobyBmp,
                 themed = themed,
                 catIdx = idx,
                 onSelectCat = { catIdx = it },
@@ -398,6 +394,27 @@ private fun rememberAssetImage(path: String): ImageBitmap? {
     val context = LocalContext.current
     return remember(path) {
         runCatching { context.assets.open(path).use { BitmapFactory.decodeStream(it) }.asImageBitmap() }.getOrNull()
+    }
+}
+
+/**
+ * 스와치용 다운샘플 디코드 — 큰 테마 PNG(룸 배경 원본)를 썸네일 크기로만 읽어
+ * 트레이에 여러 테마 미리보기를 띄울 때의 메모리/끊김을 줄인다. path=null 이면 null.
+ */
+@Composable
+private fun rememberAssetThumb(path: String?, reqPx: Int = 192): ImageBitmap? {
+    val context = LocalContext.current
+    return remember(path, reqPx) {
+        if (path == null) return@remember null
+        runCatching {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.assets.open(path).use { BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            val longest = maxOf(bounds.outWidth, bounds.outHeight)
+            while (longest / sample > reqPx * 2) sample *= 2
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            context.assets.open(path).use { BitmapFactory.decodeStream(it, null, opts) }?.asImageBitmap()
+        }.getOrNull()
     }
 }
 
@@ -880,7 +897,6 @@ private fun DecorTray(
     state: OzHouseState,
     activeTab: String,
     onTab: (String) -> Unit,
-    mobyBmp: ImageBitmap?,
     themed: Boolean,
     catIdx: Int,
     onSelectCat: (Int) -> Unit,
@@ -939,7 +955,7 @@ private fun DecorTray(
                             val owned = opt.id == "default" || opt.id in state.purchasedThemes
                             val lockedVisual = opt.locked && !owned
                             TrayOption(label = opt.name, active = state.theme == opt.id, onClick = { onSelectTheme(opt) }) {
-                                ThemeSwatch(opt, lockedVisual, mobyBmp)
+                                ThemeSwatch(opt, lockedVisual)
                             }
                         }
                         "cat" -> CAT_CASES.forEachIndexed { i, case ->
@@ -1019,11 +1035,13 @@ private fun TrayOption(label: String, active: Boolean, onClick: () -> Unit, swat
 }
 
 @Composable
-private fun BoxScope.ThemeSwatch(opt: OzThemeOpt, lockedVisual: Boolean, mobyBmp: ImageBitmap?) {
+private fun BoxScope.ThemeSwatch(opt: OzThemeOpt, lockedVisual: Boolean) {
+    // 각 테마는 자신의 배경 이미지를 썸네일로 — 잠금/이미지 없음이면 디코드 생략.
+    val thumb = rememberAssetThumb(if (!lockedVisual) opt.image else null)
     when {
         opt.id == "default" -> Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFFFBF6EC), Color(0xFFEFE6D2)))))
-        !lockedVisual && opt.image != null && mobyBmp != null ->
-            Image(bitmap = mobyBmp, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        thumb != null ->
+            Image(bitmap = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         lockedVisual -> {
             Box(Modifier.fillMaxSize().background(Color(0x2E3C2612)), contentAlignment = Alignment.Center) {
                 Text("🔒", fontSize = 16.sp)
