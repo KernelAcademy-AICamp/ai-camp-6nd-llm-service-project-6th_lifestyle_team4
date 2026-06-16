@@ -155,6 +155,13 @@ struct MyFeedView: View {
 
             if editingPostId == post.postId {
                 editBox
+                Spacer().frame(height: 6)
+                HStack {
+                    Spacer()
+                    Text("\(editDraft.count)/300자")
+                        .font(.bodySans(11))
+                        .foregroundStyle(.walnut)
+                }
                 Spacer().frame(height: 8)
                 linkRow {
                     linkButton("Cancel", color: .walnut) { editingPostId = nil }
@@ -241,7 +248,9 @@ struct MyFeedView: View {
                 .padding(.vertical, 6)
                 .scrollContentBackground(.hidden)
                 .onChange(of: editDraft) { _, newValue in
-                    if newValue.count > 500 { editDraft = String(newValue.prefix(500)) }
+                    // feed_posts.body DB CHECK is 1–300 chars (017_feed_posts.sql),
+                    // matching FeedView's composer — cap here so an edit can't fail on save.
+                    if newValue.count > 300 { editDraft = String(newValue.prefix(300)) }
                 }
         }
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
