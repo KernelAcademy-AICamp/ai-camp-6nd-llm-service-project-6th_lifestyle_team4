@@ -54,7 +54,7 @@
 
   /* ── 테마: 모비딕 ── 배경 이미지(데크 + 바다 + 고래) 한 장으로 룸 전체를 대체 */
   .room.theme-moby-dick{
-    background-image: url('assets/oz-themes/Mobydick.png');
+    background-image: url('assets/oz-themes/mobydick.png');
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
@@ -68,7 +68,7 @@
 
   /* ── 테마: 위대한 개츠비 ── 야간 무도회 + 호수 풍경 한 장으로 룸 전체를 대체 */
   .room.theme-gatsby{
-    background-image: url("assets/oz-themes/The Great Gatsby.png");
+    background-image: url("assets/oz-themes/the great gatsby.png");
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
@@ -81,7 +81,7 @@
 
   /* ── 테마: 걸리버 여행기 ── 거인 나라 풍경 한 장으로 룸 전체를 대체 */
   .room.theme-gullivers{
-    background-image: url("assets/oz-themes/Gulliver's Travels.png");
+    background-image: url("assets/oz-themes/gulliver's travels.png");
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
@@ -94,7 +94,7 @@
 
   /* ── 테마: 셜록 홈즈 ── 베이커가 221B 한 장으로 룸 전체를 대체 */
   .room.theme-sherlock{
-    background-image: url("assets/oz-themes/Sherlock Holmes.png");
+    background-image: url("assets/oz-themes/sherlock holmes.png");
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
@@ -104,6 +104,19 @@
   .room.theme-sherlock .floor,
   .room.theme-sherlock .lightbeam{ background:none !important; box-shadow:none !important; }
   .room.theme-sherlock .wall::before{ background:none !important; }
+
+  /* ── 테마: 로미오와 줄리엣 ── 발코니 + 베로나 풍경 한 장으로 룸 전체를 대체 */
+  .room.theme-romeo-juliet{
+    background-image: url("assets/oz-themes/romeo and juliet.png");
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+  .room.theme-romeo-juliet .wall,
+  .room.theme-romeo-juliet .baseboard,
+  .room.theme-romeo-juliet .floor,
+  .room.theme-romeo-juliet .lightbeam{ background:none !important; box-shadow:none !important; }
+  .room.theme-romeo-juliet .wall::before{ background:none !important; }
 
   /* ── 밤 모드 ── */
   .room.night .wall{ background:linear-gradient(180deg,#28324c 0%, #303b56 60%, #36415e 100%); }
@@ -620,7 +633,7 @@
       { id:'divine-comedy',  name:'신곡',                     nameEn:'Divine Comedy',                    locked:true, price:200, hint:"실타래 200개 / 또는 책 '신곡'의 모든 카드를 다 읽으면 해금" },
       { id:'siddhartha',     name:'싯다르타',                 nameEn:'Siddhartha',                       locked:true, price:200, hint:"실타래 200개 / 또는 책 '싯다르타'의 모든 카드를 다 읽으면 해금" },
       { id:'phantom-opera',  name:'오페라의 유령',            nameEn:'The Phantom of the Opera',         locked:true, price:200, hint:"실타래 200개 / 또는 책 '오페라의 유령'의 모든 카드를 다 읽으면 해금" },
-      { id:'romeo-juliet',   name:'로미오와 줄리엣',          nameEn:'Romeo and Juliet',                 locked:true, price:200, hint:"실타래 200개 / 또는 책 '로미오와 줄리엣'의 모든 카드를 다 읽으면 해금" },
+      { id:'romeo-juliet',   name:'로미오와 줄리엣',          nameEn:'Romeo and Juliet',                 locked:false, price:200, hint:"실타래 200개 / 또는 책 '로미오와 줄리엣'의 모든 카드를 다 읽으면 해금" },
       { id:'alice',          name:'이상한 나라의 앨리스',     nameEn:"Alice's Adventures in Wonderland", locked:true, price:200, hint:"실타래 200개 / 또는 책 '이상한 나라의 앨리스'의 모든 카드를 다 읽으면 해금" },
       { id:'jungle-book',    name:'정글북',                   nameEn:'The Jungle Book',                  locked:true, price:200, hint:"실타래 200개 / 또는 책 '정글북'의 모든 카드를 다 읽으면 해금" },
       { id:'king-arthur',    name:'아서왕',                   nameEn:'King Arthur',                      locked:true, price:200, hint:"실타래 200개 / 또는 책 '아서왕'의 모든 카드를 다 읽으면 해금" },
@@ -883,10 +896,11 @@
   }
   /* 테마 id → swatch/배경 미니어처 이미지 경로. 등록 안 된 id 는 이미지 없음(자물쇠 표시). */
   const THEME_IMG = {
-    'moby-dick': 'assets/oz-themes/Mobydick.png',
-    'gatsby':    'assets/oz-themes/The Great Gatsby.png',
-    'gullivers': "assets/oz-themes/Gulliver's Travels.png",
-    'sherlock':  'assets/oz-themes/Sherlock Holmes.png',
+    'moby-dick':    'assets/oz-themes/mobydick.png',
+    'gatsby':       'assets/oz-themes/the great gatsby.png',
+    'gullivers':    "assets/oz-themes/gulliver's travels.png",
+    'sherlock':     'assets/oz-themes/sherlock holmes.png',
+    'romeo-juliet': 'assets/oz-themes/romeo and juliet.png',
   };
 
   function swatch(cat,o){
