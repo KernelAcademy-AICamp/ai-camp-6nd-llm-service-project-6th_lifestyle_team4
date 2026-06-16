@@ -26,6 +26,10 @@ object AppAnalytics {
                     Configuration(
                         apiKey = amplitudeApiKey,
                         context = appContext,
+                        // DB user_id(예: "42")는 SDK 기본 최소 id 길이(5)보다 짧아,
+                        // 이 설정이 없으면 setUserId가 거부돼 모든 이벤트가 익명으로 잡힌다.
+                        // PWA analytics.js의 minIdLength: 1 과 동일하게 맞춘다.
+                        minIdLength = 1,
                         autocapture = setOf(AutocaptureOption.SESSIONS),
                     )
                 )
