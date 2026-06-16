@@ -2791,7 +2791,7 @@ function renderDailyDate() {
   const d = new Date();
   const days = ['일','월','화','수','목','금','토'];
   const ymd = `${d.getFullYear()} · ${String(d.getMonth()+1).padStart(2,'0')} · ${String(d.getDate()).padStart(2,'0')}`;
-  el.innerHTML = `${ymd} · <span style="color:var(--cta);">${days[d.getDay()]}</span>`;
+  el.innerHTML = `${ymd} · <span style="color:var(--cta);font-weight:700;">${days[d.getDay()]}</span>`;
 }
 
 const NOTICE_TAG_LABEL_DAILY = { update: 'UPDATE', notice: 'NOTICE', event: 'EVENT' };
@@ -3054,8 +3054,7 @@ function renderDailyContextual() {
   stopContextualCarousel();
   sec.style.display = 'block';
   sec.innerHTML = `
-    <h2 class="t-headline-md c-espresso" style="margin:0 0 4px;">이럴 땐, 이런 문장</h2>
-    <p class="t-body-sm c-walnut" style="margin:0 0 14px;">지금 마음에 맞춰 한 문장을 골라드려요</p>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">이럴 땐, 이런 문장</h2>
     <div class="archive-chips" id="daily-context-chips" style="margin-bottom:16px;">
       ${CONTEXT_CATEGORIES.map((c, i) => `<button class="a-chip ${i === 0 ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
@@ -3252,7 +3251,7 @@ function renderDailyOzPick() {
   const themeHit = matchedChosenTheme(pick);
   const tasteHit = (pick.keywords || []).find((k) => taste.has(k));
   const reason = themeHit
-    ? `'${themeHit}' 주제를 고르신 당신을 위해 오즈가 골랐어요.`
+    ? `'${themeHit}' 주제를 고른 당신에게 추천해요.`
     : tasteHit
       ? `'${tasteHit}'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
       : '오즈가 오늘 골라드린 한 문장이에요.';
@@ -3285,8 +3284,8 @@ function renderDailyOzPick() {
       <div style="background:var(--latte);border:0.5px solid var(--sand);padding:14px 16px;margin-bottom:14px;border-radius:8px;">
         <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.6;">${escapeHtml(reason)}</p>
       </div>
-      <!-- 책표지(좌측) + 제목/작가/연도(우측) -->
-      <div style="display:flex;align-items:center;gap:12px;">
+      <!-- 추천 책 — 클릭 시 오늘의 명대사 카드(추천 카드)로 이동 -->
+      <div class="oz-rec-book" role="button" tabindex="0" style="display:flex;align-items:center;gap:12px;cursor:pointer;">
         ${dailyBookCoverHTML(work, { width: 56 })}
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:15px;color:var(--espresso);font-weight:700;line-height:1.3;">${escapeHtml(work.title || '')}</p>
@@ -3304,6 +3303,17 @@ function renderDailyOzPick() {
       track('daily_oz_clicked', { card_id: pick.card_id });
       spawnRandomCat();
     });
+  }
+  // 추천 책 클릭 → 추천 카드를 홈 '오늘의 명대사'로 띄우고 이동 (카드 전체의 고양이 spawn 은 막음).
+  const recBook = sec.querySelector('.oz-rec-book');
+  if (recBook) {
+    const openRec = (e) => {
+      e.stopPropagation();
+      track('daily_oz_recommend_open', { card_id: pick.card_id });
+      openRecommendedCard(pick);
+    };
+    recBook.addEventListener('click', openRec);
+    recBook.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') openRec(e); });
   }
 }
 
