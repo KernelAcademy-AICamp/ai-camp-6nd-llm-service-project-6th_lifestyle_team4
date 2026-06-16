@@ -44,8 +44,8 @@ android {
         applicationId = "com.lifestyle.dailyscript"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 5
+        versionName = "0.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -78,8 +78,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 네이티브 디버그 기호를 AAB에 포함 → Play Console 크래시/ANR 분석 가능
-            // ("이 App Bundle 유형은 네이티브 코드를 포함..." 경고 해결)
+            // 자체(C/C++) 네이티브 코드가 있으면 디버그 기호를 AAB에 포함시킨다.
+            // 현재는 자체 네이티브 코드가 없고 .so 가 전부 stripped 된 AndroidX prebuilt
+            // (libandroidx.graphics.path / libdatastore_shared_counter)뿐이라 추출되는 기호가
+            // 없어 Play Console "네이티브 디버그 기호 미업로드" 경고는 남지만 무해하다.
+            // 이후 자체 네이티브 코드를 추가하면 이 설정으로 자동 포함된다.
             ndk {
                 debugSymbolLevel = "FULL"
             }
