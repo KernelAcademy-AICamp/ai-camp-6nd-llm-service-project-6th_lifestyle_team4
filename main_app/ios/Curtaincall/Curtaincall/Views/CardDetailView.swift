@@ -40,6 +40,56 @@ struct CardDetailView: View {
     }
 
     var body: some View {
+        gatedContent
+            .background(Color.paper)
+            .toolbar(.hidden, for: .navigationBar)
+            .task { await runOpenFlow() }
+            // 충전 시트가 닫히면(구매 성공 등) 게이트를 자동 재평가 — 잠금 화면에서
+            // 충전 후 뒤로 나갔다 다시 들어오지 않아도 그 자리에서 열린다.
+            .sheet(isPresented: $showYarnPurchase, onDismiss: {
+                Task { await reEvaluateGateAfterPurchase() }
+            }) { YarnPurchaseView() }
+    }
+
+    /// 게이트 상태별 화면. **`.open` 일 때만** 카드 본문을 트리에 만든다 —
+    /// 그 전(.checking)엔 본문/스크립트/메타데이터가 존재하지 않아 읽기·텍스트 선택이 불가능하다.
+    @ViewBuilder
+    private var gatedContent: some View {
+        switch gate {
+        case .open: cardContent
+        case .checking: checkingCover
+        case .locked: yarnGateOverlay
+        }
+    }
+
+    /// 잔액 확인 전 불투명 커버 — 카드 본문을 만들지 않는다(읽기 불가).
+    private var checkingCover: some View {
+        ZStack {
+            Color.paper.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(.espresso)
+                            .frame(width: 40, height: 40)
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 64)
+                Spacer()
+                Text("불러오는 중⋯")
+                    .font(.bodySans(14))
+                    .foregroundStyle(.walnut)
+                Spacer()
+            }
+        }
+    }
+
+    /// 카드 본문 — 게이트가 `.open` 일 때만 렌더된다.
+    private var cardContent: some View {
         VStack(spacing: 0) {
             detailTopBar
             Hairline()
@@ -148,8 +198,6 @@ struct CardDetailView: View {
                 )
             }
         }
-        .background(Color.paper)
-        .toolbar(.hidden, for: .navigationBar)
         .preference(key: ComposerFocusedPreferenceKey.self, value: composerFocused)
         // Tapping REPLY on a comment focuses the composer (keyboard up).
         .onChange(of: comments.replyingTo?.commentId) { _, newValue in
@@ -161,12 +209,6 @@ struct CardDetailView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             if composerFocused { composerFocused = false }
         }
-        .task { await runOpenFlow() }
-        // 잔액 부족 시 카드 내용을 덮는 게이트(불투명) — 열람 차단 + 충전 유도.
-        .overlay {
-            if gate == .locked { yarnGateOverlay }
-        }
-        .sheet(isPresented: $showYarnPurchase) { YarnPurchaseView() }
         .overlay {
             if showAccountPrompt {
                 AccountRequiredPrompt {
@@ -376,6 +418,18 @@ struct CardDetailView: View {
             await loadCountsAndIncrementView()
         case .blocked:
             gate = .locked
+        }
+    }
+
+    /// 충전 시트가 닫힌 뒤 재평가 — 잠금 상태에서만. 구매로 잔액이 생겼으면
+    /// gateOpen 이 1 차감 + 언락 후 `.open` 으로 전환해 그 자리에서 본문을 드러낸다.
+    /// 구매 없이 닫았으면 consume_yarn 이 -1 → 잠금 유지(미차감).
+    private func reEvaluateGateAfterPurchase() async {
+        guard gate == .locked else { return }
+        let decision = await yarn.gateOpen(cardId: card.cardId, userId: session.userId, tourActive: false)
+        if case .allowed = decision {
+            gate = .open
+            await loadCountsAndIncrementView()
         }
     }
 
