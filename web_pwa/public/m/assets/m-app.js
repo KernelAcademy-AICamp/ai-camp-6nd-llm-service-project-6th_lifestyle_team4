@@ -4342,6 +4342,31 @@ nicknameInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeNicknameModal();
 });
 
+// 마이페이지 — 버전 정보 7번 연속 클릭 → 제작자 크레딧 이스터에그
+(function _versionEasterEgg() {
+  const row = document.getElementById('version-row');
+  if (!row) return;
+  let count = 0;
+  let timer = null;
+  row.addEventListener('click', () => {
+    count += 1;
+    clearTimeout(timer);
+    timer = setTimeout(() => { count = 0; }, 1500); // 1.5s 안에 다음 탭 없으면 reset
+    if (count >= 7) {
+      count = 0;
+      clearTimeout(timer);
+      openPromptModal({
+        title: '제작',
+        message: '정환욱\n박신영\n함승엽\n이창훈',
+        confirmLabel: '확인',
+        dismissLabel: '',
+        openSigninOnConfirm: false,
+        onConfirm: () => {},
+      });
+    }
+  });
+})();
+
 signOutBtn.addEventListener('click', async () => {
   const msg = state.isAnonymous
     ? '익명 세션을 종료할까요? 다시 입장하면 새 익명 ID가 생성됩니다.'
