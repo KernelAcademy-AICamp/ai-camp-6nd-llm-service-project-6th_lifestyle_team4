@@ -3099,7 +3099,7 @@ function renderDailyContextual() {
   const _dailyCatIdx = 0;
   sec.innerHTML = `
     <h2 class="t-headline-md c-espresso" style="margin:0 0 2px;font-weight:700;">이럴 땐, 이런 문장</h2>
-    <p class="t-body-sm c-walnut" style="margin:0 0 10px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
+    <p class="t-body-sm c-walnut" style="margin:0 0 5px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
     <div class="archive-chips" id="daily-context-chips" style="margin-bottom:16px;">
       ${cats.map((c, i) => `<button class="a-chip ${i === _dailyCatIdx ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
