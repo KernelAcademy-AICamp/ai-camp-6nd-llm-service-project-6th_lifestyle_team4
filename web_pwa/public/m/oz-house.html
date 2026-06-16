@@ -647,6 +647,24 @@
   const state={ theme:'default', sofa:'cream', rug:'coral', tower:'tall' };
   let activeCat='theme', curCase=-1;
 
+  /* 고양이 크기 — CSS variable 로 적용 (breathe animation 과 합성, --cat-scale × 1.012 호흡).
+     placeCat 첫 호출보다 위에 정의해 TDZ 문제 회피. 슬라이더 element 는 매 호출마다 query. */
+  let catScale = 1;
+  function applyCatScale(s){
+    catScale = Math.max(0.5, Math.min(1.8, Number(s) || 1));
+    try { if (catWrap) catWrap.style.setProperty('--cat-scale', String(catScale)); } catch {}
+    const range = document.getElementById('catSizeRange');
+    const val   = document.getElementById('catSizeVal');
+    if (range) range.value = String(catScale);
+    if (val)   val.textContent = `${Math.round(catScale * 100)}%`;
+  }
+  (function wireCatSizeRange(){
+    const range = document.getElementById('catSizeRange');
+    if (!range) return;
+    range.addEventListener('input',  (e) => applyCatScale(e.target.value));
+    range.addEventListener('change', () => { try { saveCatPos(); } catch {} });
+  })();
+
   function applySofa(o){ const s=sceneSofa.style; s.setProperty('--s-frame',o.frame); s.setProperty('--s-frame-d',o.frameD); s.setProperty('--s-seat',o.seat); s.setProperty('--s-seat-d',o.seatD); s.setProperty('--s-cushion',o.cushion); s.setProperty('--s-cushion-d',o.cushionD); s.setProperty('--s-pa',o.pA); s.setProperty('--s-pa-d',o.pAd); s.setProperty('--s-pb',o.pB); s.setProperty('--s-pb-d',o.pBd); }
   function applyRug(o){ sceneRug.style.background=o.bg; }
   function applyTower(o){ sceneTower.innerHTML=o.html; }
@@ -1101,22 +1119,6 @@
   }
   function currentCatSrc(){ return (typeof CATS !== 'undefined' && CATS[curCase]?.src) || ''; }
 
-  /* 고양이 크기 — CSS variable 로 적용 (breathe animation 과 합성, --cat-scale × 1.012 호흡) */
-  const catSizeCtrl  = document.getElementById('catSizeCtrl');
-  const catSizeRange = document.getElementById('catSizeRange');
-  const catSizeVal   = document.getElementById('catSizeVal');
-  let catScale = 1;
-  function applyCatScale(s){
-    catScale = Math.max(0.5, Math.min(1.8, Number(s) || 1));
-    if (catWrap) catWrap.style.setProperty('--cat-scale', String(catScale));
-    if (catSizeRange) catSizeRange.value = String(catScale);
-    if (catSizeVal) catSizeVal.textContent = `${Math.round(catScale * 100)}%`;
-  }
-  if (catSizeRange) {
-    catSizeRange.addEventListener('input',  (e) => applyCatScale(e.target.value));
-    catSizeRange.addEventListener('change', () => { try { saveCatPos(); } catch {} });
-  }
-
   function saveCatPos(){
     const src = currentCatSrc(); if (!src) return;
     const cs = getComputedStyle(catWrap);
@@ -1233,7 +1235,7 @@
     });
     document.getElementById('tray')?.classList.remove('expanded');
     /* 고양이 크기 슬라이더 노출 + 현재 scale 동기화 */
-    catSizeCtrl?.classList.add('show');
+    document.getElementById('catSizeCtrl')?.classList.add('show');
     applyCatScale(catScale);
     syncParentBtn();
   }
@@ -1243,7 +1245,7 @@
     EDIT_SELECTORS.forEach(sel => {
       withGroup(sel).forEach(s => document.querySelector(s)?.classList.remove('oz-editing'));
     });
-    catSizeCtrl?.classList.remove('show');
+    document.getElementById('catSizeCtrl')?.classList.remove('show');
     saveAll();
     syncParentBtn();
   }
