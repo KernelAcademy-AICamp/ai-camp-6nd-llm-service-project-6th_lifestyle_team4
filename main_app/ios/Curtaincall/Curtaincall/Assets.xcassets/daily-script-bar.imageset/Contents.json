@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "daily-script-bar.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

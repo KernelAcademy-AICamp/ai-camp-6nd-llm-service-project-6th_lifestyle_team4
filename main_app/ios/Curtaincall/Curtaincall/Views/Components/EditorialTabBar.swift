@@ -1,5 +1,19 @@
 import SwiftUI
 
+/// 탭별 장식 고양이 자세 — Android `BottomNavBar.kt` 의 `catPose` / PWA
+/// `updateBottomNavCatForView` 미러. 위치/크기 수치는 실기기에서 미세조정 가능(조정 가능).
+private struct NavCatPose: Equatable {
+    /// Assets.xcassets imageset 이름.
+    let asset: String
+    /// 화면에 그릴 높이(pt). 폭은 `scaledToFit` 으로 비율 유지.
+    let height: CGFloat
+    /// 가로 위치 bias: -1=좌, 0=중앙, 1=우. (Android hBias 미러)
+    let hBias: CGFloat
+    /// 이미지에서 'ledge 선'(바 윗면에 닿는 지점)의 위→아래 비율.
+    /// 이 비율만큼이 바 위로 솟고(protrude), 나머지가 바 위에 얹힌다.
+    let ledgeFraction: CGFloat
+}
+
 struct EditorialTabBar: View {
     @Binding var selection: Tab
     /// Unread-notice dot on the MY tab (Notice is no longer its own tab).
@@ -8,13 +22,25 @@ struct EditorialTabBar: View {
     /// navigation stack back to root).
     var onReselect: ((Tab) -> Void)? = nil
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// TODAY(center) 탭을 누를 때마다 1씩 증가 → 실타래 'jiggle' 트리거.
+    @State private var yarnTapCount = 0
+    /// jiggle 중 실타래에 적용하는 스케일/회전.
+    @State private var yarnScale: CGFloat = 1
+    @State private var yarnRotation: Double = 0
+
+    private var poseAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.72)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Hairline()
             HStack(spacing: 0) {
                 ForEach(Tab.allCases, id: \.self) { tab in
                     Button {
-                        if selection == tab { onReselect?(tab) } else { selection = tab }
+                        handleTap(tab)
                     } label: {
                         tabItem(tab: tab, active: tab == selection)
                             .frame(maxWidth: .infinity)
@@ -27,7 +53,43 @@ struct EditorialTabBar: View {
             .frame(height: 64)
         }
         .background(Color.paper)
+        // 장식 고양이 — 바 윗면 위로 솟아오른다. click-through(allowsHitTesting=false)
+        // 라서 탭 히트테스트를 가리지 않는다. overlay 라 바 레이아웃 크기에 영향 없음.
+        .overlay(alignment: .top) { navCat }
+        // 탭 전환 시 잔잔한 셀렉션 햅틱 (시스템 설정 자동 반영).
+        .sensoryFeedback(.selection, trigger: selection)
     }
+
+    // MARK: - Tap handling
+
+    private func handleTap(_ tab: Tab) {
+        if selection == tab {
+            onReselect?(tab)
+        } else {
+            selection = tab
+        }
+        // TODAY(center) 를 누르면 실타래를 톡 흔든다 (재탭 포함 = '새 명대사' 신호).
+        if tab.isCenter {
+            yarnTapCount += 1
+            jiggleYarn()
+        }
+    }
+
+    /// 실타래 한 번 'jiggle' — 스프링으로 살짝 키웠다 회전했다 제자리로. Reduce Motion 시 생략.
+    private func jiggleYarn() {
+        guard !reduceMotion else { return }
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.38)) {
+            yarnScale = 1.18
+            yarnRotation = 12
+        } completion: {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.55)) {
+                yarnScale = 1
+                yarnRotation = 0
+            }
+        }
+    }
+
+    // MARK: - Tab items
 
     @ViewBuilder
     private func tabItem(tab: Tab, active: Bool) -> some View {
@@ -64,8 +126,8 @@ struct EditorialTabBar: View {
         }
     }
 
-    /// Prominent center tab (TODAY) — a raised filled medallion. The yarn-ball
-    /// graphic replaces the SF Symbol in a later PR.
+    /// Prominent center tab (TODAY) — a raised filled medallion holding the
+    /// daily-script (yarn-ball) graphic, mirroring the PWA/Android center button.
     private func centerItem(tab: Tab, active: Bool) -> some View {
         VStack(spacing: 2) {
             ZStack {
@@ -73,9 +135,12 @@ struct EditorialTabBar: View {
                     .fill(active ? Color.espresso : Color.roast)
                     .frame(width: 44, height: 44)
                     .shadow(color: Color.black.opacity(0.18), radius: 4, x: 0, y: 2)
-                Image(systemName: tab.iconName)
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(Color.paper)
+                Image("daily-script-bar")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 30, height: 30)
+                    .scaleEffect(yarnScale)
+                    .rotationEffect(.degrees(yarnRotation))
             }
             .offset(y: -6)
             Text(tab.title.uppercased())
@@ -85,6 +150,44 @@ struct EditorialTabBar: View {
                 .lineLimit(1)
                 .offset(y: -4)
         }
+    }
+
+    // MARK: - Decorative nav cat
+
+    /// 선택된 탭에 따른 고양이 자세 — Android/PWA 미러.
+    ///   feed=cat_pen · archive(Library)=cat_struck · daily/settings=cat_empty(코너) · 그 외=cat_today(중앙 약간 우측)
+    private func catPose(for tab: Tab) -> NavCatPose {
+        switch tab {
+        case .feed:
+            return NavCatPose(asset: "cat_pen", height: 92, hBias: 0.92, ledgeFraction: 0.86)
+        case .archive:
+            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.78, ledgeFraction: 0.86)
+        case .daily, .settings:
+            return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)
+        case .home:
+            return NavCatPose(asset: "cat_today", height: 60, hBias: 0.30, ledgeFraction: 0.72)
+        }
+    }
+
+    private var navCat: some View {
+        let pose = catPose(for: selection)
+        return GeometryReader { geo in
+            let w = geo.size.width
+            // ledge 선이 바 윗면(geo y=0)에 오도록: 이미지 중심 y = height*(0.5 - ledgeFraction).
+            let centerY = pose.height * (0.5 - pose.ledgeFraction)
+            // bias 를 좌우 위치로: 0=중앙, ±1=가장자리에서 inset 만큼 안쪽.
+            let inset: CGFloat = 44
+            let centerX = w / 2 + pose.hBias * (w / 2 - inset)
+            Image(pose.asset)
+                .resizable()
+                .scaledToFit()
+                .frame(height: pose.height)
+                .id(pose.asset)                                  // 자세 바뀌면 새 뷰 → 크로스페이드
+                .transition(reduceMotion ? .identity : .opacity)
+                .position(x: centerX, y: centerY)
+        }
+        .allowsHitTesting(false)                                  // click-through
+        .animation(poseAnimation, value: selection)
     }
 }
 
