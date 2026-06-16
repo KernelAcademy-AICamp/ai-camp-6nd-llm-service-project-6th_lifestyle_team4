@@ -143,15 +143,18 @@ struct EditorialTabBar: View {
             ZStack {
                 Circle()
                     .fill(active ? Color.espresso : Color.roast)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 54, height: 54)
                     .shadow(color: Color.black.opacity(0.18), radius: 4, x: 0, y: 2)
+                // 실타래가 메달리온을 가득 채우도록 fill+clip (이미지 좌우 투명 여백은 잘라낸다).
                 Image("daily-script-bar")
                     .resizable()
-                    .scaledToFit()
-                    .frame(width: 30, height: 30)
-                    .scaleEffect(yarnScale)
-                    .rotationEffect(.degrees(yarnRotation))
+                    .scaledToFill()
+                    .frame(width: 54, height: 54)
+                    .clipShape(Circle())
             }
+            // jiggle 은 메달리온 전체에 적용 — fill+clip 이라 이미지만 돌리면 모서리가 비므로.
+            .scaleEffect(yarnScale)
+            .rotationEffect(.degrees(yarnRotation))
             .offset(y: -6)
             Text(tab.title.uppercased())
                 .font(.custom("Pretendard-Medium", size: 10))
