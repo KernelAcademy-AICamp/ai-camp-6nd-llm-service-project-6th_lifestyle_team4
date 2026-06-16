@@ -476,7 +476,7 @@
             <button class="tab" data-cat="sofa">소파</button>
             <button class="tab" data-cat="rug">러그</button>
             <button class="tab" data-cat="tower">캣타워</button>
-            <span class="yarn-chip"><img src="assets/daily-script-bar.png" alt="" /> 실타래 5</span>
+            <span class="yarn-chip" id="trayYarnChip"><img src="assets/daily-script-bar.png" alt="" /> 실타래 <b id="trayYarnCount">0</b></span>
           </div>
           <div class="tray-options" id="trayOptions"></div>
         </div>
@@ -707,6 +707,7 @@
               state[cat] = id;
               applyTheme(o);
               renderOptions();
+              updateYarnChip();
               /* TODO: 서버 실타래 차감 RPC 연결 */
             },
           });
@@ -788,6 +789,16 @@
   /* ───── 부모(m/index.html) 의 실데이터로 매칭 — state / localStorage / Supabase ───── */
   const P = () => window.parent || {};
   const parentState = () => (P().state || {});
+
+  /* 보유 실타래 — 부모(m-app.js) state.yarnPurchased 미러 */
+  function updateYarnChip(){
+    try {
+      const el = document.getElementById('trayYarnCount');
+      if (!el) return;
+      const n = Number(parentState().yarnPurchased ?? 0);
+      el.textContent = String(Math.max(0, n));
+    } catch {}
+  }
 
   function escapeText(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function todayStrLocal(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
@@ -986,7 +997,10 @@
   /* 초기화 */
   loadSavedTheme();
   apply('theme', state.theme || 'default'); apply('sofa','cream'); apply('rug','coral'); apply('tower','tall');
-  renderOptions(); buildWallCal();
+  renderOptions(); buildWallCal(); updateYarnChip();
+  /* 보유 실타래 — 부모 state 동기화 (출석/카드 첫 열람 등으로 바뀔 수 있음) */
+  setInterval(updateYarnChip, 2000);
+  window.addEventListener('focus', updateYarnChip);
   /* 사용자 명세: 진입마다 랜덤 자세 */
   placeCat(Math.floor(Math.random() * CATS.length));
 
