@@ -2777,7 +2777,7 @@ function dailyBookCoverHTML(work, opts = {}) {
       <img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" loading="lazy"
         onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', this.dataset.fallback);"
         data-fallback="${escapeHtml(fallback)}"
-        style="width:100%;height:100%;object-fit:cover;display:block;" />
+        style="width:100%;height:100%;object-fit:cover;object-position:top;display:block;" />
     </div>`;
   }
   return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};box-shadow:0 1px 4px rgba(60,40,20,0.18);border-radius:${radius}px;position:relative;overflow:hidden;">
@@ -2916,8 +2916,9 @@ function renderDailyNewBooks() {
   };
 
   const renderTemplate = (main, rest, mainWork, sampleQuote) => `
+    <div style="position:relative;">
     <button type="button" class="daily-newbook-main" data-work-key="${escapeHtml(main.key)}"
-      style="display:block;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px;cursor:pointer;text-align:left;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;overflow:hidden;position:relative;">
+      style="display:block;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px 20px 34px;cursor:pointer;text-align:left;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;overflow:hidden;position:relative;">
       <div class="daily-newbook-main-inner" style="display:flex;gap:16px;width:100%;align-items:center;">
         <div style="flex:1;min-width:0;">
           <p style="font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.04em;color:var(--sand);margin:0 0 12px;">${dailyDateLabel}</p>
@@ -2932,6 +2933,11 @@ function renderDailyNewBooks() {
         </div>
       </div>
     </button>
+    <!-- 페이지네이션 dots — 블랙 카드 하단에 오버레이 (카드 버튼 안에 중첩하면 button-in-button 무효라 래퍼에 absolute) -->
+    ${sorted.length > 1 ? `<div style="position:absolute;left:0;right:0;bottom:14px;display:flex;justify-content:center;gap:7px;">
+      ${sorted.map((_, i) => `<button type="button" data-dot-idx="${i}" aria-label="${i + 1}번째 새 책 보기" style="width:7px;height:7px;border-radius:50%;border:none;padding:0;cursor:pointer;background:${i === _newbooksMainIdx ? 'var(--paper)' : 'rgba(255,255,255,0.32)'};transition:background 0.2s;"></button>`).join('')}
+    </div>` : ''}
+    </div>
     <div style="display:flex;gap:12px;overflow-x:auto;padding:16px 0 8px;scrollbar-width:none;">
       ${rest.map((w) => {
         const work = (w.cards || [])[0]?.works || { title: w.title, cover_url: null };
@@ -2945,9 +2951,6 @@ function renderDailyNewBooks() {
         `;
       }).join('')}
     </div>
-    ${sorted.length > 1 ? `<div style="display:flex;justify-content:center;gap:7px;padding:8px 0 0;">
-      ${sorted.map((_, i) => `<button type="button" data-dot-idx="${i}" aria-label="${i + 1}번째 새 책 보기" style="width:7px;height:7px;border-radius:50%;border:none;padding:0;cursor:pointer;background:${i === _newbooksMainIdx ? 'var(--espresso)' : 'var(--sand)'};transition:background 0.2s;"></button>`).join('')}
-    </div>` : ''}
     <div style="height:36px;"></div>
   `;
 
