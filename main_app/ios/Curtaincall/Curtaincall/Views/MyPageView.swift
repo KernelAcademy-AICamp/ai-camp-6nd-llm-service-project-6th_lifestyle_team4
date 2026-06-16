@@ -77,6 +77,9 @@ struct MyPageView: View {
                         activityLink(title: "내 댓글", subtitle: "내가 남긴 댓글 보기") {
                             MyCommentsView()
                         }
+                        activityLink(title: "내 피드", subtitle: "내가 쓴 한줄과 하이라이트 보기") {
+                            MyFeedView()
+                        }
                     }
 
                     Spacer().frame(height: 40)
