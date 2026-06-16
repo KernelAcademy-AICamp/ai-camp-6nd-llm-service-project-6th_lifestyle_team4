@@ -2790,8 +2790,8 @@ function renderDailyDate() {
   if (!el) return;
   const d = new Date();
   const days = ['일','월','화','수','목','금','토'];
-  const ymd = `${d.getFullYear()} · ${String(d.getMonth()+1).padStart(2,'0')} · ${String(d.getDate()).padStart(2,'0')}`;
-  el.innerHTML = `${ymd} · <span style="color:var(--cta);font-weight:700;">${days[d.getDay()]}</span>`;
+  const ymd = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`;
+  el.innerHTML = `<span style="font-weight:700;">${ymd}</span> <span style="color:var(--cta);">${days[d.getDay()]}요일</span>`;
 }
 
 const NOTICE_TAG_LABEL_DAILY = { update: 'UPDATE', notice: 'NOTICE', event: 'EVENT' };
@@ -3098,7 +3098,8 @@ function renderDailyContextual() {
   // 그날 노출되는 3개 중 첫 번째를 기본으로 연다.
   const _dailyCatIdx = 0;
   sec.innerHTML = `
-    <h2 class="t-headline-md c-espresso" style="margin:0 0 8px;">이럴 땐, 이런 문장</h2>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 6px;">이럴 땐, 이런 문장</h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 16px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
     <div class="archive-chips" id="daily-context-chips" style="margin-bottom:16px;">
       ${cats.map((c, i) => `<button class="a-chip ${i === _dailyCatIdx ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
@@ -3226,7 +3227,7 @@ function renderDailyOzPick() {
       <article class="sharp-card" style="padding:20px;">
         <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
           <img src="assets/cat/library-cat-2.png" alt="오즈"
-            style="width:200px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
+            style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
           <div style="flex:1;min-width:0;">
             <p style="margin:0 0 6px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(guestName)}</p>
             <p style="margin:0;font-size:12px;color:var(--walnut);line-height:1.6;">아직 당신의 취향을 몰라요</p>
@@ -3320,7 +3321,7 @@ function renderDailyOzPick() {
       <!-- 헤더 — 고양이 + 닉네임 + 선호(장르/주제) 메타 -->
       <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
         <img src="assets/cat/library-cat-2.png" alt="오즈"
-          style="width:200px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
+          style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
           <p style="margin:0 0 8px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(userName)}</p>
           <p style="margin:0;font-size:11px;color:var(--walnut);line-height:1.9;">
