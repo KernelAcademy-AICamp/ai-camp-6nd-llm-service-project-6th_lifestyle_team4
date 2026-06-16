@@ -2777,7 +2777,7 @@ function dailyBookCoverHTML(work, opts = {}) {
       <img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" loading="lazy"
         onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', this.dataset.fallback);"
         data-fallback="${escapeHtml(fallback)}"
-        style="width:100%;height:100%;object-fit:cover;display:block;" />
+        style="width:100%;height:100%;object-fit:cover;object-position:top;display:block;" />
     </div>`;
   }
   return `<div style="width:${w}px;height:${h}px;flex-shrink:0;background:${leatherColorFor(title)};box-shadow:0 1px 4px rgba(60,40,20,0.18);border-radius:${radius}px;position:relative;overflow:hidden;">
