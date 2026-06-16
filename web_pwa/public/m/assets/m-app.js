@@ -3098,8 +3098,8 @@ function renderDailyContextual() {
   // 그날 노출되는 3개 중 첫 번째를 기본으로 연다.
   const _dailyCatIdx = 0;
   sec.innerHTML = `
-    <h2 class="t-headline-md c-espresso" style="margin:0 0 6px;">이럴 땐, 이런 문장</h2>
-    <p class="t-body-sm c-walnut" style="margin:0 0 16px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 2px;">이럴 땐, 이런 문장</h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 10px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
     <div class="archive-chips" id="daily-context-chips" style="margin-bottom:16px;">
       ${cats.map((c, i) => `<button class="a-chip ${i === _dailyCatIdx ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
@@ -3226,7 +3226,7 @@ function renderDailyOzPick() {
       </h2>
       <article class="sharp-card" style="padding:20px;">
         <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
-          <img src="assets/cat/library-cat-2.png" alt="오즈"
+          <img src="assets/cat/cat_computer.png" alt="오즈"
             style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
           <div style="flex:1;min-width:0;">
             <p style="margin:0 0 6px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(guestName)}</p>
@@ -3320,7 +3320,7 @@ function renderDailyOzPick() {
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
       <!-- 헤더 — 고양이 + 닉네임 + 선호(장르/주제) 메타 -->
       <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
-        <img src="assets/cat/library-cat-2.png" alt="오즈"
+        <img src="assets/cat/cat_computer.png" alt="오즈"
           style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
           <p style="margin:0 0 8px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(userName)}</p>
