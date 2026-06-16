@@ -10,6 +10,9 @@ struct CardDetailView: View {
     @EnvironmentObject private var yarn: YarnStore
     @StateObject private var comments: CommentsModel
     @State private var showAccountPrompt = false
+    /// 실타래 게이트 — 잔액 부족이면 카드 내용을 가리고 충전을 유도한다.
+    @State private var gate: GateState = .checking
+    @State private var showYarnPurchase = false
     @State private var displayedViewCount: Int
     @State private var bookmarkCount = 0
     @State private var didIncrementView = false
@@ -158,12 +161,12 @@ struct CardDetailView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             if composerFocused { composerFocused = false }
         }
-        .task {
-            // 게이트/잠금 없음 — 모든 카드 자유 열람(PWA openDetail / Android YarnGate 미러).
-            // 카드당 1회 첫 열람 시에만 실타래 +1 지급(서버 dedup).
-            await yarn.rewardFirstOpen(cardId: card.cardId, userId: session.userId)
-            await loadCountsAndIncrementView()
+        .task { await runOpenFlow() }
+        // 잔액 부족 시 카드 내용을 덮는 게이트(불투명) — 열람 차단 + 충전 유도.
+        .overlay {
+            if gate == .locked { yarnGateOverlay }
         }
+        .sheet(isPresented: $showYarnPurchase) { YarnPurchaseView() }
         .overlay {
             if showAccountPrompt {
                 AccountRequiredPrompt {
@@ -352,6 +355,77 @@ struct CardDetailView: View {
         Task {
             await bookmarks.toggle(userId: session.userId, cardId: card.cardId)
             await loadBookmarkCount()
+        }
+    }
+
+    /// 게이트 진행 상태. `.checking` 동안은 콘텐츠를 그대로 보여주고(낙관적),
+    /// 차단 확정되면 `.locked` 오버레이로 덮는다.
+    enum GateState { case checking, open, locked }
+
+    /// 카드 열람 흐름 — PWA `openDetail` 순서 미러: 첫 열람 보상(+1) 먼저, 그다음 게이트.
+    ///  보상이 먼저라 새 카드의 첫 열람은 +1 로 자가 충전된다(신규 사용자 잠금 방지).
+    ///  게이트: 3일 언락/투어면 무료, 아니면 consume_yarn 1 차감. 부족하면 잠금.
+    private func runOpenFlow() async {
+        // 보상은 그대로 유지 (PWA 는 reward + gate 둘 다 한다).
+        await yarn.rewardFirstOpen(cardId: card.cardId, userId: session.userId)
+        // TODO(coach): iOS 코치 투어 도입 시 tourActive 를 실제 상태로 연결 (현재 스텁 false).
+        let decision = await yarn.gateOpen(cardId: card.cardId, userId: session.userId, tourActive: false)
+        switch decision {
+        case .allowed:
+            gate = .open
+            await loadCountsAndIncrementView()
+        case .blocked:
+            gate = .locked
+        }
+    }
+
+    /// 잔액 부족 게이트 — 불투명 paper 패널로 카드 내용을 가린다(열람 차단).
+    private var yarnGateOverlay: some View {
+        ZStack {
+            Color.paper.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(.espresso)
+                            .frame(width: 40, height: 40)
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 64)
+                Spacer()
+                Image("daily-script-bar")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 64, height: 64)
+                    .clipShape(Circle())
+                    .opacity(0.6)
+                Spacer().frame(height: 20)
+                Text("실타래가 부족해요")
+                    .font(.titleSerif(20))
+                    .foregroundStyle(.espresso)
+                Spacer().frame(height: 10)
+                Text("이 카드를 열려면 실타래가 필요해요.\n충전하면 계속 읽을 수 있어요.")
+                    .font(.bodySans(14))
+                    .foregroundStyle(.walnut)
+                    .multilineTextAlignment(.center)
+                    .bookLeading(size: 14)
+                Spacer().frame(height: 28)
+                Button { showYarnPurchase = true } label: {
+                    Text("충전하러 가기")
+                }
+                .buttonStyle(EditorialButtonStyle(.filled))
+                Spacer().frame(height: 12)
+                Button { dismiss() } label: {
+                    Text("닫기").labelCaps()
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+            .padding(.horizontal, 32)
         }
     }
 
