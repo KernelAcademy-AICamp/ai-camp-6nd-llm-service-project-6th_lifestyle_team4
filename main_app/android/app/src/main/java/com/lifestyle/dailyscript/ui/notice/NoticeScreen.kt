@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lifestyle.dailyscript.data.model.Notice
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
+import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.detail.relativeTime
 import com.lifestyle.dailyscript.ui.settings.ActivityTopBar
 import com.lifestyle.dailyscript.ui.theme.CardWarm
@@ -66,20 +67,26 @@ fun NoticeScreen(vm: NoticeViewModel, onBack: () -> Unit) {
         ActivityTopBar(title = "공지사항", onBack = onBack)
         Box(modifier = Modifier.height(8.dp))
 
-        when {
-            state.loading && state.notices.isEmpty() -> CenteredNote("불러오는 중⋯")
-            state.error != null && state.notices.isEmpty() -> CenteredNote(state.error.orEmpty(), error = true)
-            state.notices.isEmpty() -> CenteredNote("등록된 공지가 없습니다.")
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(state.notices, key = { it.noticeId }) { notice ->
-                    NoticeCard(notice)
+        RefreshableBox(
+            refreshing = state.refreshing,
+            onRefresh = { vm.refresh() },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when {
+                state.loading && state.notices.isEmpty() -> CenteredNote("불러오는 중⋯")
+                state.error != null && state.notices.isEmpty() -> CenteredNote(state.error.orEmpty(), error = true)
+                state.notices.isEmpty() -> CenteredNote("등록된 공지가 없습니다.")
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(state.notices, key = { it.noticeId }) { notice ->
+                        NoticeCard(notice)
+                    }
+                    // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
+                    item { Box(modifier = Modifier.height(BottomBarContentInset + 24.dp)) }
                 }
-                // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
-                item { Box(modifier = Modifier.height(BottomBarContentInset + 24.dp)) }
             }
         }
     }

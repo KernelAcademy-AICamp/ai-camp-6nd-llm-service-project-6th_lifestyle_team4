@@ -61,6 +61,7 @@ import com.lifestyle.dailyscript.data.model.Highlight
 import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.FeedCatImageTopInset
+import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.detail.relativeTime
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
@@ -158,36 +159,42 @@ fun FeedScreen(
             Box(modifier = Modifier.height(8.dp))
 
             val empty = if (state.category == FEED_TODAY) state.posts.isEmpty() else state.highlights.isEmpty()
-            when {
-                state.loading && empty -> CenteredNote("불러오는 중⋯")
-                // 하이라이트는 빈 상태 안내 유지. '나의 감상평'은 비어 있으면 샘플 폴백을 보여준다(PWA FEED_SAMPLES).
-                empty && state.category == FEED_HIGHLIGHT ->
-                    CenteredNote("아직 하이라이트가 없어요. 명대사 본문을 길게 눌러 저장해보세요.")
-                else -> LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    if (state.category == FEED_TODAY) {
-                        if (state.posts.isEmpty()) {
-                            // 빈 피드 폴백 — PWA FEED_SAMPLES 예시 글(탭 불가, 댓글 없음).
-                            items(FEED_SAMPLES, key = { "sample-${it.nick}" }) { sample ->
-                                FeedSampleCard(sample)
+            RefreshableBox(
+                refreshing = state.refreshing,
+                onRefresh = { vm.refresh(userId) },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                when {
+                    state.loading && empty -> CenteredNote("불러오는 중⋯")
+                    // 하이라이트는 빈 상태 안내 유지. '나의 감상평'은 비어 있으면 샘플 폴백을 보여준다(PWA FEED_SAMPLES).
+                    empty && state.category == FEED_HIGHLIGHT ->
+                        CenteredNote("아직 하이라이트가 없어요. 명대사 본문을 길게 눌러 저장해보세요.")
+                    else -> LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        if (state.category == FEED_TODAY) {
+                            if (state.posts.isEmpty()) {
+                                // 빈 피드 폴백 — PWA FEED_SAMPLES 예시 글(탭 불가, 댓글 없음).
+                                items(FEED_SAMPLES, key = { "sample-${it.nick}" }) { sample ->
+                                    FeedSampleCard(sample)
+                                }
+                            } else {
+                                // Type-prefixed keys so a highlight_id never collides with a post_id
+                                // (a raw-id collision made the LazyColumn jump to the wrong card on tab switch).
+                                items(state.posts, key = { "post-${it.postId}" }) { post ->
+                                    FeedPostCard(post, onClick = { detailPost = post })
+                                }
                             }
                         } else {
-                            // Type-prefixed keys so a highlight_id never collides with a post_id
-                            // (a raw-id collision made the LazyColumn jump to the wrong card on tab switch).
-                            items(state.posts, key = { "post-${it.postId}" }) { post ->
-                                FeedPostCard(post, onClick = { detailPost = post })
+                            items(state.highlights, key = { "hl-${it.highlightId}" }) { hl ->
+                                HighlightCard(hl, onClick = { detailHighlight = hl })
                             }
                         }
-                    } else {
-                        items(state.highlights, key = { "hl-${it.highlightId}" }) { hl ->
-                            HighlightCard(hl, onClick = { detailHighlight = hl })
-                        }
+                        item(key = "tail-spacer") { Box(modifier = Modifier.height(72.dp)) }
                     }
-                    item(key = "tail-spacer") { Box(modifier = Modifier.height(72.dp)) }
                 }
             }
         }

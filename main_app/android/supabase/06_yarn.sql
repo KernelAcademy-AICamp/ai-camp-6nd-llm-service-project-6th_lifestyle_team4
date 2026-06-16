@@ -66,3 +66,35 @@ $$;
 
 grant execute on function public.consume_yarn()  to anon, authenticated;
 grant execute on function public.grant_yarn(int) to anon, authenticated;
+
+-- 구매(예: OZ's house 테마) — 충전 잔액에서 p_amount 만큼 원자적 차감.
+-- 잔액 >= p_amount 일 때만 감소 → 동시 더블탭에도 음수/초과차감 불가.
+-- 반환: 차감 후 잔액. 잔액 부족(또는 행 없음)이면 -1 (미차감).
+create or replace function public.spend_yarn(p_amount int)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_uid     uuid;
+    v_balance int;
+begin
+    v_uid := auth.uid();
+    if v_uid is null then raise exception 'not authenticated'; end if;
+    if p_amount is null or p_amount <= 0 then raise exception 'p_amount must be positive'; end if;
+
+    update public.users
+       set yarn_balance = yarn_balance - p_amount
+     where anonymous_id = v_uid
+       and yarn_balance >= p_amount
+    returning yarn_balance into v_balance;
+
+    if v_balance is null then
+        return -1;            -- 잔액 부족(또는 행 없음): 미차감
+    end if;
+    return v_balance;
+end;
+$$;
+
+grant execute on function public.spend_yarn(int) to anon, authenticated;

@@ -75,6 +75,7 @@ import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
+import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
@@ -283,20 +284,26 @@ fun ArchiveScreen(
             Box(modifier = Modifier.height(4.dp))
         }
 
-        when {
-            state.loading && state.bookmarks.isEmpty() -> {
-                Text(
-                    text = stringResource(R.string.loading),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Walnut,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+        RefreshableBox(
+            refreshing = state.refreshing,
+            onRefresh = { vm.refresh(userId) },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when {
+                state.loading && state.bookmarks.isEmpty() -> {
+                    Text(
+                        text = stringResource(R.string.loading),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Walnut,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    )
+                }
+                state.bookmarks.isEmpty() -> EmptyShelf()
+                else -> Bookcase(
+                    books = filtered,
+                    onOpenCard = onOpenCard,
                 )
             }
-            state.bookmarks.isEmpty() -> EmptyShelf()
-            else -> Bookcase(
-                books = filtered,
-                onOpenCard = onOpenCard,
-            )
         }
     }
 }

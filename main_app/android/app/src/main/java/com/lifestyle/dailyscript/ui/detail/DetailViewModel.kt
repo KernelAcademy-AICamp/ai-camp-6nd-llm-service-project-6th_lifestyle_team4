@@ -115,6 +115,28 @@ class DetailViewModel : ViewModel() {
         }
     }
 
+    /**
+     * 당겨서 새로고침 — 댓글/좋아요만 다시 불러온다(PWA 의 댓글 Realtime 구독 대체).
+     * 카드 본문은 다시 불러오지 않는다 — [load] 의 조회수 +1(incrementView) 재증가를 피하기 위함.
+     */
+    fun refreshComments() {
+        val cardId = currentCardId
+        if (cardId <= 0L || _state.value.commentsRefreshing) return
+        _state.value = _state.value.copy(commentsRefreshing = true)
+        viewModelScope.launch {
+            val commentsResult = runCatching { commentRepo.loadComments(cardId) }
+            val comments = commentsResult.getOrDefault(_state.value.comments)
+            val likes = runCatching { commentRepo.loadLikes(comments.map { it.commentId }) }
+                .getOrDefault(_state.value.likes)
+            _state.value = _state.value.copy(
+                comments = comments,
+                likes = likes,
+                commentsRefreshing = false,
+                commentsError = commentsResult.exceptionOrNull()?.message,
+            )
+        }
+    }
+
     fun setReplyTarget(comment: Comment?) {
         _state.value = _state.value.copy(replyingTo = comment)
     }
@@ -294,6 +316,7 @@ data class DetailState(
     val bookmarkActionInFlight: Boolean = false,
     val comments: List<Comment> = emptyList(),
     val likes: Map<Long, Set<Long>> = emptyMap(),
+    val commentsRefreshing: Boolean = false,
     val commentSubmitting: Boolean = false,
     val commentsError: String? = null,
     val replyingTo: Comment? = null,

@@ -24,4 +24,11 @@ class YarnRepository {
             function = "grant_yarn",
             parameters = buildJsonObject { put("p_n", n) },
         ).decodeAs<Int>()
+
+    /** 구매(테마 등) — 충전 잔액에서 amount 만큼 원자적 차감. 차감 후 잔액 반환(부족/행 없음이면 -1, 미차감). */
+    suspend fun spendYarn(amount: Int): Int =
+        client.postgrest.rpc(
+            function = "spend_yarn",
+            parameters = buildJsonObject { put("p_amount", amount) },
+        ).decodeAs<Int>()
 }

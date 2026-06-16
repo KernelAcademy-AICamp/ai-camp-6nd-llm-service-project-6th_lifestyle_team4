@@ -76,6 +76,7 @@ import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.DetailTopBar
+import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.components.EditorialField
 import com.lifestyle.dailyscript.ui.components.LangSegmented
 import com.lifestyle.dailyscript.ui.components.SharpButton
@@ -238,9 +239,14 @@ fun DetailScreen(
             onToggleBookmark = { vm.toggleBookmark(userId) },
         )
 
+        RefreshableBox(
+            refreshing = state.commentsRefreshing,
+            onRefresh = { vm.refreshComments() },
+            modifier = Modifier.weight(1f),
+        ) {
         Column(
             modifier = Modifier
-                .weight(1f)
+                .fillMaxSize()
                 .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp, vertical = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -409,6 +415,7 @@ fun DetailScreen(
                 // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
                 Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
             }
+        }
         }
       }
 

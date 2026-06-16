@@ -46,6 +46,7 @@ import com.lifestyle.dailyscript.data.model.WorkDto
 import com.lifestyle.dailyscript.data.repo.FeedRepository
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.EditorialField
+import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -74,6 +75,23 @@ class MyFeedViewModel : ViewModel() {
                 loading = false,
                 posts = posts.getOrDefault(emptyList()),
                 highlights = hls.getOrDefault(emptyList()),
+                error = listOfNotNull(posts.exceptionOrNull()?.message, hls.exceptionOrNull()?.message)
+                    .joinToString(" / ").ifBlank { null },
+            )
+        }
+    }
+
+    /** 당겨서 새로고침 — 목록은 유지하며 인디케이터만 표시하고 다시 불러온다. */
+    fun refresh(userId: Long) {
+        if (_state.value.refreshing) return
+        _state.value = _state.value.copy(refreshing = true, error = null)
+        viewModelScope.launch {
+            val posts = runCatching { repo.loadMyPosts(userId) }
+            val hls = runCatching { repo.loadMyHighlights(userId) }
+            _state.value = _state.value.copy(
+                refreshing = false,
+                posts = posts.getOrDefault(_state.value.posts),
+                highlights = hls.getOrDefault(_state.value.highlights),
                 error = listOfNotNull(posts.exceptionOrNull()?.message, hls.exceptionOrNull()?.message)
                     .joinToString(" / ").ifBlank { null },
             )
@@ -111,6 +129,7 @@ class MyFeedViewModel : ViewModel() {
 
 data class MyFeedState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val posts: List<FeedPost> = emptyList(),
     val highlights: List<Highlight> = emptyList(),
     val error: String? = null,
@@ -144,51 +163,57 @@ fun MyFeedScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) {
         }
 
         val empty = if (category == CAT_COMMENT) state.posts.isEmpty() else state.highlights.isEmpty()
-        when {
-            state.loading && empty -> ActivityNote("불러오는 중⋯")
-            state.error != null && empty -> ActivityNote(state.error.orEmpty(), error = true)
-            empty && category == CAT_COMMENT -> ActivityEmpty(
-                icon = Icons.Outlined.EditNote,
-                title = "아직 작성한 한줄이 없어요",
-                subtitle = "피드의 + 로 나의 감상평을 남겨보세요.",
-            )
-            empty -> ActivityEmpty(
-                icon = Icons.Outlined.AutoAwesome,
-                title = "아직 만든 하이라이트가 없어요",
-                subtitle = "본문을 길게 눌러 한 구절을 하이라이트해보세요.",
-            )
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 20.dp),
-            ) {
-                if (category == CAT_COMMENT) {
-                    items(state.posts, key = { "p-${it.postId}" }) { p ->
-                        MyFeedCommentRow(
-                            post = p,
-                            isEditing = editingId == p.postId,
-                            draft = draft,
-                            onDraftChange = { draft = it },
-                            onStartEdit = { editingId = p.postId; draft = p.body },
-                            onCancel = { editingId = null },
-                            onSave = {
-                                val body = draft.trim()
-                                if (body.isNotEmpty()) { vm.editPost(userId, p.postId, body); editingId = null }
-                            },
-                            onDelete = { pendingDeletePost = p.postId },
-                            onOpen = { p.cards?.let { onOpenCard(it.cardId) } },
-                        )
+        RefreshableBox(
+            refreshing = state.refreshing,
+            onRefresh = { vm.refresh(userId) },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when {
+                state.loading && empty -> ActivityNote("불러오는 중⋯")
+                state.error != null && empty -> ActivityNote(state.error.orEmpty(), error = true)
+                empty && category == CAT_COMMENT -> ActivityEmpty(
+                    icon = Icons.Outlined.EditNote,
+                    title = "아직 작성한 한줄이 없어요",
+                    subtitle = "피드의 + 로 나의 감상평을 남겨보세요.",
+                )
+                empty -> ActivityEmpty(
+                    icon = Icons.Outlined.AutoAwesome,
+                    title = "아직 만든 하이라이트가 없어요",
+                    subtitle = "본문을 길게 눌러 한 구절을 하이라이트해보세요.",
+                )
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                ) {
+                    if (category == CAT_COMMENT) {
+                        items(state.posts, key = { "p-${it.postId}" }) { p ->
+                            MyFeedCommentRow(
+                                post = p,
+                                isEditing = editingId == p.postId,
+                                draft = draft,
+                                onDraftChange = { draft = it },
+                                onStartEdit = { editingId = p.postId; draft = p.body },
+                                onCancel = { editingId = null },
+                                onSave = {
+                                    val body = draft.trim()
+                                    if (body.isNotEmpty()) { vm.editPost(userId, p.postId, body); editingId = null }
+                                },
+                                onDelete = { pendingDeletePost = p.postId },
+                                onOpen = { p.cards?.let { onOpenCard(it.cardId) } },
+                            )
+                        }
+                    } else {
+                        items(state.highlights, key = { "h-${it.highlightId}" }) { h ->
+                            MyFeedHighlightRow(
+                                highlight = h,
+                                onDelete = { pendingDeleteHl = h.highlightId },
+                                onOpen = { h.cards?.let { onOpenCard(it.cardId) } },
+                            )
+                        }
                     }
-                } else {
-                    items(state.highlights, key = { "h-${it.highlightId}" }) { h ->
-                        MyFeedHighlightRow(
-                            highlight = h,
-                            onDelete = { pendingDeleteHl = h.highlightId },
-                            onOpen = { h.cards?.let { onOpenCard(it.cardId) } },
-                        )
-                    }
+                    // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
+                    item { Box(modifier = Modifier.height(BottomBarContentInset + 24.dp)) }
                 }
-                // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
-                item { Box(modifier = Modifier.height(BottomBarContentInset + 24.dp)) }
             }
         }
     }

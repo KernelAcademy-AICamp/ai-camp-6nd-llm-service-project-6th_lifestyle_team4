@@ -402,6 +402,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.OZ_HOUSE) {
                     com.lifestyle.dailyscript.ui.ozhouse.OzHouseScreen(
                         userId = session.userId,
+                        yarnVm = yarnVm,
                         onBack = { navController.popBackStack() },
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )

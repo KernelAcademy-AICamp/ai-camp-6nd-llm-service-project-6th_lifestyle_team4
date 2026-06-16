@@ -1,6 +1,7 @@
 package com.lifestyle.dailyscript.ui.ozhouse
 
 import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -47,6 +48,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,8 +90,11 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.formatBookmarkDate
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import com.lifestyle.dailyscript.ui.yarn.CalendarGrid
+import com.lifestyle.dailyscript.ui.yarn.SpendResult
+import com.lifestyle.dailyscript.ui.yarn.YarnViewModel
 import java.time.LocalTime
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 // ── 방 전용 팔레트(고정; 밤/낮은 시간/수동 토글 기반) ──
 private val RWallDay = listOf(Color(0xFFFCF7EE), Color(0xFFF4ECDB), Color(0xFFEFE6D2))
@@ -186,10 +191,12 @@ private val LightBeamShape = GenericShape { size, _ ->
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) {
+fun OzHouseScreen(userId: Long, yarnVm: YarnViewModel, onBack: () -> Unit, onOpenCard: (Long) -> Unit) {
     val vm: OzHouseViewModel = viewModel()
     val state by vm.state.collectAsState()
     LaunchedEffect(userId) { vm.load(userId) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // 낮/밤 — auto 면 시간 기반, 아니면 수동 토글값.
     val autoNight = remember { LocalTime.now().hour.let { it < 6 || it >= 19 } }
@@ -345,7 +352,19 @@ fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) 
             onDismissRequest = { themeDialog = null },
             confirmButton = {
                 if (purchasable) {
-                    TextButton(onClick = { vm.purchaseTheme(opt.id); themeDialog = null }) { Text("구매하기", color = RCtaC) }
+                    TextButton(onClick = {
+                        val id = opt.id
+                        val price = opt.price
+                        themeDialog = null
+                        // 서버 실타래를 먼저 차감하고, 성공했을 때만 테마를 보유/적용한다.
+                        scope.launch {
+                            when (yarnVm.spend(price)) {
+                                SpendResult.SUCCESS -> vm.purchaseTheme(id)
+                                SpendResult.INSUFFICIENT -> Toast.makeText(context, "실타래가 부족해요", Toast.LENGTH_SHORT).show()
+                                SpendResult.ERROR -> Toast.makeText(context, "구매에 실패했어요", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }) { Text("구매하기", color = RCtaC) }
                 } else {
                     TextButton(onClick = { themeDialog = null }) { Text("확인", color = RCtaC) }
                 }

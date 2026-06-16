@@ -44,6 +44,20 @@ class NoticeViewModel : ViewModel() {
         }
     }
 
+    /** 당겨서 새로고침 — 목록은 유지하며 인디케이터만 표시하고 다시 불러온다. */
+    fun refresh() {
+        if (_state.value.refreshing) return
+        _state.value = _state.value.copy(refreshing = true, error = null)
+        viewModelScope.launch {
+            val result = runCatching { repo.list() }
+            _state.value = _state.value.copy(
+                refreshing = false,
+                notices = result.getOrDefault(_state.value.notices),
+                error = result.exceptionOrNull()?.message,
+            )
+        }
+    }
+
     /** Called when the Notice screen is opened — clears the unread badge. */
     fun markAllSeen() {
         val maxId = _state.value.notices.maxOfOrNull { it.noticeId } ?: return
@@ -53,6 +67,7 @@ class NoticeViewModel : ViewModel() {
 
 data class NoticeState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val notices: List<Notice> = emptyList(),
     val error: String? = null,
 )

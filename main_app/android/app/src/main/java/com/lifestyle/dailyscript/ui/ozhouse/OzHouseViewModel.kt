@@ -122,8 +122,9 @@ class OzHouseViewModel : ViewModel() {
     }
 
     /**
-     * 테마 구매 — PWA addPurchasedTheme 미러. 구매 기록을 로컬에 남기고 즉시 적용한다.
-     * 서버 실타래 차감은 PWA와 동일하게 미연결(TODO: spend_yarn RPC). default 외 잠금 해제용.
+     * 테마 구매 확정 — 구매 기록을 로컬에 남기고 즉시 적용한다.
+     * 서버 실타래 차감은 호출 전에 [com.lifestyle.dailyscript.ui.yarn.YarnViewModel.spend]
+     * (spend_yarn RPC) 으로 끝내고, 성공(SUCCESS)했을 때만 이 메서드를 호출한다.
      */
     fun purchaseTheme(value: String) {
         val owned = _state.value.purchasedThemes + value

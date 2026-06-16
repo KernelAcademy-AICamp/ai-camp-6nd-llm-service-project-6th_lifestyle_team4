@@ -42,6 +42,7 @@ import com.lifestyle.dailyscript.data.model.MyComment
 import com.lifestyle.dailyscript.data.repo.CommentRepository
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.EditorialField
+import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
@@ -66,6 +67,20 @@ class MyCommentsViewModel : ViewModel() {
             _state.value = MyCommentsState(
                 loading = false,
                 comments = result.getOrDefault(emptyList()),
+                error = result.exceptionOrNull()?.message,
+            )
+        }
+    }
+
+    /** 당겨서 새로고침 — 목록은 유지하며 인디케이터만 표시하고 다시 불러온다. */
+    fun refresh(userId: Long) {
+        if (_state.value.refreshing) return
+        _state.value = _state.value.copy(refreshing = true, error = null)
+        viewModelScope.launch {
+            val result = runCatching { repo.loadByUser(userId) }
+            _state.value = _state.value.copy(
+                refreshing = false,
+                comments = result.getOrDefault(_state.value.comments),
                 error = result.exceptionOrNull()?.message,
             )
         }
@@ -98,6 +113,7 @@ class MyCommentsViewModel : ViewModel() {
 
 data class MyCommentsState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val comments: List<MyComment> = emptyList(),
     val error: String? = null,
 )
@@ -114,39 +130,45 @@ fun MyCommentsScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Uni
 
     Column(modifier = Modifier.fillMaxSize().background(Paper)) {
         ActivityTopBar(title = "내 댓글", onBack = onBack)
-        when {
-            state.loading && state.comments.isEmpty() -> ActivityNote("불러오는 중⋯")
-            state.error != null && state.comments.isEmpty() -> ActivityNote(state.error.orEmpty(), error = true)
-            state.comments.isEmpty() -> ActivityEmpty(
-                icon = Icons.Outlined.Forum,
-                title = "아직 단 댓글이 없어요",
-                subtitle = "명대사에 첫 댓글을 남겨보세요.",
-            )
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 20.dp),
-            ) {
-                items(state.comments, key = { it.commentId }) { c ->
-                    MyCommentRow(
-                        comment = c,
-                        isEditing = editingId == c.commentId,
-                        draft = draft,
-                        onDraftChange = { draft = it },
-                        onStartEdit = { editingId = c.commentId; draft = c.body },
-                        onCancel = { editingId = null },
-                        onSave = {
-                            val body = draft.trim()
-                            if (body.isNotEmpty()) {
-                                vm.edit(userId, c.commentId, body)
-                                editingId = null
-                            }
-                        },
-                        onDelete = { pendingDelete = c.commentId },
-                        onOpen = { onOpenCard(c.cardId) },
-                    )
+        RefreshableBox(
+            refreshing = state.refreshing,
+            onRefresh = { vm.refresh(userId) },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when {
+                state.loading && state.comments.isEmpty() -> ActivityNote("불러오는 중⋯")
+                state.error != null && state.comments.isEmpty() -> ActivityNote(state.error.orEmpty(), error = true)
+                state.comments.isEmpty() -> ActivityEmpty(
+                    icon = Icons.Outlined.Forum,
+                    title = "아직 단 댓글이 없어요",
+                    subtitle = "명대사에 첫 댓글을 남겨보세요.",
+                )
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                ) {
+                    items(state.comments, key = { it.commentId }) { c ->
+                        MyCommentRow(
+                            comment = c,
+                            isEditing = editingId == c.commentId,
+                            draft = draft,
+                            onDraftChange = { draft = it },
+                            onStartEdit = { editingId = c.commentId; draft = c.body },
+                            onCancel = { editingId = null },
+                            onSave = {
+                                val body = draft.trim()
+                                if (body.isNotEmpty()) {
+                                    vm.edit(userId, c.commentId, body)
+                                    editingId = null
+                                }
+                            },
+                            onDelete = { pendingDelete = c.commentId },
+                            onOpen = { onOpenCard(c.cardId) },
+                        )
+                    }
+                    // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
+                    item { Box(modifier = Modifier.height(BottomBarContentInset + 24.dp)) }
                 }
-                // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
-                item { Box(modifier = Modifier.height(BottomBarContentInset + 24.dp)) }
             }
         }
     }

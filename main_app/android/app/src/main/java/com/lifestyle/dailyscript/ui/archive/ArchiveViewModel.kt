@@ -28,6 +28,20 @@ class ArchiveViewModel : ViewModel() {
         }
     }
 
+    /** 당겨서 새로고침 — 목록은 유지하며 인디케이터만 표시하고 다시 불러온다. */
+    fun refresh(userId: Long) {
+        if (_state.value.refreshing) return
+        _state.value = _state.value.copy(refreshing = true, error = null)
+        viewModelScope.launch {
+            val result = runCatching { bookmarkRepo.list(userId) }
+            _state.value = _state.value.copy(
+                refreshing = false,
+                bookmarks = result.getOrDefault(_state.value.bookmarks),
+                error = result.exceptionOrNull()?.message,
+            )
+        }
+    }
+
     fun removeBookmark(userId: Long, cardId: Long) {
         if (_state.value.removingCardId != null) return
         _state.value = _state.value.copy(removingCardId = cardId, error = null)
@@ -53,6 +67,7 @@ class ArchiveViewModel : ViewModel() {
 
 data class ArchiveState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val bookmarks: List<BookmarkRow> = emptyList(),
     val error: String? = null,
     val removingCardId: Long? = null,

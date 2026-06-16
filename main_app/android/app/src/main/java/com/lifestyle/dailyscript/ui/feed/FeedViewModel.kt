@@ -54,6 +54,29 @@ class FeedViewModel : ViewModel() {
         }
     }
 
+    /** 당겨서 새로고침 — loaded 가드를 우회해 다시 불러온다(목록은 유지하며 인디케이터만 표시). */
+    fun refresh(userId: Long) {
+        if (_state.value.refreshing) return
+        _state.value = _state.value.copy(refreshing = true, error = null)
+        viewModelScope.launch {
+            val posts = runCatching { feedRepo.loadPosts() }
+            val highlights = runCatching { feedRepo.loadHighlights() }
+            val bookmarks = runCatching { bookmarkRepo.list(userId) }
+                .getOrNull()?.mapNotNull { it.cards } ?: emptyList()
+            loaded = true
+            _state.value = _state.value.copy(
+                refreshing = false,
+                posts = posts.getOrDefault(_state.value.posts),
+                highlights = highlights.getOrDefault(_state.value.highlights),
+                bookmarkCards = bookmarks,
+                error = listOfNotNull(
+                    posts.exceptionOrNull()?.message,
+                    highlights.exceptionOrNull()?.message,
+                ).joinToString(" / ").ifBlank { null },
+            )
+        }
+    }
+
     fun setCategory(cat: String) {
         if (cat != _state.value.category) {
             AppAnalytics.track("feed_category_changed", mapOf("category" to cat))
@@ -96,6 +119,7 @@ class FeedViewModel : ViewModel() {
 
 data class FeedState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val category: String = FEED_TODAY,
     val posts: List<FeedPost> = emptyList(),
     val highlights: List<Highlight> = emptyList(),

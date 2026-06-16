@@ -66,6 +66,17 @@ class YarnViewModel : ViewModel() {
         return true
     }
 
+    /**
+     * 구매 차감 — 서버 충전 잔액에서 amount 만큼 원자적 차감(spend_yarn RPC).
+     * 성공 시 공유 잔액([available]) 갱신 후 SUCCESS, 잔액 부족이면 INSUFFICIENT, RPC 실패면 ERROR.
+     */
+    suspend fun spend(amount: Int): SpendResult {
+        val newBalance = runCatching { repo.spendYarn(amount) }.getOrNull() ?: return SpendResult.ERROR
+        if (newBalance < 0) return SpendResult.INSUFFICIENT
+        purchased.value = newBalance
+        return SpendResult.SUCCESS
+    }
+
     /** QA/데모용 — fire-and-forget 충전. */
     fun grant(n: Int) = viewModelScope.launch { addYarn(n) }
 
@@ -79,3 +90,6 @@ sealed interface YarnResult {
     data object Insufficient : YarnResult
     data object Error : YarnResult
 }
+
+/** [YarnViewModel.spend] 결과 — 구매 차감 성공/잔액부족/오류. */
+enum class SpendResult { SUCCESS, INSUFFICIENT, ERROR }
