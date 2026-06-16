@@ -14,6 +14,7 @@ struct CurtaincallApp: App {
     @StateObject private var session = AuthSession()
     @StateObject private var bookmarks = BookmarkStore()
     @StateObject private var prefs = PrefsStore()
+    @StateObject private var yarn = YarnStore()
 
     init() {
         FontRegistration.register()
@@ -32,10 +33,12 @@ struct CurtaincallApp: App {
                 .environmentObject(session)
                 .environmentObject(bookmarks)
                 .environmentObject(prefs)
+                .environmentObject(yarn)
                 .preferredColorScheme(prefs.darkTheme ? .dark : .light)
                 .task {
                     await session.start()
                     await bookmarks.load(userId: session.userId)
+                    yarn.sync(serverBalance: session.yarnBalance)   // 부트스트랩 잔액 시드
                 }
                 .onOpenURL { url in
                     if let id = Self.parseCardId(from: url) {

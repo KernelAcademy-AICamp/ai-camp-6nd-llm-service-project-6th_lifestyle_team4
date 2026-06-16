@@ -22,6 +22,8 @@ nonisolated struct UserRow: Decodable, Sendable {
     let loginId: String?
     let gender: String?
     let ageGroup: String?
+    /// 실타래 충전 잔액 (users.yarn_balance). 부트스트랩 시드용 — insert 경로엔 없어 nil.
+    let yarnBalance: Int?
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
@@ -29,6 +31,7 @@ nonisolated struct UserRow: Decodable, Sendable {
         case loginId = "login_id"
         case gender
         case ageGroup = "age_group"
+        case yarnBalance = "yarn_balance"
     }
 }
 

@@ -188,12 +188,28 @@ final class Supa {
 
     func findUser(anonymousId: String) async throws -> UserRow? {
         let rows: [UserRow] = try await client.from("users")
-            .select("user_id, nickname, login_id, gender, age_group")
+            .select("user_id, nickname, login_id, gender, age_group, yarn_balance")
             .eq("anonymous_id", value: anonymousId)
             .limit(1)
             .execute()
             .value
         return rows.first
+    }
+
+    // MARK: - Yarn (실타래) — 06_yarn.sql RPCs. Balance lives in users.yarn_balance,
+    // keyed by anonymous_id = auth.uid(); the RPCs derive the target from the JWT.
+
+    /// Atomically spend 1 yarn. Returns the post-spend balance, or **-1** when the
+    /// balance is 0 (no charge applied). Mirrors PWA `consumeYarnRpc`.
+    func consumeYarn() async throws -> Int {
+        try await client.rpc("consume_yarn").execute().value
+    }
+
+    /// Grant `n` yarn (the "준비 중" purchase mock + the attendance reward hook).
+    /// Returns the post-grant balance. Mirrors PWA `grantYarnRpc` (`p_n`).
+    @discardableResult
+    func grantYarn(_ n: Int) async throws -> Int {
+        try await client.rpc("grant_yarn", params: ["p_n": n]).execute().value
     }
 
     func insertUser(anonymousId: String, nickname: String) async throws -> UserRow {
