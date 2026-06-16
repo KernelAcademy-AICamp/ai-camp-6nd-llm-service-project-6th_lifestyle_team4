@@ -206,22 +206,33 @@
   .cat{ position:absolute; z-index:6; transform-origin:bottom center; pointer-events:none; animation:breathe 3.6s ease-in-out infinite; transition:opacity .18s ease; }
   .cat img{ display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none; }
   .cat.flip img{ transform:scaleX(-1); }
-  @keyframes breathe{ 0%,100%{ transform:scale(var(--cat-scale,1)); } 50%{ transform:scale(calc(var(--cat-scale,1) * 1.012)); } }
+  @keyframes breathe{
+    0%,100%{ transform:scale(var(--cat-scale,1)) rotate(var(--cat-rot,0deg)); }
+    50%   { transform:scale(calc(var(--cat-scale,1) * 1.012)) rotate(var(--cat-rot,0deg)); }
+  }
 
-  /* 편집 모드 시 — 고양이 크기 슬라이더 (화면 하단 fixed) */
+  /* 편집 모드 시 — 고양이 컨트롤 (크기 / 회전 / 방향 뒤집기) — 화면 맨 하단 딱 붙임 */
   .cat-size-ctrl{
-    position:fixed; left:50%; bottom:120px; transform:translateX(-50%);
+    position:fixed; left:0; right:0; bottom:0;
     display:none; z-index:9999;
-    background:rgba(14,12,10,.85); color:#FAF8F2;
-    padding:8px 14px; border-radius:18px;
-    font-size:12px; align-items:center; gap:10px;
-    box-shadow:0 4px 14px rgba(0,0,0,.25);
+    background:rgba(14,12,10,.92); color:#FAF8F2;
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom)) 14px;
+    border-radius:14px 14px 0 0;
+    font-size:12px; flex-direction:column; align-items:stretch; gap:8px;
+    box-shadow:0 -4px 14px rgba(0,0,0,.25);
     -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
   }
-  .cat-size-ctrl.show{ display:inline-flex; }
-  .cat-size-ctrl input[type=range]{ width:140px; accent-color:#D85A30; }
-  .cat-size-ctrl .label{ font-size:11px; opacity:.85; }
-  .cat-size-ctrl .val{ font-size:11px; min-width:34px; text-align:right; font-variant-numeric:tabular-nums; }
+  .cat-size-ctrl.show{ display:flex; }
+  .cat-size-ctrl .row{ display:flex; align-items:center; gap:10px; }
+  .cat-size-ctrl input[type=range]{ flex:1; min-width:0; accent-color:#D85A30; }
+  .cat-size-ctrl .label{ font-size:11px; opacity:.85; min-width:54px; flex-shrink:0; }
+  .cat-size-ctrl .val{ font-size:11px; min-width:42px; text-align:right; font-variant-numeric:tabular-nums; flex-shrink:0; }
+  .cat-size-ctrl .btn{
+    appearance:none; border:1px solid rgba(255,255,255,.25); background:transparent; color:#FAF8F2;
+    font-size:11px; padding:6px 12px; border-radius:12px; cursor:pointer; line-height:1;
+  }
+  .cat-size-ctrl .btn:hover{ background:rgba(255,255,255,.08); }
+  .cat-size-ctrl .btn.on{ background:#D85A30; border-color:#D85A30; }
   .mote{ position:absolute; width:5px; height:5px; border-radius:50%; background:rgba(255,240,210,.85); box-shadow:0 0 6px 2px rgba(247,210,160,.5); z-index:7; pointer-events:none; animation:float 7s ease-in-out infinite; }
   .mote.m1{ left:120px; top:300px; } .mote.m2{ left:60px; top:360px; animation-delay:1.6s; width:4px; height:4px; } .mote.m3{ left:250px; top:340px; animation-delay:3.2s; }
   @keyframes float{ 0%,100%{ transform:translateY(0); opacity:.2; } 50%{ transform:translateY(-22px); opacity:.9; } }
@@ -533,11 +544,22 @@
       </div>
     </div>
 
-    <!-- 편집 모드 시 — 고양이 크기 슬라이더 (fixed, 화면 하단) -->
-    <div class="cat-size-ctrl" id="catSizeCtrl" role="group" aria-label="고양이 크기">
-      <span class="label">🐈 크기</span>
-      <input type="range" id="catSizeRange" min="0.5" max="1.8" step="0.05" value="1" aria-label="크기 조절" />
-      <span class="val" id="catSizeVal">100%</span>
+    <!-- 편집 모드 시 — 고양이 컨트롤 (크기 / 회전 / 방향) — fixed, 화면 하단 -->
+    <div class="cat-size-ctrl" id="catSizeCtrl" role="group" aria-label="고양이 편집">
+      <div class="row">
+        <span class="label">🐈 크기</span>
+        <input type="range" id="catSizeRange" min="0.5" max="1.8" step="0.05" value="1" aria-label="크기 조절" />
+        <span class="val" id="catSizeVal">100%</span>
+      </div>
+      <div class="row">
+        <span class="label">↻ 회전</span>
+        <input type="range" id="catRotRange" min="-180" max="180" step="5" value="0" aria-label="회전 각도" />
+        <span class="val" id="catRotVal">0°</span>
+      </div>
+      <div class="row" style="justify-content:space-between;">
+        <button type="button" class="btn" id="catRotReset" title="각도 0°">↺ 각도 0</button>
+        <button type="button" class="btn" id="catFlipBtn"  title="좌우 뒤집기">↔ 좌우</button>
+      </div>
     </div>
 
     <!-- 우측 컨트롤 -->
@@ -647,9 +669,11 @@
   const state={ theme:'default', sofa:'cream', rug:'coral', tower:'tall' };
   let activeCat='theme', curCase=-1;
 
-  /* 고양이 크기 — CSS variable 로 적용 (breathe animation 과 합성, --cat-scale × 1.012 호흡).
-     placeCat 첫 호출보다 위에 정의해 TDZ 문제 회피. 슬라이더 element 는 매 호출마다 query. */
+  /* 고양이 크기/각도/방향 — CSS variable 로 적용 (breathe animation 과 합성).
+     placeCat 첫 호출보다 위에 정의해 TDZ 문제 회피. 슬라이더/버튼 element 는 매 호출마다 query. */
   let catScale = 1;
+  let catRot   = 0;
+  let catFlip  = false;
   function applyCatScale(s){
     catScale = Math.max(0.5, Math.min(1.8, Number(s) || 1));
     try { if (catWrap) catWrap.style.setProperty('--cat-scale', String(catScale)); } catch {}
@@ -658,11 +682,42 @@
     if (range) range.value = String(catScale);
     if (val)   val.textContent = `${Math.round(catScale * 100)}%`;
   }
-  (function wireCatSizeRange(){
-    const range = document.getElementById('catSizeRange');
-    if (!range) return;
-    range.addEventListener('input',  (e) => applyCatScale(e.target.value));
-    range.addEventListener('change', () => { try { saveCatPos(); } catch {} });
+  function applyCatRotation(deg){
+    let d = Number(deg);
+    if (!Number.isFinite(d)) d = 0;
+    d = Math.max(-180, Math.min(180, d));
+    catRot = d;
+    try { if (catWrap) catWrap.style.setProperty('--cat-rot', `${d}deg`); } catch {}
+    const range = document.getElementById('catRotRange');
+    const val   = document.getElementById('catRotVal');
+    if (range) range.value = String(d);
+    if (val)   val.textContent = `${Math.round(d)}°`;
+  }
+  function applyCatFlip(on){
+    catFlip = !!on;
+    if (catWrap) catWrap.classList.toggle('flip', catFlip);
+    const btn = document.getElementById('catFlipBtn');
+    if (btn) btn.classList.toggle('on', catFlip);
+  }
+  (function wireCatEditCtrls(){
+    const sizeR = document.getElementById('catSizeRange');
+    if (sizeR) {
+      sizeR.addEventListener('input',  (e) => applyCatScale(e.target.value));
+      sizeR.addEventListener('change', () => { try { saveCatPos(); } catch {} });
+    }
+    const rotR = document.getElementById('catRotRange');
+    if (rotR) {
+      rotR.addEventListener('input',  (e) => applyCatRotation(e.target.value));
+      rotR.addEventListener('change', () => { try { saveCatPos(); } catch {} });
+    }
+    document.getElementById('catRotReset')?.addEventListener('click', () => {
+      applyCatRotation(0);
+      try { saveCatPos(); } catch {}
+    });
+    document.getElementById('catFlipBtn')?.addEventListener('click', () => {
+      applyCatFlip(!catFlip);
+      try { saveCatPos(); } catch {}
+    });
   })();
 
   function applySofa(o){ const s=sceneSofa.style; s.setProperty('--s-frame',o.frame); s.setProperty('--s-frame-d',o.frameD); s.setProperty('--s-seat',o.seat); s.setProperty('--s-seat-d',o.seatD); s.setProperty('--s-cushion',o.cushion); s.setProperty('--s-cushion-d',o.cushionD); s.setProperty('--s-pa',o.pA); s.setProperty('--s-pa-d',o.pAd); s.setProperty('--s-pb',o.pB); s.setProperty('--s-pb-d',o.pBd); }
@@ -842,8 +897,10 @@
     poseLabel.textContent=c.label;
     /* normalize 마크 리셋 — 다음 편집 진입 시 새 위치 기준으로 정규화 */
     delete catWrap.dataset.ozNormalized;
-    /* 새 자세 진입 시 크기 1.0 으로 리셋. applyCatPosForCurrent 가 저장된 scale 있으면 덮어씀 */
+    /* 새 자세 진입 시 크기/각도/방향 기본값으로 리셋. applyCatPosForCurrent 가 저장된 값 있으면 덮어씀 */
     applyCatScale(1);
+    applyCatRotation(0);
+    applyCatFlip(!!c.flip);  /* 자세 정의의 flip 을 기본값으로 */
     /* (theme + 자세) 별 저장된 편집 위치가 있으면 덮어씀 */
     applyCatPosForCurrent();
   }
@@ -1128,7 +1185,7 @@
     const layout = readCatLayout();
     const theme = currentThemeId();
     layout[theme] = layout[theme] || {};
-    layout[theme][src] = { left, top, scale: catScale };
+    layout[theme][src] = { left, top, scale: catScale, rot: catRot, flip: catFlip };
     writeCatLayout(layout);
   }
   function applyCatPosForCurrent(){
@@ -1142,6 +1199,8 @@
       catWrap.dataset.ozNormalized = '1';
     }
     if (saved && Number.isFinite(saved.scale)) applyCatScale(saved.scale);
+    if (saved && Number.isFinite(saved.rot))   applyCatRotation(saved.rot);
+    if (saved && typeof saved.flip === 'boolean') applyCatFlip(saved.flip);
   }
   const LAYOUT_KEY = 'ds.ozhouse.layout.v3';   /* v3 — 옛 placard 좌표 데이터 무시(강제 reset) */
 
@@ -1234,9 +1293,11 @@
       });
     });
     document.getElementById('tray')?.classList.remove('expanded');
-    /* 고양이 크기 슬라이더 노출 + 현재 scale 동기화 */
+    /* 고양이 컨트롤 노출 + 현재 값 동기화 */
     document.getElementById('catSizeCtrl')?.classList.add('show');
     applyCatScale(catScale);
+    applyCatRotation(catRot);
+    applyCatFlip(catFlip);
     syncParentBtn();
   }
   function exitEdit(){
