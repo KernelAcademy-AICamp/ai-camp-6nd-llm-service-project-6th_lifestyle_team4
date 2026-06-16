@@ -188,12 +188,25 @@ final class Supa {
 
     func findUser(anonymousId: String) async throws -> UserRow? {
         let rows: [UserRow] = try await client.from("users")
-            .select("user_id, nickname, login_id, gender, age_group")
+            .select("user_id, nickname, login_id, gender, age_group, yarn_balance")
             .eq("anonymous_id", value: anonymousId)
             .limit(1)
             .execute()
             .value
         return rows.first
+    }
+
+    // MARK: - Yarn (실타래) — 06_yarn.sql RPC. Balance lives in users.yarn_balance,
+    // keyed by anonymous_id = auth.uid(); the RPC derives the target from the JWT.
+    // No spend path: cards open freely (gate removed cross-platform), yarn is only
+    // earned (first-open +1) and purchased (mock), so consume_yarn is unused on iOS.
+
+    /// Grant `n` yarn (the first-open +1 reward, the "준비 중" purchase mock, and
+    /// the future attendance hook). Returns the post-grant balance. Mirrors PWA
+    /// `grantYarnRpc` (`p_n`).
+    @discardableResult
+    func grantYarn(_ n: Int) async throws -> Int {
+        try await client.rpc("grant_yarn", params: ["p_n": n]).execute().value
     }
 
     func insertUser(anonymousId: String, nickname: String) async throws -> UserRow {

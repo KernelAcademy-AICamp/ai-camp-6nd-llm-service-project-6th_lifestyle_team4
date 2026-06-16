@@ -35,6 +35,7 @@ struct RootView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @EnvironmentObject private var yarn: YarnStore
 
     @State private var selectedTab: Tab = .daily
     @State private var dailyPath = NavigationPath()
@@ -74,6 +75,7 @@ struct RootView: View {
         }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
+            yarn.sync(serverBalance: session.yarnBalance)   // 로그인/로그아웃 시 잔액 재시드
         }
         .onChange(of: selectedTab) { _, newValue in
             if newValue == .archive && session.isAnonymous {

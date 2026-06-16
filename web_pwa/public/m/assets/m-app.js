@@ -3099,8 +3099,8 @@ function renderDailyContextual() {
   const _dailyCatIdx = 0;
   sec.innerHTML = `
     <h2 class="t-headline-md c-espresso" style="margin:0 0 2px;font-weight:700;">이럴 땐, 이런 문장</h2>
-    <p class="t-body-sm c-walnut" style="margin:0 0 5px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
-    <div class="archive-chips" id="daily-context-chips" style="margin-bottom:16px;">
+    <p class="t-body-sm c-walnut" style="margin:0 0 1px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
+    <div class="archive-chips" id="daily-context-chips" style="margin-top:10px;margin-bottom:16px;">
       ${cats.map((c, i) => `<button class="a-chip ${i === _dailyCatIdx ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
     <div id="daily-context-card-host"></div>
@@ -3310,7 +3310,7 @@ function renderDailyOzPick() {
 
   sec.style.display = 'block';
   sec.innerHTML = `
-    <h2 class="c-espresso" style="margin:0 0 8px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
+    <h2 class="c-espresso" style="margin:0 0 4px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
       <span style="font-size:17px;">당신을 위한</span>
       <span class="brand-logo" style="font-size:24px;"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
     </h2>
@@ -3321,11 +3321,10 @@ function renderDailyOzPick() {
         <img src="assets/cat/cat_computer.png" alt="오즈"
           style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
-          <p style="margin:0 0 10px;font-size:12px;color:var(--walnut);">${(state.userNickname || state.userLoginId) ? escapeHtml(userName) + '님' : '당신'}</p>
           <p style="margin:0;font-size:11px;color:var(--walnut);line-height:1.9;">
-            <strong style="color:var(--espresso);">당신의 취향</strong><br>
-            🧶 <strong style="color:var(--cta);">장르</strong> : ${escapeHtml(genreText)}<br>
-            🧶 <strong style="color:var(--cta);">주제</strong> : ${escapeHtml(themeText)}
+            ${(state.userNickname || state.userLoginId) ? '<strong style="font-size:15px;color:#000;font-weight:700;">' + escapeHtml(userName) + '</strong> 님' : '<strong style="font-size:15px;color:#000;font-weight:700;">당신</strong>'}<br>
+            <strong style="color:var(--cta);">장르</strong> : ${escapeHtml(genreText)}<br>
+            <strong style="color:var(--cta);">주제</strong> : ${escapeHtml(themeText)}
           </p>
         </div>
       </div>
@@ -3426,7 +3425,7 @@ function renderDailyRecent() {
   const work = card.works || {};
   sec.style.display = 'block';
   sec.innerHTML = `
-    <h2 style="font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:20px;color:var(--espresso);margin:0 0 6px;font-weight:700;">다시 만나기</h2>
+    <h2 style="font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:20px;color:var(--espresso);margin:0 0 4px;font-weight:700;">다시 만나기</h2>
     <p class="t-body-sm c-walnut" style="margin:0 0 14px;">담아둔 문장, 다시 읽어볼까요?</p>
     <button type="button" class="sharp-card daily-recent-card" data-card-id="${card.card_id}"
       style="display:flex;align-items:center;gap:14px;width:100%;padding:16px;cursor:pointer;text-align:left;">

@@ -22,6 +22,9 @@ final class AuthSession: ObservableObject {
     @Published var loginId = ""
     @Published var gender = ""        // "" | male | female | other
     @Published var ageGroup = ""      // "" | 10s..90s
+    /// 실타래 충전 잔액(users.yarn_balance) — 부트스트랩 시 로드. UI 단일 출처는
+    /// `YarnStore`; 이 값은 그쪽으로 시드된다(RootView). 차감/충전은 RPC 반환값으로 갱신.
+    @Published var yarnBalance = 0
     @Published var errorMessage: String?
 
     @Published var authInProgress = false
@@ -84,6 +87,7 @@ final class AuthSession: ObservableObject {
                 loginId = existing.loginId ?? ""
                 gender = existing.gender ?? ""
                 ageGroup = existing.ageGroup ?? ""
+                yarnBalance = existing.yarnBalance ?? 0
             } else {
                 // 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다.
                 let starting = anon ? "" : Self.randomCuteNickname()
@@ -94,6 +98,7 @@ final class AuthSession: ObservableObject {
                 loginId = ""
                 gender = ""
                 ageGroup = ""
+                yarnBalance = 0   // 신규 행: DB 기본값 0
                 // 가입 직후라면 입력한 아이디를 기록하고 익명 북마크를 이전한다.
                 if !anon {
                     if let lid = recordLoginId, !lid.isEmpty {

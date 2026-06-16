@@ -68,7 +68,7 @@
 
   /* ── 테마: 위대한 개츠비 ── 야간 무도회 + 호수 풍경 한 장으로 룸 전체를 대체 */
   .room.theme-gatsby{
-    background-image: url('assets/oz-themes/Gatsby.png');
+    background-image: url("assets/oz-themes/The Great Gatsby.png");
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
@@ -78,6 +78,32 @@
   .room.theme-gatsby .floor,
   .room.theme-gatsby .lightbeam{ background:none !important; box-shadow:none !important; }
   .room.theme-gatsby .wall::before{ background:none !important; }
+
+  /* ── 테마: 걸리버 여행기 ── 거인 나라 풍경 한 장으로 룸 전체를 대체 */
+  .room.theme-gullivers{
+    background-image: url("assets/oz-themes/Gulliver's Travels.png");
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+  .room.theme-gullivers .wall,
+  .room.theme-gullivers .baseboard,
+  .room.theme-gullivers .floor,
+  .room.theme-gullivers .lightbeam{ background:none !important; box-shadow:none !important; }
+  .room.theme-gullivers .wall::before{ background:none !important; }
+
+  /* ── 테마: 셜록 홈즈 ── 베이커가 221B 한 장으로 룸 전체를 대체 */
+  .room.theme-sherlock{
+    background-image: url("assets/oz-themes/Sherlock Holmes.png");
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+  .room.theme-sherlock .wall,
+  .room.theme-sherlock .baseboard,
+  .room.theme-sherlock .floor,
+  .room.theme-sherlock .lightbeam{ background:none !important; box-shadow:none !important; }
+  .room.theme-sherlock .wall::before{ background:none !important; }
 
   /* ── 밤 모드 ── */
   .room.night .wall{ background:linear-gradient(180deg,#28324c 0%, #303b56 60%, #36415e 100%); }
@@ -180,7 +206,22 @@
   .cat{ position:absolute; z-index:6; transform-origin:bottom center; pointer-events:none; animation:breathe 3.6s ease-in-out infinite; transition:opacity .18s ease; }
   .cat img{ display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none; }
   .cat.flip img{ transform:scaleX(-1); }
-  @keyframes breathe{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.012); } }
+  @keyframes breathe{ 0%,100%{ transform:scale(var(--cat-scale,1)); } 50%{ transform:scale(calc(var(--cat-scale,1) * 1.012)); } }
+
+  /* 편집 모드 시 — 고양이 크기 슬라이더 (화면 하단 fixed) */
+  .cat-size-ctrl{
+    position:fixed; left:50%; bottom:120px; transform:translateX(-50%);
+    display:none; z-index:9999;
+    background:rgba(14,12,10,.85); color:#FAF8F2;
+    padding:8px 14px; border-radius:18px;
+    font-size:12px; align-items:center; gap:10px;
+    box-shadow:0 4px 14px rgba(0,0,0,.25);
+    -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+  }
+  .cat-size-ctrl.show{ display:inline-flex; }
+  .cat-size-ctrl input[type=range]{ width:140px; accent-color:#D85A30; }
+  .cat-size-ctrl .label{ font-size:11px; opacity:.85; }
+  .cat-size-ctrl .val{ font-size:11px; min-width:34px; text-align:right; font-variant-numeric:tabular-nums; }
   .mote{ position:absolute; width:5px; height:5px; border-radius:50%; background:rgba(255,240,210,.85); box-shadow:0 0 6px 2px rgba(247,210,160,.5); z-index:7; pointer-events:none; animation:float 7s ease-in-out infinite; }
   .mote.m1{ left:120px; top:300px; } .mote.m2{ left:60px; top:360px; animation-delay:1.6s; width:4px; height:4px; } .mote.m3{ left:250px; top:340px; animation-delay:3.2s; }
   @keyframes float{ 0%,100%{ transform:translateY(0); opacity:.2; } 50%{ transform:translateY(-22px); opacity:.9; } }
@@ -492,6 +533,13 @@
       </div>
     </div>
 
+    <!-- 편집 모드 시 — 고양이 크기 슬라이더 (fixed, 화면 하단) -->
+    <div class="cat-size-ctrl" id="catSizeCtrl" role="group" aria-label="고양이 크기">
+      <span class="label">🐈 크기</span>
+      <input type="range" id="catSizeRange" min="0.5" max="1.8" step="0.05" value="1" aria-label="크기 조절" />
+      <span class="val" id="catSizeVal">100%</span>
+    </div>
+
     <!-- 우측 컨트롤 -->
     <div class="controls">
       <div class="panel-title">환경 설정</div>
@@ -541,13 +589,13 @@
       { id:'default',   name:'기본',          nameEn:'Normal',            locked:false, price:0,   hint:'기본 테마' },
       { id:'moby-dick', name:'모비딕',         nameEn:'Moby-Dick',         locked:false, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
       { id:'demian',    name:'데미안',         nameEn:'Demian',            locked:true,  price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
-      { id:'gatsby',         name:'위대한 개츠비',           nameEn:'The Great Gatsby',                 locked:true, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      { id:'gatsby',         name:'위대한 개츠비',           nameEn:'The Great Gatsby',                 locked:false, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      { id:'gullivers',      name:'걸리버 여행기',            nameEn:"Gulliver's Travels",               locked:false, price:200, hint:"실타래 200개 / 또는 책 '걸리버 여행기'의 모든 카드를 다 읽으면 해금" },
       /* ── 이미지 추가 예정. 모두 잠김 + 실타래 200 ── */
       { id:'around-world',   name:'80일 간의 세계일주',       nameEn:'Around the World in Eighty Days',  locked:true, price:200, hint:"실타래 200개 / 또는 책 '80일 간의 세계일주'의 모든 카드를 다 읽으면 해금" },
-      { id:'gullivers',      name:'걸리버 여행기',            nameEn:"Gulliver's Travels",               locked:true, price:200, hint:"실타래 200개 / 또는 책 '걸리버 여행기'의 모든 카드를 다 읽으면 해금" },
       { id:'notre-dame',     name:'노트르담 드 파리',         nameEn:'Notre-Dame de Paris',              locked:true, price:200, hint:"실타래 200개 / 또는 책 '노트르담 드 파리'의 모든 카드를 다 읽으면 해금" },
       { id:'metamorphosis',  name:'변신',                     nameEn:'The Metamorphosis',                locked:true, price:200, hint:"실타래 200개 / 또는 책 '변신'의 모든 카드를 다 읽으면 해금" },
-      { id:'sherlock',       name:'셜록 홈즈',                nameEn:'Sherlock Holmes',                  locked:true, price:200, hint:"실타래 200개 / 또는 책 '셜록 홈즈'의 모든 카드를 다 읽으면 해금" },
+      { id:'sherlock',       name:'셜록 홈즈',                nameEn:'Sherlock Holmes',                  locked:false, price:200, hint:"실타래 200개 / 또는 책 '셜록 홈즈'의 모든 카드를 다 읽으면 해금" },
       { id:'divine-comedy',  name:'신곡',                     nameEn:'Divine Comedy',                    locked:true, price:200, hint:"실타래 200개 / 또는 책 '신곡'의 모든 카드를 다 읽으면 해금" },
       { id:'siddhartha',     name:'싯다르타',                 nameEn:'Siddhartha',                       locked:true, price:200, hint:"실타래 200개 / 또는 책 '싯다르타'의 모든 카드를 다 읽으면 해금" },
       { id:'phantom-opera',  name:'오페라의 유령',            nameEn:'The Phantom of the Opera',         locked:true, price:200, hint:"실타래 200개 / 또는 책 '오페라의 유령'의 모든 카드를 다 읽으면 해금" },
@@ -728,7 +776,9 @@
   /* 테마 id → swatch/배경 미니어처 이미지 경로. 등록 안 된 id 는 이미지 없음(자물쇠 표시). */
   const THEME_IMG = {
     'moby-dick': 'assets/oz-themes/Mobydick.png',
-    'gatsby':    'assets/oz-themes/Gatsby.png',
+    'gatsby':    'assets/oz-themes/The Great Gatsby.png',
+    'gullivers': "assets/oz-themes/Gulliver's Travels.png",
+    'sherlock':  'assets/oz-themes/Sherlock Holmes.png',
   };
 
   function swatch(cat,o){
@@ -739,7 +789,7 @@
       /* 해금됨(locked:false) — 자물쇠/가격 칩 제거하고 테마 이미지 미니어처만 (이미지 없으면 라이트 폴백) */
       if (!o.locked) {
         const img = THEME_IMG[o.id];
-        if (img) return `<div style="position:absolute;inset:0;background-image:url('${img}');background-size:cover;background-position:center;border-radius:8px;"></div>`;
+        if (img) return `<div style="position:absolute;inset:0;background-image:url(&quot;${img}&quot;);background-size:cover;background-position:center;border-radius:8px;"></div>`;
         return `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#EFE6D2,#DDD2B8);border-radius:8px;"></div>`;
       }
       /* 잠김 — 어두운 표지 + 🔒 + 가격(실타래) 칩 */
@@ -774,6 +824,8 @@
     poseLabel.textContent=c.label;
     /* normalize 마크 리셋 — 다음 편집 진입 시 새 위치 기준으로 정규화 */
     delete catWrap.dataset.ozNormalized;
+    /* 새 자세 진입 시 크기 1.0 으로 리셋. applyCatPosForCurrent 가 저장된 scale 있으면 덮어씀 */
+    applyCatScale(1);
     /* (theme + 자세) 별 저장된 편집 위치가 있으면 덮어씀 */
     applyCatPosForCurrent();
   }
@@ -1048,6 +1100,23 @@
     return m ? m[1] : 'default';
   }
   function currentCatSrc(){ return (typeof CATS !== 'undefined' && CATS[curCase]?.src) || ''; }
+
+  /* 고양이 크기 — CSS variable 로 적용 (breathe animation 과 합성, --cat-scale × 1.012 호흡) */
+  const catSizeCtrl  = document.getElementById('catSizeCtrl');
+  const catSizeRange = document.getElementById('catSizeRange');
+  const catSizeVal   = document.getElementById('catSizeVal');
+  let catScale = 1;
+  function applyCatScale(s){
+    catScale = Math.max(0.5, Math.min(1.8, Number(s) || 1));
+    if (catWrap) catWrap.style.setProperty('--cat-scale', String(catScale));
+    if (catSizeRange) catSizeRange.value = String(catScale);
+    if (catSizeVal) catSizeVal.textContent = `${Math.round(catScale * 100)}%`;
+  }
+  if (catSizeRange) {
+    catSizeRange.addEventListener('input',  (e) => applyCatScale(e.target.value));
+    catSizeRange.addEventListener('change', () => { try { saveCatPos(); } catch {} });
+  }
+
   function saveCatPos(){
     const src = currentCatSrc(); if (!src) return;
     const cs = getComputedStyle(catWrap);
@@ -1057,7 +1126,7 @@
     const layout = readCatLayout();
     const theme = currentThemeId();
     layout[theme] = layout[theme] || {};
-    layout[theme][src] = { left, top };
+    layout[theme][src] = { left, top, scale: catScale };
     writeCatLayout(layout);
   }
   function applyCatPosForCurrent(){
@@ -1070,6 +1139,7 @@
       catWrap.style.bottom = 'auto';
       catWrap.dataset.ozNormalized = '1';
     }
+    if (saved && Number.isFinite(saved.scale)) applyCatScale(saved.scale);
   }
   const LAYOUT_KEY = 'ds.ozhouse.layout.v3';   /* v3 — 옛 placard 좌표 데이터 무시(강제 reset) */
 
@@ -1162,6 +1232,9 @@
       });
     });
     document.getElementById('tray')?.classList.remove('expanded');
+    /* 고양이 크기 슬라이더 노출 + 현재 scale 동기화 */
+    catSizeCtrl?.classList.add('show');
+    applyCatScale(catScale);
     syncParentBtn();
   }
   function exitEdit(){
@@ -1170,6 +1243,7 @@
     EDIT_SELECTORS.forEach(sel => {
       withGroup(sel).forEach(s => document.querySelector(s)?.classList.remove('oz-editing'));
     });
+    catSizeCtrl?.classList.remove('show');
     saveAll();
     syncParentBtn();
   }

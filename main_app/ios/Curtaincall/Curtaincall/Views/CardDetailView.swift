@@ -7,6 +7,7 @@ struct CardDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
+    @EnvironmentObject private var yarn: YarnStore
     @StateObject private var comments: CommentsModel
     @State private var showAccountPrompt = false
     @State private var displayedViewCount: Int
@@ -157,7 +158,12 @@ struct CardDetailView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             if composerFocused { composerFocused = false }
         }
-        .task { await loadCountsAndIncrementView() }
+        .task {
+            // 게이트/잠금 없음 — 모든 카드 자유 열람(PWA openDetail / Android YarnGate 미러).
+            // 카드당 1회 첫 열람 시에만 실타래 +1 지급.
+            await yarn.rewardFirstOpen(cardId: card.cardId)
+            await loadCountsAndIncrementView()
+        }
         .overlay {
             if showAccountPrompt {
                 AccountRequiredPrompt {
