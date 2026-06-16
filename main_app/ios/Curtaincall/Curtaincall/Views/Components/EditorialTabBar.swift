@@ -34,28 +34,38 @@ struct EditorialTabBar: View {
         reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.72)
     }
 
+    /// 가장 크게 솟는 고양이 자세의 돌출량(pt). 바 위에 이만큼 '투명 여백'을 둬서
+    /// safeAreaInset 이 스크롤 콘텐츠를 그만큼 위로 밀어 — 고양이가 읽을 내용을 가리지 않는다.
+    /// (각 자세 height*ledgeFraction ≤ 이 값이 되도록 catPose 수치를 잡는다.)
+    private static let catClearance: CGFloat = 56
+
     var body: some View {
         VStack(spacing: 0) {
-            Hairline()
-            HStack(spacing: 0) {
-                ForEach(Tab.allCases, id: \.self) { tab in
-                    Button {
-                        handleTap(tab)
-                    } label: {
-                        tabItem(tab: tab, active: tab == selection)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .contentShape(Rectangle())
+            // 고양이 돌출용 투명 여백 — 배경(paper)을 깔지 않아 솔리드 바처럼 보이지 않고,
+            // 콘텐츠는 이 위에서 끝나므로 그 아래로 스크롤되지 않는다.
+            Color.clear.frame(height: Self.catClearance)
+            VStack(spacing: 0) {
+                Hairline()
+                HStack(spacing: 0) {
+                    ForEach(Tab.allCases, id: \.self) { tab in
+                        Button {
+                            handleTap(tab)
+                        } label: {
+                            tabItem(tab: tab, active: tab == selection)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .frame(height: 64)
             }
-            .frame(height: 64)
+            .background(Color.paper)
         }
-        .background(Color.paper)
-        // 장식 고양이 — 바 윗면 위로 솟아오른다. click-through(allowsHitTesting=false)
-        // 라서 탭 히트테스트를 가리지 않는다. overlay 라 바 레이아웃 크기에 영향 없음.
-        .overlay(alignment: .top) { navCat }
+        // 장식 고양이 — 위 투명 여백 안에 앉아 바 윗면에 걸친다. 여백 높이만큼만 솟으므로
+        // 콘텐츠 영역을 침범하지 않는다. click-through(allowsHitTesting=false)라 탭을 가리지 않음.
+        .overlay { navCat }
         // 탭 전환 시 잔잔한 셀렉션 햅틱 (시스템 설정 자동 반영).
         .sensoryFeedback(.selection, trigger: selection)
     }
@@ -157,15 +167,17 @@ struct EditorialTabBar: View {
     /// 선택된 탭에 따른 고양이 자세 — Android/PWA 미러.
     ///   feed=cat_pen · archive(Library)=cat_struck · daily/settings=cat_empty(코너) · 그 외=cat_today(중앙 약간 우측)
     private func catPose(for tab: Tab) -> NavCatPose {
+        // 각 자세의 돌출량 = height * ledgeFraction ≤ catClearance(56pt) 이 되도록 잡는다
+        // (그래야 고양이가 위 투명 여백 안에 머물고 콘텐츠를 가리지 않는다).
         switch tab {
         case .feed:
-            return NavCatPose(asset: "cat_pen", height: 92, hBias: 0.92, ledgeFraction: 0.86)
+            return NavCatPose(asset: "cat_pen", height: 64, hBias: 0.92, ledgeFraction: 0.86)    // 돌출 ≈ 55
         case .archive:
-            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.78, ledgeFraction: 0.86)
+            return NavCatPose(asset: "cat_struck", height: 64, hBias: 0.78, ledgeFraction: 0.86) // 돌출 ≈ 55
         case .daily, .settings:
-            return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)
+            return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)  // 돌출 ≈ 24
         case .home:
-            return NavCatPose(asset: "cat_today", height: 60, hBias: 0.30, ledgeFraction: 0.72)
+            return NavCatPose(asset: "cat_today", height: 60, hBias: 0.30, ledgeFraction: 0.72)  // 돌출 ≈ 43
         }
     }
 
@@ -173,8 +185,9 @@ struct EditorialTabBar: View {
         let pose = catPose(for: selection)
         return GeometryReader { geo in
             let w = geo.size.width
-            // ledge 선이 바 윗면(geo y=0)에 오도록: 이미지 중심 y = height*(0.5 - ledgeFraction).
-            let centerY = pose.height * (0.5 - pose.ledgeFraction)
+            // 바 윗면(hairline)은 투명 여백 아래, 즉 geo y = catClearance 지점.
+            // ledge 선이 거기에 오도록: 중심 y = catClearance + height*(0.5 - ledgeFraction).
+            let centerY = Self.catClearance + pose.height * (0.5 - pose.ledgeFraction)
             // bias 를 좌우 위치로: 0=중앙, ±1=가장자리에서 inset 만큼 안쪽.
             let inset: CGFloat = 44
             let centerX = w / 2 + pose.hBias * (w / 2 - inset)
