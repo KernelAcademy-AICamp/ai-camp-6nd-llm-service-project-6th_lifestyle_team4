@@ -89,6 +89,7 @@ struct HomeView: View {
                                 ArchiveRow(card: card)
                             }
                             .buttonStyle(.plain)
+                            .cardContextMenu(card)
                         }
                     } else {
                         Text("새로고침하면 이전 카드가 여기에 쌓입니다.")
@@ -144,6 +145,7 @@ struct HomeView: View {
                 )
             }
             .buttonStyle(.plain)
+            .cardContextMenu(card)
 
             Button {
                 toggleBookmark(cardId: card.cardId)

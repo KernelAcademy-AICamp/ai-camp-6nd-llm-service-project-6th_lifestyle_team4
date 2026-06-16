@@ -143,6 +143,8 @@ struct RootView: View {
                 .tag(Tab.settings)
         }
         .toolbar(.hidden, for: .tabBar)
+        // 카드 컨텍스트 메뉴(비회원 북마크 프롬프트)의 '로그인' → MY 탭으로.
+        .environment(\.requestLogin) { selectedTab = .settings }
         // Hide the tab bar while the comment composer is focused (keyboard up),
         // so the input can pin directly above the keyboard; restore on blur.
         .onPreferenceChange(ComposerFocusedPreferenceKey.self) { active in
