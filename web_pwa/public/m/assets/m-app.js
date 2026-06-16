@@ -3098,8 +3098,8 @@ function renderDailyContextual() {
   // 그날 노출되는 3개 중 첫 번째를 기본으로 연다.
   const _dailyCatIdx = 0;
   sec.innerHTML = `
-    <h2 class="t-headline-md c-espresso" style="margin:0 0 2px;font-weight:700;">이럴 땐, 이런 문장</h2>
-    <p class="t-body-sm c-walnut" style="margin:0 0 1px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 4px;font-weight:700;">이럴 땐, 이런 문장</h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 12px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
     <div class="archive-chips" id="daily-context-chips" style="margin-top:10px;margin-bottom:16px;">
       ${cats.map((c, i) => `<button class="a-chip ${i === _dailyCatIdx ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
@@ -3426,7 +3426,7 @@ function renderDailyRecent() {
   sec.style.display = 'block';
   sec.innerHTML = `
     <h2 style="font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:20px;color:var(--espresso);margin:0 0 4px;font-weight:700;">다시 만나기</h2>
-    <p class="t-body-sm c-walnut" style="margin:0 0 14px;">담아둔 문장, 다시 읽어볼까요?</p>
+    <p class="t-body-sm c-walnut" style="margin:0 0 12px;">담아둔 문장, 다시 읽어볼까요?</p>
     <button type="button" class="sharp-card daily-recent-card" data-card-id="${card.card_id}"
       style="display:flex;align-items:center;gap:14px;width:100%;padding:16px;cursor:pointer;text-align:left;">
       ${dailyBookCoverHTML(work, { width: 64 })}
