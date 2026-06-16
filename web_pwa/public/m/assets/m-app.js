@@ -3310,7 +3310,7 @@ function renderDailyOzPick() {
 
   sec.style.display = 'block';
   sec.innerHTML = `
-    <h2 class="c-espresso" style="margin:0 0 8px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
+    <h2 class="c-espresso" style="margin:0 0 4px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
       <span style="font-size:17px;">당신을 위한</span>
       <span class="brand-logo" style="font-size:24px;"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
     </h2>
@@ -3321,9 +3321,8 @@ function renderDailyOzPick() {
         <img src="assets/cat/cat_computer.png" alt="오즈"
           style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
-          <p style="margin:0 0 10px;font-size:12px;color:var(--walnut);">${(state.userNickname || state.userLoginId) ? '<strong style="font-size:15px;color:#000;font-weight:700;">' + escapeHtml(userName) + '</strong> 님' : '당신'}</p>
           <p style="margin:0;font-size:11px;color:var(--walnut);line-height:1.9;">
-            <strong style="color:var(--espresso);">당신의 취향</strong><br>
+            ${(state.userNickname || state.userLoginId) ? '<strong style="font-size:15px;color:#000;font-weight:700;">' + escapeHtml(userName) + '</strong> 님' : '<strong style="font-size:15px;color:#000;font-weight:700;">당신</strong>'}<br>
             <strong style="color:var(--cta);">장르</strong> : ${escapeHtml(genreText)}<br>
             <strong style="color:var(--cta);">주제</strong> : ${escapeHtml(themeText)}
           </p>
