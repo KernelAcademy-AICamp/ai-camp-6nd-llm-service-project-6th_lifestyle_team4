@@ -3298,11 +3298,8 @@ function renderDailyOzPick() {
   // reasonHtml 은 의도된 <strong> 을 포함하므로 렌더 시 escape 하지 않는다 — 동적 값은 개별 escape.
   const themeHit = matchedChosenTheme(pick);
   const tasteHit = (pick.keywords || []).find((k) => taste.has(k));
-  const personLabel = (!state.isAnonymous && (state.userNickname || state.userLoginId))
-    ? `<strong>'${escapeHtml(state.userNickname || state.userLoginId)}'</strong>님`
-    : '당신';
   const reasonHtml = themeHit
-    ? `<strong>'${escapeHtml(themeHit)}'</strong> 주제를 고른 ${personLabel}에게 추천해요.`
+    ? `<strong>'${escapeHtml(themeHit)}'</strong> 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요.`
     : tasteHit
       ? `<strong>'${escapeHtml(tasteHit)}'</strong>에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
       : '오즈가 오늘 골라드린 한 문장이에요.';
@@ -3317,17 +3314,18 @@ function renderDailyOzPick() {
       <span style="font-size:17px;">당신을 위한</span>
       <span class="brand-logo" style="font-size:24px;"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
     </h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 12px;">오즈가 당신의 취향을 살펴 골랐어요.</p>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
       <!-- 헤더 — 고양이 + 닉네임 + 선호(장르/주제) 메타 -->
       <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
         <img src="assets/cat/cat_computer.png" alt="오즈"
           style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
-          <p style="margin:0 0 8px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(userName)}</p>
+          <p style="margin:0 0 10px;font-size:12px;color:var(--walnut);">${(state.userNickname || state.userLoginId) ? escapeHtml(userName) + '님' : '당신'}</p>
           <p style="margin:0;font-size:11px;color:var(--walnut);line-height:1.9;">
             <strong style="color:var(--espresso);">당신의 취향</strong><br>
-            <strong style="color:var(--espresso);">장르</strong> : ${escapeHtml(genreText)}<br>
-            <strong style="color:var(--espresso);">주제</strong> : ${escapeHtml(themeText)}
+            🧶 <strong style="color:var(--cta);">장르</strong> : ${escapeHtml(genreText)}<br>
+            🧶 <strong style="color:var(--cta);">주제</strong> : ${escapeHtml(themeText)}
           </p>
         </div>
       </div>
