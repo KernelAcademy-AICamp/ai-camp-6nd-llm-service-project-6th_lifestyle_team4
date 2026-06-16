@@ -201,12 +201,22 @@ final class Supa {
     // No spend path: cards open freely (gate removed cross-platform), yarn is only
     // earned (first-open +1) and purchased (mock), so consume_yarn is unused on iOS.
 
-    /// Grant `n` yarn (the first-open +1 reward, the "준비 중" purchase mock, and
-    /// the future attendance hook). Returns the post-grant balance. Mirrors PWA
-    /// `grantYarnRpc` (`p_n`).
+    /// Grant `n` yarn (the "준비 중" purchase mock + the future attendance hook).
+    /// Returns the post-grant balance. Mirrors PWA `grantYarnRpc` (`p_n`).
     @discardableResult
     func grantYarn(_ n: Int) async throws -> Int {
         try await client.rpc("grant_yarn", params: ["p_n": n]).execute().value
+    }
+
+    /// First-open +1 reward with **durable server-side dedup** — `(user_id, card_id)`
+    /// is UNIQUE in `yarn_card_rewards`, so a reinstall/device-reset can't re-grant
+    /// (unlike a client-only guard). Returns the post-reward balance (unchanged if
+    /// already rewarded). Mirrors PWA `reward_yarn_first_view` (035_yarn_card_rewards.sql).
+    func rewardFirstView(userId: Int, cardId: Int) async throws -> Int {
+        try await client.rpc(
+            "reward_yarn_first_view",
+            params: ["p_user_id": userId, "p_card_id": cardId]
+        ).execute().value
     }
 
     func insertUser(anonymousId: String, nickname: String) async throws -> UserRow {
