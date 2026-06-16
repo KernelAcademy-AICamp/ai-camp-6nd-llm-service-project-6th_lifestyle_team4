@@ -4586,6 +4586,21 @@ async function grantYarnRpc(n) {
   return typeof data === 'number' ? data : parseInt(data, 10);
 }
 
+// OZ 테마 구매 — 서버 atomic 차감 + 영구 unlock 기록.
+//   반환: 새 yarn_balance (>=0), -1=인자 NULL, -2=잔액 부족.
+async function purchaseOzThemeRpc(themeId, price) {
+  if (!state.userId) throw new Error('not_signed_in');
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('purchase_oz_theme', {
+    p_user_id: state.userId,
+    p_theme_id: themeId,
+    p_price: price,
+  });
+  if (error) throw error;
+  return typeof data === 'number' ? data : parseInt(data, 10);
+}
+window.purchaseOzThemeRpc = purchaseOzThemeRpc;
+
 // 카드 첫 열람 보상 — 카드당 1회 +1 실타래 (중복 지급 없음).
 //   로컬 키 ds.yarnRewarded 에 카드ID 기록 → optimistic 차단 후 RPC 호출.
 const YARN_REWARDED_KEY = 'ds.yarnRewarded';

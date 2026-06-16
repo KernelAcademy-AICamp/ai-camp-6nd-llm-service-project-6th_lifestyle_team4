@@ -556,8 +556,7 @@
         <input type="range" id="catRotRange" min="-180" max="180" step="5" value="0" aria-label="회전 각도" />
         <span class="val" id="catRotVal">0°</span>
       </div>
-      <div class="row" style="justify-content:space-between;">
-        <button type="button" class="btn" id="catRotReset" title="각도 0°">↺ 각도 0</button>
+      <div class="row" style="justify-content:flex-end;">
         <button type="button" class="btn" id="catFlipBtn"  title="좌우 뒤집기">↔ 좌우</button>
       </div>
     </div>
@@ -710,10 +709,6 @@
       rotR.addEventListener('input',  (e) => applyCatRotation(e.target.value));
       rotR.addEventListener('change', () => { try { saveCatPos(); } catch {} });
     }
-    document.getElementById('catRotReset')?.addEventListener('click', () => {
-      applyCatRotation(0);
-      try { saveCatPos(); } catch {}
-    });
     document.getElementById('catFlipBtn')?.addEventListener('click', () => {
       applyCatFlip(!catFlip);
       try { saveCatPos(); } catch {}
@@ -823,13 +818,53 @@
             confirmLabel: '구매하기',
             dismissLabel: '취소',
             openSigninOnConfirm: false,
-            onConfirm: () => {
-              addPurchasedTheme(o.id);
-              state[cat] = id;
-              applyTheme(o);
-              renderOptions();
-              updateYarnChip();
-              /* TODO: 서버 실타래 차감 RPC 연결 */
+            onConfirm: async () => {
+              /* 서버 atomic 차감 + 영구 unlock 기록. 클라이언트 purchased 는 캐시 역할만. */
+              const rpc = window.parent && window.parent.purchaseOzThemeRpc;
+              if (typeof rpc !== 'function') {
+                /* 부모 함수 미로드 — 옛 경로 폴백 (차감 안 됨) */
+                addPurchasedTheme(o.id);
+                state[cat] = id; applyTheme(o); renderOptions(); updateYarnChip();
+                return;
+              }
+              try {
+                const newBal = await rpc(o.id, o.price);
+                if (newBal === -2) {
+                  fn({
+                    title: '실타래 부족',
+                    message: `실타래가 부족해요.\n필요: ${o.price}개`,
+                    confirmLabel: '확인', dismissLabel: '',
+                    openSigninOnConfirm: false,
+                  });
+                  return;
+                }
+                if (!Number.isFinite(newBal) || newBal < 0) {
+                  fn({
+                    title: '구매 실패',
+                    message: '잠시 후 다시 시도해주세요.',
+                    confirmLabel: '확인', dismissLabel: '',
+                    openSigninOnConfirm: false,
+                  });
+                  return;
+                }
+                /* 성공 — 잔액 갱신, purchased 캐시, 적용 */
+                try { if (window.parent.state) window.parent.state.yarnPurchased = newBal; } catch {}
+                addPurchasedTheme(o.id);
+                state[cat] = id;
+                applyTheme(o);
+                renderOptions();
+                updateYarnChip();
+              } catch (e) {
+                console.warn('[oz] purchase failed:', e);
+                fn({
+                  title: '구매 실패',
+                  message: e && e.message === 'not_signed_in'
+                    ? '로그인이 필요해요.'
+                    : '잠시 후 다시 시도해주세요.',
+                  confirmLabel: '확인', dismissLabel: '',
+                  openSigninOnConfirm: false,
+                });
+              }
             },
           });
         }
