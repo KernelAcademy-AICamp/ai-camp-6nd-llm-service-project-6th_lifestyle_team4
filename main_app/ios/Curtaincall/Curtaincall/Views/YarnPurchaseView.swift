@@ -156,7 +156,7 @@ struct YarnPurchaseView: View {
     private var aboutNote: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("실타래란?").labelCaps()
-            Text("실타래는 명대사 카드를 여는 데 쓰여요. 카드를 처음 열면 +1, 한 번 연 카드는 3일간 다시 무료로 볼 수 있어요.")
+            Text("모든 명대사 카드는 자유롭게 열람할 수 있어요. 카드를 처음 열 때마다 실타래를 +1 모을 수 있어요.")
                 .font(.bodySans(14))
                 .foregroundStyle(.walnut)
                 .bookLeading(size: 14)

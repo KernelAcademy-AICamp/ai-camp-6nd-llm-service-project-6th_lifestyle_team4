@@ -196,17 +196,14 @@ final class Supa {
         return rows.first
     }
 
-    // MARK: - Yarn (실타래) — 06_yarn.sql RPCs. Balance lives in users.yarn_balance,
-    // keyed by anonymous_id = auth.uid(); the RPCs derive the target from the JWT.
+    // MARK: - Yarn (실타래) — 06_yarn.sql RPC. Balance lives in users.yarn_balance,
+    // keyed by anonymous_id = auth.uid(); the RPC derives the target from the JWT.
+    // No spend path: cards open freely (gate removed cross-platform), yarn is only
+    // earned (first-open +1) and purchased (mock), so consume_yarn is unused on iOS.
 
-    /// Atomically spend 1 yarn. Returns the post-spend balance, or **-1** when the
-    /// balance is 0 (no charge applied). Mirrors PWA `consumeYarnRpc`.
-    func consumeYarn() async throws -> Int {
-        try await client.rpc("consume_yarn").execute().value
-    }
-
-    /// Grant `n` yarn (the "준비 중" purchase mock + the attendance reward hook).
-    /// Returns the post-grant balance. Mirrors PWA `grantYarnRpc` (`p_n`).
+    /// Grant `n` yarn (the first-open +1 reward, the "준비 중" purchase mock, and
+    /// the future attendance hook). Returns the post-grant balance. Mirrors PWA
+    /// `grantYarnRpc` (`p_n`).
     @discardableResult
     func grantYarn(_ n: Int) async throws -> Int {
         try await client.rpc("grant_yarn", params: ["p_n": n]).execute().value
