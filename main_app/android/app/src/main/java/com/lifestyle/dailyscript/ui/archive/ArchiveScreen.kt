@@ -75,6 +75,9 @@ import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
+import com.lifestyle.dailyscript.ui.components.Chip
+import com.lifestyle.dailyscript.ui.components.GenreChips
+import com.lifestyle.dailyscript.ui.components.OpenedBookShell
 import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -88,14 +91,10 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.settings.ActivityTopBar
 import com.lifestyle.dailyscript.ui.util.GENRE_ORDER
 import com.lifestyle.dailyscript.ui.util.Markdown
+import com.lifestyle.dailyscript.ui.util.formatBookmarkDate
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import com.lifestyle.dailyscript.ui.util.resolveSeriesSubtitle
 import com.lifestyle.dailyscript.ui.util.workGroupKey
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.ZoneOffset
 import kotlinx.coroutines.delay
 
 // --- British-bookstore bookshelf palette (local, decorative) ---
@@ -116,10 +115,6 @@ private val WoodFace = Color(0xFF6E5031)
 private val WoodShadow = Color(0xFF33220F)
 
 private val ShelfSidePadding = 20.dp
-
-// The book cover swings open with a slight overshoot — matches the PWA's
-// cubic-bezier(0.34, 1.2, 0.64, 1) on the .book transform.
-private val BookCoverEasing = CubicBezierEasing(0.34f, 1.2f, 0.64f, 1f)
 
 /** Gilt bookmark glyph stamped at the head of each spine (mirrors the PWA spine-count icon path). */
 private val BookmarkGilt: ImageVector =
@@ -209,18 +204,21 @@ fun ArchiveScreen(
     }
 
     val allBooks = remember(state.bookmarks) { buildBooks(state.bookmarks) }
-    val filtered = allBooks.filter { b ->
-        val fmt = b.format?.lowercase() ?: ""
-        val genreOk = when (genre) {
-            null -> true
-            "other" -> fmt !in GENRE_ORDER
-            else -> fmt == genre
+    // remember 로 감싸 검색 타이핑 중 매 recomposition마다 전체 리스트를 재필터링하지 않게 한다.
+    val filtered = remember(allBooks, genre, search) {
+        allBooks.filter { b ->
+            val fmt = b.format?.lowercase() ?: ""
+            val genreOk = when (genre) {
+                null -> true
+                "other" -> fmt !in GENRE_ORDER
+                else -> fmt == genre
+            }
+            val q = search.trim()
+            val searchOk = q.isBlank() ||
+                b.title.contains(q, ignoreCase = true) ||
+                (b.subtitle?.contains(q, ignoreCase = true) == true)
+            genreOk && searchOk
         }
-        val q = search.trim()
-        val searchOk = q.isBlank() ||
-            b.title.contains(q, ignoreCase = true) ||
-            (b.subtitle?.contains(q, ignoreCase = true) == true)
-        genreOk && searchOk
     }
 
     Column(
@@ -268,8 +266,9 @@ fun ArchiveScreen(
 
         if (allBooks.isNotEmpty()) {
             GenreChips(
-                allBooks = allBooks,
+                items = allBooks,
                 selected = genre,
+                formatOf = { it.format },
                 onSelect = {
                     genre = it
                     AppAnalytics.track("archive_genre_filtered", mapOf("genre" to (it ?: "all")))
@@ -305,52 +304,6 @@ fun ArchiveScreen(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun GenreChips(
-    allBooks: List<ShelfBook>,
-    selected: String?,
-    onSelect: (String?) -> Unit,
-) {
-    val counts = allBooks.groupingBy { it.format?.lowercase() ?: "other" }.eachCount()
-    val present = GENRE_ORDER.filter { counts.containsKey(it) }
-    val otherCount = counts.filterKeys { it !in GENRE_ORDER }.values.sum()
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Chip(text = "All · ${allBooks.size}", active = selected == null) { onSelect(null) }
-        present.forEach { g ->
-            Chip(text = "${genreLabel(g)} · ${counts[g]}", active = selected == g) { onSelect(g) }
-        }
-        if (otherCount > 0) {
-            Chip(text = "기타 · $otherCount", active = selected == "other") { onSelect("other") }
-        }
-    }
-}
-
-@Composable
-private fun Chip(text: String, active: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(4.dp)
-    Box(
-        modifier = Modifier
-            .background(if (active) Espresso else Paper, shape)
-            .border(1.dp, if (active) Espresso else Latte, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (active) Paper else Walnut,
-            maxLines = 1,
-        )
     }
 }
 
@@ -648,106 +601,21 @@ private fun OpenedBook(
     onOpenCard: (Long) -> Unit,
     onClose: () -> Unit,
 ) {
-    // progress 0→1 drives the open; on dismiss `visible` flips false and the real
-    // onClose is deferred until the close animation finishes (cover swings shut).
-    var visible by remember { mutableStateOf(true) }
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(visible) {
-        progress.animateTo(
-            targetValue = if (visible) 1f else 0f,
-            animationSpec = tween(
-                durationMillis = if (visible) 550 else 300,
-                easing = if (visible) BookCoverEasing else LinearEasing,
-            ),
-        )
-        if (!visible) onClose()
-    }
-    val dismiss: () -> Unit = { if (visible) visible = false }
-
-    Dialog(
-        onDismissRequest = dismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    OpenedBookShell(
+        leather = book.leather,
+        onClose = onClose,
+        header = { dismiss -> BookHeader(book = book, volumeNo = volumeNo, onClose = dismiss) },
     ) {
-        // Drop the platform scrim — our own backdrop fades in step with the cover.
-        (LocalView.current.parent as? DialogWindowProvider)?.window?.setDimAmount(0f)
-
-        val p = progress.value
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFF0E0C0A).copy(alpha = 0.65f * p))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = dismiss,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            val panelMaxHeight = maxHeight * 0.86f
-            val panelWidth = if (maxWidth - 40.dp < 480.dp) maxWidth - 40.dp else 480.dp
-            Box(
-                modifier = Modifier
-                    .width(panelWidth)
-                    .heightIn(max = panelMaxHeight)
-                    .graphicsLayer {
-                        rotationY = -100f * (1f - p)
-                        val s = 0.6f + 0.4f * p
-                        scaleX = s
-                        scaleY = s
-                        alpha = (0.25f + 0.75f * p).coerceIn(0f, 1f)
-                        transformOrigin = TransformOrigin(0f, 0.5f)
-                        cameraDistance = 1500f * density
-                    }
-                    .background(Paper)
-                    .drawBehind {
-                        // Faint ruled lines down the page, then the leather spine edge.
-                        val gap = 28.dp.toPx()
-                        val stroke = 1.dp.toPx()
-                        val rule = Color(0xFF6B5D4F).copy(alpha = 0.08f)
-                        var y = gap
-                        while (y < size.height) {
-                            drawLine(rule, Offset(0f, y), Offset(size.width, y), stroke)
-                            y += gap
-                        }
-                        drawRect(book.leather, Offset.Zero, Size(8.dp.toPx(), size.height))
-                    }
-                    // Swallow taps on the book so it doesn't dismiss the modal.
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    ),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(start = 40.dp, top = 36.dp, end = 28.dp, bottom = 28.dp),
-                ) {
-                    BookHeader(book = book, volumeNo = volumeNo, onClose = dismiss)
-                    Box(modifier = Modifier.height(20.dp))
-                    Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Sand))
-                    Box(modifier = Modifier.height(12.dp))
-                    book.cards.forEach { card ->
-                        BookQuoteItem(
-                            card = card,
-                            bookmarkedAt = formatBookmarkDate(book.bookmarkedAt[card.cardId]),
-                            onOpen = {
-                                onOpenCard(card.cardId)
-                                onClose()
-                            },
-                        )
-                        Box(modifier = Modifier.height(12.dp))
-                    }
-                    Box(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "— Daily Script · Limited Edition —",
-                        style = TextStyle(fontSize = 10.sp, letterSpacing = 0.3.em, color = Sand),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
+        book.cards.forEach { card ->
+            BookQuoteItem(
+                card = card,
+                bookmarkedAt = book.bookmarkedAt[card.cardId]?.let { formatBookmarkDate(it) } ?: "",
+                onOpen = {
+                    onOpenCard(card.cardId)
+                    onClose()
+                },
+            )
+            Box(modifier = Modifier.height(12.dp))
         }
     }
 }
@@ -873,22 +741,6 @@ private fun BookQuoteItem(
                 .padding(top = 10.dp, end = 12.dp),
         )
     }
-}
-
-/** "M. d  오전/오후 h:mm" in local time — mirrors the PWA formatBookmarkDate. */
-private fun formatBookmarkDate(iso: String?): String {
-    if (iso.isNullOrBlank()) return ""
-    val instant = runCatching { OffsetDateTime.parse(iso).toInstant() }
-        .recoverCatching { Instant.parse(iso) }
-        .recoverCatching { LocalDateTime.parse(iso).toInstant(ZoneOffset.UTC) }
-        .getOrNull() ?: return ""
-    val dt = instant.atZone(ZoneId.systemDefault())
-    var h = dt.hour
-    val ampm = if (h < 12) "오전" else "오후"
-    h %= 12
-    if (h == 0) h = 12
-    val min = "%02d".format(dt.minute)
-    return "${dt.monthValue}. ${dt.dayOfMonth}  $ampm $h:$min"
 }
 
 /** Double gilt line evoking the raised bands tooled across an antique spine. */

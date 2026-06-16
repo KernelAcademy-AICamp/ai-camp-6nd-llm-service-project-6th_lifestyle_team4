@@ -18,7 +18,6 @@ import com.lifestyle.dailyscript.data.model.UserRow
 import io.github.jan.supabase.auth.SignOutScope
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
-import io.github.jan.supabase.auth.providers.Kakao
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -231,24 +230,6 @@ class AuthRepository {
         }
     }
 
-    /**
-     * Social sign-in via Supabase OAuth (web-redirect). Launches the system
-     * browser; completion arrives later as a deep link (handled in MainActivity),
-     * after which AppSessionViewModel re-bootstraps. We stash the current
-     * (anonymous) user_id so re-bootstrap can migrate its bookmarks over.
-     *
-     * 구글은 [signInWithGoogleNative]로 네이티브 처리하므로, 이 경로는 카카오 전용
-     * (비즈앱 전환 후 활성화) 또는 네이티브 실패 시 fallback 용도로 남겨둔다.
-     */
-    suspend fun signInWithOAuth(provider: SocialProvider, currentUserId: Long?) {
-        pendingMigrationUserId = currentUserId
-        pendingLoginId = null
-        when (provider) {
-            SocialProvider.GOOGLE -> auth.signInWith(Google)
-            SocialProvider.KAKAO -> auth.signInWith(Kakao)
-        }
-    }
-
     suspend fun signOut() {
         auth.signOut()
         clearPending()
@@ -264,12 +245,6 @@ class AuthRepository {
         client.postgrest.rpc("delete_account")
         runCatching { auth.signOut(SignOutScope.LOCAL) }
         clearPending()
-    }
-
-    suspend fun updateNickname(userId: Long, nickname: String) {
-        client.postgrest["users"].update({ set("nickname", nickname) }) {
-            filter { eq("user_id", userId) }
-        }
     }
 
     /** Stamp the human-entered login id onto the user's row (shown in the UI). */

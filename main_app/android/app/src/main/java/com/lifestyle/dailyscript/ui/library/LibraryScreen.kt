@@ -78,6 +78,9 @@ import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
+import com.lifestyle.dailyscript.ui.components.Chip
+import com.lifestyle.dailyscript.ui.components.GenreChips
+import com.lifestyle.dailyscript.ui.components.OpenedBookShell
 import com.lifestyle.dailyscript.ui.components.leatherColorFor
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -93,9 +96,6 @@ import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.displayTitle
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import kotlinx.coroutines.delay
-
-// The cover swings open with a slight overshoot — matches the archive/PWA .book transition.
-private val BookCoverEasing = CubicBezierEasing(0.34f, 1.2f, 0.64f, 1f)
 
 // 한 페이지에 4열 × 3줄 = 12권 (무한스크롤 대신 페이지 단위).
 private const val LibraryPageSize = 12
@@ -221,8 +221,9 @@ fun LibraryScreen(
 
             if (books.isNotEmpty()) {
                 GenreChips(
-                    books = books,
+                    items = books,
                     selected = genre,
+                    formatOf = { it.work.format },
                     onSelect = {
                         genre = it
                         AppAnalytics.track("library_genre_filtered", mapOf("genre" to (it ?: "all")))
@@ -407,33 +408,6 @@ private fun PageArrow(forward: Boolean, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun GenreChips(
-    books: List<LibraryBook>,
-    selected: String?,
-    onSelect: (String?) -> Unit,
-) {
-    val counts = books.groupingBy { it.work.format.lowercase() }.eachCount()
-    val present = GENRE_ORDER.filter { counts.containsKey(it) }
-    val otherCount = counts.filterKeys { it !in GENRE_ORDER }.values.sum()
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Chip(text = "All · ${books.size}", active = selected == null) { onSelect(null) }
-        present.forEach { g ->
-            Chip(text = "${genreLabel(g)} · ${counts[g]}", active = selected == g) { onSelect(g) }
-        }
-        if (otherCount > 0) {
-            Chip(text = "기타 · $otherCount", active = selected == "other") { onSelect("other") }
-        }
-    }
-}
-
 /**
  * 정렬 토글 — 현재 정렬(가나다순/최신등록순) 라벨을 보여주고 탭하면 다른 쪽으로 전환.
  * 카운트 줄 오른쪽 끝에 들어가는 작은 알약 모양(장르 칩과 같은 테두리·톤).
@@ -460,25 +434,6 @@ private fun SortToggle(selected: LibrarySort, onToggle: () -> Unit) {
             text = selected.label,
             style = MaterialTheme.typography.labelSmall,
             color = Walnut,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun Chip(text: String, active: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(4.dp)
-    Box(
-        modifier = Modifier
-            .background(if (active) Espresso else Paper, shape)
-            .border(1.dp, if (active) Espresso else Latte, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (active) Paper else Walnut,
             maxLines = 1,
         )
     }
@@ -526,106 +481,22 @@ internal fun OpenedLibraryBook(
     onOpenCard: (Long) -> Unit,
     onClose: () -> Unit,
 ) {
-    var visible by remember { mutableStateOf(true) }
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(visible) {
-        progress.animateTo(
-            targetValue = if (visible) 1f else 0f,
-            animationSpec = tween(
-                durationMillis = if (visible) 550 else 300,
-                easing = if (visible) BookCoverEasing else LinearEasing,
-            ),
-        )
-        if (!visible) onClose()
-    }
-    val dismiss: () -> Unit = { if (visible) visible = false }
-    val leather = leatherColorFor(book.work.title)
-
-    Dialog(
-        onDismissRequest = dismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    OpenedBookShell(
+        leather = leatherColorFor(book.work.title),
+        onClose = onClose,
+        header = { dismiss -> LibraryBookHeader(book = book, onClose = dismiss) },
     ) {
-        // Drop the platform scrim — our own backdrop fades in step with the cover.
-        (LocalView.current.parent as? DialogWindowProvider)?.window?.setDimAmount(0f)
-
-        val p = progress.value
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFF0E0C0A).copy(alpha = 0.65f * p))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = dismiss,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            val panelMaxHeight = maxHeight * 0.86f
-            val panelWidth = if (maxWidth - 40.dp < 480.dp) maxWidth - 40.dp else 480.dp
-            Box(
-                modifier = Modifier
-                    .width(panelWidth)
-                    .heightIn(max = panelMaxHeight)
-                    .graphicsLayer {
-                        rotationY = -100f * (1f - p)
-                        val s = 0.6f + 0.4f * p
-                        scaleX = s
-                        scaleY = s
-                        alpha = (0.25f + 0.75f * p).coerceIn(0f, 1f)
-                        transformOrigin = TransformOrigin(0f, 0.5f)
-                        cameraDistance = 1500f * density
-                    }
-                    .background(Paper)
-                    .drawBehind {
-                        // Faint ruled lines down the page, then the leather spine edge.
-                        val gap = 28.dp.toPx()
-                        val stroke = 1.dp.toPx()
-                        val rule = Color(0xFF6B5D4F).copy(alpha = 0.08f)
-                        var y = gap
-                        while (y < size.height) {
-                            drawLine(rule, Offset(0f, y), Offset(size.width, y), stroke)
-                            y += gap
-                        }
-                        drawRect(leather, Offset.Zero, Size(8.dp.toPx(), size.height))
-                    }
-                    // Swallow taps on the book so it doesn't dismiss the modal.
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    ),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(start = 40.dp, top = 36.dp, end = 28.dp, bottom = 28.dp),
-                ) {
-                    LibraryBookHeader(book = book, onClose = dismiss)
-                    Box(modifier = Modifier.height(20.dp))
-                    Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Sand))
-                    Box(modifier = Modifier.height(12.dp))
-                    book.cards.forEachIndexed { index, card ->
-                        LibraryQuoteItem(
-                            card = card,
-                            serial = index + 1,
-                            bookmarked = card.cardId in bookmarkedCardIds,
-                            onOpen = {
-                                onOpenCard(card.cardId)
-                                onClose()
-                            },
-                        )
-                        Box(modifier = Modifier.height(12.dp))
-                    }
-                    Box(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "— Daily Script · Limited Edition —",
-                        style = TextStyle(fontSize = 10.sp, letterSpacing = 0.3.em, color = Sand),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
+        book.cards.forEachIndexed { index, card ->
+            LibraryQuoteItem(
+                card = card,
+                serial = index + 1,
+                bookmarked = card.cardId in bookmarkedCardIds,
+                onOpen = {
+                    onOpenCard(card.cardId)
+                    onClose()
+                },
+            )
+            Box(modifier = Modifier.height(12.dp))
         }
     }
 }

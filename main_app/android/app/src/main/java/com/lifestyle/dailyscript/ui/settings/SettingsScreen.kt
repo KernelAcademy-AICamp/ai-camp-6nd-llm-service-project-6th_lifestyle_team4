@@ -108,9 +108,16 @@ fun SettingsScreen(
     var showSignInDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showAttendance by remember { mutableStateOf(false) }
+    // 설정에서 수동으로 열 땐 오늘 출석(+5)을 이미 받았는지 실제 상태로 배너를 띄운다(앱 진입 시 자동 지급됨).
+    var attendanceRewardedToday by remember { mutableStateOf(false) }
+    LaunchedEffect(showAttendance) {
+        if (showAttendance) {
+            attendanceRewardedToday = AppPreferences.hasAttendanceToday(java.time.LocalDate.now().toString())
+        }
+    }
     if (showAttendance) {
         com.lifestyle.dailyscript.ui.yarn.AttendanceDialog(
-            rewardedToday = false,
+            rewardedToday = attendanceRewardedToday,
             onDismiss = { showAttendance = false },
         )
     }

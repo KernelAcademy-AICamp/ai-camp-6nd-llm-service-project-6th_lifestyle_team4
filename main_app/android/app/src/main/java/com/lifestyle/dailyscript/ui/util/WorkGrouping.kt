@@ -65,9 +65,6 @@ fun resolveSeriesSubtitle(title: String?, subtitle: String?, author: String?): P
     return extractSeries(normalizeTitle(title), author ?: "")
 }
 
-fun resolveSeriesSubtitle(work: WorkDto?): Pair<String, String> =
-    resolveSeriesSubtitle(work?.title, work?.subtitle, work?.author)
-
 /** Grouping key — series__subtitle__author, lowercased (mirrors the PWA workGroupKey). */
 fun workGroupKey(title: String?, subtitle: String?, author: String?): String {
     val (series, sub) = resolveSeriesSubtitle(title, subtitle, author)

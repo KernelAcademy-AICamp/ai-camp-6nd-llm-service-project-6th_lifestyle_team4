@@ -1,13 +1,11 @@
 package com.lifestyle.dailyscript.ui.yarn
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.repo.YarnRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
@@ -27,13 +25,7 @@ class YarnViewModel : ViewModel() {
     /** 사용 가능한 실타래 = 서버 충전분 전부. */
     val available: StateFlow<Int> = purchased.asStateFlow()
 
-    /** 충전 페이지의 "보유 실타래" 와 동일(이전 호환 유지). */
-    val purchasedBalance: StateFlow<Int> = purchased.asStateFlow()
-
     private fun today() = LocalDate.now().toString()
-
-    /** 더 이상 일일 카운터가 없으나 호출자 호환을 위해 noop 으로 유지. */
-    fun refreshDaily() {}
 
     /** 세션의 서버 잔액으로 시드(재bootstrap 동기화). */
     fun setPurchased(balance: Int) { purchased.value = balance }
@@ -77,18 +69,7 @@ class YarnViewModel : ViewModel() {
         return SpendResult.SUCCESS
     }
 
-    /** QA/데모용 — fire-and-forget 충전. */
-    fun grant(n: Int) = viewModelScope.launch { addYarn(n) }
-
     companion object { const val ATTENDANCE_REWARD = 5 }
-}
-
-sealed interface YarnResult {
-    data object AlreadyUnlocked : YarnResult
-    data object ChargedDaily : YarnResult
-    data object ChargedPurchased : YarnResult
-    data object Insufficient : YarnResult
-    data object Error : YarnResult
 }
 
 /** [YarnViewModel.spend] 결과 — 구매 차감 성공/잔액부족/오류. */

@@ -13,12 +13,9 @@ import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
 import com.lifestyle.dailyscript.data.repo.CommentRepository
 import com.lifestyle.dailyscript.data.repo.NoticeRepository
+import com.lifestyle.dailyscript.ui.util.parseEpochMillis
 import kotlinx.coroutines.flow.first
-import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -141,14 +138,6 @@ class DailyViewModel : ViewModel() {
                 )
             }
             .sortedByDescending { it.newestMillis }
-
-    private fun parseEpochMillis(iso: String?): Long? {
-        if (iso.isNullOrBlank()) return null
-        runCatching { return OffsetDateTime.parse(iso).toInstant().toEpochMilli() }
-        runCatching { return Instant.parse(iso).toEpochMilli() }
-        runCatching { return LocalDateTime.parse(iso).toInstant(ZoneOffset.UTC).toEpochMilli() }
-        return null
-    }
 }
 
 data class DailyState(

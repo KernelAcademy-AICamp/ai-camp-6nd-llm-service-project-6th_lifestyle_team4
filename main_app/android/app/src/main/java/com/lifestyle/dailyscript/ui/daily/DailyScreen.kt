@@ -61,6 +61,7 @@ import com.lifestyle.dailyscript.data.model.UserPrefs
 import com.lifestyle.dailyscript.data.model.WorkDto
 import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
+import com.lifestyle.dailyscript.ui.components.Chip
 import com.lifestyle.dailyscript.ui.components.rememberAssetBitmap
 import com.lifestyle.dailyscript.ui.library.LibraryBook
 import com.lifestyle.dailyscript.ui.library.OpenedLibraryBook
@@ -72,19 +73,14 @@ import com.lifestyle.dailyscript.ui.theme.Highlight
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.MetaCaps
 import com.lifestyle.dailyscript.ui.theme.Paper
-import com.lifestyle.dailyscript.ui.theme.Roast
 import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.displayTitle
 import com.lifestyle.dailyscript.ui.util.formatCount
 import com.lifestyle.dailyscript.ui.util.genreLabel
-import java.time.Instant
+import com.lifestyle.dailyscript.ui.util.parseEpochMillis
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.ZoneOffset
 import kotlinx.coroutines.delay
 
 @Composable
@@ -826,20 +822,6 @@ private fun DailyBookCover(work: WorkDto?, width: Dp) {
 }
 
 @Composable
-private fun Chip(text: String, active: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(4.dp)
-    Box(
-        modifier = Modifier
-            .background(if (active) Espresso else Paper, shape)
-            .border(1.dp, if (active) Espresso else Latte, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Text(text = text, style = MaterialTheme.typography.labelSmall, color = if (active) Paper else Walnut)
-    }
-}
-
-@Composable
 private fun ToneLabels(labels: ToneLabelSet) {
     val items = listOfNotNull(
         labels.temp?.let { "온도" to it },
@@ -987,12 +969,4 @@ private fun bookmarkAge(iso: String): String {
         1L -> "어제"
         else -> "${days}일 전"
     }
-}
-
-private fun parseEpochMillis(iso: String?): Long? {
-    if (iso.isNullOrBlank()) return null
-    runCatching { return OffsetDateTime.parse(iso).toInstant().toEpochMilli() }
-    runCatching { return Instant.parse(iso).toEpochMilli() }
-    runCatching { return LocalDateTime.parse(iso).toInstant(ZoneOffset.UTC).toEpochMilli() }
-    return null
 }

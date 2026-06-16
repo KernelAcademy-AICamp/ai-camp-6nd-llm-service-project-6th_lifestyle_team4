@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Holds the bootstrapped session (user_id, anonymous flag, nickname) used across screens. */
 class AppSessionViewModel : ViewModel() {
@@ -148,21 +150,6 @@ class AppSessionViewModel : ViewModel() {
         }
     }
 
-    fun updateNickname(newName: String) {
-        val session = (_state.value as? SessionState.Ready)?.session ?: return
-        val trimmed = newName.trim()
-        if (trimmed.isEmpty()) { _authMessage.value = "이름을 입력해주세요"; return }
-        if (trimmed.length > 24) { _authMessage.value = "24자 이하로 입력해주세요"; return }
-        viewModelScope.launch {
-            runCatching { authRepo.updateNickname(session.userId, trimmed) }
-                .onSuccess {
-                    _state.value = SessionState.Ready(session.copy(nickname = trimmed))
-                    _authMessage.value = "이름이 변경됐어요"
-                }
-                .onFailure { _authMessage.value = "저장 실패: ${it.message ?: ""}" }
-        }
-    }
-
     fun updateProfile(newName: String, gender: String?, ageGroup: String?) {
         val session = (_state.value as? SessionState.Ready)?.session ?: return
         val trimmed = newName.trim()
@@ -232,7 +219,17 @@ class AppSessionViewModel : ViewModel() {
         }
     }
 
-    private suspend fun bootstrapIntoState() {
+    // init 의 bootstrap() 과 observeAuthChanges() 가 콜드스타트에 동시에 진입할 수 있다.
+    // 직렬화하지 않으면 두 코루틴이 각각 signInAnonymously() 를 호출해 익명 계정이 둘 생기거나
+    // _state/lastAuthUid 쓰기가 경쟁한다. Mutex 로 단일화하고, 잠금 안에서 이미 같은 사용자로
+    // 부트스트랩이 끝났으면 중복 작업/로딩 깜빡임을 건너뛴다.
+    private val bootstrapMutex = Mutex()
+
+    private suspend fun bootstrapIntoState() = bootstrapMutex.withLock {
+        val current = runCatching { SupabaseProvider.client.auth.currentUserOrNull()?.id }.getOrNull()
+        if (current != null && current == lastAuthUid && _state.value is SessionState.Ready) {
+            return@withLock
+        }
         _state.value = SessionState.Loading
         val result = runCatching { authRepo.bootstrap() }
         lastAuthUid = runCatching { SupabaseProvider.client.auth.currentUserOrNull()?.id }.getOrNull()

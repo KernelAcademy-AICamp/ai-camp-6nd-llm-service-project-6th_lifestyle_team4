@@ -65,14 +65,26 @@ fun CardDto.keywordsFor(useEnglish: Boolean): List<String> {
 }
 
 /**
+ * Parse a Supabase ISO timestamp to an [Instant] (or null). The timestamps arrive in a few
+ * shapes — offset ("…+09:00"/"…Z"), bare instant, or local — so try each in turn (mirrors the
+ * PWA's lenient Date parsing). Shared by [formatBookmarkDate] and the recency sorters.
+ */
+fun parseIsoInstant(iso: String?): Instant? {
+    if (iso.isNullOrBlank()) return null
+    return runCatching { OffsetDateTime.parse(iso).toInstant() }.getOrNull()
+        ?: runCatching { Instant.parse(iso) }.getOrNull()
+        ?: runCatching { LocalDateTime.parse(iso).toInstant(ZoneOffset.UTC) }.getOrNull()
+}
+
+/** [parseIsoInstant] as epoch millis (or null). */
+fun parseEpochMillis(iso: String?): Long? = parseIsoInstant(iso)?.toEpochMilli()
+
+/**
  * Absolute "<월>. <일>  오전/오후 h:mm" stamp used by the bookmark/feed/comment lists.
  * Mirrors the PWA's formatBookmarkDate (m-app.js:1481). Returns "" on unparseable input.
  */
 fun formatBookmarkDate(iso: String): String {
-    val instant = runCatching { OffsetDateTime.parse(iso).toInstant() }.getOrNull()
-        ?: runCatching { Instant.parse(iso) }.getOrNull()
-        ?: runCatching { LocalDateTime.parse(iso).toInstant(ZoneOffset.UTC) }.getOrNull()
-        ?: return ""
+    val instant = parseIsoInstant(iso) ?: return ""
     val dt = OffsetDateTime.ofInstant(instant, ZoneId.systemDefault())
     var h = dt.hour
     val min = "%02d".format(dt.minute)

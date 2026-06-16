@@ -35,16 +35,6 @@ class CardRepository {
         """.trimIndent()
     )
 
-    /** MVP: pull a small page of cards and pick one at random client-side. */
-    suspend fun fetchRandomCard(): CardDto? {
-        val cards = client.postgrest["cards"]
-            .select(cardSelect) {
-                limit(100)
-            }
-            .decodeList<CardDto>()
-        return cards.randomOrNull()
-    }
-
     /** Pull a large page used for seed/taste-based recommendation (mirrors the PWA's 500). */
     suspend fun fetchAllCards(): List<CardDto> =
         client.postgrest["cards"]

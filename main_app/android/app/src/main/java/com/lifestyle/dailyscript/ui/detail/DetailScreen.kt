@@ -54,15 +54,9 @@ import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -575,29 +569,6 @@ private fun shouldShowSignificance(card: CardDto): Boolean {
     return !card.significance.isNullOrBlank() && format in SignificanceFormats
 }
 
-/** Bold any line that exactly matches a character name (mirrors the PWA's boldSpeakerLines). */
-private fun boldSpeakerLines(text: String, characterNames: List<String>): AnnotatedString {
-    if (characterNames.isEmpty()) return AnnotatedString(text)
-    val nameSet = characterNames.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-    if (nameSet.isEmpty()) return AnnotatedString(text)
-    return buildAnnotatedString {
-        val lines = text.split("\n")
-        lines.forEachIndexed { index, line ->
-            val trimmed = line.trim()
-            val namePart = trimmed.substringBefore("(").trim()
-            // A speaker name only appears at a block start (first line, or after a blank line).
-            val isBlockStart = index == 0 || lines[index - 1].trim().isEmpty()
-            val isSpeaker = isBlockStart && trimmed.isNotEmpty() && (trimmed in nameSet || namePart in nameSet)
-            if (isSpeaker) {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(line) }
-            } else {
-                append(line)
-            }
-            if (index < lines.lastIndex) append("\n")
-        }
-    }
-}
-
 /**
  * Script excerpt in a read-only text field — long-press selects text natively, styled like
  * the PWA's yellow 형광펜 with the native Copy/Select-all toolbar suppressed. The selection
@@ -659,11 +630,6 @@ private fun HlFloatingButton(modifier: Modifier = Modifier, onClick: () -> Unit)
             ),
         )
     }
-}
-
-private class SpeakerBoldTransformation(private val names: List<String>) : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText =
-        TransformedText(boldSpeakerLines(text.text, names), OffsetMapping.Identity)
 }
 
 // Yellow 형광펜 text selection (mirrors the PWA .hl-rect rgba(244,194,13,0.55)).

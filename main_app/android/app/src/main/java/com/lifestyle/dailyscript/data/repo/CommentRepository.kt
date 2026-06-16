@@ -106,7 +106,14 @@ class CommentRepository {
     /** @param liked target state. true → insert a like, false → remove it. */
     suspend fun setLike(commentId: Long, userId: Long, liked: Boolean) {
         if (liked) {
-            client.postgrest["comment_likes"].insert(CommentLikeRow(commentId, userId))
+            // 이미 좋아요한 행에 다시 insert 하면 복합 PK 충돌이 난다. 충돌은 '이미 목표 상태'
+            // 이므로 흡수하고, 그 외 실패만 전파해 호출측이 롤백하게 한다 (BookmarkRepository.toggle 패턴).
+            val result = runCatching {
+                client.postgrest["comment_likes"].insert(CommentLikeRow(commentId, userId))
+            }
+            if (result.isFailure && !likeExists(commentId, userId)) {
+                throw result.exceptionOrNull() ?: IllegalStateException("Like insert failed.")
+            }
         } else {
             client.postgrest["comment_likes"].delete {
                 filter {
@@ -116,4 +123,15 @@ class CommentRepository {
             }
         }
     }
+
+    private suspend fun likeExists(commentId: Long, userId: Long): Boolean =
+        client.postgrest["comment_likes"]
+            .select(Columns.raw("comment_id, user_id")) {
+                filter {
+                    eq("comment_id", commentId)
+                    eq("user_id", userId)
+                }
+                limit(1)
+            }
+            .decodeSingleOrNull<CommentLikeRow>() != null
 }

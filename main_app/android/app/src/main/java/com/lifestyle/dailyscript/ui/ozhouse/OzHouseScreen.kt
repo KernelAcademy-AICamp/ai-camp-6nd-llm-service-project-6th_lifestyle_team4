@@ -558,52 +558,33 @@ private fun RoomScene(
             modifier = Modifier.align(Alignment.TopStart).offset(x = mx(14f), y = mx(12f)),
         )
 
-        // 고양이 — 편집 중엔 드래그로 자리 옮김(저장), 평소엔 탭하면 새 자세.
+        // 고양이 — 편집 중엔 드래그로 자리 옮김(저장), 평소엔 탭하면 새 자세. 가구와 동일한
+        // 프리셋/오버라이드/드래그 로직이므로 DraggableObject 를 재사용한다. flip 은 content
+        // 안쪽 Image 에만 걸어 바깥 박스의 드래그 좌표가 반전되지 않게 한다(드래그 방향 정상).
         val cw = maxWidth * catCase.wFrac
         val ch = cw * catCase.aspect
-        val cwPx = with(density) { cw.toPx() }
-        val chPx = with(density) { ch.toPx() }
         val presetLeft = with(density) { (maxWidth * catCase.cx - cw / 2f).toPx() }
-        val presetTop = hPx - chPx - with(density) { mx(catCase.bottomPx).toPx() }
-        val hasOverride = savedX in 0f..1f && savedY in 0f..1f
-        val initLeft = if (hasOverride) savedX * wPx - cwPx / 2f else presetLeft
-        val initTop = if (hasOverride) savedY * hPx - chPx / 2f else presetTop
-        var catPos by remember(poseIndex, hasOverride, wPx, hPx, themed) { mutableStateOf(Offset(initLeft, initTop)) }
+        val presetTop = hPx - with(density) { ch.toPx() } - with(density) { mx(catCase.bottomPx).toPx() }
 
         val catBmp = rememberAssetImage("cat/${catCase.file}")
         if (catBmp != null) {
-            Image(
-                bitmap = catBmp,
-                contentDescription = "OZ",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset { IntOffset(catPos.x.roundToInt(), catPos.y.roundToInt()) }
-                    .width(cw).height(ch)
-                    .then(
-                        if (editing) {
-                            Modifier.border(2.dp, RCtaC, RoundedCornerShape(8.dp)).pointerInput(poseIndex, wPx, hPx) {
-                                detectDragGestures(
-                                    onDragEnd = {
-                                        val cx = ((catPos.x + cwPx / 2f) / wPx).coerceIn(0f, 1f)
-                                        val cy = ((catPos.y + chPx / 2f) / hPx).coerceIn(0f, 1f)
-                                        onCatMoved(poseIndex, cx, cy)
-                                    },
-                                ) { change, dragAmount ->
-                                    change.consume()
-                                    catPos = Offset(
-                                        (catPos.x + dragAmount.x).coerceIn(0f, (wPx - cwPx).coerceAtLeast(0f)),
-                                        (catPos.y + dragAmount.y).coerceIn(0f, (hPx - chPx).coerceAtLeast(0f)),
-                                    )
-                                }
-                            }
-                        } else {
-                            Modifier.clickable(onClick = onReshuffleCat)
-                        },
-                    )
-                    // flip 은 마지막에 — pointerInput 좌표가 반전되지 않도록(드래그 방향 정상).
-                    .graphicsLayer { scaleX = if (catCase.flip) -1f else 1f },
-            )
+            DraggableObject(
+                contentWidth = cw, contentHeight = ch,
+                presetLeftPx = presetLeft, presetTopPx = presetTop,
+                wPx = wPx, hPx = hPx, savedX = savedX, savedY = savedY,
+                editing = editing, dragKey = "cat-$poseIndex-$themed",
+                onMoved = { x, y -> onCatMoved(poseIndex, x, y) },
+                onTapWhenIdle = onReshuffleCat,
+            ) {
+                Image(
+                    bitmap = catBmp,
+                    contentDescription = "OZ",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .width(cw).height(ch)
+                        .graphicsLayer { scaleX = if (catCase.flip) -1f else 1f },
+                )
+            }
         }
 
         // 우측 이모지 패널 — 북마크/출석/기록 시트 진입 (기본·테마 화면 공통, PWA wall-icons).
@@ -635,6 +616,7 @@ private fun BoxScope.DraggableObject(
     editing: Boolean,
     dragKey: Any,
     onMoved: (Float, Float) -> Unit,
+    onTapWhenIdle: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -667,6 +649,9 @@ private fun BoxScope.DraggableObject(
                                 )
                             }
                         }
+                } else if (onTapWhenIdle != null) {
+                    // 평소(비편집)엔 탭 동작이 있는 오브젝트(예: 고양이 자세 바꾸기)에만 클릭을 단다.
+                    Modifier.clickable(onClick = onTapWhenIdle)
                 } else {
                     Modifier
                 },
