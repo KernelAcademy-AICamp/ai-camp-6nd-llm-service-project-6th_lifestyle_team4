@@ -44,6 +44,15 @@ class AppSessionViewModel : ViewModel() {
     private val _profilePromptVisible = MutableStateFlow(false)
     val profilePromptVisible: StateFlow<Boolean> = _profilePromptVisible.asStateFlow()
 
+    // init 의 bootstrap() 과 observeAuthChanges() 가 콜드스타트에 동시에 진입할 수 있다.
+    // 직렬화하지 않으면 두 코루틴이 각각 signInAnonymously() 를 호출해 익명 계정이 둘 생기거나
+    // _state/lastAuthUid 쓰기가 경쟁한다. Mutex 로 단일화하고, 잠금 안에서 이미 같은 사용자로
+    // 부트스트랩이 끝났으면 중복 작업/로딩 깜빡임을 건너뛴다.
+    // NOTE: 아래 init 이 (코루틴을 통해) 이 Mutex 를 사용하므로 반드시 init 보다 먼저 초기화해야
+    // 한다. init 뒤에 두면 release(R8)에서 bootstrapIntoState 가 생성자 도중 동기 실행될 때
+    // 아직 null 이라 NPE 가 난다.
+    private val bootstrapMutex = Mutex()
+
     init {
         bootstrap()
         observeAuthChanges()
@@ -218,12 +227,6 @@ class AppSessionViewModel : ViewModel() {
             }
         }
     }
-
-    // init 의 bootstrap() 과 observeAuthChanges() 가 콜드스타트에 동시에 진입할 수 있다.
-    // 직렬화하지 않으면 두 코루틴이 각각 signInAnonymously() 를 호출해 익명 계정이 둘 생기거나
-    // _state/lastAuthUid 쓰기가 경쟁한다. Mutex 로 단일화하고, 잠금 안에서 이미 같은 사용자로
-    // 부트스트랩이 끝났으면 중복 작업/로딩 깜빡임을 건너뛴다.
-    private val bootstrapMutex = Mutex()
 
     private suspend fun bootstrapIntoState() = bootstrapMutex.withLock {
         val current = runCatching { SupabaseProvider.client.auth.currentUserOrNull()?.id }.getOrNull()

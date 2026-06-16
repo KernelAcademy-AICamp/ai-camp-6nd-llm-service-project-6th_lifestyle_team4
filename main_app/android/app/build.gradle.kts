@@ -44,8 +44,8 @@ android {
         applicationId = "com.lifestyle.dailyscript"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -73,11 +73,16 @@ android {
             if (hasReleaseKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 네이티브 디버그 기호를 AAB에 포함 → Play Console 크래시/ANR 분석 가능
+            // ("이 App Bundle 유형은 네이티브 코드를 포함..." 경고 해결)
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
     }
 
