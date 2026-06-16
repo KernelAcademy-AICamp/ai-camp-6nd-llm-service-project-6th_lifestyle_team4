@@ -2790,8 +2790,8 @@ function renderDailyDate() {
   if (!el) return;
   const d = new Date();
   const days = ['일','월','화','수','목','금','토'];
-  const ymd = `${d.getFullYear()} · ${String(d.getMonth()+1).padStart(2,'0')} · ${String(d.getDate()).padStart(2,'0')}`;
-  el.innerHTML = `${ymd} · <span style="color:var(--cta);font-weight:700;">${days[d.getDay()]}</span>`;
+  const ymd = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`;
+  el.innerHTML = `<span style="font-weight:700;">${ymd}</span> <span style="color:var(--cta);">${days[d.getDay()]}요일</span>`;
 }
 
 const NOTICE_TAG_LABEL_DAILY = { update: 'UPDATE', notice: 'NOTICE', event: 'EVENT' };
@@ -2917,9 +2917,9 @@ function renderDailyNewBooks() {
       <div class="daily-newbook-main-inner" style="display:flex;gap:16px;width:100%;align-items:center;">
         <div style="flex:1;min-width:0;">
           <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
-          <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:9px 0 4px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.15;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
-          <p style="font-size:11px;color:var(--sand);margin:0 0 7px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
-          <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.4;font-family:'Noto Serif KR',serif;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
+          <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
+          <p style="font-size:11px;color:var(--sand);margin:0 0 12px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
+          <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;font-family:'Noto Serif KR',serif;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
         </div>
         <!-- 책표지 — 얇은 베이지 림 + 그림자로 검은 표지 분리 (사용자 명세: 림 얇게) -->
         <div style="flex-shrink:0;padding:1px;background:var(--latte);border-radius:2px;box-shadow:0 6px 18px rgba(0,0,0,0.5);">
@@ -2940,7 +2940,7 @@ function renderDailyNewBooks() {
         `;
       }).join('')}
     </div>
-    <div style="height:26px;"></div>
+    <div style="height:36px;"></div>
   `;
 
   const attachClickHandlers = (worksList) => {
@@ -3021,6 +3021,16 @@ const CONTEXT_CATEGORIES = [
     keywords: ['믿음', '신앙', '양심', '기도', '위선', '죄', '구원', '회개', '영혼', '도덕', '종교', '참회', '심판', '용서'] },
   { id: 'freedom', label: '자유를 꿈꿀 때',
     keywords: ['자유', '해방', '독립', '탈출', '속박', '억압', '굴레', '저항', '권리', '평등', '존엄', '굴종', '해탈', '구속'] },
+  // 아래 4개는 실제 추출 키워드(글쓰기·강박·직업 / 소유·집착 / 민중·복종·회복력 / 질문·인내·성장)
+  // 군집에 근거해 확장 — 표본에 등장한 단어를 앞에 두고 동의어로 보강.
+  { id: 'vocation', label: '일과 소명',
+    keywords: ['글쓰기', '직업', '강박', '소명', '창작', '예술', '노동', '일', '천직', '몰두', '장인', '재능', '직분', '소임'] },
+  { id: 'greed',    label: '욕심과 소유',
+    keywords: ['소유', '집착', '욕심', '탐욕', '재물', '돈', '물질', '인색', '미련', '소유욕', '재산', '부', '이익', '가난'] },
+  { id: 'society',  label: '시대와 민중',
+    keywords: ['민중', '복종', '회복력', '사회', '계급', '권위', '부조리', '시대', '군중', '혁명', '신분', '억압', '체제', '저항'] },
+  { id: 'growth',   label: '깨달음과 성장',
+    keywords: ['질문', '인내', '성장', '깨달음', '배움', '지혜', '통찰', '성찰', '각성', '자각', '성숙', '깨우침', '수양', '경험'] },
 ];
 let _contextualTimer = null;
 let _contextualCatId = null;
@@ -3074,19 +3084,27 @@ function renderDailyContextual() {
   const sec = document.getElementById('daily-section-contextual');
   if (!sec) return;
   stopContextualCarousel();
-  // 매칭 카드가 1장 이상 있는 카테고리만 노출 — 빈 칩이 기본으로 열리는 걸 막는다.
-  const cats = CONTEXT_CATEGORIES.filter((c) => filterContextualCards(c.id).length > 0);
-  if (cats.length === 0) { sec.style.display = 'none'; return; }
+  // 매칭 카드가 1장 이상 있는 카테고리만 후보로 — 빈 칩이 열리는 걸 막는다.
+  const allCats = CONTEXT_CATEGORIES.filter((c) => filterContextualCards(c.id).length > 0);
+  if (allCats.length === 0) { sec.style.display = 'none'; return; }
+  // 하루에 3개씩만 노출 — 일별 시드로 시작점을 돌려 매일 다른 조합이 나오게 한다.
+  // (후보가 3개 이하면 그대로 전부 보여준다.)
+  const DAILY_COUNT = 3;
+  const start = _dailySeed() % allCats.length;
+  const cats = allCats.length <= DAILY_COUNT
+    ? allCats
+    : Array.from({ length: DAILY_COUNT }, (_, k) => allCats[(start + k) % allCats.length]);
   sec.style.display = 'block';
-  // 매일 다른 카테고리가 기본으로 열리도록 일별 시드로 시작 인덱스를 돌린다.
-  const _dailyCatIdx = _dailySeed() % cats.length;
+  // 그날 노출되는 3개 중 첫 번째를 기본으로 연다.
+  const _dailyCatIdx = 0;
   sec.innerHTML = `
-    <h2 class="t-headline-md c-espresso" style="margin:0 0 14px;">이럴 땐, 이런 문장</h2>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 2px;font-weight:700;">이럴 땐, 이런 문장</h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 5px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
     <div class="archive-chips" id="daily-context-chips" style="margin-bottom:16px;">
       ${cats.map((c, i) => `<button class="a-chip ${i === _dailyCatIdx ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
     <div id="daily-context-card-host"></div>
-    <div style="height:26px;"></div>
+    <div style="height:36px;"></div>
   `;
   const renderCard = () => {
     const host = sec.querySelector('#daily-context-card-host');
@@ -3146,8 +3164,8 @@ function renderDailyTrending() {
   if (scored.length === 0) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
   sec.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
-      <h2 class="t-headline-md c-espresso">이번 주 인기 대사</h2>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+      <h2 class="t-headline-md c-espresso" style="font-weight:700;">이번 주 인기 대사</h2>
       <button id="daily-trending-all" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;">전체 ›</button>
     </div>
     ${scored.map(({ c, bm, cm, vw }, i) => `
@@ -3164,7 +3182,7 @@ function renderDailyTrending() {
         </div>
       </button>
     `).join('')}
-    <div style="height:26px;"></div>
+    <div style="height:36px;"></div>
   `;
   sec.querySelectorAll('[data-card-id]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -3202,14 +3220,14 @@ function renderDailyOzPick() {
     sec.style.display = 'block';
     const guestName = state.userNickname || '게스트';
     sec.innerHTML = `
-      <h2 class="c-espresso" style="margin:0 0 14px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
+      <h2 class="c-espresso" style="margin:0 0 8px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
         <span style="font-size:17px;">당신을 위한</span>
         <span class="brand-logo" style="font-size:24px;"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
       </h2>
       <article class="sharp-card" style="padding:20px;">
         <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
-          <img src="assets/cat/library-cat-2.png" alt="오즈"
-            style="width:200px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
+          <img src="assets/cat/cat_computer.png" alt="오즈"
+            style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
           <div style="flex:1;min-width:0;">
             <p style="margin:0 0 6px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(guestName)}</p>
             <p style="margin:0;font-size:12px;color:var(--walnut);line-height:1.6;">아직 당신의 취향을 몰라요</p>
@@ -3221,7 +3239,7 @@ function renderDailyOzPick() {
         <button id="oz-personalize-btn" type="button"
           style="width:100%;padding:13px;background:var(--cta);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">취향 알려주기</button>
       </article>
-      <div style="height:26px;"></div>
+      <div style="height:36px;"></div>
     `;
     sec.querySelector('#oz-personalize-btn')?.addEventListener('click', () => {
       track('oz_personalize_cta');
@@ -3276,16 +3294,14 @@ function renderDailyOzPick() {
   if (!pick) { sec.style.display = 'none'; return; }
 
   // 추천 한마디 — 고른 주제 > 행동 취향 > 일반 순으로 개인화.
-  // 로그인 상태면 '당신' 대신 표시 이름(닉네임>아이디)으로 호명.
+  // 로그인 상태면 '당신' 대신 표시 이름(닉네임>아이디)+'님'으로 호명.
+  // reasonHtml 은 의도된 <strong> 을 포함하므로 렌더 시 escape 하지 않는다 — 동적 값은 개별 escape.
   const themeHit = matchedChosenTheme(pick);
   const tasteHit = (pick.keywords || []).find((k) => taste.has(k));
-  const personLabel = (!state.isAnonymous && (state.userNickname || state.userLoginId))
-    ? `'${state.userNickname || state.userLoginId}'`
-    : '당신';
-  const reason = themeHit
-    ? `'${themeHit}' 주제를 고른 ${personLabel}에게 추천해요.`
+  const reasonHtml = themeHit
+    ? `<strong>'${escapeHtml(themeHit)}'</strong> 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요.`
     : tasteHit
-      ? `'${tasteHit}'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
+      ? `<strong>'${escapeHtml(tasteHit)}'</strong>에 자주 머무는 당신이라면, 좋아할 한 문장이에요.`
       : '오즈가 오늘 골라드린 한 문장이에요.';
   const work = pick.works || {};
   // 선호 메타 표시용 — 고른 장르/주제(없으면 상관없음).
@@ -3294,27 +3310,28 @@ function renderDailyOzPick() {
 
   sec.style.display = 'block';
   sec.innerHTML = `
-    <h2 class="c-espresso" style="margin:0 0 14px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
+    <h2 class="c-espresso" style="margin:0 0 8px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
       <span style="font-size:17px;">당신을 위한</span>
       <span class="brand-logo" style="font-size:24px;"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
     </h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 12px;">오즈가 당신의 취향을 살펴 골랐어요.</p>
     <article class="sharp-card daily-oz-card" data-card-id="${pick.card_id}" style="padding:20px;cursor:pointer;">
       <!-- 헤더 — 고양이 + 닉네임 + 선호(장르/주제) 메타 -->
       <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
-        <img src="assets/cat/library-cat-2.png" alt="오즈"
-          style="width:200px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
+        <img src="assets/cat/cat_computer.png" alt="오즈"
+          style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
-          <p style="margin:0 0 8px;font-weight:700;color:var(--espresso);font-size:14px;">${escapeHtml(userName)}</p>
+          <p style="margin:0 0 10px;font-size:12px;color:var(--walnut);">${(state.userNickname || state.userLoginId) ? escapeHtml(userName) + '님' : '당신'}</p>
           <p style="margin:0;font-size:11px;color:var(--walnut);line-height:1.9;">
             <strong style="color:var(--espresso);">당신의 취향</strong><br>
-            <strong style="color:var(--espresso);">장르</strong> : ${escapeHtml(genreText)}<br>
-            <strong style="color:var(--espresso);">주제</strong> : ${escapeHtml(themeText)}
+            🧶 <strong style="color:var(--cta);">장르</strong> : ${escapeHtml(genreText)}<br>
+            🧶 <strong style="color:var(--cta);">주제</strong> : ${escapeHtml(themeText)}
           </p>
         </div>
       </div>
       <!-- 추천 한마디 박스 (별도) -->
       <div style="background:var(--latte);border:0.5px solid var(--sand);padding:14px 16px;margin-bottom:14px;border-radius:8px;">
-        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.6;">${escapeHtml(reason)}</p>
+        <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.6;">${reasonHtml}</p>
       </div>
       <!-- 추천 책 — 클릭 시 오늘의 명대사 카드(추천 카드)로 이동 -->
       <div class="oz-rec-book" role="button" tabindex="0" style="display:flex;align-items:center;gap:12px;cursor:pointer;">
@@ -3325,7 +3342,7 @@ function renderDailyOzPick() {
         </div>
       </div>
     </article>
-    <div style="height:26px;"></div>
+    <div style="height:36px;"></div>
   `;
   // 사용자 명세: 오즈 카드 클릭 → daily 탭에 랜덤 고양이 spawn (카드 상세 이동 X).
   const ozCard = sec.querySelector('.daily-oz-card');
@@ -3409,8 +3426,8 @@ function renderDailyRecent() {
   const work = card.works || {};
   sec.style.display = 'block';
   sec.innerHTML = `
-    <h2 style="font-family:'Noto Serif KR',serif;font-size:20px;color:var(--espresso);margin:0 0 6px;font-weight:700;">다시 만나기</h2>
-    <p class="t-body-sm c-walnut" style="margin:0 0 14px;">지난주 담아둔 문장, 다시 읽어볼까요</p>
+    <h2 style="font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:20px;color:var(--espresso);margin:0 0 6px;font-weight:700;">다시 만나기</h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 14px;">담아둔 문장, 다시 읽어볼까요?</p>
     <button type="button" class="sharp-card daily-recent-card" data-card-id="${card.card_id}"
       style="display:flex;align-items:center;gap:14px;width:100%;padding:16px;cursor:pointer;text-align:left;">
       ${dailyBookCoverHTML(work, { width: 64 })}
@@ -3419,7 +3436,7 @@ function renderDailyRecent() {
         <p class="t-label-sm c-walnut" style="margin:8px 0 0;">${escapeHtml(work.title || '')} · ${escapeHtml(ago)}</p>
       </div>
     </button>
-    <div style="height:26px;"></div>
+    <div style="height:36px;"></div>
   `;
   sec.querySelector('.daily-recent-card')?.addEventListener('click', () => {
     track('daily_recent_clicked', { card_id: card.card_id });

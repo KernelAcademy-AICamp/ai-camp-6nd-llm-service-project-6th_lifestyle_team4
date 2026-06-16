@@ -23,7 +23,7 @@ enum Tab: Hashable, CaseIterable {
         switch self {
         case .daily: return "safari"               // explore (PWA)
         case .feed: return "rectangle.stack"
-        case .home: return "quote.bubble.fill"     // placeholder; yarn-ball graphic next PR
+        case .home: return "quote.bubble.fill"     // fallback only; center renders the daily-script (yarn) graphic
         case .archive: return "books.vertical"
         case .settings: return "person.crop.circle"
         }
