@@ -43,16 +43,17 @@ This app prioritizes **cross-platform brand/visual parity** with the Android and
 
 **Reviewer (Codex) should flag:** off-token colors/fonts, decoration that fights the editorial calm, inconsistent spacing/type, non-calm motion, and accessibility regressions.
 
-## Build & verify (use the local toolchain)
+## Build & verify (local toolchain; author/reviewer split)
 - Scheme: **Curtaincall** (app). Widget is a separate target.
-- Build/verify locally with `xcodebuild` (or Xcode's MCP `BuildProject` / `RenderPreview` if wired). Use SwiftUI Previews for visual iteration.
-- Run tests if a test target exists. *(TODO: confirm whether one exists.)*
+- **CCC (author)** works in the main checkout: verify with an **incremental** `xcodebuild build` (never `clean` — it discards warm DerivedData and slows the next iteration). Use SwiftUI Previews for quick visual iteration. Do NOT run the simulator or capture screenshots — that is the reviewer's step. Commit + open PR.
+- **Codex (reviewer)** works in a SEPARATE git worktree (`git worktree add ../curtaincall-review origin/main`) so its clean builds never wipe CCC's warm cache or collide on branches: clean build from origin, install/launch via `xcrun simctl`, screenshot, review the diff + screenshot via `gh`.
 - **Judge visual work on a real device, not just the simulator.**
 
 ## Workflow
+- **CCC authors, Codex reviews.** CCC writes on a feature branch and opens the PR; Codex builds/runs/screenshots and reviews. Never merge before Codex review.
 - **Never commit to `main`.** One task = one feature branch + PR.
-- Anything touching auth/data/RLS: investigate and propose first; report findings.
-- Keep changes additive and scoped; after editing, build (and smoke-test) and report.
+- Auth/data/RLS changes are **gated** — investigate and propose first; report findings. Read-only UI gets a lighter pass.
+- Keep changes additive and scoped; after editing, build (incremental) and report.
 - Flag any new dependency before adding it.
 - Backend contracts may have drifted (web/Android/Supabase) — verify against the live schema rather than assuming.
 
