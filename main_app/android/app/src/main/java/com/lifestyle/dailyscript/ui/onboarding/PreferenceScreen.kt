@@ -76,9 +76,10 @@ data class PrefFlowResult(
 )
 
 // PWA preferences.js GENRES — format 값은 works.format / users.pref_genres 저장값.
-private data class PrefGenre(val ko: String, val en: String, val format: String, val full: Boolean = false)
+// 프로필 편집(SettingsScreen)에서도 동일 목록을 써 단일 출처를 유지한다 → internal.
+internal data class PrefGenre(val ko: String, val en: String, val format: String, val full: Boolean = false)
 
-private val GENRES = listOf(
+internal val GENRES = listOf(
     PrefGenre("소설", "Novel", "novel"),
     PrefGenre("연극(희곡)", "Play", "play"),
     PrefGenre("에세이", "Essay", "essay"),
@@ -87,9 +88,9 @@ private val GENRES = listOf(
 )
 
 // PWA preferences.js THEMES — ko 는 users.pref_themes 저장값(분류기 범주명과 동일해야 함).
-private data class PrefTheme(val ko: String, val kw: String, val color: Color)
+internal data class PrefTheme(val ko: String, val kw: String, val color: Color)
 
-private val THEMES = listOf(
+internal val THEMES = listOf(
     PrefTheme("관계·사랑", "사랑 · 연애 · 가족 · 우정", Color(0xFFC75D4A)),
     PrefTheme("상실·애도", "죽음 · 이별 · 그리움 · 애도", Color(0xFF5E6B7A)),
     PrefTheme("자기·정체성", "자아 · 성장 · 자존 · 양심", Color(0xFFB98A3E)),

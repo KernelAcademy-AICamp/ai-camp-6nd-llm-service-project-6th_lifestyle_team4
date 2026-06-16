@@ -205,14 +205,19 @@ fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) 
     val themed = state.theme != "default" && themeBmp != null
     val themeLabel = OZ_THEMES.firstOrNull { it.id == state.theme }?.nameEn ?: "Normal"
 
-    // 고양이 자세 — 저장된 드래그 포즈가 있으면 그 포즈로 시작.
-    var catIdx by remember { mutableStateOf<Int?>(null) }
+    // 고양이 자세 — 위치를 저장해 둔 포즈가 있으면 그 중 하나로 시작(따뜻한 캐시), 없으면 랜덤.
+    var catIdx by remember {
+        val saved = state.catPositions.keys.filter { it in CAT_CASES.indices }
+        mutableStateOf(saved.randomOrNull() ?: CAT_CASES.indices.random())
+    }
+    // 콜드 캐시(시드 실패) 대비: load 후 저장 포즈가 생겼는데 현재 포즈가 미저장이면 저장된 포즈로 보정.
     LaunchedEffect(state.loading) {
-        if (catIdx == null && !state.loading) {
-            catIdx = state.catPose.takeIf { it in CAT_CASES.indices } ?: CAT_CASES.indices.random()
+        if (!state.loading) {
+            val saved = state.catPositions.keys.filter { it in CAT_CASES.indices }
+            if (saved.isNotEmpty() && catIdx !in saved) catIdx = saved.random()
         }
     }
-    val idx = catIdx ?: 0
+    val idx = catIdx
     val catCase = CAT_CASES[idx]
 
     var editing by remember { mutableStateOf(false) }
@@ -259,6 +264,7 @@ fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) 
                 )
             }
 
+            val catSavedPos = state.catPositions[idx]
             RoomScene(
                 night = night,
                 themed = themed,
@@ -266,9 +272,8 @@ fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) 
                 themeLabel = themeLabel,
                 catCase = catCase,
                 poseIndex = idx,
-                savedPose = state.catPose,
-                savedX = state.catX,
-                savedY = state.catY,
+                savedX = catSavedPos?.first ?: -1f,
+                savedY = catSavedPos?.second ?: -1f,
                 sofaOpt = sofaOptScene,
                 rugKind = rugKindScene,
                 towerVariant = towerScene,
@@ -280,7 +285,7 @@ fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) 
                     var n = CAT_CASES.indices.random()
                     if (CAT_CASES.size > 1) while (n == idx) n = CAT_CASES.indices.random()
                     catIdx = n
-                    vm.clearCatPos()
+                    // 각 포즈는 자기 저장 위치(없으면 프리셋)로 복원 — 더는 위치를 지우지 않는다.
                 },
                 onCatMoved = { pose, x, y -> vm.setCatPos(pose, x, y) },
                 onSofaMoved = { x, y -> vm.setSofaPos(x, y) },
@@ -303,6 +308,8 @@ fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) 
                 onTab = { activeTab = it },
                 mobyBmp = mobyBmp,
                 themed = themed,
+                catIdx = idx,
+                onSelectCat = { catIdx = it },
                 onSelectTheme = { opt ->
                     when {
                         opt.id == "default" -> vm.setTheme("default")
@@ -383,7 +390,6 @@ private fun RoomScene(
     themeLabel: String,
     catCase: CatCase,
     poseIndex: Int,
-    savedPose: Int,
     savedX: Float,
     savedY: Float,
     sofaOpt: OzSofaOpt?,
@@ -458,15 +464,15 @@ private fun RoomScene(
                     ),
             )
 
-            // 창에서 비스듬히 들어오는 햇/달빛 — 바닥 위, 가구 뒤 (PWA .lightbeam).
+            // 창에서 비스듬히 들어오는 햇/달빛 — 창 폭에 맞춘 좁은 빛줄기, 바닥 위·가구 뒤 (PWA .lightbeam).
             Box(
-                modifier = Modifier.align(Alignment.TopCenter).offset(x = -mx(40f), y = mx(150f))
-                    .width(mx(250f)).height(mx(300f))
+                modifier = Modifier.align(Alignment.TopCenter).offset(x = -mx(18f), y = mx(150f))
+                    .width(mx(140f)).height(mx(230f))
                     .clip(LightBeamShape)
                     .background(
                         Brush.verticalGradient(
-                            *(if (night) arrayOf(0f to Color(0x4D96B4FF), 0.62f to Color(0x0096B4FF))
-                              else arrayOf(0f to Color(0x66F7D2A0), 0.62f to Color(0x00F7D2A0)))
+                            *(if (night) arrayOf(0f to Color(0x3896B4FF), 0.62f to Color(0x0096B4FF))
+                              else arrayOf(0f to Color(0x4DF7D2A0), 0.62f to Color(0x00F7D2A0)))
                         ),
                     ),
             )
@@ -540,7 +546,7 @@ private fun RoomScene(
         val chPx = with(density) { ch.toPx() }
         val presetLeft = with(density) { (maxWidth * catCase.cx - cw / 2f).toPx() }
         val presetTop = hPx - chPx - with(density) { mx(catCase.bottomPx).toPx() }
-        val hasOverride = savedPose == poseIndex && savedX in 0f..1f && savedY in 0f..1f
+        val hasOverride = savedX in 0f..1f && savedY in 0f..1f
         val initLeft = if (hasOverride) savedX * wPx - cwPx / 2f else presetLeft
         val initTop = if (hasOverride) savedY * hPx - chPx / 2f else presetTop
         var catPos by remember(poseIndex, hasOverride, wPx, hPx, themed) { mutableStateOf(Offset(initLeft, initTop)) }
@@ -872,6 +878,8 @@ private fun DecorTray(
     onTab: (String) -> Unit,
     mobyBmp: ImageBitmap?,
     themed: Boolean,
+    catIdx: Int,
+    onSelectCat: (Int) -> Unit,
     onSelectTheme: (OzThemeOpt) -> Unit,
     onSelectSofa: (String) -> Unit,
     onSelectRug: (String) -> Unit,
@@ -904,7 +912,7 @@ private fun DecorTray(
         if (expanded) {
             Column(modifier = Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, bottom = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("theme" to "테마", "sofa" to "소파", "rug" to "러그", "tower" to "캣타워").forEach { (id, label) ->
+                    listOf("theme" to "테마", "cat" to "고양이", "sofa" to "소파", "rug" to "러그", "tower" to "캣타워").forEach { (id, label) ->
                         TrayTab(label, activeTab == id) { onTab(id) }
                     }
                     Spacer(Modifier.weight(1f))
@@ -928,6 +936,12 @@ private fun DecorTray(
                             val lockedVisual = opt.locked && !owned
                             TrayOption(label = opt.name, active = state.theme == opt.id, onClick = { onSelectTheme(opt) }) {
                                 ThemeSwatch(opt, lockedVisual, mobyBmp)
+                            }
+                        }
+                        "cat" -> CAT_CASES.forEachIndexed { i, case ->
+                            // 자세를 탭하면 방에 그 고양이가 표시되고, 방에서 드래그해 위치를 지정 → 포즈별 저장.
+                            TrayOption(label = "오즈 ${i + 1}", active = catIdx == i, onClick = { onSelectCat(i) }) {
+                                CatSwatch(case)
                             }
                         }
                         "sofa" -> {
@@ -1054,6 +1068,26 @@ private fun BoxScope.TowerSwatch() {
 @Composable
 private fun BoxScope.NoneSwatch() {
     Text("⊘", fontSize = 20.sp, color = Walnut)
+}
+
+@Composable
+private fun BoxScope.CatSwatch(case: CatCase) {
+    // 트레이 자세 미리보기 — 바닥에 선 고양이를 박스에 맞춰(Fit) 보여주고 flip 반영.
+    val bmp = rememberAssetImage("cat/${case.file}")
+    if (bmp != null) {
+        Image(
+            bitmap = bmp,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxSize()
+                .padding(4.dp)
+                .graphicsLayer { scaleX = if (case.flip) -1f else 1f },
+        )
+    } else {
+        Text("🐱", fontSize = 18.sp)
+    }
 }
 
 // ════════════════════════ SHEETS ════════════════════════

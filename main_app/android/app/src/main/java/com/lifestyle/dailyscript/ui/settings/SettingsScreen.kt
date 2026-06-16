@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
@@ -51,10 +54,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.BuildConfig
 import com.lifestyle.dailyscript.R
+import com.lifestyle.dailyscript.data.AppPreferences
+import com.lifestyle.dailyscript.data.model.UserPrefs
 import com.lifestyle.dailyscript.data.repo.AuthRepository
 import com.lifestyle.dailyscript.data.repo.SocialProvider
 import com.lifestyle.dailyscript.data.repo.UserSession
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
+import com.lifestyle.dailyscript.ui.onboarding.GENRES
+import com.lifestyle.dailyscript.ui.onboarding.THEMES
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
 import com.lifestyle.dailyscript.ui.components.YarnIcon
@@ -75,6 +82,7 @@ fun SettingsScreen(
     onSignOut: () -> Unit,
     onDeleteAccount: () -> Unit,
     onUpdateProfile: (nickname: String, gender: String?, ageGroup: String?) -> Unit,
+    onSavePreferences: (genres: List<String>, themes: List<String>, any: Boolean) -> Unit,
     onOpenMyComments: () -> Unit,
     onOpenMyFeed: () -> Unit,
     onOpenBookmarks: () -> Unit,
@@ -91,6 +99,8 @@ fun SettingsScreen(
     val tasteEnabled by vm.tasteEnabled.collectAsState()
     val tasteProfile by vm.tasteProfile.collectAsState()
     val darkTheme by vm.darkTheme.collectAsState()
+    // 프로필 편집에서 미리 채울 현재 선호도(장르·주제). 미동기화면 null.
+    val userPrefs by AppPreferences.userPrefs.collectAsState(initial = null)
 
     LaunchedEffect(session.userId) { vm.loadTasteProfile(session.userId) }
 
@@ -338,11 +348,14 @@ fun SettingsScreen(
             initialNickname = session.nickname,
             initialGender = session.gender,
             initialAge = session.ageGroup,
+            initialPrefs = userPrefs,
+            showPreferences = true,
             onDismiss = { showProfileDialog = false },
             onSave = { newName, gender, age ->
                 onUpdateProfile(newName, gender, age)
                 showProfileDialog = false
             },
+            onSavePreferences = onSavePreferences,
         )
     }
 
@@ -508,6 +521,7 @@ private val GENDER_OPTIONS: List<Pair<String?, String>> = listOf(
 private val AGE_OPTIONS: List<Pair<String?, String>> = listOf(null to "선택 안 함") +
     (1..9).map { "${it}0s" to "${it}0대" }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ProfileDialog(
     initialNickname: String,
@@ -515,21 +529,38 @@ internal fun ProfileDialog(
     initialAge: String?,
     onDismiss: () -> Unit,
     onSave: (String, String?, String?) -> Unit,
+    initialPrefs: UserPrefs? = null,
+    showPreferences: Boolean = false,
+    onSavePreferences: (genres: List<String>, themes: List<String>, any: Boolean) -> Unit = { _, _, _ -> },
 ) {
     var name by remember { mutableStateOf(initialNickname) }
     var gender by remember { mutableStateOf(initialGender) }
     var age by remember { mutableStateOf(initialAge) }
+    // 취향(장르·주제) — 온보딩과 동일 저장값. 초기값은 현재 저장된 선호도.
+    val initGenres = remember(initialPrefs) { initialPrefs?.genres?.toSet() ?: emptySet() }
+    val initThemes = remember(initialPrefs) { initialPrefs?.themes?.toSet() ?: emptySet() }
+    val initAny = initialPrefs?.any ?: false
+    var genres by remember(initialPrefs) { mutableStateOf(initGenres) }
+    var themes by remember(initialPrefs) { mutableStateOf(initThemes) }
+    var any by remember(initialPrefs) { mutableStateOf(initAny) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onSave(name, gender, age) }) { Text("저장", color = Cta) }
+            TextButton(onClick = {
+                // 선호도는 바뀐 경우에만 저장(로컬+서버). 안 건드렸으면 그대로 둔다.
+                if (showPreferences && (genres != initGenres || themes != initThemes || any != initAny)) {
+                    onSavePreferences(genres.toList(), themes.toList(), any)
+                }
+                onSave(name, gender, age)
+            }) { Text("저장", color = Cta) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("취소", color = Walnut) }
         },
         title = { Text(stringResource(R.string.edit_profile), color = Espresso) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 FieldBox(value = name, placeholder = stringResource(R.string.nickname_placeholder), onChange = { if (it.length <= 24) name = it })
                 Box(modifier = Modifier.height(8.dp))
                 Text(
@@ -544,10 +575,71 @@ internal fun ProfileDialog(
                 DropdownField(label = "성별", options = GENDER_OPTIONS, selected = gender, onSelect = { gender = it })
                 Box(modifier = Modifier.height(8.dp))
                 DropdownField(label = "나이대", options = AGE_OPTIONS, selected = age, onSelect = { age = it })
+
+                if (showPreferences) {
+                    Box(modifier = Modifier.height(20.dp))
+                    SectionLabel("좋아하는 장르")
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        GENRES.forEach { g ->
+                            PrefChip(label = g.ko, selected = g.format in genres) {
+                                genres = if (g.format in genres) genres - g.format else genres + g.format
+                            }
+                        }
+                    }
+                    Box(modifier = Modifier.height(16.dp))
+                    SectionLabel("관심 주제")
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        THEMES.forEach { t ->
+                            PrefChip(label = t.ko, selected = !any && t.ko in themes, accent = t.color) {
+                                themes = if (t.ko in themes) themes - t.ko else themes + t.ko
+                                if (themes.isNotEmpty()) any = false
+                            }
+                        }
+                        // "상관없음" — 켜면 주제 선택을 비우고 모든 주제에서 폭넓게 추천 (PWA any).
+                        PrefChip(label = "상관없음", selected = any) {
+                            any = !any
+                            if (any) themes = emptySet()
+                        }
+                    }
+                }
             }
         },
         containerColor = Paper,
     )
+}
+
+/** 프로필 편집의 장르·주제 토글 칩 (선택 시 강조색 테두리 + 굵은 텍스트). */
+@Composable
+private fun PrefChip(
+    label: String,
+    selected: Boolean,
+    accent: Color = Cta,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(20.dp)
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .background(if (selected) accent.copy(alpha = 0.12f) else Paper)
+            .border(1.dp, if (selected) accent else Latte, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 13.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (selected) Espresso else Walnut,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        )
+    }
 }
 
 /** Editorial-styled dropdown row (label left, value right) backed by a DropdownMenu. */

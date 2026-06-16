@@ -9,14 +9,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,17 +31,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
@@ -57,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.lifestyle.dailyscript.data.AppAnalytics
+import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.CardTheme
 import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
@@ -90,14 +86,13 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 @Composable
 fun DailyScreen(
     userId: Long,
     isAnonymous: Boolean,
     nickname: String,
+    loginId: String?,
     onOpenNotice: () -> Unit,
     onOpenCard: (Long) -> Unit,
     onOpenLibraryWork: (Long) -> Unit,
@@ -106,19 +101,20 @@ fun DailyScreen(
 ) {
     val state by vm.state.collectAsState()
     LaunchedEffect(userId) { vm.load(userId) }
+    // 프로필 편집에서 장르·주제를 바꾸면 OZ 픽/취향 메타를 즉시 갱신 (로드된 선호와 달라졌을 때만).
+    val persistedPrefs by AppPreferences.userPrefs.collectAsState(initial = null)
+    LaunchedEffect(persistedPrefs) {
+        if (state.loaded && persistedPrefs != state.prefs) vm.load(userId, force = true)
+    }
 
-    val cats = remember { mutableStateListOf<CatSpawn>() }
-    val scope = rememberCoroutineScope()
     // 새 책 탭 → LIBRARY 화면으로 이동하지 않고 daily 에 머문 채 책 펼침 팝업만 표시 (PWA 0ec4ed4).
     var openWorkId by remember { mutableStateOf<Long?>(null) }
 
-    BoxWithConstraints(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Paper),
     ) {
-        val screenWidth = maxWidth
-        val screenHeight = maxHeight
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -199,9 +195,10 @@ fun DailyScreen(
                 prefs = state.prefs,
                 isAnonymous = isAnonymous,
                 nickname = nickname,
-                onSpawnCat = {
-                    AppAnalytics.track("daily_oz_clicked", mapOf("card_id" to (state.ozPick?.cardId ?: -1L)))
-                    spawnCat(cats, screenWidth, screenHeight, scope)
+                loginId = loginId,
+                onOpenCard = { card ->
+                    AppAnalytics.track("daily_oz_clicked", mapOf("card_id" to card.cardId))
+                    onOpenCard(card.cardId)
                 },
                 onRequestPreferences = {
                     AppAnalytics.track("daily_oz_pref_cta")
@@ -217,24 +214,6 @@ fun DailyScreen(
             )
 
             Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
-        }
-
-        cats.forEach { cat ->
-            val bitmap = rememberAssetBitmap("cat/${cat.file}")
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .offset(x = cat.x, y = cat.y)
-                        .width(cat.size)
-                        .graphicsLayer {
-                            rotationZ = cat.rotation
-                            alpha = 0.95f
-                        },
-                )
-            }
         }
 
         // 새 책 펼침 팝업 — daily 에 머문 채 그 작품의 모인 명대사를 LIBRARY 와 동일한 모달로 보여준다.
@@ -566,7 +545,8 @@ private fun DailyOzPick(
     prefs: UserPrefs?,
     isAnonymous: Boolean,
     nickname: String,
-    onSpawnCat: () -> Unit,
+    loginId: String?,
+    onOpenCard: (CardDto) -> Unit,
     onRequestPreferences: () -> Unit,
 ) {
     // 익명 + 활성 선호 없음 → 카드 대신 개인화 유도 CTA (PWA renderDailyOzPick 게스트 분기).
@@ -583,8 +563,14 @@ private fun DailyOzPick(
         null
     }
     val tasteHit = card.keywordList().firstOrNull { it in taste }
+    // 로그인 상태면 '당신' 대신 표시 이름(닉네임>아이디)으로 호명 (PWA personLabel).
+    val personLabel = if (!isAnonymous && (nickname.isNotBlank() || !loginId.isNullOrBlank())) {
+        "'${nickname.ifBlank { loginId.orEmpty() }}'"
+    } else {
+        "당신"
+    }
     val reason = when {
-        themeHit != null -> "'$themeHit' 주제를 고르신 당신을 위해 오즈가 골랐어요."
+        themeHit != null -> "'$themeHit' 주제를 고른 ${personLabel}에게 추천해요."
         tasteHit != null -> "'$tasteHit'에 자주 머무는 당신이라면, 좋아할 한 문장이에요."
         else -> "오즈가 오늘 골라드린 한 문장이에요."
     }
@@ -601,12 +587,12 @@ private fun DailyOzPick(
         modifier = Modifier
             .fillMaxWidth()
             .dailyCard()
-            .clickable(onClick = onSpawnCat)
+            .clickable { onOpenCard(card) }
             .padding(20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (cat != null) {
-                Image(bitmap = cat, contentDescription = "오즈", contentScale = ContentScale.Fit, modifier = Modifier.width(96.dp))
+                Image(bitmap = cat, contentDescription = "오즈", contentScale = ContentScale.Fit, modifier = Modifier.width(140.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -713,7 +699,7 @@ private fun DailyOzPickCta(nickname: String, onRequestPreferences: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (cat != null) {
-                Image(bitmap = cat, contentDescription = "오즈", contentScale = ContentScale.Fit, modifier = Modifier.width(96.dp))
+                Image(bitmap = cat, contentDescription = "오즈", contentScale = ContentScale.Fit, modifier = Modifier.width(140.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -992,48 +978,6 @@ private data class TrendingCard(
     val views: Int,
     val score: Int,
 )
-
-private data class CatSpawn(
-    val id: Long,
-    val file: String,
-    val size: Dp,
-    val x: Dp,
-    val y: Dp,
-    val rotation: Float,
-)
-
-private val RandomCatFiles = listOf(
-    "cat_confused.png",
-    "cat_empty.png",
-    "cat_idle.png",
-    "cat_shelf_few.png",
-    "cat_shelf_many.png",
-    "cat_struck.png",
-)
-
-private fun spawnCat(
-    cats: MutableList<CatSpawn>,
-    maxWidth: Dp,
-    maxHeight: Dp,
-    scope: kotlinx.coroutines.CoroutineScope,
-) {
-    val size = (60 + Random.nextInt(51)).dp
-    val xMax = (maxWidth - size - 24.dp).coerceAtLeast(0.dp)
-    val yMax = (maxHeight * 0.70f - size).coerceAtLeast(90.dp)
-    val cat = CatSpawn(
-        id = System.nanoTime(),
-        file = RandomCatFiles.random(),
-        size = size,
-        x = 12.dp + (xMax.value * Random.nextFloat()).dp,
-        y = 70.dp + ((yMax - 70.dp).coerceAtLeast(0.dp).value * Random.nextFloat()).dp,
-        rotation = Random.nextInt(-15, 16).toFloat(),
-    )
-    cats.add(cat)
-    scope.launch {
-        delay(10_000)
-        cats.removeAll { it.id == cat.id }
-    }
-}
 
 private fun bookmarkAge(iso: String): String {
     val millis = parseEpochMillis(iso) ?: return "언젠가"

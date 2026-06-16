@@ -36,9 +36,7 @@ data class OzHouseState(
     val sofa: String = "cream",
     val rug: String = "coral",
     val tower: String = "tall",
-    val catPose: Int = -1,            // 드래그 저장 위치가 속한 포즈 index (-1=프리셋 사용)
-    val catX: Float = 0.62f,
-    val catY: Float = 0.86f,
+    val catPositions: Map<Int, Pair<Float, Float>> = emptyMap(), // 포즈 index → (중심x, 중심y) 비율; 없으면 프리셋
     // 가구 드래그 위치(중심 비율; -1f=프리셋)
     val sofaX: Float = -1f, val sofaY: Float = -1f,
     val rugX: Float = -1f, val rugY: Float = -1f,
@@ -51,8 +49,24 @@ class OzHouseViewModel : ViewModel() {
     private val commentRepo = CommentRepository()
     private val feedRepo = FeedRepository()
 
-    private val _state = MutableStateFlow(OzHouseState())
+    private val _state = MutableStateFlow(seedState())
     val state: StateFlow<OzHouseState> = _state.asStateFlow()
+
+    /**
+     * 진입 시 첫 프레임부터 저장된 꾸미기를 그리도록, 동기 캐시로 초기 상태를 미리 채운다.
+     * 캐시가 없으면(콜드 스타트) 기본값으로 시작하고 [load]가 디스크에서 채운다.
+     * 벽 소품 실데이터(북마크 등)는 캐시 대상이 아니므로 그대로 loading 상태로 둔다.
+     */
+    private fun seedState(): OzHouseState {
+        val d = AppPreferences.cachedOzDecor() ?: return OzHouseState()
+        return OzHouseState(
+            loading = true,
+            nightMode = d.night, theme = d.theme, sofa = d.sofa, rug = d.rug, tower = d.tower,
+            catPositions = d.catPositions,
+            sofaX = d.sofaX, sofaY = d.sofaY, rugX = d.rugX, rugY = d.rugY,
+            towerX = d.towerX, towerY = d.towerY,
+        )
+    }
 
     fun load(userId: Long) {
         _state.value = _state.value.copy(loading = true, error = null)
@@ -85,9 +99,7 @@ class OzHouseViewModel : ViewModel() {
                 sofa = decor?.sofa ?: "cream",
                 rug = decor?.rug ?: "coral",
                 tower = decor?.tower ?: "tall",
-                catPose = decor?.catPose ?: -1,
-                catX = decor?.catX ?: 0.62f,
-                catY = decor?.catY ?: 0.86f,
+                catPositions = decor?.catPositions ?: emptyMap(),
                 sofaX = decor?.sofaX ?: -1f, sofaY = decor?.sofaY ?: -1f,
                 rugX = decor?.rugX ?: -1f, rugY = decor?.rugY ?: -1f,
                 towerX = decor?.towerX ?: -1f, towerY = decor?.towerY ?: -1f,
@@ -137,16 +149,10 @@ class OzHouseViewModel : ViewModel() {
         viewModelScope.launch { AppPreferences.setOzTower(value) }
     }
 
-    /** 드래그 종료 시 호출 — 현재 포즈(pose)와 함께 고양이 위치(비율) 보존. */
+    /** 드래그 종료 시 호출 — 해당 포즈(pose) 슬롯의 위치(비율)만 갱신(다른 포즈는 유지). */
     fun setCatPos(pose: Int, x: Float, y: Float) {
-        _state.value = _state.value.copy(catPose = pose, catX = x, catY = y)
+        _state.value = _state.value.copy(catPositions = _state.value.catPositions + (pose to (x to y)))
         viewModelScope.launch { AppPreferences.setOzCatPos(pose, x, y) }
-    }
-
-    /** 고양이 새로고침 시 — 저장된 드래그 위치를 비워 프리셋 위치로 복귀. */
-    fun clearCatPos() {
-        _state.value = _state.value.copy(catPose = -1)
-        viewModelScope.launch { AppPreferences.clearOzCatPos() }
     }
 
     // ── 가구 드래그 위치 보존 (중심 비율) ──

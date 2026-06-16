@@ -258,6 +258,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         userId = session.userId,
                         isAnonymous = session.isAnonymous,
                         nickname = session.nickname,
+                        loginId = session.loginId,
                         onOpenNotice = { navController.navigate(Routes.NOTICE) { launchSingleTop = true } },
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                         onOpenLibraryWork = { workId ->
@@ -317,6 +318,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onSignOut = sessionVm::signOutAndReauth,
                         onDeleteAccount = sessionVm::deleteAccountAndReauth,
                         onUpdateProfile = sessionVm::updateProfile,
+                        onSavePreferences = { g, t, a -> sessionVm.savePreferences(g, t, a, skipped = false) },
                         onOpenMyComments = {
                             AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.MY_COMMENTS))
                             navController.navigate(Routes.MY_COMMENTS)
