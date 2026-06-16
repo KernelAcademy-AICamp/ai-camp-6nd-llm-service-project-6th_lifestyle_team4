@@ -39,8 +39,8 @@ private struct CardContextMenuModifier: ViewModifier {
                     Label(bookmarked ? "북마크 해제" : "북마크 저장",
                           systemImage: bookmarked ? "bookmark.slash" : "bookmark")
                 }
-                // 기본 공유 — 일반 텍스트(명대사). #10 의 타이포 명대사 카드 공유가 이걸 대체.
-                ShareLink(item: shareText) {
+                // 타이포 명대사 카드 이미지 공유 (#10). 렌더 실패 시 텍스트로 폴백(QuoteShareLink 내부).
+                QuoteShareLink(card: card) {
                     Label("공유", systemImage: "square.and.arrow.up")
                 }
             } preview: {
@@ -90,10 +90,6 @@ private struct CardContextMenuModifier: ViewModifier {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
-    }
-
-    private var shareText: String {
-        meta.isEmpty ? peekQuote : "\u{201C}\(peekQuote)\u{201D}\n— \(meta)"
     }
 }
 
