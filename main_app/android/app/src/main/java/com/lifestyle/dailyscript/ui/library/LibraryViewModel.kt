@@ -6,8 +6,10 @@ import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.WorkDto
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
-import com.lifestyle.dailyscript.ui.util.GENRE_ORDER
+import com.lifestyle.dailyscript.ui.util.displayTitle
 import com.lifestyle.dailyscript.ui.util.workGroupKey
+import java.text.Collator
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +24,24 @@ data class LibraryBook(
     val work: WorkDto,
     val cards: List<CardDto>,
 )
+
+/** 라이브러리 정렬 옵션 — 가나다순(기본) / 최신등록순. (장르순은 폐지) */
+enum class LibrarySort(val label: String) {
+    ALPHA("가나다순"),
+    LATEST("최신등록순"),
+}
+
+private val koreanCollator: Collator = Collator.getInstance(Locale.KOREAN)
+
+/** 선택된 정렬에 맞는 책 비교자 — 화면(사용자 선택)과 VM(기본 정렬)이 공용으로 쓴다. */
+fun librarySortComparator(sort: LibrarySort): Comparator<LibraryBook> = when (sort) {
+    // 가나다순 — 화면에 보이는 제목(displayTitle) 기준 한글 콜레이션(숫자·영문 혼합도 자연스럽게).
+    LibrarySort.ALPHA ->
+        Comparator { a, b -> koreanCollator.compare(a.work.displayTitle(), b.work.displayTitle()) }
+    // 최신등록순 — 책의 카드 중 최대 card_id(=가장 최근 등록 카드). card_id 는 단조증가라 createdAt 보다 안전.
+    LibrarySort.LATEST ->
+        compareByDescending { book -> book.cards.maxOf { it.cardId } }
+}
 
 data class LibraryState(
     val loading: Boolean = true,
@@ -66,7 +86,7 @@ class LibraryViewModel : ViewModel() {
     /**
      * Group cards into books by series + subtitle + author (NOT work_id), mirroring the PWA
      * groupAllCardsByWork — duplicate work rows of the same title fold into one book instead of
-     * showing twice. Ordered by genre then title for a tidy "All" view.
+     * showing twice. 기본 정렬은 가나다순(화면에서 사용자가 최신등록순으로 바꿀 수 있음).
      */
     private fun buildBooks(cards: List<CardDto>): List<LibraryBook> =
         cards
@@ -81,13 +101,5 @@ class LibraryViewModel : ViewModel() {
                     cards = group.map { it.first },
                 )
             }
-            .sortedWith(
-                compareBy(
-                    { book ->
-                        val i = GENRE_ORDER.indexOf(book.work.format?.lowercase())
-                        if (i < 0) Int.MAX_VALUE else i
-                    },
-                    { it.work.title },
-                ),
-            )
+            .sortedWith(librarySortComparator(LibrarySort.ALPHA))
 }

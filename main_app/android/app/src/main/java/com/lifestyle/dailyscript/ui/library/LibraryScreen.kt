@@ -37,6 +37,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -117,6 +118,7 @@ fun LibraryScreen(
 
     var search by remember { mutableStateOf("") }
     var genre by remember { mutableStateOf<String?>(null) } // null = 전체
+    var sort by remember { mutableStateOf(LibrarySort.ALPHA) } // 기본 = 가나다순
     var openWorkId by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(initialOpenWorkId, state.books) {
@@ -136,7 +138,7 @@ fun LibraryScreen(
     }
 
     val books = state.books
-    val filtered = remember(books, genre, search) {
+    val filtered = remember(books, genre, search, sort) {
         val q = search.trim()
         books.filter { b ->
             val fmt = b.work.format.lowercase()
@@ -150,7 +152,7 @@ fun LibraryScreen(
                 (b.work.subtitle?.contains(q, ignoreCase = true) == true) ||
                 (b.work.author?.contains(q, ignoreCase = true) == true)
             genreOk && searchOk
-        }
+        }.sortedWith(librarySortComparator(sort))
     }
 
     // 페이지네이션 — 필터/검색이 바뀌면(=filtered 재계산) 1페이지로 리셋.
@@ -180,13 +182,29 @@ fun LibraryScreen(
             if (books.isNotEmpty()) {
                 val cardCount = remember(books) { books.sumOf { it.cards.size } }
                 Box(modifier = Modifier.height(6.dp))
-                Text(
-                    text = stringResource(R.string.library_work_count, books.size) +
-                        "  ·  " + stringResource(R.string.archive_card_count, cardCount),
-                    style = MetaCaps,
-                    color = Walnut,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
+                // 작품/명대사 카운트 줄 — 오른쪽 끝에 정렬 토글(가나다순 ⇄ 최신등록순)을 같은 라인에 둔다.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.library_work_count, books.size) +
+                            "  ·  " + stringResource(R.string.archive_card_count, cardCount),
+                        style = MetaCaps,
+                        color = Walnut,
+                        modifier = Modifier.weight(1f),
+                    )
+                    SortToggle(
+                        selected = sort,
+                        onToggle = {
+                            val next = if (sort == LibrarySort.ALPHA) LibrarySort.LATEST else LibrarySort.ALPHA
+                            sort = next
+                            AppAnalytics.track("library_sorted", mapOf("sort" to next.name.lowercase()))
+                        },
+                    )
+                }
             }
 
             state.error?.let {
@@ -413,6 +431,37 @@ private fun GenreChips(
         if (otherCount > 0) {
             Chip(text = "기타 · $otherCount", active = selected == "other") { onSelect("other") }
         }
+    }
+}
+
+/**
+ * 정렬 토글 — 현재 정렬(가나다순/최신등록순) 라벨을 보여주고 탭하면 다른 쪽으로 전환.
+ * 카운트 줄 오른쪽 끝에 들어가는 작은 알약 모양(장르 칩과 같은 테두리·톤).
+ */
+@Composable
+private fun SortToggle(selected: LibrarySort, onToggle: () -> Unit) {
+    val shape = RoundedCornerShape(4.dp)
+    Row(
+        modifier = Modifier
+            .background(Paper, shape)
+            .border(1.dp, Latte, shape)
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.SwapVert,
+            contentDescription = "정렬 전환",
+            tint = Walnut,
+            modifier = Modifier.size(13.dp),
+        )
+        Box(modifier = Modifier.width(4.dp))
+        Text(
+            text = selected.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Walnut,
+            maxLines = 1,
+        )
     }
 }
 

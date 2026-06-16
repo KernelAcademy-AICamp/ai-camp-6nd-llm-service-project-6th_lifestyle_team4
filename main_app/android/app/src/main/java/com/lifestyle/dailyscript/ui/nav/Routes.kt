@@ -19,4 +19,7 @@ object Routes {
     const val DETAIL = "detail/{cardId}"
     fun archiveWork(workId: Long) = "archive/$workId"
     fun detail(cardId: Long) = "detail/$cardId"
+
+    /** 하단 네비게이션 탭의 루트 목적지들 (상세 등 임시 화면과 구분). */
+    val bottomTabs = setOf(DAILY, HOME, ARCHIVE, FEED, SETTINGS)
 }

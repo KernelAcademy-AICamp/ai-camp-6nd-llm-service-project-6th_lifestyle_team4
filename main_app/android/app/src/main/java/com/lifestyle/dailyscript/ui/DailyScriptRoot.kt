@@ -453,13 +453,25 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 currentRoute = currentRoute,
                 noticeBadge = noticeBadge,
                 onSelect = { route ->
-                    if (currentRoute != route) {
+                    // 상세 등 '탭이 아닌' 임시 화면이 탭 위에 쌓인 상태에서 하단 탭을 누르면, 아래 표준 패턴의
+                    // popUpTo(start){saveState}가 그 임시 화면까지 떠나는 탭의 상태로 함께 저장하고
+                    // restoreState 가 즉시 되살려 다시 그 화면으로 튕긴다(투데이=HOME 처럼 시작목적지가 아닌
+                    // 탭에서 항상 재현). 탭을 누르면 항상 그 탭으로 가야 하므로, 표준 전환 전에 위에 쌓인
+                    // 임시 화면들을 (저장 없이) 먼저 pop 해 떨궈낸다 → saveState 는 탭만 깨끗하게 저장한다.
+                    while (
+                        navController.currentDestination?.route !in Routes.bottomTabs &&
+                        navController.previousBackStackEntry != null
+                    ) {
+                        if (!navController.popBackStack()) break
+                    }
+                    // pop 직후 실제 목적지(currentRoute Compose 상태는 이 프레임엔 아직 갱신 전일 수 있음).
+                    val liveRoute = navController.currentDestination?.route
+                    if (liveRoute != route) {
                         AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to route))
                         // 표준 하단탭 패턴 — 시작 목적지까지 popUpTo(saveState)로 떠나는 탭의 상태를 저장하고
                         // restoreState로 되살린다. 덕분에 탭을 다시 눌러도 그 탭의 NavBackStackEntry(=ViewModel)
                         // 가 복원돼 데이터를 다시 불러오지 않는다(각 VM의 loaded 가드와 맞물림). 백스택은
                         // [시작탭, 현재탭]으로 얕게 유지 → 뒤로가기는 시작탭(오늘)으로 모였다가 앱 종료.
-                        // (같은 탭 재탭은 위 currentRoute != route 가드로 중복 push 방지)
                         navController.navigate(route) {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
