@@ -68,7 +68,7 @@
 
   /* ── 테마: 위대한 개츠비 ── 야간 무도회 + 호수 풍경 한 장으로 룸 전체를 대체 */
   .room.theme-gatsby{
-    background-image: url('assets/oz-themes/Gatsby.png');
+    background-image: url("assets/oz-themes/The Great Gatsby.png");
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
@@ -78,6 +78,19 @@
   .room.theme-gatsby .floor,
   .room.theme-gatsby .lightbeam{ background:none !important; box-shadow:none !important; }
   .room.theme-gatsby .wall::before{ background:none !important; }
+
+  /* ── 테마: 걸리버 여행기 ── 거인 나라 풍경 한 장으로 룸 전체를 대체 */
+  .room.theme-gullivers{
+    background-image: url("assets/oz-themes/Gulliver's Travels.png");
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+  .room.theme-gullivers .wall,
+  .room.theme-gullivers .baseboard,
+  .room.theme-gullivers .floor,
+  .room.theme-gullivers .lightbeam{ background:none !important; box-shadow:none !important; }
+  .room.theme-gullivers .wall::before{ background:none !important; }
 
   /* ── 밤 모드 ── */
   .room.night .wall{ background:linear-gradient(180deg,#28324c 0%, #303b56 60%, #36415e 100%); }
@@ -541,10 +554,10 @@
       { id:'default',   name:'기본',          nameEn:'Normal',            locked:false, price:0,   hint:'기본 테마' },
       { id:'moby-dick', name:'모비딕',         nameEn:'Moby-Dick',         locked:false, price:200, hint:"실타래 200개 / 또는 책 '모비딕'의 모든 카드를 다 읽으면 해금" },
       { id:'demian',    name:'데미안',         nameEn:'Demian',            locked:true,  price:200, hint:"실타래 200개 / 또는 책 '데미안'의 모든 카드를 다 읽으면 해금" },
-      { id:'gatsby',         name:'위대한 개츠비',           nameEn:'The Great Gatsby',                 locked:true, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      { id:'gatsby',         name:'위대한 개츠비',           nameEn:'The Great Gatsby',                 locked:false, price:200, hint:"실타래 200개 / 또는 책 '위대한 개츠비'의 모든 카드를 다 읽으면 해금" },
+      { id:'gullivers',      name:'걸리버 여행기',            nameEn:"Gulliver's Travels",               locked:false, price:200, hint:"실타래 200개 / 또는 책 '걸리버 여행기'의 모든 카드를 다 읽으면 해금" },
       /* ── 이미지 추가 예정. 모두 잠김 + 실타래 200 ── */
       { id:'around-world',   name:'80일 간의 세계일주',       nameEn:'Around the World in Eighty Days',  locked:true, price:200, hint:"실타래 200개 / 또는 책 '80일 간의 세계일주'의 모든 카드를 다 읽으면 해금" },
-      { id:'gullivers',      name:'걸리버 여행기',            nameEn:"Gulliver's Travels",               locked:true, price:200, hint:"실타래 200개 / 또는 책 '걸리버 여행기'의 모든 카드를 다 읽으면 해금" },
       { id:'notre-dame',     name:'노트르담 드 파리',         nameEn:'Notre-Dame de Paris',              locked:true, price:200, hint:"실타래 200개 / 또는 책 '노트르담 드 파리'의 모든 카드를 다 읽으면 해금" },
       { id:'metamorphosis',  name:'변신',                     nameEn:'The Metamorphosis',                locked:true, price:200, hint:"실타래 200개 / 또는 책 '변신'의 모든 카드를 다 읽으면 해금" },
       { id:'sherlock',       name:'셜록 홈즈',                nameEn:'Sherlock Holmes',                  locked:true, price:200, hint:"실타래 200개 / 또는 책 '셜록 홈즈'의 모든 카드를 다 읽으면 해금" },
@@ -728,7 +741,8 @@
   /* 테마 id → swatch/배경 미니어처 이미지 경로. 등록 안 된 id 는 이미지 없음(자물쇠 표시). */
   const THEME_IMG = {
     'moby-dick': 'assets/oz-themes/Mobydick.png',
-    'gatsby':    'assets/oz-themes/Gatsby.png',
+    'gatsby':    'assets/oz-themes/The Great Gatsby.png',
+    'gullivers': "assets/oz-themes/Gulliver's Travels.png",
   };
 
   function swatch(cat,o){
