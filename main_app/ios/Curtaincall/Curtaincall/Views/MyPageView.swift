@@ -12,6 +12,7 @@ struct MyPageView: View {
     @State private var signUpMode = false
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
+    @State private var showAttendance = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,9 +66,10 @@ struct MyPageView: View {
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
 
+                    Spacer().frame(height: 20)
+                    sectionLabel("내 활동")
+                    // 계정 전용 활동(서재/댓글/피드)은 회원만.
                     if !session.isAnonymous {
-                        Spacer().frame(height: 20)
-                        sectionLabel("내 활동")
                         activityRow(
                             title: "내 서재",
                             subtitle: "보관한 명대사와 작품별 책장 보기"
@@ -80,6 +82,10 @@ struct MyPageView: View {
                         activityLink(title: "내 피드", subtitle: "내가 쓴 한줄과 하이라이트 보기") {
                             MyFeedView()
                         }
+                    }
+                    // 출석체크는 익명 사용자도 보상을 받으므로 항상 노출 (PWA/Android 패리티).
+                    activityRow(title: "출석체크", subtitle: "내 출석현황 보기") {
+                        showAttendance = true
                     }
 
                     Spacer().frame(height: 40)
@@ -157,6 +163,9 @@ struct MyPageView: View {
             } onCancel: {
                 showNicknameSheet = false
             }
+        }
+        .sheet(isPresented: $showAttendance) {
+            AttendanceView()   // 보기 전용 (보상 지급 없음)
         }
         .task { await bookmarks.load(userId: session.userId) }
         .onChange(of: session.userId) { _, newValue in
