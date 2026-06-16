@@ -224,6 +224,14 @@ nonisolated struct FeedPost: Decodable, Identifiable, Sendable {
     var id: Int { postId }
     var createdDate: Date? { parseISODate(createdAt) }
 
+    /// Copy with an edited body — for optimistic in-place update after `updateFeedPost`
+    /// (fields are `let`, so this rebuilds the row rather than mutating it).
+    func withBody(_ newBody: String) -> FeedPost {
+        FeedPost(postId: postId, cardId: cardId, userId: userId,
+                 authorNickname: authorNickname, body: newBody,
+                 createdAt: createdAt, card: card)
+    }
+
     enum CodingKeys: String, CodingKey {
         case postId = "post_id"
         case cardId = "card_id"
