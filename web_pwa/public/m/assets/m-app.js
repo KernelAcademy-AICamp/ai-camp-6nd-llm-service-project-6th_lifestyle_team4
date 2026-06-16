@@ -3100,7 +3100,7 @@ function renderDailyContextual() {
   sec.innerHTML = `
     <h2 class="t-headline-md c-espresso" style="margin:0 0 2px;font-weight:700;">이럴 땐, 이런 문장</h2>
     <p class="t-body-sm c-walnut" style="margin:0 0 1px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
-    <div class="archive-chips" id="daily-context-chips" style="margin-top:6px;margin-bottom:16px;">
+    <div class="archive-chips" id="daily-context-chips" style="margin-top:10px;margin-bottom:16px;">
       ${cats.map((c, i) => `<button class="a-chip ${i === _dailyCatIdx ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
     <div id="daily-context-card-host"></div>
@@ -3321,11 +3321,11 @@ function renderDailyOzPick() {
         <img src="assets/cat/cat_computer.png" alt="오즈"
           style="width:140px;height:auto;flex-shrink:0;pointer-events:none;user-select:none;-webkit-user-drag:none;" />
         <div style="flex:1;min-width:0;">
-          <p style="margin:0 0 10px;font-size:12px;color:var(--walnut);">${(state.userNickname || state.userLoginId) ? escapeHtml(userName) + '님' : '당신'}</p>
+          <p style="margin:0 0 10px;font-size:12px;color:var(--walnut);">${(state.userNickname || state.userLoginId) ? '<strong style="font-size:15px;color:#000;font-weight:700;">' + escapeHtml(userName) + '</strong> 님' : '당신'}</p>
           <p style="margin:0;font-size:11px;color:var(--walnut);line-height:1.9;">
             <strong style="color:var(--espresso);">당신의 취향</strong><br>
-            🧶 <strong style="color:var(--cta);">장르</strong> : ${escapeHtml(genreText)}<br>
-            🧶 <strong style="color:var(--cta);">주제</strong> : ${escapeHtml(themeText)}
+            <strong style="color:var(--cta);">장르</strong> : ${escapeHtml(genreText)}<br>
+            <strong style="color:var(--cta);">주제</strong> : ${escapeHtml(themeText)}
           </p>
         </div>
       </div>
