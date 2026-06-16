@@ -236,6 +236,7 @@ struct DailyNewBooksSection: View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte.opacity(0.25), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
+        .cardContextMenu(book.representativeCard)
     }
 
     private func restCover(_ book: DiscoveryWork) -> some View {
@@ -260,6 +261,7 @@ struct DailyNewBooksSection: View {
             .frame(width: 82)
         }
         .buttonStyle(.plain)
+        .cardContextMenu(book.representativeCard)
     }
 
     /// Reuse the existing `Work`-based leather cover (shared with Feed /
@@ -352,6 +354,7 @@ struct DailyContextualSection: View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
+        .cardContextMenu(card)
     }
 
     @ViewBuilder
@@ -450,6 +453,7 @@ struct DailyTrendingSection: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .cardContextMenu(item.card)
                     Rectangle().fill(Color.latte).frame(height: 0.5)
                 }
             }
@@ -560,6 +564,7 @@ struct DailyOzPickSection: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
             }
             .buttonStyle(.plain)
+            .cardContextMenu(card)
         }
     }
 }
@@ -649,6 +654,7 @@ struct DailyRecentSection: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
             }
             .buttonStyle(.plain)
+            .cardContextMenu(card)
         }
     }
 }

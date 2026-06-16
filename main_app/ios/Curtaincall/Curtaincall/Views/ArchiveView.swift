@@ -814,6 +814,7 @@ private struct BookPage: View {
                                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.latte, lineWidth: 0.5))
                             }
                             .buttonStyle(.plain)
+                            .cardContextMenu(card)
                         }
                     }
                     Text("— Daily Script · Limited Edition —")
