@@ -2861,6 +2861,10 @@ function renderDailyNewBooks() {
   const sec = document.getElementById('daily-section-new-books');
   if (!sec) return;
   stopNewbooksRotation();
+  // 날짜 — 카드(블랙 박스) 상단에 표시. 어두운 배경이라 밝은 색으로.
+  const _td = new Date();
+  const _dayKo = ['일','월','화','수','목','금','토'][_td.getDay()];
+  const dailyDateLabel = `<span style="font-weight:700;">${_td.getFullYear()}년 ${_td.getMonth()+1}월 ${_td.getDate()}일</span> <span style="color:var(--cta);">${_dayKo}요일</span>`;
   const works = (typeof groupAllCardsByWork === 'function') ? groupAllCardsByWork()
     : (typeof groupBookmarksByWork === 'function' ? groupBookmarksByWork() : []);
   if (works.length === 0) { sec.style.display = 'none'; return; }
@@ -2916,6 +2920,7 @@ function renderDailyNewBooks() {
       style="display:block;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px;cursor:pointer;text-align:left;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;overflow:hidden;position:relative;">
       <div class="daily-newbook-main-inner" style="display:flex;gap:16px;width:100%;align-items:center;">
         <div style="flex:1;min-width:0;">
+          <p style="font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.04em;color:var(--sand);margin:0 0 12px;">${dailyDateLabel}</p>
           <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
           <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
           <p style="font-size:11px;color:var(--sand);margin:0 0 12px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
@@ -2940,6 +2945,9 @@ function renderDailyNewBooks() {
         `;
       }).join('')}
     </div>
+    ${sorted.length > 1 ? `<div style="display:flex;justify-content:center;gap:7px;padding:8px 0 0;">
+      ${sorted.map((_, i) => `<button type="button" data-dot-idx="${i}" aria-label="${i + 1}번째 새 책 보기" style="width:7px;height:7px;border-radius:50%;border:none;padding:0;cursor:pointer;background:${i === _newbooksMainIdx ? 'var(--espresso)' : 'var(--sand)'};transition:background 0.2s;"></button>`).join('')}
+    </div>` : ''}
     <div style="height:36px;"></div>
   `;
 
@@ -2952,6 +2960,17 @@ function renderDailyNewBooks() {
         track('daily_newbook_clicked', { work_key: key });
         // daily 탭 그대로 머무름 + 팝업만 표시 (LIBRARY 이동 X). 실타래 게이트는 openDetail.
         if (typeof openBookModal === 'function') openBookModal(w, worksList);
+      });
+    });
+    // 페이지네이션 dot — 누르면 자동 순환을 멈추고 해당 책 소개로 전환
+    sec.querySelectorAll('[data-dot-idx]').forEach((dot) => {
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(dot.dataset.dotIdx, 10);
+        if (Number.isNaN(idx) || idx === _newbooksMainIdx) return;
+        stopNewbooksRotation();
+        _newbooksMainIdx = idx;
+        renderBlock(true);
       });
     });
   };
@@ -3098,8 +3117,8 @@ function renderDailyContextual() {
   // 그날 노출되는 3개 중 첫 번째를 기본으로 연다.
   const _dailyCatIdx = 0;
   sec.innerHTML = `
-    <h2 class="t-headline-md c-espresso" style="margin:0 0 2px;font-weight:700;">이럴 땐, 이런 문장</h2>
-    <p class="t-body-sm c-walnut" style="margin:0 0 1px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
+    <h2 class="t-headline-md c-espresso" style="margin:0 0 4px;font-weight:700;">이럴 땐, 이런 문장</h2>
+    <p class="t-body-sm c-walnut" style="margin:0 0 12px;">끌리는 주제를 골라, 새로운 문장을 만나보세요.</p>
     <div class="archive-chips" id="daily-context-chips" style="margin-top:10px;margin-bottom:16px;">
       ${cats.map((c, i) => `<button class="a-chip ${i === _dailyCatIdx ? 'active' : ''}" data-ctx="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
     </div>
@@ -3426,7 +3445,7 @@ function renderDailyRecent() {
   sec.style.display = 'block';
   sec.innerHTML = `
     <h2 style="font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:20px;color:var(--espresso);margin:0 0 4px;font-weight:700;">다시 만나기</h2>
-    <p class="t-body-sm c-walnut" style="margin:0 0 14px;">담아둔 문장, 다시 읽어볼까요?</p>
+    <p class="t-body-sm c-walnut" style="margin:0 0 12px;">담아둔 문장, 다시 읽어볼까요?</p>
     <button type="button" class="sharp-card daily-recent-card" data-card-id="${card.card_id}"
       style="display:flex;align-items:center;gap:14px;width:100%;padding:16px;cursor:pointer;text-align:left;">
       ${dailyBookCoverHTML(work, { width: 64 })}
@@ -4323,6 +4342,31 @@ nicknameInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeNicknameModal();
 });
 
+// 마이페이지 — 버전 정보 7번 연속 클릭 → 제작자 크레딧 이스터에그
+(function _versionEasterEgg() {
+  const row = document.getElementById('version-row');
+  if (!row) return;
+  let count = 0;
+  let timer = null;
+  row.addEventListener('click', () => {
+    count += 1;
+    clearTimeout(timer);
+    timer = setTimeout(() => { count = 0; }, 1500); // 1.5s 안에 다음 탭 없으면 reset
+    if (count >= 7) {
+      count = 0;
+      clearTimeout(timer);
+      openPromptModal({
+        title: '제작',
+        message: '정환욱\n박신영\n함승엽\n이창훈',
+        confirmLabel: '확인',
+        dismissLabel: '',
+        openSigninOnConfirm: false,
+        onConfirm: () => {},
+      });
+    }
+  });
+})();
+
 signOutBtn.addEventListener('click', async () => {
   const msg = state.isAnonymous
     ? '익명 세션을 종료할까요? 다시 입장하면 새 익명 ID가 생성됩니다.'
@@ -4541,6 +4585,21 @@ async function grantYarnRpc(n) {
   if (error) throw error;
   return typeof data === 'number' ? data : parseInt(data, 10);
 }
+
+// OZ 테마 구매 — 서버 atomic 차감 + 영구 unlock 기록.
+//   반환: 새 yarn_balance (>=0), -1=인자 NULL, -2=잔액 부족.
+async function purchaseOzThemeRpc(themeId, price) {
+  if (!state.userId) throw new Error('not_signed_in');
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('purchase_oz_theme', {
+    p_user_id: state.userId,
+    p_theme_id: themeId,
+    p_price: price,
+  });
+  if (error) throw error;
+  return typeof data === 'number' ? data : parseInt(data, 10);
+}
+window.purchaseOzThemeRpc = purchaseOzThemeRpc;
 
 // 카드 첫 열람 보상 — 카드당 1회 +1 실타래 (중복 지급 없음).
 //   로컬 키 ds.yarnRewarded 에 카드ID 기록 → optimistic 차단 후 RPC 호출.

@@ -148,6 +148,54 @@ final class Supa {
             .value
     }
 
+    // MARK: - My Feed (내 피드) — a member's own one-liners + highlights, with
+    // own-row edit/delete. All writes are `.eq(user_id)`-guarded (RLS also enforces
+    // owner-only), mirroring updateComment/deleteComment.
+
+    /// 내가 쓴 '오늘의 한줄' — feed_posts WHERE user_id = me, newest first.
+    func fetchMyFeedPosts(userId: Int) async throws -> [FeedPost] {
+        try await client.from("feed_posts")
+            .select(feedPostColumns)
+            .eq("user_id", value: userId)
+            .order("created_at", ascending: false)
+            .limit(100)
+            .execute()
+            .value
+    }
+
+    /// 내가 저장한 하이라이트 — card_highlights WHERE user_id = me, newest first.
+    func fetchMyHighlights(userId: Int) async throws -> [CardHighlight] {
+        try await client.from("card_highlights")
+            .select(highlightColumns)
+            .eq("user_id", value: userId)
+            .order("created_at", ascending: false)
+            .limit(100)
+            .execute()
+            .value
+    }
+
+    func updateFeedPost(postId: Int, userId: Int, body: String) async throws {
+        try await client.from("feed_posts")
+            .update(["body": body])
+            .eq("post_id", value: postId)
+            .eq("user_id", value: userId)
+            .execute()
+    }
+
+    func deleteFeedPost(postId: Int, userId: Int) async throws {
+        try await client.from("feed_posts").delete()
+            .eq("post_id", value: postId)
+            .eq("user_id", value: userId)
+            .execute()
+    }
+
+    func deleteHighlight(highlightId: Int, userId: Int) async throws {
+        try await client.from("card_highlights").delete()
+            .eq("highlight_id", value: highlightId)
+            .eq("user_id", value: userId)
+            .execute()
+    }
+
     func addFeedPost(cardId: Int, userId: Int, body: String, authorNickname: String?) async throws {
         try await client.from("feed_posts")
             .insert(
@@ -196,12 +244,16 @@ final class Supa {
         return rows.first
     }
 
-    // MARK: - Yarn (실타래) — 06_yarn.sql RPC. Balance lives in users.yarn_balance,
-    // keyed by anonymous_id = auth.uid(); the RPC derives the target from the JWT.
-    // No spend path: cards open freely (gate removed cross-platform), yarn is only
-    // earned (first-open +1) and purchased (mock), so consume_yarn is unused on iOS.
+    // MARK: - Yarn (실타래) — 06_yarn.sql RPCs. Balance lives in users.yarn_balance,
+    // keyed by anonymous_id = auth.uid(); the RPCs derive the target from the JWT.
 
-    /// Grant `n` yarn (the "준비 중" purchase mock + the future attendance hook).
+    /// Atomically spend 1 yarn for a card-open. Returns the post-decrement balance,
+    /// or **-1** when the balance is 0 (no charge applied). Mirrors PWA `consumeYarnRpc`.
+    func consumeYarn() async throws -> Int {
+        try await client.rpc("consume_yarn").execute().value
+    }
+
+    /// Grant `n` yarn (the "준비 중" purchase mock + the attendance reward).
     /// Returns the post-grant balance. Mirrors PWA `grantYarnRpc` (`p_n`).
     @discardableResult
     func grantYarn(_ n: Int) async throws -> Int {
