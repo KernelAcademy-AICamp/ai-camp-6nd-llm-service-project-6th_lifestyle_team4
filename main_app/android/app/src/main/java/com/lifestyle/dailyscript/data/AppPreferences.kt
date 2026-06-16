@@ -27,6 +27,9 @@ object AppPreferences {
     /** 매일 부여되는 무료 실타래 수 (단일 출처). */
     const val DAILY_YARN_GRANT = 5
 
+    /** 카드 N개 열람 후 1회 피드백 넛지 (PWA FEEDBACK_NUDGE_THRESHOLD). */
+    const val FEEDBACK_NUDGE_THRESHOLD = 15
+
     /** unlock(카드당 1회 무료 재열람) 유효 기간 — 이후엔 다시 실타래를 차감. */
     private const val UNLOCK_WINDOW_MS = 3L * 24 * 60 * 60 * 1000 // 3일
 
@@ -51,6 +54,21 @@ object AppPreferences {
     private val ATTENDANCE_LAST_SHOWN = stringPreferencesKey("attendance_last_shown") // 오늘 모달 띄움 표시
     private val OZ_DAILY_DATE = stringPreferencesKey("oz_daily_date")     // yyyy-MM-dd for Daily Oz pick
     private val OZ_DAILY_CARD_ID = longPreferencesKey("oz_daily_card_id") // cached card_id for that date
+    private val CARDS_VIEWED = intPreferencesKey("cards_viewed")          // PWA ds.cardsViewed (누적 카드 열람 수)
+    private val FEEDBACK_NUDGE_SEEN = booleanPreferencesKey("feedback_nudge_seen") // PWA ds.feedbackNudgeSeen (1회 가드)
+    // OZ's house 꾸미기 (PWA oz-house ds.ozhouse.*) — 로컬 보존.
+    private val OZ_NIGHT = stringPreferencesKey("oz_night")   // "auto" | "day" | "night"
+    private val OZ_THEME = stringPreferencesKey("oz_theme")   // 방 팔레트 id
+    private val OZ_SOFA = stringPreferencesKey("oz_sofa")
+    private val OZ_RUG = stringPreferencesKey("oz_rug")
+    private val OZ_TOWER = stringPreferencesKey("oz_tower")
+    private val OZ_CAT_POS = stringPreferencesKey("oz_cat_pos") // "x,y" 비율 (0~1)
+    private val OZ_CAT_POSE = intPreferencesKey("oz_cat_pose")  // 저장된 위치가 속한 고양이 포즈 index (-1=없음)
+    private val OZ_SOFA_POS = stringPreferencesKey("oz_sofa_pos")   // "x,y" 중심 비율(드래그); 없으면 프리셋
+    private val OZ_RUG_POS = stringPreferencesKey("oz_rug_pos")
+    private val OZ_TOWER_POS = stringPreferencesKey("oz_tower_pos")
+    private val OZ_THEMES_PURCHASED = stringPreferencesKey("oz_themes_purchased") // CSV (PWA ds.ozhouse.theme.purchased)
+    private val TODAY_YARN_HINTED = booleanPreferencesKey("today_yarn_hinted") // TODAY 실뭉치 힌트 1회 학습 (PWA)
 
     @Volatile
     private lateinit var store: DataStore<Preferences>
@@ -204,6 +222,102 @@ object AppPreferences {
             p[OZ_DAILY_CARD_ID] = cardId
         }
     }
+
+    // --- 피드백 넛지 (PWA bumpCardsViewed / feedbackNudgeSeen) ---
+    /** 누적 카드 열람 수 +1 (새 값 반환). */
+    suspend fun bumpCardsViewed(): Int {
+        var result = 0
+        store.edit { p ->
+            result = (p[CARDS_VIEWED] ?: 0) + 1
+            p[CARDS_VIEWED] = result
+        }
+        return result
+    }
+
+    suspend fun feedbackNudgeSeen(): Boolean = store.data.first()[FEEDBACK_NUDGE_SEEN] ?: false
+    suspend fun markFeedbackNudgeSeen() { store.edit { it[FEEDBACK_NUDGE_SEEN] = true } }
+
+    // --- OZ's house 꾸미기 (테마·가구·낮밤·고양이 위치) ---
+    data class OzDecorPrefs(
+        val night: String,
+        val theme: String,
+        val sofa: String,
+        val rug: String,
+        val tower: String,
+        val catPose: Int,
+        val catX: Float,
+        val catY: Float,
+        val sofaX: Float,
+        val sofaY: Float,
+        val rugX: Float,
+        val rugY: Float,
+        val towerX: Float,
+        val towerY: Float,
+    )
+
+    /** "x,y" → (x,y) 비율; 없으면 (-1,-1) = 프리셋 위치 사용. */
+    private fun parsePos(s: String?): Pair<Float, Float> {
+        val p = s?.split(",")
+        return (p?.getOrNull(0)?.toFloatOrNull() ?: -1f) to (p?.getOrNull(1)?.toFloatOrNull() ?: -1f)
+    }
+
+    suspend fun ozDecor(): OzDecorPrefs {
+        val p = store.data.first()
+        val pos = (p[OZ_CAT_POS] ?: "0.62,0.86").split(",")
+        val sofaP = parsePos(p[OZ_SOFA_POS])
+        val rugP = parsePos(p[OZ_RUG_POS])
+        val towerP = parsePos(p[OZ_TOWER_POS])
+        return OzDecorPrefs(
+            night = p[OZ_NIGHT] ?: "auto",
+            theme = p[OZ_THEME] ?: "default",
+            sofa = p[OZ_SOFA] ?: "cream",
+            rug = p[OZ_RUG] ?: "coral",
+            tower = p[OZ_TOWER] ?: "tall",
+            catPose = p[OZ_CAT_POSE] ?: -1,
+            catX = pos.getOrNull(0)?.toFloatOrNull() ?: 0.62f,
+            catY = pos.getOrNull(1)?.toFloatOrNull() ?: 0.86f,
+            sofaX = sofaP.first, sofaY = sofaP.second,
+            rugX = rugP.first, rugY = rugP.second,
+            towerX = towerP.first, towerY = towerP.second,
+        )
+    }
+
+    suspend fun setOzNight(value: String) { store.edit { it[OZ_NIGHT] = value } }
+    suspend fun setOzTheme(value: String) { store.edit { it[OZ_THEME] = value } }
+    suspend fun setOzSofa(value: String) { store.edit { it[OZ_SOFA] = value } }
+    suspend fun setOzRug(value: String) { store.edit { it[OZ_RUG] = value } }
+    suspend fun setOzTower(value: String) { store.edit { it[OZ_TOWER] = value } }
+    /** 드래그 종료 시 — 현재 포즈(pose)와 함께 고양이 위치(비율) 보존. */
+    suspend fun setOzCatPos(pose: Int, x: Float, y: Float) {
+        store.edit { it[OZ_CAT_POSE] = pose; it[OZ_CAT_POS] = "$x,$y" }
+    }
+    /** 새로고침 시 드래그 위치를 비워 프리셋 위치로 복귀. */
+    suspend fun clearOzCatPos() { store.edit { it[OZ_CAT_POSE] = -1 } }
+
+    // 가구 드래그 위치 (중심 비율). PWA layout[selector] = {left,top}.
+    suspend fun setOzSofaPos(x: Float, y: Float) { store.edit { it[OZ_SOFA_POS] = "$x,$y" } }
+    suspend fun setOzRugPos(x: Float, y: Float) { store.edit { it[OZ_RUG_POS] = "$x,$y" } }
+    suspend fun setOzTowerPos(x: Float, y: Float) { store.edit { it[OZ_TOWER_POS] = "$x,$y" } }
+
+    // --- OZ 테마 구매 기록 (PWA THEME_PURCHASED_KEY; 'default' 는 기본 보유) ---
+    suspend fun ozPurchasedThemes(): Set<String> {
+        val raw = store.data.first()[OZ_THEMES_PURCHASED]
+        val set = raw?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toMutableSet() ?: mutableSetOf()
+        set.add("default")
+        return set
+    }
+    suspend fun addOzPurchasedTheme(id: String) {
+        store.edit { p ->
+            val cur = p[OZ_THEMES_PURCHASED]?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toMutableSet()
+                ?: mutableSetOf()
+            cur.add(id)
+            p[OZ_THEMES_PURCHASED] = cur.joinToString(",")
+        }
+    }
+
+    // --- TODAY 실뭉치 힌트 (PWA today_yarn_hinted) ---
+    val todayYarnHinted: Flow<Boolean> get() = store.data.map { it[TODAY_YARN_HINTED] ?: false }
+    suspend fun setTodayYarnHinted() { store.edit { it[TODAY_YARN_HINTED] = true } }
 
     // --- Feed category (오늘의 한줄 vs 하이라이트) ---
     val feedCategory: Flow<String> get() = store.data.map { it[FEED_CATEGORY] ?: "today" }

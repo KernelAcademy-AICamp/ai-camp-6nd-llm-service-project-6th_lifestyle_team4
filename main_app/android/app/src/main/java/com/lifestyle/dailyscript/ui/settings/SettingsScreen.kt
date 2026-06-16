@@ -195,8 +195,8 @@ fun SettingsScreen(
             },
         )
 
+        // 익명 사용자 — '내 활동' 위에 로그인 CTA 먼저 (PWA: ACCOUNT 블록).
         if (session.isAnonymous) {
-            // --- ACCOUNT (anonymous) ---
             Box(modifier = Modifier.height(20.dp))
             SectionLabel(text = stringResource(R.string.account))
             Text(
@@ -217,10 +217,13 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = Walnut,
             )
-        } else {
-            // --- 내 활동 (logged-in) ---
-            Box(modifier = Modifier.height(20.dp))
-            SectionLabel(text = stringResource(R.string.my_activity))
+        }
+
+        // --- 내 활동 — 내 댓글·내 피드·북마크·출석체크·실타래 구매를 한 섹션으로 (PWA MY 탭). ---
+        Box(modifier = Modifier.height(if (session.isAnonymous) 40.dp else 20.dp))
+        SectionLabel(text = stringResource(R.string.my_activity))
+        if (!session.isAnonymous) {
+            // 내 댓글·내 피드는 로그인 사용자만.
             SettingRow(
                 title = stringResource(R.string.my_comments),
                 subtitle = stringResource(R.string.my_comments_desc),
@@ -234,10 +237,6 @@ fun SettingsScreen(
                 trailingArrow = true,
             )
         }
-
-        // --- 보관함 (북마크: 익명·로그인 모두 사용) ---
-        Box(modifier = Modifier.height(40.dp))
-        SectionLabel(text = "보관함")
         SettingRow(
             title = stringResource(R.string.bookmarks_entry),
             subtitle = stringResource(R.string.bookmarks_entry_desc),
@@ -250,10 +249,6 @@ fun SettingsScreen(
             onClick = { showAttendance = true },
             trailingArrow = true,
         )
-
-        // --- 실타래 ---
-        Box(modifier = Modifier.height(40.dp))
-        SectionLabel(text = "실타래")
         SettingRow(
             title = stringResource(R.string.yarn_charge),
             subtitle = stringResource(R.string.yarn_charge_desc),

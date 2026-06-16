@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
@@ -31,15 +33,18 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -93,6 +98,7 @@ import com.lifestyle.dailyscript.ui.util.displayAuthor
 import com.lifestyle.dailyscript.ui.util.significanceFor
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -104,9 +110,12 @@ fun DetailScreen(
     onBack: () -> Unit,
     onGoLibrary: () -> Unit,
     onGoFeed: () -> Unit,
+    onOpenFeedback: () -> Unit,
 ) {
     val vm: DetailViewModel = viewModel()
     val state by vm.state.collectAsState()
+    val scrollState = rememberScrollState()
+    val scrollScope = rememberCoroutineScope()
 
     LaunchedEffect(cardId, userId) { vm.load(cardId, userId) }
     LaunchedEffect(state.card?.cardId) {
@@ -232,7 +241,7 @@ fun DetailScreen(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp, vertical = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -385,12 +394,16 @@ fun DetailScreen(
                     isAnonymous = isAnonymous,
                     submitting = state.commentSubmitting,
                     replyingTo = state.replyingTo,
+                    editingCommentId = state.editingCommentId,
                     commentsError = state.commentsError,
                     onSubmit = { vm.submitComment(userId, myNickname, it) },
                     onToggleLike = { vm.toggleLike(userId, it) },
                     onDelete = { vm.deleteComment(userId, it) },
                     onStartReply = { vm.setReplyTarget(it) },
                     onCancelReply = { vm.setReplyTarget(null) },
+                    onStartEdit = { vm.startEditComment(it) },
+                    onCancelEdit = { vm.cancelEditComment() },
+                    onSaveEdit = { id, body -> vm.editComment(userId, id, body) },
                 )
 
                 // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
@@ -453,6 +466,67 @@ fun DetailScreen(
               )
           }
       }
+
+      // 맨 위로 FAB — 스크롤 깊이 80% 이상일 때 좌하단에 노출 (PWA #detail-scroll-top-fab).
+      val showScrollTop by remember {
+          derivedStateOf {
+              val max = scrollState.maxValue
+              max > 0 && scrollState.value.toFloat() / max >= 0.8f
+          }
+      }
+      if (showScrollTop) {
+          ScrollTopFab(
+              modifier = Modifier
+                  .align(Alignment.BottomStart)
+                  .padding(start = 16.dp, bottom = BottomBarContentInset + 24.dp),
+              onClick = { scrollScope.launch { scrollState.animateScrollTo(0) } },
+          )
+      }
+
+      // 피드백 넛지 — 카드 15개 열람 후 1회 (PWA feedbackNudgeModal).
+      if (state.showFeedbackNudge) {
+          AlertDialog(
+              onDismissRequest = { vm.consumeFeedbackNudge() },
+              confirmButton = {
+                  TextButton(onClick = {
+                      vm.consumeFeedbackNudge()
+                      onOpenFeedback()
+                  }) { Text("의견 남기기", color = Cta) }
+              },
+              dismissButton = {
+                  TextButton(onClick = { vm.consumeFeedbackNudge() }) { Text("다음에", color = Walnut) }
+              },
+              title = { Text("앱은 어떠셨나요?", color = Espresso) },
+              text = {
+                  Text(
+                      text = "벌써 명대사 15편을 함께 읽었어요. 잠깐 의견을 들려주시면 더 좋은 앱을 만드는 데 큰 힘이 돼요.",
+                      color = Walnut,
+                      style = MaterialTheme.typography.bodyMedium,
+                  )
+              },
+              containerColor = Paper,
+          )
+      }
+    }
+}
+
+/** 좌하단에 떠 있는 '맨 위로' 동그란 버튼 (PWA #detail-scroll-top-fab). */
+@Composable
+private fun ScrollTopFab(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .shadow(8.dp, CircleShape)
+            .clip(CircleShape)
+            .background(Espresso)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "↑",
+            color = Paper,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        )
     }
 }
 

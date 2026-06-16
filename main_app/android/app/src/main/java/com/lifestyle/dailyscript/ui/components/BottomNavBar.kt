@@ -1,5 +1,12 @@
 package com.lifestyle.dailyscript.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,12 +32,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -38,7 +53,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lifestyle.dailyscript.R
+import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.ui.nav.Routes
+import kotlinx.coroutines.launch
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -146,7 +163,6 @@ fun BottomNavBar(
                 icon = Icons.Outlined.Explore,
                 active = currentRoute == Routes.DAILY,
                 onClick = onSelect,
-                badge = noticeBadge,
                 modifier = Modifier.weight(1f),
             )
             NavItem(
@@ -173,6 +189,7 @@ fun BottomNavBar(
                 icon = Icons.Outlined.Person,
                 active = currentRoute == Routes.SETTINGS,
                 onClick = onSelect,
+                badge = noticeBadge, // PWA: unread-notice dot sits on the MY tab (not DAILY)
                 modifier = Modifier.weight(1f),
             )
         }
@@ -229,15 +246,57 @@ private fun HomeCenterButton(
     val circleColor = Latte
     // 실타래 이미지: assets/"daily script bar.png" (공백 포함) 우선, 없으면 ic_yarn 벡터로 폴백.
     val yarnBitmap = rememberAssetBitmap(YarnAssetName)
+
+    // 실뭉치 힌트/스핀 (PWA updateYarnHint/spinYarn) — TODAY 재탭 = 새 명대사 제스처 신호.
+    // today_yarn_hinted 면 흔들림 정지. 탭하면 한 바퀴 회전 + 학습 완료로 기록.
+    val hinted by AppPreferences.todayYarnHinted.collectAsState(initial = true)
+    val scope = rememberCoroutineScope()
+    val spin = remember { Animatable(0f) }
+    var spinning by remember { mutableStateOf(false) }
+    val hinting = active && !hinted && !spinning
+    val infinite = rememberInfiniteTransition(label = "yarnHint")
+    val wobble by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 3000
+                0f at 0
+                0f at 2400
+                -11f at 2490
+                9f at 2610
+                -6f at 2730
+                3f at 2850
+                0f at 3000
+            },
+        ),
+        label = "yarnWobbleDeg",
+    )
+    val rotation = spin.value + if (hinting) wobble else 0f
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .clickable { onClick() }
+            .clickable {
+                onClick()
+                if (!hinted) scope.launch { AppPreferences.setTodayYarnHinted() }
+                scope.launch {
+                    spinning = true
+                    spin.snapTo(0f)
+                    spin.animateTo(360f, animationSpec = tween(600, easing = CubicBezierEasing(0.34f, 1.4f, 0.5f, 1f)))
+                    spin.snapTo(0f)
+                    spinning = false
+                }
+            }
             .padding(horizontal = 6.dp),
     ) {
         Box(
             modifier = Modifier
                 .size(HomeCircleSize)
+                .graphicsLayer {
+                    rotationZ = rotation
+                    transformOrigin = TransformOrigin(0.5f, 0.48f)
+                }
                 .shadow(4.dp, CircleShape)
                 .background(circleColor, CircleShape)
                 .clip(CircleShape),

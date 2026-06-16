@@ -146,6 +146,9 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         yarnVm.refreshDaily()
     }
 
+    // OZ Pick "취향 알려주기" CTA → 선호도 온보딩 강제 재노출 (이미 완료한 사용자도 다시 설정 가능).
+    var forcePrefOverlay by remember { mutableStateOf(false) }
+
     // 출석체크 — 00시 기준 그날 첫 진입이면 1회 다이얼로그 + 실타래 +5
     var attendanceVisible by remember { mutableStateOf(false) }
     var attendanceRewarded by remember { mutableStateOf(false) }
@@ -253,6 +256,8 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.DAILY) {
                     DailyScreen(
                         userId = session.userId,
+                        isAnonymous = session.isAnonymous,
+                        nickname = session.nickname,
                         onOpenNotice = { navController.navigate(Routes.NOTICE) { launchSingleTop = true } },
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                         onOpenLibraryWork = { workId ->
@@ -262,6 +267,8 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                                 navController.navigate(Routes.ARCHIVE) { launchSingleTop = true }
                             }
                         },
+                        // OZ Pick CTA — 게스트/무선호 사용자가 선호도 온보딩을 다시 열도록.
+                        onRequestPreferences = { forcePrefOverlay = true },
                     )
                 }
                 composable(Routes.HOME) {
@@ -426,6 +433,10 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                             onGoFeed = {
                                 navController.navigate(Routes.FEED) { launchSingleTop = true }
                             },
+                            onOpenFeedback = {
+                                AppAnalytics.track("nav", mapOf("from" to Routes.DETAIL, "to" to Routes.FEEDBACK))
+                                navController.navigate(Routes.FEEDBACK) { launchSingleTop = true }
+                            },
                         )
                     }
                 }
@@ -465,9 +476,10 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         // 홈 첫 진입 때 시작 (PWA 순서: 선호도 → 투어). 덕분에 홈 첫 카드부터 선호가 반영된다.
         // initial=null(DataStore 방출 전)엔 띄우지 않아 완료 사용자에게 깜빡임이 없다.
         val prefSelected by AppPreferences.prefSelected.collectAsState(initial = null)
-        if (prefSelected == false) {
+        if (prefSelected == false || forcePrefOverlay) {
             PreferenceOverlay(onFinish = { r ->
                 sessionVm.savePreferences(r.genres, r.themes, r.any, r.skipped)
+                forcePrefOverlay = false
             })
         }
         // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(기존 프로필 다이얼로그 재사용, 건너뛰기 가능).

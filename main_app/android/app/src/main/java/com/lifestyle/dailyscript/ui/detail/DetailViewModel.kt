@@ -56,6 +56,14 @@ class DetailViewModel : ViewModel() {
             // 조회(증가 전 값 읽기) 후에 증가시켜 +1 이 정확히 한 번만 반영되게 한다. 실패는 비치명적.
             // (PWA m-app.js:3235 increment_card_view RPC.)
             runCatching { cardRepo.incrementView(cardId) }
+            // PWA: 카드 15개 열람 후 1회 피드백 넛지 (bumpCardsViewed + feedbackNudgeSeen 가드).
+            runCatching {
+                val viewed = AppPreferences.bumpCardsViewed()
+                if (viewed >= AppPreferences.FEEDBACK_NUDGE_THRESHOLD && !AppPreferences.feedbackNudgeSeen()) {
+                    AppPreferences.markFeedbackNudgeSeen()
+                    _state.value = _state.value.copy(showFeedbackNudge = true)
+                }
+            }
         }
         loadComments()
     }
@@ -109,6 +117,38 @@ class DetailViewModel : ViewModel() {
 
     fun setReplyTarget(comment: Comment?) {
         _state.value = _state.value.copy(replyingTo = comment)
+    }
+
+    fun startEditComment(commentId: Long) {
+        _state.value = _state.value.copy(editingCommentId = commentId, replyingTo = null)
+    }
+
+    fun cancelEditComment() {
+        _state.value = _state.value.copy(editingCommentId = null)
+    }
+
+    /** 내 댓글 본문 수정 (PWA saveEditComment — card_comments.update). 변경 없으면 그냥 닫는다. */
+    fun editComment(userId: Long, commentId: Long, rawBody: String) {
+        val body = rawBody.trim()
+        if (body.isEmpty()) return
+        val original = _state.value.comments.firstOrNull { it.commentId == commentId }
+        if (original != null && original.body == body) {
+            _state.value = _state.value.copy(editingCommentId = null)
+            return
+        }
+        viewModelScope.launch {
+            runCatching { commentRepo.updateComment(commentId, userId, body) }
+                .onSuccess {
+                    AppAnalytics.track("comment_edited", mapOf("card_id" to currentCardId, "comment_id" to commentId))
+                    _state.value = _state.value.copy(
+                        comments = _state.value.comments.map { if (it.commentId == commentId) it.copy(body = body) else it },
+                        editingCommentId = null,
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(commentsError = "수정 실패: ${error.message ?: ""}")
+                }
+        }
     }
 
     fun submitComment(userId: Long, nickname: String, rawBody: String) {
@@ -193,6 +233,8 @@ class DetailViewModel : ViewModel() {
 
     fun consumeHighlightMessage() { _state.value = _state.value.copy(highlightMessage = null) }
 
+    fun consumeFeedbackNudge() { _state.value = _state.value.copy(showFeedbackNudge = false) }
+
     // ---------- 오늘의 한줄 (feed post from detail) ----------
     fun clearFeedError() { _state.value = _state.value.copy(feedError = null) }
 
@@ -255,6 +297,8 @@ data class DetailState(
     val commentSubmitting: Boolean = false,
     val commentsError: String? = null,
     val replyingTo: Comment? = null,
+    val editingCommentId: Long? = null,
+    val showFeedbackNudge: Boolean = false,
     val highlightSaving: Boolean = false,
     val highlightMessage: String? = null,
     val feedSubmitting: Boolean = false,

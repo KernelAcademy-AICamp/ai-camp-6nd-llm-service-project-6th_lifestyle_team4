@@ -160,10 +160,9 @@ fun FeedScreen(
             val empty = if (state.category == FEED_TODAY) state.posts.isEmpty() else state.highlights.isEmpty()
             when {
                 state.loading && empty -> CenteredNote("불러오는 중⋯")
-                empty -> CenteredNote(
-                    if (state.category == FEED_TODAY) "아직 올라온 한줄이 없어요. 첫 글을 남겨보세요."
-                    else "아직 하이라이트가 없어요. 명대사 본문을 길게 눌러 저장해보세요."
-                )
+                // 하이라이트는 빈 상태 안내 유지. '나의 감상평'은 비어 있으면 샘플 폴백을 보여준다(PWA FEED_SAMPLES).
+                empty && state.category == FEED_HIGHLIGHT ->
+                    CenteredNote("아직 하이라이트가 없어요. 명대사 본문을 길게 눌러 저장해보세요.")
                 else -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -171,10 +170,17 @@ fun FeedScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (state.category == FEED_TODAY) {
-                        // Type-prefixed keys so a highlight_id never collides with a post_id
-                        // (a raw-id collision made the LazyColumn jump to the wrong card on tab switch).
-                        items(state.posts, key = { "post-${it.postId}" }) { post ->
-                            FeedPostCard(post, onClick = { detailPost = post })
+                        if (state.posts.isEmpty()) {
+                            // 빈 피드 폴백 — PWA FEED_SAMPLES 예시 글(탭 불가, 댓글 없음).
+                            items(FEED_SAMPLES, key = { "sample-${it.nick}" }) { sample ->
+                                FeedSampleCard(sample)
+                            }
+                        } else {
+                            // Type-prefixed keys so a highlight_id never collides with a post_id
+                            // (a raw-id collision made the LazyColumn jump to the wrong card on tab switch).
+                            items(state.posts, key = { "post-${it.postId}" }) { post ->
+                                FeedPostCard(post, onClick = { detailPost = post })
+                            }
                         }
                     } else {
                         items(state.highlights, key = { "hl-${it.highlightId}" }) { hl ->
@@ -401,6 +407,90 @@ private fun FeedChip(text: String, active: Boolean, modifier: Modifier = Modifie
             .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
         Text(text, style = MaterialTheme.typography.labelSmall, color = if (active) Paper else Walnut, maxLines = 1)
+    }
+}
+
+/** PWA FEED_SAMPLES — 글이 하나도 없을 때 빈 피드를 채우는 예시 글(탭 불가). */
+private data class FeedSample(
+    val nick: String,
+    val timeAgo: String,
+    val body: String,
+    val title: String,
+    val author: String,
+)
+
+private val FEED_SAMPLES = listOf(
+    FeedSample("춤추는 늑대", "방금", "처음 읽었을 때보다 다시 펼쳤을 때 더 좋았다.\n홈즈의 관찰력은 결국 사람을 향한 관심이라는 걸 이제야 알겠다.", "셜록 홈즈", "아서 코난 도일"),
+    FeedSample("별 보는 고양이", "12시간 전", "사느냐 죽느냐, 그 한 줄 앞에서 한참을 멈췄다.\n오래된 문장인데 하나도 낡지 않았다.", "햄릿", "윌리엄 셰익스피어"),
+    FeedSample("댄싱 울프", "3시간 전", "추리보다 인물이 남는 이야기.\n다 읽고 나면 사건은 잊혀도 그 새벽의 공기는 오래 기억에 남는다.", "셜록 홈즈", "아서 코난 도일"),
+    FeedSample("노래하는 강아지", "3일 전", "아무 일도 일어나지 않는데 자꾸 마음이 움직인다.\n체호프는 늘 그런 식이다.", "바냐 아저씨", "안톤 체호프"),
+    FeedSample("책 읽는 여우", "5일 전", "개츠비가 바라본 초록 불빛이 오늘따라 내 것처럼 느껴졌다.", "위대한 개츠비", "F. 스콧 피츠제럴드"),
+)
+
+/** 샘플 글 카드 — FeedPostCard 와 동일한 레이아웃(헤더 → 인용 패널 → 책 줄), 단 표지·클릭 없음. */
+@Composable
+private fun FeedSampleCard(sample: FeedSample) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(2.dp, shape)
+            .clip(shape)
+            .background(Paper),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier.size(44.dp).clip(CircleShape).background(Latte),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.Edit, contentDescription = null, tint = Walnut, modifier = Modifier.size(22.dp))
+            }
+            Box(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = sample.nick,
+                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = EditorialSans, fontWeight = FontWeight.Normal),
+                    color = Espresso,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Box(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "한 줄 리뷰 · ${sample.timeAgo}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = EditorialSans, fontWeight = FontWeight.Normal),
+                    color = Roast,
+                )
+            }
+        }
+        Box(
+            modifier = Modifier.fillMaxWidth().background(CardWarm).padding(horizontal = 28.dp, vertical = 40.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = sample.body,
+                style = TextStyle(fontFamily = EditorialSerif, fontWeight = FontWeight.Bold, fontSize = 18.sp, lineHeight = 30.sp, color = Espresso),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Column(modifier = Modifier.fillMaxWidth().background(Paper).padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text(
+                text = sample.title,
+                style = MaterialTheme.typography.titleMedium.copy(fontFamily = EditorialSans, fontWeight = FontWeight.Normal),
+                color = Espresso,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Box(modifier = Modifier.height(4.dp))
+            Text(
+                text = sample.author,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = EditorialSans, fontWeight = FontWeight.Normal),
+                color = Walnut,
+            )
+        }
     }
 }
 

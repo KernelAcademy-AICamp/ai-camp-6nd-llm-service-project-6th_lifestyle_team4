@@ -6,14 +6,16 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,16 +26,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -54,18 +61,19 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -80,12 +88,10 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.formatBookmarkDate
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import com.lifestyle.dailyscript.ui.yarn.CalendarGrid
-import java.time.DayOfWeek
-import java.time.LocalDate
 import java.time.LocalTime
-import java.time.YearMonth
+import kotlin.math.roundToInt
 
-// ── 방 전용 팔레트(고정; 밤/낮은 시간 기반) ──
+// ── 방 전용 팔레트(고정; 밤/낮은 시간/수동 토글 기반) ──
 private val RWallDay = listOf(Color(0xFFFCF7EE), Color(0xFFF4ECDB), Color(0xFFEFE6D2))
 private val RWallNight = listOf(Color(0xFF28324C), Color(0xFF303B56), Color(0xFF36415E))
 private val RFloorDay = listOf(Color(0xFFDAC7A3), Color(0xFFCBB58D), Color(0xFFBFA77E))
@@ -94,15 +100,8 @@ private val RWindowDay = listOf(Color(0xFFBFE0E8), Color(0xFFF3DEB0), Color(0xFF
 private val RWindowNight = listOf(Color(0xFF141D38), Color(0xFF1D2C52), Color(0xFF243353))
 private val RWalnut = Color(0xFF6B5D4F)
 private val RWoodDark = Color(0xFF5A4026)
-private val RLatteC = Color(0xFFE8E1D3)
 private val RCtaC = Color(0xFFD85A30)
 private val REspC = Color(0xFF0E0C0A)
-private val RPaperCard = Color(0xFFFBF6EC)
-private val RGold = Color(0xFFC9A24B)
-private val RBookSpines = listOf(
-    Color(0xFFD85A30), Color(0xFFE8E1D3), Color(0xFFF4C20D),
-    Color(0xFF6E8C4E), Color(0xFF8A6A45), Color(0xFF5E7A6B), Color(0xFF9C7B92),
-)
 
 private enum class OzSheet { ATTEND, BOOKMARKS, RECORDS }
 
@@ -120,6 +119,71 @@ private val CAT_CASES = listOf(
     CatCase("cat_idle.png", 0.698f, 0.60f, 152f, 0.40f, false),
 )
 
+// ════════════════ 꾸미기 카탈로그 (PWA oz-house DECOR) ════════════════
+
+/** 테마 — 'default' 는 기본 보유, 'moby-dick' 은 구매(이미지) 가능, 나머지는 잠금(책 완독 해금). */
+private data class OzThemeOpt(
+    val id: String, val name: String, val nameEn: String,
+    val locked: Boolean, val price: Int, val image: String? = null,
+)
+
+private val OZ_THEMES = listOf(
+    OzThemeOpt("default", "기본", "Normal", false, 0),
+    OzThemeOpt("moby-dick", "모비딕", "Moby-Dick", false, 200, "oz-themes/Mobydick.png"),
+    OzThemeOpt("demian", "데미안", "Demian", true, 200),
+    OzThemeOpt("gatsby", "위대한 개츠비", "The Great Gatsby", true, 200),
+    OzThemeOpt("around-world", "80일 간의 세계일주", "Around the World in 80 Days", true, 200),
+    OzThemeOpt("gullivers", "걸리버 여행기", "Gulliver's Travels", true, 200),
+    OzThemeOpt("notre-dame", "노트르담 드 파리", "Notre-Dame de Paris", true, 200),
+    OzThemeOpt("metamorphosis", "변신", "The Metamorphosis", true, 200),
+    OzThemeOpt("sherlock", "셜록 홈즈", "Sherlock Holmes", true, 200),
+    OzThemeOpt("divine-comedy", "신곡", "Divine Comedy", true, 200),
+    OzThemeOpt("siddhartha", "싯다르타", "Siddhartha", true, 200),
+    OzThemeOpt("phantom-opera", "오페라의 유령", "The Phantom of the Opera", true, 200),
+    OzThemeOpt("romeo-juliet", "로미오와 줄리엣", "Romeo and Juliet", true, 200),
+    OzThemeOpt("alice", "이상한 나라의 앨리스", "Alice in Wonderland", true, 200),
+    OzThemeOpt("jungle-book", "정글북", "The Jungle Book", true, 200),
+    OzThemeOpt("king-arthur", "아서왕", "King Arthur", true, 200),
+    OzThemeOpt("frankenstein", "프랑켄슈타인", "Frankenstein", true, 200),
+    OzThemeOpt("peter-pan", "피터 팬", "Peter Pan", true, 200),
+    OzThemeOpt("midsummer", "한여름 밤의 꿈", "A Midsummer Night's Dream", true, 200),
+)
+
+/** 소파 변형 — 프레임/방석/쿠션 색 (PWA DECOR.sofa). */
+private data class OzSofaOpt(
+    val id: String, val name: String,
+    val frame: Color, val frameD: Color, val seat: Color, val seatD: Color,
+    val cushion: Color, val cushionD: Color,
+    val pA: Color, val pAd: Color, val pB: Color, val pBd: Color,
+)
+
+private val OZ_SOFAS = listOf(
+    OzSofaOpt("cream", "크림", Color(0xFF7B5A3C), Color(0xFF6E4F30), Color(0xFF8A6A45), Color(0xFF6E4F30), Color(0xFFF1E7D2), Color(0xFFE3D7BC), Color(0xFFF4C20D), Color(0xFFD9A800), Color(0xFFE0683E), Color(0xFFC44E26)),
+    OzSofaOpt("coral", "코랄", Color(0xFFB5663B), Color(0xFF9A5230), Color(0xFFC2774A), Color(0xFFA8612F), Color(0xFFF6E3D3), Color(0xFFEBCBB2), Color(0xFF6E8C4E), Color(0xFF566F3C), Color(0xFFD85A30), Color(0xFFB8431F)),
+    OzSofaOpt("sage", "세이지", Color(0xFF5E6E55), Color(0xFF4C5A45), Color(0xFF6E7E63), Color(0xFF566048), Color(0xFFE6E9D8), Color(0xFFD3D8BE), Color(0xFFE0683E), Color(0xFFC44E26), Color(0xFF9C8B79), Color(0xFF7E6F5E)),
+    OzSofaOpt("ink", "잉크", Color(0xFF3A332C), Color(0xFF2A241F), Color(0xFF403933), Color(0xFF332D27), Color(0xFFD8CDBA), Color(0xFFC2B6A0), Color(0xFFF4C20D), Color(0xFFD9A800), Color(0xFFD85A30), Color(0xFFB8431F)),
+)
+
+private enum class RugKind { CORAL, SAND, SAGE, MONO }
+
+private val OZ_RUGS = listOf(
+    Triple("coral", "코랄 링", RugKind.CORAL),
+    Triple("sand", "샌드", RugKind.SAND),
+    Triple("sage", "세이지 링", RugKind.SAGE),
+    Triple("mono", "모노", RugKind.MONO),
+)
+
+private val OZ_TOWERS = listOf("mini" to "미니", "cozy" to "코지", "tall" to "타워")
+
+/** 빛무리(lightbeam) 모양 — 창에서 바닥으로 비스듬히 내려가는 평행사변형 (PWA clip-path polygon). */
+private val LightBeamShape = GenericShape { size, _ ->
+    moveTo(size.width * 0.30f, 0f)
+    lineTo(size.width, 0f)
+    lineTo(size.width * 0.70f, size.height)
+    lineTo(0f, size.height)
+    close()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) {
@@ -127,40 +191,133 @@ fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) 
     val state by vm.state.collectAsState()
     LaunchedEffect(userId) { vm.load(userId) }
 
-    val night = remember { LocalTime.now().hour.let { it < 6 || it >= 19 } }
-    var catCase by remember { mutableStateOf(CAT_CASES.random()) }
-    var sheet by remember { mutableStateOf<OzSheet?>(null) }
+    // 낮/밤 — auto 면 시간 기반, 아니면 수동 토글값.
+    val autoNight = remember { LocalTime.now().hour.let { it < 6 || it >= 19 } }
+    val night = when (state.nightMode) {
+        "day" -> false
+        "night" -> true
+        else -> autoNight
+    }
 
-    Column(modifier = Modifier.fillMaxSize().background(Paper)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "뒤로", tint = Espresso)
-            }
-            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+    // 테마 — 이미지가 있는 비-default 테마면 배경 이미지로 방을 덮는다.
+    val themeImagePath = OZ_THEMES.firstOrNull { it.id == state.theme }?.image
+    val themeBmp = if (themeImagePath != null) rememberAssetImage(themeImagePath) else null
+    val themed = state.theme != "default" && themeBmp != null
+    val themeLabel = OZ_THEMES.firstOrNull { it.id == state.theme }?.nameEn ?: "Normal"
+
+    // 고양이 자세 — 저장된 드래그 포즈가 있으면 그 포즈로 시작.
+    var catIdx by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(state.loading) {
+        if (catIdx == null && !state.loading) {
+            catIdx = state.catPose.takeIf { it in CAT_CASES.indices } ?: CAT_CASES.indices.random()
+        }
+    }
+    val idx = catIdx ?: 0
+    val catCase = CAT_CASES[idx]
+
+    var editing by remember { mutableStateOf(false) }
+    var trayExpanded by remember { mutableStateOf(true) }
+    LaunchedEffect(editing) { if (editing) trayExpanded = true } // 편집 시작 땐 펼친 상태로.
+    var activeTab by remember { mutableStateOf("theme") }
+    var sheet by remember { mutableStateOf<OzSheet?>(null) }
+    var themeDialog by remember { mutableStateOf<OzThemeOpt?>(null) }
+
+    // 트레이 테마 스와치용 모비딕 미니어처 — 편집 중에만 로드.
+    val mobyBmp = if (editing) rememberAssetImage("oz-themes/Mobydick.png") else null
+
+    val showFurniture = !themed
+    val sofaOptScene = if (showFurniture) OZ_SOFAS.firstOrNull { it.id == state.sofa } else null
+    val rugKindScene = if (showFurniture) OZ_RUGS.firstOrNull { it.first == state.rug }?.third else null
+    val towerScene = if (showFurniture) state.tower else "none"
+
+    Box(modifier = Modifier.fillMaxSize().background(Paper)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "뒤로", tint = Espresso)
+                }
+                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "OZ'S HOUSE",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
+                        color = Walnut,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(text = "오즈의 집", style = MaterialTheme.typography.bodyMedium, color = Espresso)
+                }
                 Text(
-                    text = "OZ'S HOUSE",
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
-                    color = Walnut,
+                    text = if (editing) "완료" else "꾸미기",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (editing) RCtaC else Espresso,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { editing = !editing }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                 )
-                Spacer(Modifier.height(2.dp))
-                Text(text = "고양이 집", style = MaterialTheme.typography.bodyMedium, color = Espresso)
             }
-            Spacer(Modifier.size(40.dp))
+
+            RoomScene(
+                night = night,
+                themed = themed,
+                themeBmp = themeBmp,
+                themeLabel = themeLabel,
+                catCase = catCase,
+                poseIndex = idx,
+                savedPose = state.catPose,
+                savedX = state.catX,
+                savedY = state.catY,
+                sofaOpt = sofaOptScene,
+                rugKind = rugKindScene,
+                towerVariant = towerScene,
+                sofaX = state.sofaX, sofaY = state.sofaY,
+                rugX = state.rugX, rugY = state.rugY,
+                towerX = state.towerX, towerY = state.towerY,
+                editing = editing,
+                onReshuffleCat = {
+                    var n = CAT_CASES.indices.random()
+                    if (CAT_CASES.size > 1) while (n == idx) n = CAT_CASES.indices.random()
+                    catIdx = n
+                    vm.clearCatPos()
+                },
+                onCatMoved = { pose, x, y -> vm.setCatPos(pose, x, y) },
+                onSofaMoved = { x, y -> vm.setSofaPos(x, y) },
+                onRugMoved = { x, y -> vm.setRugPos(x, y) },
+                onTowerMoved = { x, y -> vm.setTowerPos(x, y) },
+                onToggleNight = { vm.setNightMode(if (night) "day" else "night") },
+                onOpenAttend = { sheet = OzSheet.ATTEND },
+                onOpenBookmarks = { sheet = OzSheet.BOOKMARKS },
+                onOpenRecords = { sheet = OzSheet.RECORDS },
+                modifier = Modifier.weight(1f),
+            )
         }
 
-        RoomScene(
-            night = night,
-            catCase = catCase,
-            attendance = state.attendance,
-            onReshuffleCat = { catCase = CAT_CASES.filter { it != catCase }.random() },
-            onOpenAttend = { sheet = OzSheet.ATTEND },
-            onOpenBookmarks = { sheet = OzSheet.BOOKMARKS },
-            onOpenRecords = { sheet = OzSheet.RECORDS },
-            modifier = Modifier.weight(1f),
-        )
+        // 트레이 = 방 위에 떠 있는 바텀시트(오버레이). 방 크기를 바꾸지 않아 가구 위치가 어긋나지 않는다.
+        // 핸들을 탭하면 접었다 펴서, 트레이에 가린 가구(러그 등)에 닿을 수 있다 (PWA tray-handle).
+        if (editing) {
+            DecorTray(
+                state = state,
+                activeTab = activeTab,
+                onTab = { activeTab = it },
+                mobyBmp = mobyBmp,
+                themed = themed,
+                onSelectTheme = { opt ->
+                    when {
+                        opt.id == "default" -> vm.setTheme("default")
+                        opt.id in state.purchasedThemes -> vm.setTheme(opt.id)
+                        else -> themeDialog = opt // 구매(locked=false) 또는 해금 안내(locked=true)
+                    }
+                },
+                onSelectSofa = { if (!themed) vm.setSofa(it) },
+                onSelectRug = { if (!themed) vm.setRug(it) },
+                onSelectTower = { if (!themed) vm.setTower(it) },
+                expanded = trayExpanded,
+                onToggleExpand = { trayExpanded = !trayExpanded },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
     }
 
     when (sheet) {
@@ -172,6 +329,39 @@ fun OzHouseScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) 
             RecordsSheetBody(state, onOpenCard = { sheet = null; onOpenCard(it) })
         }
         null -> Unit
+    }
+
+    // 테마 구매 / 해금 안내 (PWA openPromptModal).
+    themeDialog?.let { opt ->
+        val purchasable = !opt.locked
+        AlertDialog(
+            onDismissRequest = { themeDialog = null },
+            confirmButton = {
+                if (purchasable) {
+                    TextButton(onClick = { vm.purchaseTheme(opt.id); themeDialog = null }) { Text("구매하기", color = RCtaC) }
+                } else {
+                    TextButton(onClick = { themeDialog = null }) { Text("확인", color = RCtaC) }
+                }
+            },
+            dismissButton = if (purchasable) {
+                ({ TextButton(onClick = { themeDialog = null }) { Text("취소", color = Walnut) } })
+            } else {
+                null
+            },
+            title = { Text(if (purchasable) "테마 구매" else "해금 안내", color = Espresso) },
+            text = {
+                Text(
+                    text = if (purchasable) {
+                        "'${opt.name}' 을(를) 구매하시겠습니까?\n실타래 ${opt.price}개가 사용됩니다."
+                    } else {
+                        "'${opt.name}' 은(는) 아직 해금되지 않았어요.\n책의 모든 카드를 다 읽으면 해금돼요."
+                    },
+                    color = Walnut,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            containerColor = Paper,
+        )
     }
 }
 
@@ -188,9 +378,30 @@ private fun rememberAssetImage(path: String): ImageBitmap? {
 @Composable
 private fun RoomScene(
     night: Boolean,
+    themed: Boolean,
+    themeBmp: ImageBitmap?,
+    themeLabel: String,
     catCase: CatCase,
-    attendance: Set<String>,
+    poseIndex: Int,
+    savedPose: Int,
+    savedX: Float,
+    savedY: Float,
+    sofaOpt: OzSofaOpt?,
+    rugKind: RugKind?,
+    towerVariant: String,
+    sofaX: Float,
+    sofaY: Float,
+    rugX: Float,
+    rugY: Float,
+    towerX: Float,
+    towerY: Float,
+    editing: Boolean,
     onReshuffleCat: () -> Unit,
+    onCatMoved: (Int, Float, Float) -> Unit,
+    onSofaMoved: (Float, Float) -> Unit,
+    onRugMoved: (Float, Float) -> Unit,
+    onTowerMoved: (Float, Float) -> Unit,
+    onToggleNight: () -> Unit,
     onOpenAttend: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenRecords: () -> Unit,
@@ -199,62 +410,141 @@ private fun RoomScene(
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val s = maxWidth.value / 390f
         fun mx(v: Float): Dp = (v * s).dp
+        val density = LocalDensity.current
+        val wPx = with(density) { maxWidth.toPx() }
+        val hPx = with(density) { maxHeight.toPx() }
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().weight(1f).background(Brush.verticalGradient(if (night) RWallNight else RWallDay)))
-            Box(Modifier.fillMaxWidth().height(mx(300f)).background(Brush.verticalGradient(if (night) RFloorNight else RFloorDay)))
-        }
+        if (themed && themeBmp != null) {
+            Image(
+                bitmap = themeBmp,
+                contentDescription = themeLabel,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (night) Box(Modifier.fillMaxSize().background(Color(0x55101A33)))
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxWidth().weight(1f).background(Brush.verticalGradient(if (night) RWallNight else RWallDay)))
+                // 마루 바닥 — 세로 마루널 줄 (PWA repeating-linear-gradient 90deg, 52px 간격).
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(mx(300f))
+                        .background(Brush.verticalGradient(if (night) RFloorNight else RFloorDay)),
+                ) {
+                    val plankStep = with(density) { mx(52f).toPx() }
+                    val plankColor = if (night) Color(0x290A0F23) else Color(0x1A5A3A1E)
+                    Canvas(Modifier.fillMaxSize()) {
+                        var x = plankStep
+                        while (x < size.width) {
+                            drawLine(plankColor, start = Offset(x, 0f), end = Offset(x, size.height), strokeWidth = 1f)
+                            x += plankStep
+                        }
+                    }
+                }
+            }
 
-        // 걸레받이 아래 바닥 그림자
-        Box(
-            modifier = Modifier.align(Alignment.BottomStart).offset(y = -mx(280f)).fillMaxWidth().height(mx(13f))
-                .background(Brush.verticalGradient(listOf(Color(0x22000000), Color(0x00000000)))),
-        )
-        // 걸레받이(벽-바닥 턱)
-        Box(
-            modifier = Modifier.align(Alignment.BottomStart).offset(y = -mx(293f)).fillMaxWidth().height(mx(15f))
-                .background(
-                    Brush.verticalGradient(
-                        if (night) listOf(Color(0xFF34406A), Color(0xFF2A3554), Color(0xFF222C46))
-                        else listOf(Color(0xFFF5ECDC), Color(0xFFE7DBC2), Color(0xFFD2C09C)),
+            // 걸레받이 아래 바닥 그림자
+            Box(
+                modifier = Modifier.align(Alignment.BottomStart).offset(y = -mx(280f)).fillMaxWidth().height(mx(13f))
+                    .background(Brush.verticalGradient(listOf(Color(0x22000000), Color(0x00000000)))),
+            )
+            // 걸레받이(벽-바닥 턱)
+            Box(
+                modifier = Modifier.align(Alignment.BottomStart).offset(y = -mx(293f)).fillMaxWidth().height(mx(15f))
+                    .background(
+                        Brush.verticalGradient(
+                            if (night) listOf(Color(0xFF34406A), Color(0xFF2A3554), Color(0xFF222C46))
+                            else listOf(Color(0xFFF5ECDC), Color(0xFFE7DBC2), Color(0xFFD2C09C)),
+                        ),
                     ),
-                ),
+            )
+
+            // 창에서 비스듬히 들어오는 햇/달빛 — 바닥 위, 가구 뒤 (PWA .lightbeam).
+            Box(
+                modifier = Modifier.align(Alignment.TopCenter).offset(x = -mx(40f), y = mx(150f))
+                    .width(mx(250f)).height(mx(300f))
+                    .clip(LightBeamShape)
+                    .background(
+                        Brush.verticalGradient(
+                            *(if (night) arrayOf(0f to Color(0x4D96B4FF), 0.62f to Color(0x0096B4FF))
+                              else arrayOf(0f to Color(0x66F7D2A0), 0.62f to Color(0x00F7D2A0)))
+                        ),
+                    ),
+            )
+
+            // 창문 — 가운데 상단. 기본 테마에서 탭하면 낮/밤 토글 (PWA: 창문 그림을 직접 누름).
+            Box(
+                modifier = Modifier.align(Alignment.TopCenter).offset(y = mx(36f))
+                    .clip(RoundedCornerShape(topStartPercent = 46, topEndPercent = 46))
+                    .clickable(onClick = onToggleNight),
+            ) {
+                WindowPane(night = night, width = mx(108f), height = mx(126f))
+            }
+            // 창틀 선반 + 화분 — 창 아래 가운데 (PWA .sill / .sill-pot).
+            Box(
+                modifier = Modifier.align(Alignment.TopCenter).offset(y = mx(150f))
+                    .width(mx(124f)).height(mx(8f)).clip(RoundedCornerShape(3.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF7A5A3B), RWoodDark))),
+            )
+            Box(modifier = Modifier.align(Alignment.TopCenter).offset(x = mx(34f), y = mx(118f))) {
+                PottedPlant(width = mx(24f))
+            }
+            // 벽 책장·달력·액자 그림은 PWA처럼 그리지 않는다 — 진입은 우측 이모지 패널로 통일.
+
+            // 캣타워 (우, 뒤) — 편집 모드에서 드래그.
+            if (towerVariant != "none") {
+                val tW = mx(72f); val tH = tW * 2.4f
+                DraggableObject(
+                    contentWidth = tW, contentHeight = tH,
+                    presetLeftPx = wPx - with(density) { tW.toPx() } - with(density) { mx(6f).toPx() },
+                    presetTopPx = hPx - with(density) { tH.toPx() } - with(density) { mx(110f).toPx() },
+                    wPx = wPx, hPx = hPx, savedX = towerX, savedY = towerY,
+                    editing = editing, dragKey = "tower-$towerVariant", onMoved = onTowerMoved,
+                ) { Tower(width = tW, variant = towerVariant) }
+            }
+            // 소파 (중앙-우, 뒤)
+            if (sofaOpt != null) {
+                val sW = mx(200f); val sH = mx(102f)
+                DraggableObject(
+                    contentWidth = sW, contentHeight = sH,
+                    presetLeftPx = with(density) { mx(138f).toPx() },
+                    presetTopPx = hPx - with(density) { sH.toPx() } - with(density) { mx(108f).toPx() },
+                    wPx = wPx, hPx = hPx, savedX = sofaX, savedY = sofaY,
+                    editing = editing, dragKey = "sofa-${sofaOpt.id}", onMoved = onSofaMoved,
+                ) { Sofa(opt = sofaOpt, width = sW, height = sH) }
+            }
+            // 러그 (중앙-앞)
+            if (rugKind != null) {
+                val rW = mx(244f); val rH = mx(58f)
+                DraggableObject(
+                    contentWidth = rW, contentHeight = rH,
+                    presetLeftPx = with(density) { mx(72f).toPx() },
+                    presetTopPx = hPx - with(density) { rH.toPx() } - with(density) { mx(36f).toPx() },
+                    wPx = wPx, hPx = hPx, savedX = rugX, savedY = rugY,
+                    editing = editing, dragKey = "rug-$rugKind", onMoved = onRugMoved,
+                ) { Rug(modifier = Modifier.width(rW).height(rH), kind = rugKind) }
+            }
+        }
+
+        // 좌상단 현재 테마 영문 라벨 (PWA oz-theme-label)
+        Text(
+            text = themeLabel,
+            style = TextStyle(fontFamily = EditorialSerif, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 0.08.em),
+            color = if (themed || night) Color(0xFFF3EEDE) else REspC.copy(alpha = 0.72f),
+            modifier = Modifier.align(Alignment.TopStart).offset(x = mx(14f), y = mx(12f)),
         )
 
-        Box(modifier = Modifier.align(Alignment.TopStart).offset(x = mx(16f), y = mx(8f))) {
-            WindowPane(night = night, width = mx(98f), height = mx(118f))
-        }
-        // 창틀 선반 + 화분
-        Box(
-            modifier = Modifier.align(Alignment.TopStart).offset(x = mx(12f), y = mx(124f))
-                .width(mx(106f)).height(mx(7f)).clip(RoundedCornerShape(3.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF7A5A3B), RWoodDark))),
-        )
-        Box(modifier = Modifier.align(Alignment.TopStart).offset(x = mx(88f), y = mx(86f))) {
-            PottedPlant(width = mx(24f))
-        }
-        Box(modifier = Modifier.align(Alignment.TopStart).offset(x = mx(120f), y = mx(14f))) {
-            WallBookshelf(width = mx(104f), onClick = onOpenBookmarks)
-        }
-        Box(modifier = Modifier.align(Alignment.TopStart).offset(x = mx(256f), y = mx(8f))) {
-            WallCalendar(attendance = attendance, width = mx(102f), onClick = onOpenAttend)
-        }
-        Box(modifier = Modifier.align(Alignment.TopStart).offset(x = mx(274f), y = mx(152f))) {
-            WallFrame(width = mx(76f), onClick = onOpenRecords)
-        }
-
-        // 소파 (중앙-우, 뒤)
-        Box(modifier = Modifier.align(Alignment.BottomStart).offset(x = mx(138f), y = -mx(108f))) {
-            Sofa(width = mx(200f), height = mx(102f))
-        }
-        // 러그 (중앙-앞)
-        Rug(
-            modifier = Modifier.align(Alignment.BottomStart).offset(x = mx(72f), y = -mx(36f))
-                .width(mx(244f)).height(mx(58f)),
-        )
-
+        // 고양이 — 편집 중엔 드래그로 자리 옮김(저장), 평소엔 탭하면 새 자세.
         val cw = maxWidth * catCase.wFrac
         val ch = cw * catCase.aspect
+        val cwPx = with(density) { cw.toPx() }
+        val chPx = with(density) { ch.toPx() }
+        val presetLeft = with(density) { (maxWidth * catCase.cx - cw / 2f).toPx() }
+        val presetTop = hPx - chPx - with(density) { mx(catCase.bottomPx).toPx() }
+        val hasOverride = savedPose == poseIndex && savedX in 0f..1f && savedY in 0f..1f
+        val initLeft = if (hasOverride) savedX * wPx - cwPx / 2f else presetLeft
+        val initTop = if (hasOverride) savedY * hPx - chPx / 2f else presetTop
+        var catPos by remember(poseIndex, hasOverride, wPx, hPx, themed) { mutableStateOf(Offset(initLeft, initTop)) }
+
         val catBmp = rememberAssetImage("cat/${catCase.file}")
         if (catBmp != null) {
             Image(
@@ -262,13 +552,125 @@ private fun RoomScene(
                 contentDescription = "OZ",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .offset(x = maxWidth * catCase.cx - cw / 2f, y = -mx(catCase.bottomPx))
+                    .align(Alignment.TopStart)
+                    .offset { IntOffset(catPos.x.roundToInt(), catPos.y.roundToInt()) }
                     .width(cw).height(ch)
-                    .graphicsLayer { scaleX = if (catCase.flip) -1f else 1f }
-                    .clickable(onClick = onReshuffleCat),
+                    .then(
+                        if (editing) {
+                            Modifier.border(2.dp, RCtaC, RoundedCornerShape(8.dp)).pointerInput(poseIndex, wPx, hPx) {
+                                detectDragGestures(
+                                    onDragEnd = {
+                                        val cx = ((catPos.x + cwPx / 2f) / wPx).coerceIn(0f, 1f)
+                                        val cy = ((catPos.y + chPx / 2f) / hPx).coerceIn(0f, 1f)
+                                        onCatMoved(poseIndex, cx, cy)
+                                    },
+                                ) { change, dragAmount ->
+                                    change.consume()
+                                    catPos = Offset(
+                                        (catPos.x + dragAmount.x).coerceIn(0f, (wPx - cwPx).coerceAtLeast(0f)),
+                                        (catPos.y + dragAmount.y).coerceIn(0f, (hPx - chPx).coerceAtLeast(0f)),
+                                    )
+                                }
+                            }
+                        } else {
+                            Modifier.clickable(onClick = onReshuffleCat)
+                        },
+                    )
+                    // flip 은 마지막에 — pointerInput 좌표가 반전되지 않도록(드래그 방향 정상).
+                    .graphicsLayer { scaleX = if (catCase.flip) -1f else 1f },
             )
         }
+
+        // 우측 이모지 패널 — 북마크/출석/기록 시트 진입 (기본·테마 화면 공통, PWA wall-icons).
+        Column(
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = mx(56f), end = mx(12f)),
+            verticalArrangement = Arrangement.spacedBy(mx(12f)),
+        ) {
+            WallIconBtn("📚", "북마크", onOpenBookmarks)
+            WallIconBtn("📅", "출석", onOpenAttend)
+            WallIconBtn("📝", "기록", onOpenRecords)
+        }
+    }
+}
+
+/**
+ * 편집 모드에서 드래그로 옮기는 방 안 오브젝트(가구). 위치는 중심 비율(0~1)로 저장 — PWA layout[selector].
+ * 저장값이 없으면(savedX<0) 프리셋 위치(presetLeftPx/presetTopPx) 사용.
+ */
+@Composable
+private fun BoxScope.DraggableObject(
+    contentWidth: Dp,
+    contentHeight: Dp,
+    presetLeftPx: Float,
+    presetTopPx: Float,
+    wPx: Float,
+    hPx: Float,
+    savedX: Float,
+    savedY: Float,
+    editing: Boolean,
+    dragKey: Any,
+    onMoved: (Float, Float) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val density = LocalDensity.current
+    val cwPx = with(density) { contentWidth.toPx() }
+    val chPx = with(density) { contentHeight.toPx() }
+    val hasOverride = savedX in 0f..1f && savedY in 0f..1f
+    val initLeft = if (hasOverride) savedX * wPx - cwPx / 2f else presetLeftPx
+    val initTop = if (hasOverride) savedY * hPx - chPx / 2f else presetTopPx
+    var pos by remember(dragKey, hasOverride, wPx, hPx) { mutableStateOf(Offset(initLeft, initTop)) }
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
+            .then(
+                if (editing) {
+                    Modifier
+                        .border(2.dp, RCtaC, RoundedCornerShape(8.dp))
+                        .pointerInput(dragKey, wPx, hPx) {
+                            detectDragGestures(
+                                onDragEnd = {
+                                    val cx = ((pos.x + cwPx / 2f) / wPx).coerceIn(0f, 1f)
+                                    val cy = ((pos.y + chPx / 2f) / hPx).coerceIn(0f, 1f)
+                                    onMoved(cx, cy)
+                                },
+                            ) { change, drag ->
+                                change.consume()
+                                pos = Offset(
+                                    (pos.x + drag.x).coerceIn(0f, (wPx - cwPx).coerceAtLeast(0f)),
+                                    (pos.y + drag.y).coerceIn(0f, (hPx - chPx).coerceAtLeast(0f)),
+                                )
+                            }
+                        }
+                } else {
+                    Modifier
+                },
+            ),
+    ) { content() }
+}
+
+// ── 창턱 화분 ──
+@Composable
+private fun PottedPlant(width: Dp) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(modifier = Modifier.width(width).height(width * 0.9f)) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width; val h = size.height
+                val leaf = Color(0xFF6E8C4E)
+                drawOval(leaf, topLeft = Offset(w * 0.30f, 0f), size = Size(w * 0.40f, h * 0.85f))
+                rotate(degrees = -26f, pivot = Offset(w * 0.5f, h)) {
+                    drawOval(leaf.copy(alpha = 0.92f), topLeft = Offset(w * 0.08f, h * 0.18f), size = Size(w * 0.36f, h * 0.7f))
+                }
+                rotate(degrees = 26f, pivot = Offset(w * 0.5f, h)) {
+                    drawOval(leaf.copy(alpha = 0.92f), topLeft = Offset(w * 0.56f, h * 0.18f), size = Size(w * 0.36f, h * 0.7f))
+                }
+            }
+        }
+        Box(
+            modifier = Modifier.width(width * 0.62f).height(width * 0.5f)
+                .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp, bottomStart = 6.dp, bottomEnd = 6.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFFC77B4A), Color(0xFFA85F33)))),
+        )
     }
 }
 
@@ -314,178 +716,28 @@ private fun WindowPane(night: Boolean, width: Dp, height: Dp) {
     }
 }
 
-// ── 벽 책장: 두 선반 + 브래킷 + 책등 + 코랄 리본 ──
+// ── 러그: 변형별 동심 타원 + 점선 테두리 ──
 @Composable
-private fun WallBookshelf(width: Dp, onClick: () -> Unit) {
-    Column(modifier = Modifier.width(width).clickable(onClick = onClick)) {
-        repeat(2) { shelf ->
-            Box(modifier = Modifier.fillMaxWidth().height(width * 0.40f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = width * 0.04f),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(width * 0.018f),
-                ) {
-                    val spines = if (shelf == 0) listOf(0, 1, 2, 3, 4) else listOf(5, 6, 0, 3, 1)
-                    val heights = if (shelf == 0) listOf(0.78f, 0.92f, 0.66f, 0.84f, 0.74f) else listOf(0.86f, 0.7f, 0.9f, 0.76f, 0.82f)
-                    val leans = if (shelf == 0) listOf(0f, 0f, 11f, 0f, 0f) else listOf(0f, -10f, 0f, 0f, 8f)
-                    spines.forEachIndexed { i, idx ->
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(heights[i])
-                                .graphicsLayer {
-                                    rotationZ = leans[i]
-                                    transformOrigin = TransformOrigin(0.5f, 1f)
-                                }
-                                .clip(RoundedCornerShape(topStart = 1.5.dp, topEnd = 1.5.dp))
-                                .background(RBookSpines[idx]),
-                        )
-                    }
-                }
-                // 코랄 북마크 리본 (윗 선반 책 사이로)
-                if (shelf == 0) {
-                    Box(
-                        modifier = Modifier.align(Alignment.TopStart)
-                            .offset(x = width * 0.34f, y = -width * 0.02f)
-                            .width(width * 0.06f).height(width * 0.22f)
-                            .background(RCtaC),
-                    )
-                }
-            }
-            // 선반(플랭크)
-            Box(
-                modifier = Modifier.fillMaxWidth().height(width * 0.05f)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF8A6A45), RWoodDark))),
-            )
-            // 브래킷
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = width * 0.12f), horizontalArrangement = Arrangement.SpaceBetween) {
-                repeat(2) { Box(Modifier.width(width * 0.04f).height(width * 0.04f).background(Color(0xFF4A3420))) }
-            }
-            if (shelf == 0) Spacer(Modifier.height(width * 0.06f))
-        }
-    }
-}
-
-// ── 벽 달력: 고리 + 코랄 헤더 + 점 그리드 ──
-@Composable
-private fun WallCalendar(attendance: Set<String>, width: Dp, onClick: () -> Unit) {
-    val today = remember { LocalDate.now() }
-    val ym = remember { YearMonth.from(today) }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // 걸이 고리
-        Box(
-            modifier = Modifier.width(width * 0.14f).height(width * 0.06f)
-                .border(width * 0.018f, Color(0xFFA89272), RoundedCornerShape(topStartPercent = 60, topEndPercent = 60)),
-        )
-        Column(
-            modifier = Modifier
-                .width(width)
-                .clip(RoundedCornerShape(8.dp))
-                .background(RPaperCard)
-                .border(0.5.dp, RLatteC, RoundedCornerShape(8.dp))
-                .clickable(onClick = onClick),
-        ) {
-            Box(modifier = Modifier.fillMaxWidth().background(RCtaC).padding(vertical = 3.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "${today.monthValue}월",
-                    style = TextStyle(fontFamily = EditorialSerif, fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                    color = RPaperCard,
-                )
-            }
-            MiniMonthDots(attendance, today, ym, modifier = Modifier.padding(horizontal = 5.dp, vertical = 5.dp))
-        }
-    }
-}
-
-@Composable
-private fun MiniMonthDots(history: Set<String>, today: LocalDate, ym: YearMonth, modifier: Modifier = Modifier) {
-    val firstDow = ym.atDay(1).dayOfWeek
-    val lead = if (firstDow == DayOfWeek.SUNDAY) 0 else firstDow.value
-    val days = ym.lengthOfMonth()
-    val rows = (lead + days + 6) / 7
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        for (r in 0 until rows) {
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.fillMaxWidth()) {
-                for (c in 0 until 7) {
-                    val day = r * 7 + c - lead + 1
-                    val valid = day in 1..days
-                    val on = valid && history.contains(ym.atDay(day).toString())
-                    val isToday = valid && day == today.dayOfMonth
-                    Box(modifier = Modifier.weight(1f).aspectRatio(1f), contentAlignment = Alignment.Center) {
-                        if (valid) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(0.66f).clip(CircleShape)
-                                    .background(if (on) RCtaC else RLatteC)
-                                    .then(if (isToday) Modifier.border(1.dp, REspC, CircleShape) else Modifier),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ── 나의 기록 액자: 만년필 + 코랄 잉크 + 명조 ──
-@Composable
-private fun WallFrame(width: Dp, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier.width(width).height(width * 1.18f)
-            .clip(RoundedCornerShape(3.dp))
-            .background(Color(0xFF12100E))
-            .clickable(onClick = onClick)
-            .padding(width * 0.06f),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFFFCF8EF), Color(0xFFF4ECDC))))
-                .padding(horizontal = width * 0.06f, vertical = width * 0.05f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Canvas(modifier = Modifier.fillMaxWidth(0.84f).aspectRatio(64f / 42f)) {
-                val sc = size.width / 64f
-                val ink = Path().apply {
-                    moveTo(5 * sc, 34 * sc)
-                    cubicTo(15 * sc, 27 * sc, 24 * sc, 37 * sc, 34 * sc, 31 * sc)
-                    cubicTo(44 * sc, 25 * sc, 52 * sc, 25 * sc, 59 * sc, 29 * sc)
-                }
-                drawPath(ink, color = RCtaC, style = Stroke(width = 2.6f * sc, cap = StrokeCap.Round))
-                rotate(degrees = 40f, pivot = Offset(40f * sc, 19f * sc)) {
-                    drawRoundRect(Color(0xFF171411), Offset(36f * sc, 3f * sc), Size(8f * sc, 20f * sc), CornerRadius(4f * sc))
-                    drawRect(RGold, Offset(36f * sc, 9.5f * sc), Size(8f * sc, 2.6f * sc))
-                    drawRoundRect(Color(0xFF2C2620), Offset(36.5f * sc, 1.5f * sc), Size(7f * sc, 5f * sc), CornerRadius(3.5f * sc))
-                    val nib = Path().apply {
-                        moveTo(36.4f * sc, 22 * sc); lineTo(43.6f * sc, 22 * sc); lineTo(40f * sc, 33 * sc); close()
-                    }
-                    drawPath(nib, color = RGold)
-                    drawLine(Color(0xFF171411), Offset(40f * sc, 24 * sc), Offset(40f * sc, 31.5f * sc), strokeWidth = 1f * sc)
-                }
-            }
-            Spacer(Modifier.height(width * 0.05f))
-            Text(
-                text = "나의 기록",
-                style = TextStyle(fontFamily = EditorialSerif, fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                color = Color(0xFF2C2620),
-            )
-        }
-    }
-}
-
-// ── 러그: 동심 타원 링 + 점선 테두리 ──
-@Composable
-private fun Rug(modifier: Modifier = Modifier) {
+private fun Rug(modifier: Modifier = Modifier, kind: RugKind) {
     Canvas(modifier = modifier) {
         val w = size.width; val h = size.height
         fun oval(frac: Float, c: Color) {
             drawOval(c, topLeft = Offset(w * (1 - frac) / 2f, h * (1 - frac) / 2f), size = Size(w * frac, h * frac))
         }
-        oval(1f, Color(0xFFDED2B8))
-        oval(0.70f, RWalnut)
-        oval(0.64f, Color(0xFFE7DCC6))
-        oval(0.36f, RCtaC)
-        oval(0.30f, Color(0xFFEFE7D6))
+        when (kind) {
+            RugKind.CORAL -> {
+                oval(1f, Color(0xFFDED2B8)); oval(0.70f, RWalnut); oval(0.64f, Color(0xFFE7DCC6)); oval(0.36f, RCtaC); oval(0.30f, Color(0xFFEFE7D6))
+            }
+            RugKind.SAGE -> {
+                oval(1f, Color(0xFFDCE2CC)); oval(0.70f, Color(0xFF5E7A55)); oval(0.64f, Color(0xFFE2E6D2)); oval(0.36f, Color(0xFF8FA968)); oval(0.30f, Color(0xFFE9ECDB))
+            }
+            RugKind.MONO -> {
+                oval(1f, Color(0xFFE7DECB)); oval(0.58f, Color(0xFF2C2620)); oval(0.54f, Color(0xFFF1ECE0))
+            }
+            RugKind.SAND -> {
+                oval(1f, Color(0xFFD8C9A6)); oval(0.85f, Color(0xFFE9DEC9)); oval(0.70f, Color(0xFFD8C9A6)); oval(0.55f, Color(0xFFE9DEC9)); oval(0.40f, Color(0xFFD8C9A6)); oval(0.25f, Color(0xFFE9DEC9))
+            }
+        }
         drawOval(
             color = RWalnut.copy(alpha = 0.4f),
             topLeft = Offset(1f, 1f), size = Size(w - 2f, h - 2f),
@@ -494,9 +746,9 @@ private fun Rug(modifier: Modifier = Modifier) {
     }
 }
 
-// ── 소파: 등받이 + 팔걸이 + 방석 + 쿠션 + 다리 ──
+// ── 소파: 등받이 + 팔걸이 + 방석 + 쿠션 + 다리 (변형 색상 OzSofaOpt) ──
 @Composable
-private fun Sofa(width: Dp, height: Dp) {
+private fun Sofa(opt: OzSofaOpt, width: Dp, height: Dp) {
     val W = width; val H = height
     Box(modifier = Modifier.width(W).height(H)) {
         // 다리
@@ -506,22 +758,22 @@ private fun Sofa(width: Dp, height: Dp) {
         Box(
             Modifier.align(Alignment.TopCenter).width(W * 0.84f).height(H * 0.56f)
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 8.dp, bottomEnd = 8.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF7B5A3C), Color(0xFF6B4D32)))),
+                .background(Brush.verticalGradient(listOf(opt.frame, opt.frameD))),
         )
         // 좌석 베이스
         Box(
             Modifier.align(Alignment.BottomCenter).padding(bottom = H * 0.08f).width(W * 0.88f).height(H * 0.46f)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF8A6A45), RWoodDark))),
+                .background(Brush.verticalGradient(listOf(opt.seat, opt.seatD))),
         )
         // 팔걸이
         Box(
             Modifier.align(Alignment.BottomStart).padding(bottom = H * 0.06f).width(W * 0.15f).height(H * 0.64f)
-                .clip(RoundedCornerShape(14.dp)).background(Brush.verticalGradient(listOf(Color(0xFF7B5A3C), Color(0xFF5F4329)))),
+                .clip(RoundedCornerShape(14.dp)).background(Brush.verticalGradient(listOf(opt.frame, opt.frameD))),
         )
         Box(
             Modifier.align(Alignment.BottomEnd).padding(bottom = H * 0.06f).width(W * 0.15f).height(H * 0.64f)
-                .clip(RoundedCornerShape(14.dp)).background(Brush.verticalGradient(listOf(Color(0xFF7B5A3C), Color(0xFF5F4329)))),
+                .clip(RoundedCornerShape(14.dp)).background(Brush.verticalGradient(listOf(opt.frame, opt.frameD))),
         )
         // 방석
         Row(
@@ -529,21 +781,279 @@ private fun Sofa(width: Dp, height: Dp) {
             horizontalArrangement = Arrangement.spacedBy(W * 0.02f),
         ) {
             repeat(2) {
-                Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(Brush.verticalGradient(listOf(Color(0xFFF1E7D2), Color(0xFFE3D7BC)))))
+                Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(Brush.verticalGradient(listOf(opt.cushion, opt.cushionD))))
             }
         }
         // 쿠션
         Box(
             Modifier.align(Alignment.BottomStart).offset(x = W * 0.22f, y = -H * 0.32f).size(W * 0.18f)
                 .graphicsLayer { rotationZ = -7f }.clip(RoundedCornerShape(9.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFFF4C20D), Color(0xFFD9A800)))),
+                .background(Brush.linearGradient(listOf(opt.pA, opt.pAd))),
         )
         Box(
             Modifier.align(Alignment.BottomEnd).offset(x = -W * 0.22f, y = -H * 0.32f).size(W * 0.18f)
                 .graphicsLayer { rotationZ = 8f }.clip(RoundedCornerShape(9.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFFE0683E), Color(0xFFC44E26)))),
+                .background(Brush.linearGradient(listOf(opt.pB, opt.pBd))),
         )
     }
+}
+
+// ── 캣타워: 베이스 + 기둥 + 선반 + 집(구멍) + 방석 (변형 mini/cozy/tall) ──
+@Composable
+private fun Tower(width: Dp, variant: String) {
+    val H = width * 2.4f
+    val wood = Brush.verticalGradient(listOf(Color(0xFFDAC79E), Color(0xFFC9B184)))
+    val plank = Color(0xFF8A6A45)
+    val house = Color(0xFF8A6A45)
+    Column(
+        modifier = Modifier.width(width).height(H),
+        verticalArrangement = Arrangement.Bottom,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // 방석 (맨 위)
+        Box(Modifier.width(width * 0.42f).height(H * 0.05f).clip(RoundedCornerShape(4.dp)).background(RCtaC))
+        when (variant) {
+            "mini" -> {
+                Box(Modifier.width(width * 0.78f).height(H * 0.04f).clip(RoundedCornerShape(3.dp)).background(plank))
+                Box(Modifier.width(width * 0.2f).height(H * 0.42f).background(wood))
+            }
+            "cozy" -> {
+                Box(Modifier.width(width * 0.6f).height(H * 0.035f).clip(RoundedCornerShape(3.dp)).background(plank))
+                TowerHouse(width, H, house)
+                Box(Modifier.width(width * 0.2f).height(H * 0.28f).background(wood))
+            }
+            else -> { // tall
+                Box(Modifier.width(width * 0.6f).height(H * 0.035f).clip(RoundedCornerShape(3.dp)).background(plank))
+                TowerHouse(width, H, house)
+                Box(Modifier.width(width * 0.2f).height(H * 0.10f).background(wood))
+                Box(Modifier.width(width * 0.78f).height(H * 0.04f).clip(RoundedCornerShape(3.dp)).background(plank))
+                Box(Modifier.width(width * 0.2f).height(H * 0.24f).background(wood))
+            }
+        }
+        // 베이스
+        Box(Modifier.width(width).height(H * 0.05f).clip(RoundedCornerShape(6.dp)).background(plank))
+    }
+}
+
+@Composable
+private fun TowerHouse(width: Dp, H: Dp, color: Color) {
+    Box(
+        modifier = Modifier.width(width * 0.72f).height(H * 0.20f).clip(RoundedCornerShape(8.dp)).background(color),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(width * 0.28f).clip(CircleShape).background(Color(0xFF3A2A1A)))
+    }
+}
+
+// ── 우측 이모지 진입 버튼 (테마 적용 시 벽 소품 대체) ──
+@Composable
+private fun WallIconBtn(emoji: String, label: String, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .size(width = 52.dp, height = 52.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xF0FBF6EC))
+            .border(1.dp, Sand, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(emoji, fontSize = 20.sp)
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold), color = Walnut, maxLines = 1)
+    }
+}
+
+// ════════════════════════ 꾸미기 트레이 ════════════════════════
+
+@Composable
+private fun DecorTray(
+    state: OzHouseState,
+    activeTab: String,
+    onTab: (String) -> Unit,
+    mobyBmp: ImageBitmap?,
+    themed: Boolean,
+    onSelectTheme: (OzThemeOpt) -> Unit,
+    onSelectSofa: (String) -> Unit,
+    onSelectRug: (String) -> Unit,
+    onSelectTower: (String) -> Unit,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(12.dp, shape)
+            .clip(shape)
+            .background(Paper),
+    ) {
+        // 핸들 — 탭하면 접기/펴기 (PWA tray-handle). 접으면 가린 가구를 드래그할 수 있다.
+        Column(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggleExpand).padding(vertical = 7.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(Sand))
+            Spacer(Modifier.height(5.dp))
+            Text(
+                text = if (expanded) "꾸미기  ▾" else "꾸미기  ▴",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = Walnut,
+            )
+        }
+        if (expanded) {
+            Column(modifier = Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, bottom = 16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("theme" to "테마", "sofa" to "소파", "rug" to "러그", "tower" to "캣타워").forEach { (id, label) ->
+                        TrayTab(label, activeTab == id) { onTab(id) }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(RCtaC.copy(alpha = 0.1f)).padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Box(Modifier.size(11.dp).clip(CircleShape).background(RCtaC))
+                        Spacer(Modifier.width(5.dp))
+                        Text("실타래", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold), color = RCtaC)
+                    }
+                }
+                Spacer(Modifier.height(11.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    when (activeTab) {
+                        "theme" -> OZ_THEMES.forEach { opt ->
+                            val owned = opt.id == "default" || opt.id in state.purchasedThemes
+                            val lockedVisual = opt.locked && !owned
+                            TrayOption(label = opt.name, active = state.theme == opt.id, onClick = { onSelectTheme(opt) }) {
+                                ThemeSwatch(opt, lockedVisual, mobyBmp)
+                            }
+                        }
+                        "sofa" -> {
+                            TrayOption("적용 안함", state.sofa == "none", { onSelectSofa("none") }) { NoneSwatch() }
+                            OZ_SOFAS.forEach { opt -> TrayOption(opt.name, state.sofa == opt.id, { onSelectSofa(opt.id) }) { SofaSwatch(opt) } }
+                        }
+                        "rug" -> {
+                            TrayOption("적용 안함", state.rug == "none", { onSelectRug("none") }) { NoneSwatch() }
+                            OZ_RUGS.forEach { (id, label, kind) -> TrayOption(label, state.rug == id, { onSelectRug(id) }) { RugSwatch(kind) } }
+                        }
+                        "tower" -> {
+                            TrayOption("적용 안함", state.tower == "none", { onSelectTower("none") }) { NoneSwatch() }
+                            OZ_TOWERS.forEach { (id, label) -> TrayOption(label, state.tower == id, { onSelectTower(id) }) { TowerSwatch() } }
+                        }
+                    }
+                }
+                if (themed && activeTab != "theme") {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "테마 적용 중엔 가구를 바꿀 수 없어요. 기본 테마로 돌아가면 가능해요.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Walnut,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrayTab(label: String, active: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (active) Espresso else Color.Transparent)
+            .border(1.dp, if (active) Espresso else Sand, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 13.dp, vertical = 5.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
+            color = if (active) Paper else Walnut,
+        )
+    }
+}
+
+@Composable
+private fun TrayOption(label: String, active: Boolean, onClick: () -> Unit, swatch: @Composable BoxScope.() -> Unit) {
+    Column(
+        modifier = Modifier.width(64.dp).clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 64.dp, height = 46.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(2.dp, if (active) RCtaC else Color.Transparent, RoundedCornerShape(10.dp))
+                .background(Color(0xFFF3EAD8)),
+            contentAlignment = Alignment.Center,
+            content = swatch,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+            color = if (active) RCtaC else Walnut,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun BoxScope.ThemeSwatch(opt: OzThemeOpt, lockedVisual: Boolean, mobyBmp: ImageBitmap?) {
+    when {
+        opt.id == "default" -> Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFFFBF6EC), Color(0xFFEFE6D2)))))
+        !lockedVisual && opt.image != null && mobyBmp != null ->
+            Image(bitmap = mobyBmp, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        lockedVisual -> {
+            Box(Modifier.fillMaxSize().background(Color(0x2E3C2612)), contentAlignment = Alignment.Center) {
+                Text("🔒", fontSize = 16.sp)
+            }
+            Row(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp)
+                    .clip(RoundedCornerShape(8.dp)).background(Color(0xC70E0C0A)).padding(horizontal = 5.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(RCtaC))
+                Spacer(Modifier.width(3.dp))
+                Text("${opt.price}", color = Paper, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        else -> Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFFEFE6D2), Color(0xFFDDD2B8)))))
+    }
+}
+
+@Composable
+private fun BoxScope.SofaSwatch(opt: OzSofaOpt) {
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(opt.frame, opt.frameD)))) {
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).fillMaxWidth(0.8f).height(15.dp).clip(RoundedCornerShape(4.dp)).background(opt.cushion))
+        Box(Modifier.align(Alignment.BottomStart).padding(start = 11.dp, bottom = 12.dp).size(9.dp).clip(RoundedCornerShape(2.dp)).background(opt.pA))
+        Box(Modifier.align(Alignment.BottomEnd).padding(end = 11.dp, bottom = 12.dp).size(9.dp).clip(RoundedCornerShape(2.dp)).background(opt.pB))
+    }
+}
+
+@Composable
+private fun BoxScope.RugSwatch(kind: RugKind) {
+    val c = when (kind) {
+        RugKind.CORAL -> RCtaC
+        RugKind.SAND -> Color(0xFFD8C9A6)
+        RugKind.SAGE -> Color(0xFF8FA968)
+        RugKind.MONO -> Color(0xFF2C2620)
+    }
+    Box(Modifier.fillMaxSize().padding(7.dp).clip(CircleShape).background(c))
+}
+
+@Composable
+private fun BoxScope.TowerSwatch() {
+    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).width(9.dp).height(24.dp).background(Brush.verticalGradient(listOf(Color(0xFFDAC79E), Color(0xFFC9B184)))))
+    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp).width(26.dp).height(7.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF8A6A45)))
+    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 33.dp).width(13.dp).height(6.dp).clip(RoundedCornerShape(3.dp)).background(RCtaC))
+}
+
+@Composable
+private fun BoxScope.NoneSwatch() {
+    Text("⊘", fontSize = 20.sp, color = Walnut)
 }
 
 // ════════════════════════ SHEETS ════════════════════════

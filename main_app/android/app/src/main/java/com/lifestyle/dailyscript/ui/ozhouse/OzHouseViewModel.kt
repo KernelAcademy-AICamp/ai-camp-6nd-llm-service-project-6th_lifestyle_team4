@@ -30,6 +30,20 @@ data class OzHouseState(
     val posts: List<FeedPost> = emptyList(),     // 내 한줄 (feed_posts)
     val highlights: List<Highlight> = emptyList(),
     val error: String? = null,
+    // 꾸미기 상태 (로컬 보존)
+    val nightMode: String = "auto",   // "auto" | "day" | "night"
+    val theme: String = "default",
+    val sofa: String = "cream",
+    val rug: String = "coral",
+    val tower: String = "tall",
+    val catPose: Int = -1,            // 드래그 저장 위치가 속한 포즈 index (-1=프리셋 사용)
+    val catX: Float = 0.62f,
+    val catY: Float = 0.86f,
+    // 가구 드래그 위치(중심 비율; -1f=프리셋)
+    val sofaX: Float = -1f, val sofaY: Float = -1f,
+    val rugX: Float = -1f, val rugY: Float = -1f,
+    val towerX: Float = -1f, val towerY: Float = -1f,
+    val purchasedThemes: Set<String> = setOf("default"), // 구매(보유)한 테마 id
 )
 
 class OzHouseViewModel : ViewModel() {
@@ -48,6 +62,8 @@ class OzHouseViewModel : ViewModel() {
             val comments = runCatching { commentRepo.loadByUser(userId) }
             val posts = runCatching { feedRepo.loadMyPosts(userId) }
             val highlights = runCatching { feedRepo.loadMyHighlights(userId) }
+            val decor = runCatching { AppPreferences.ozDecor() }.getOrNull()
+            val purchased = runCatching { AppPreferences.ozPurchasedThemes() }.getOrDefault(setOf("default"))
             val stats = attendanceStats(attendance)
             _state.value = OzHouseState(
                 loading = false,
@@ -64,8 +80,89 @@ class OzHouseViewModel : ViewModel() {
                     posts.exceptionOrNull()?.message,
                     highlights.exceptionOrNull()?.message,
                 ).joinToString(" / ").ifBlank { null },
+                nightMode = decor?.night ?: "auto",
+                theme = decor?.theme ?: "default",
+                sofa = decor?.sofa ?: "cream",
+                rug = decor?.rug ?: "coral",
+                tower = decor?.tower ?: "tall",
+                catPose = decor?.catPose ?: -1,
+                catX = decor?.catX ?: 0.62f,
+                catY = decor?.catY ?: 0.86f,
+                sofaX = decor?.sofaX ?: -1f, sofaY = decor?.sofaY ?: -1f,
+                rugX = decor?.rugX ?: -1f, rugY = decor?.rugY ?: -1f,
+                towerX = decor?.towerX ?: -1f, towerY = decor?.towerY ?: -1f,
+                purchasedThemes = purchased,
             )
         }
+    }
+
+    // ── 꾸미기 setters — 상태 즉시 반영 + 로컬 보존 ──
+    fun setNightMode(value: String) {
+        _state.value = _state.value.copy(nightMode = value)
+        viewModelScope.launch { AppPreferences.setOzNight(value) }
+    }
+
+    /** 보유한 테마로 전환(미보유 비-default 테마는 무시 — 구매는 [purchaseTheme]). */
+    fun setTheme(value: String) {
+        if (value != "default" && value !in _state.value.purchasedThemes) return
+        _state.value = _state.value.copy(theme = value)
+        viewModelScope.launch { AppPreferences.setOzTheme(value) }
+    }
+
+    /**
+     * 테마 구매 — PWA addPurchasedTheme 미러. 구매 기록을 로컬에 남기고 즉시 적용한다.
+     * 서버 실타래 차감은 PWA와 동일하게 미연결(TODO: spend_yarn RPC). default 외 잠금 해제용.
+     */
+    fun purchaseTheme(value: String) {
+        val owned = _state.value.purchasedThemes + value
+        _state.value = _state.value.copy(purchasedThemes = owned, theme = value)
+        viewModelScope.launch {
+            AppPreferences.addOzPurchasedTheme(value)
+            AppPreferences.setOzTheme(value)
+        }
+    }
+
+    fun setSofa(value: String) {
+        _state.value = _state.value.copy(sofa = value)
+        viewModelScope.launch { AppPreferences.setOzSofa(value) }
+    }
+
+    fun setRug(value: String) {
+        _state.value = _state.value.copy(rug = value)
+        viewModelScope.launch { AppPreferences.setOzRug(value) }
+    }
+
+    fun setTower(value: String) {
+        _state.value = _state.value.copy(tower = value)
+        viewModelScope.launch { AppPreferences.setOzTower(value) }
+    }
+
+    /** 드래그 종료 시 호출 — 현재 포즈(pose)와 함께 고양이 위치(비율) 보존. */
+    fun setCatPos(pose: Int, x: Float, y: Float) {
+        _state.value = _state.value.copy(catPose = pose, catX = x, catY = y)
+        viewModelScope.launch { AppPreferences.setOzCatPos(pose, x, y) }
+    }
+
+    /** 고양이 새로고침 시 — 저장된 드래그 위치를 비워 프리셋 위치로 복귀. */
+    fun clearCatPos() {
+        _state.value = _state.value.copy(catPose = -1)
+        viewModelScope.launch { AppPreferences.clearOzCatPos() }
+    }
+
+    // ── 가구 드래그 위치 보존 (중심 비율) ──
+    fun setSofaPos(x: Float, y: Float) {
+        _state.value = _state.value.copy(sofaX = x, sofaY = y)
+        viewModelScope.launch { AppPreferences.setOzSofaPos(x, y) }
+    }
+
+    fun setRugPos(x: Float, y: Float) {
+        _state.value = _state.value.copy(rugX = x, rugY = y)
+        viewModelScope.launch { AppPreferences.setOzRugPos(x, y) }
+    }
+
+    fun setTowerPos(x: Float, y: Float) {
+        _state.value = _state.value.copy(towerX = x, towerY = y)
+        viewModelScope.launch { AppPreferences.setOzTowerPos(x, y) }
     }
 
     /** 이번 달 출석 일수 + 오늘부터 거슬러 올라간 연속 출석 일수. */

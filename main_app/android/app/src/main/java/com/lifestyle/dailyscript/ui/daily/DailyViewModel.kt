@@ -3,14 +3,17 @@ package com.lifestyle.dailyscript.ui.daily
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifestyle.dailyscript.data.AppPreferences
+import com.lifestyle.dailyscript.data.CardTheme
 import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.Notice
+import com.lifestyle.dailyscript.data.model.UserPrefs
 import com.lifestyle.dailyscript.data.model.WorkDto
 import com.lifestyle.dailyscript.data.repo.BookmarkRepository
 import com.lifestyle.dailyscript.data.repo.CardRepository
 import com.lifestyle.dailyscript.data.repo.CommentRepository
 import com.lifestyle.dailyscript.data.repo.NoticeRepository
+import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -48,7 +51,9 @@ class DailyViewModel : ViewModel() {
 
             val cards = cardsResult.getOrDefault(emptyList())
             val bookmarks = bookmarksResult.getOrDefault(emptyList())
-            val ozPick = chooseOzPick(cards, bookmarks.mapNotNull { it.cards })
+            // 온보딩 선호(장르·주제) — Daily OZ Pick 개인화에 사용 (PWA getPrefs()).
+            val prefs = runCatching { AppPreferences.userPrefs.first() }.getOrNull()
+            val ozPick = chooseOzPick(cards, bookmarks.mapNotNull { it.cards }, prefs)
 
             _state.value = DailyState(
                 loading = false,
@@ -59,6 +64,7 @@ class DailyViewModel : ViewModel() {
                 notices = noticesResult.getOrDefault(emptyList()),
                 bookmarkCounts = countsResult.getOrDefault(emptyMap()),
                 commentCounts = commentCountsResult.getOrDefault(emptyMap()),
+                prefs = prefs,
                 ozPick = ozPick,
                 error = listOfNotNull(
                     cardsResult.exceptionOrNull()?.message,
@@ -70,21 +76,51 @@ class DailyViewModel : ViewModel() {
         }
     }
 
-    private suspend fun chooseOzPick(cards: List<CardDto>, bookmarkCards: List<CardDto>): CardDto? {
+    /**
+     * Daily OZ Pick 선택 — PWA renderDailyOzPick 과 동일한 우선순위:
+     *   1) 온보딩에서 고른 주제(있으면) — 카드 키워드를 [CardTheme] 분류기로 주제 집합 후 교집합.
+     *      거기에 고른 장르까지 겹치면 우선.
+     *   2) 없으면 북마크 취향(키워드) 매칭.
+     *   3) 그래도 없으면 전체에서.
+     * 하루 1개 캐시하되, 고른 주제·취향에 어긋나면 다시 뽑아 개인화 문구가 끊기지 않게 한다.
+     */
+    private suspend fun chooseOzPick(
+        cards: List<CardDto>,
+        bookmarkCards: List<CardDto>,
+        prefs: UserPrefs?,
+    ): CardDto? {
         if (cards.isEmpty()) return null
         val today = LocalDate.now().toString()
         val taste = bookmarkCards.flatMap { it.keywordList() }.toSet()
+        val chosenThemes = if (prefs != null && !prefs.any) prefs.themes.toSet() else emptySet()
+        val chosenGenres = prefs?.genres?.toSet() ?: emptySet()
 
-        // 하루 1개 캐시 — 단, 취향(북마크 키워드)이 생긴 뒤엔 취향과 겹치는 카드로 한 번 승급한다.
-        // 취향이 없던 시점에 캐시된 비매칭 카드가 그날 내내 고정돼 "당신이라면" 개인화 문구가
-        // 안 뜨던 문제 방지 (PWA renderDailyOzPick 과 동일한 개인화 조건 충족).
+        fun matchedTheme(card: CardDto): String? {
+            if (chosenThemes.isEmpty()) return null
+            return CardTheme.cardThemeSet(card.keywordList()).firstOrNull { it in chosenThemes }
+        }
+
         val cached = runCatching { AppPreferences.ozDailyCardId(today) }.getOrNull()
             ?.let { id -> cards.firstOrNull { it.cardId == id } }
-        if (cached != null && (taste.isEmpty() || cached.keywordList().any { it in taste })) return cached
+        if (cached != null) {
+            val keep = if (chosenThemes.isNotEmpty()) matchedTheme(cached) != null
+                else taste.isEmpty() || cached.keywordList().any { it in taste }
+            if (keep) return cached
+        }
 
-        val matched = if (taste.isEmpty()) emptyList()
-            else cards.filter { card -> card.keywordList().any { it in taste } }
-        val pick = (matched.ifEmpty { cards }).random(Random.Default)
+        val pool = when {
+            chosenThemes.isNotEmpty() -> {
+                var matched = cards.filter { matchedTheme(it) != null }
+                if (chosenGenres.isNotEmpty()) {
+                    val both = matched.filter { it.works?.format in chosenGenres }
+                    if (both.isNotEmpty()) matched = both // 주제+장르 둘 다 맞으면 우선
+                }
+                matched.ifEmpty { cards }
+            }
+            taste.isNotEmpty() -> cards.filter { card -> card.keywordList().any { it in taste } }.ifEmpty { cards }
+            else -> cards
+        }
+        val pick = pool.random(Random.Default)
         runCatching { AppPreferences.setOzDailyCard(today, pick.cardId) }
         return pick
     }
@@ -124,6 +160,7 @@ data class DailyState(
     val notices: List<Notice> = emptyList(),
     val bookmarkCounts: Map<Long, Int> = emptyMap(),
     val commentCounts: Map<Long, Int> = emptyMap(),
+    val prefs: UserPrefs? = null,
     val ozPick: CardDto? = null,
     val error: String? = null,
 )

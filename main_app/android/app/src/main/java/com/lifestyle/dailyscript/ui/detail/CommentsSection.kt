@@ -62,12 +62,16 @@ fun CommentsSection(
     isAnonymous: Boolean,
     submitting: Boolean,
     replyingTo: Comment?,
+    editingCommentId: Long?,
     commentsError: String?,
     onSubmit: (String) -> Unit,
     onToggleLike: (Long) -> Unit,
     onDelete: (Long) -> Unit,
     onStartReply: (Comment) -> Unit,
     onCancelReply: () -> Unit,
+    onStartEdit: (Long) -> Unit,
+    onCancelEdit: () -> Unit,
+    onSaveEdit: (Long, String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -76,6 +80,52 @@ fun CommentsSection(
             color = Walnut,
         )
         Box(modifier = Modifier.height(16.dp))
+
+        // PWA 상세: 댓글 목록이 먼저, 입력 영역은 그 아래.
+        if (comments.isEmpty()) {
+            Text(
+                text = "아직 댓글이 없어요. 첫 감상을 남겨보세요.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Walnut,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            )
+        } else {
+            groupComments(comments).forEach { (top, replies) ->
+                CommentRow(
+                    comment = top,
+                    isReply = false,
+                    likeUsers = likes[top.commentId] ?: emptySet(),
+                    myUserId = myUserId,
+                    isAnonymous = isAnonymous,
+                    editing = top.commentId == editingCommentId,
+                    onToggleLike = onToggleLike,
+                    onDelete = onDelete,
+                    onReply = onStartReply,
+                    onStartEdit = onStartEdit,
+                    onCancelEdit = onCancelEdit,
+                    onSaveEdit = onSaveEdit,
+                )
+                replies.forEach { reply ->
+                    CommentRow(
+                        comment = reply,
+                        isReply = true,
+                        likeUsers = likes[reply.commentId] ?: emptySet(),
+                        myUserId = myUserId,
+                        isAnonymous = isAnonymous,
+                        editing = reply.commentId == editingCommentId,
+                        onToggleLike = onToggleLike,
+                        onDelete = onDelete,
+                        onReply = onStartReply,
+                        onStartEdit = onStartEdit,
+                        onCancelEdit = onCancelEdit,
+                        onSaveEdit = onSaveEdit,
+                    )
+                }
+            }
+        }
+
+        Box(modifier = Modifier.height(20.dp))
 
         if (isAnonymous) {
             Text(
@@ -97,43 +147,6 @@ fun CommentsSection(
         commentsError?.let {
             Box(modifier = Modifier.height(8.dp))
             Text(text = it, color = Cta, style = MaterialTheme.typography.bodySmall)
-        }
-
-        Box(modifier = Modifier.height(20.dp))
-
-        if (comments.isEmpty()) {
-            Text(
-                text = "아직 댓글이 없어요. 첫 감상을 남겨보세요.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Walnut,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            )
-        } else {
-            groupComments(comments).forEach { (top, replies) ->
-                CommentRow(
-                    comment = top,
-                    isReply = false,
-                    likeUsers = likes[top.commentId] ?: emptySet(),
-                    myUserId = myUserId,
-                    isAnonymous = isAnonymous,
-                    onToggleLike = onToggleLike,
-                    onDelete = onDelete,
-                    onReply = onStartReply,
-                )
-                replies.forEach { reply ->
-                    CommentRow(
-                        comment = reply,
-                        isReply = true,
-                        likeUsers = likes[reply.commentId] ?: emptySet(),
-                        myUserId = myUserId,
-                        isAnonymous = isAnonymous,
-                        onToggleLike = onToggleLike,
-                        onDelete = onDelete,
-                        onReply = onStartReply,
-                    )
-                }
-            }
         }
     }
 }
@@ -236,6 +249,7 @@ private fun CommentComposer(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CommentRow(
     comment: Comment,
@@ -243,9 +257,13 @@ private fun CommentRow(
     likeUsers: Set<Long>,
     myUserId: Long,
     isAnonymous: Boolean,
+    editing: Boolean,
     onToggleLike: (Long) -> Unit,
     onDelete: (Long) -> Unit,
     onReply: (Comment) -> Unit,
+    onStartEdit: (Long) -> Unit,
+    onCancelEdit: () -> Unit,
+    onSaveEdit: (Long, String) -> Unit,
 ) {
     val likedByMe = myUserId in likeUsers
     val isMine = comment.userId == myUserId
@@ -276,6 +294,16 @@ private fun CommentRow(
             )
         }
         Box(modifier = Modifier.height(6.dp))
+
+        if (editing) {
+            CommentEditor(
+                initial = comment.body,
+                onCancel = onCancelEdit,
+                onSave = { onSaveEdit(comment.commentId, it) },
+            )
+            return@Column
+        }
+
         Text(
             text = comment.body,
             style = MaterialTheme.typography.bodyMedium,
@@ -313,14 +341,68 @@ private fun CommentRow(
                 }
             }
             if (isMine) {
-                Text(
-                    text = "DELETE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Walnut,
-                    modifier = Modifier.clickable { onDelete(comment.commentId) },
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "EDIT",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Walnut,
+                        modifier = Modifier
+                            .clickable { onStartEdit(comment.commentId) }
+                            .padding(end = 14.dp),
+                    )
+                    Text(
+                        text = "DELETE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Walnut,
+                        modifier = Modifier.clickable { onDelete(comment.commentId) },
+                    )
+                }
             }
         }
+    }
+}
+
+/** Inline editor for one's own comment (PWA comment-edit-input + Save/Cancel). */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CommentEditor(initial: String, onCancel: () -> Unit, onSave: (String) -> Unit) {
+    var text by remember(initial) { mutableStateOf(initial) }
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Paper, shape)
+            .border(0.5.dp, Latte, shape)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        BasicTextField(
+            value = text,
+            onValueChange = { if (it.length <= 500) text = it },
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = Espresso),
+            cursorBrush = SolidColor(Cta),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+        )
+    }
+    Box(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "취소",
+            style = MaterialTheme.typography.labelSmall,
+            color = Walnut,
+            modifier = Modifier.clickable { onCancel() }.padding(vertical = 4.dp),
+        )
+        Text(
+            text = "저장",
+            style = MaterialTheme.typography.labelSmall,
+            color = Cta,
+            modifier = Modifier
+                .clickable { if (text.isNotBlank()) onSave(text) }
+                .padding(vertical = 4.dp),
+        )
     }
 }
 
