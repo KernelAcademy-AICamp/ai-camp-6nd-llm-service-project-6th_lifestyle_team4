@@ -160,8 +160,8 @@ struct CardDetailView: View {
         }
         .task {
             // 게이트/잠금 없음 — 모든 카드 자유 열람(PWA openDetail / Android YarnGate 미러).
-            // 카드당 1회 첫 열람 시에만 실타래 +1 지급.
-            await yarn.rewardFirstOpen(cardId: card.cardId)
+            // 카드당 1회 첫 열람 시에만 실타래 +1 지급(서버 dedup).
+            await yarn.rewardFirstOpen(cardId: card.cardId, userId: session.userId)
             await loadCountsAndIncrementView()
         }
         .overlay {
