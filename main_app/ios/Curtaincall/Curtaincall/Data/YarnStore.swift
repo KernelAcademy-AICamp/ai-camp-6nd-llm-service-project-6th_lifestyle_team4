@@ -2,28 +2,39 @@ import Foundation
 import Combine
 
 /// 실타래(yarn) economy — faithful port of the PWA yarn module
-/// (`web_pwa/public/m/assets/m-app.js`) and Android `YarnGate`/`YarnViewModel`.
-///
-/// 사용자 명세(2026-06): **카드 열람 게이트/팝업은 제거됐다 — 모든 카드 자유 열람.**
-/// 실타래는 차감되지 않고, 카드 1개당 1회 첫 열람 시에만 **+1** 지급된다.
+/// (`web_pwa/public/m/assets/m-app.js`, yarn section) and the PWA `spendYarn`
+/// mechanics (`YARN_UNLOCK_WINDOW_MS`, `ds.yarnUnlocked`).
 ///
 /// - **Balance** = server `users.yarn_balance` only (no daily-free allotment — the
-///   old 5/day was removed). Updated from the grant RPC return; seeded once from
+///   old 5/day was removed). Updated from the RPC returns; seeded once from
 ///   `AuthSession` at bootstrap via `sync(serverBalance:)`.
-/// - **First-open reward**: +1 once per card, deduped locally via `ds.yarnRewarded`.
-/// - **Spend/charge**: yarn is only **earned** (first-open) and **purchased**
-///   (mock grant). There is no spend path — opening a card never consumes yarn.
+/// - **Earn**: +1 once per card on first open (server-deduped via
+///   `reward_yarn_first_view`; local `ds.yarnRewarded` is a per-account RPC cache).
+/// - **Spend (gate)**: opening a card costs 1 (`consume_yarn`) unless it's already
+///   unlocked (opened within the last 3 days) or the coach tour is active. A
+///   per-card unlock (`ds.yarnUnlocked`, 3-day window) makes re-opens free.
+/// - **Purchase**: mock `grant_yarn` (no StoreKit) + the attendance +5 reward.
 @MainActor
 final class YarnStore: ObservableObject {
 
-    /// 충전/보상 후 잔액(서버 권위값). 칩 표시의 단일 출처.
+    /// 차감/충전/보상 후 잔액(서버 권위값). 칩 표시의 단일 출처.
     @Published private(set) var balance = 0
+
+    /// 카드 열람 게이트 판정.
+    enum GateDecision {
+        case allowed   // 무료(언락/투어) 또는 차감 성공 → 열람
+        case blocked   // 잔액 부족 → 충전 유도, 열람 차단
+    }
 
     /// 구매 티어 [실타래 개수, 원]. PWA `YARN_TIERS` 와 동일.
     static let tiers: [(count: Int, won: Int)] =
         [(1, 100), (10, 1000), (21, 2000), (32, 3000), (113, 10000)]
 
-    private let rewardedKey = "ds.yarnRewarded"   // [cardId: epochSeconds]
+    /// 카드당 무료 재열람 창 — 3일 (PWA `YARN_UNLOCK_WINDOW_MS`).
+    private let unlockWindow: TimeInterval = 3 * 24 * 60 * 60
+
+    private let rewardedKey = "ds.yarnRewarded"   // [userId:cardId: epochSeconds]
+    private let unlockedKey = "ds.yarnUnlocked"   // [userId:cardId: epochSeconds]
     private let defaults = UserDefaults.standard
 
     // MARK: - Balance
@@ -31,21 +42,36 @@ final class YarnStore: ObservableObject {
     /// 부트스트랩에서 로드한 서버 잔액으로 시드 (RootView 에서 호출).
     func sync(serverBalance: Int) { balance = serverBalance }
 
-    // MARK: - First-open reward (+1, once per card)
+    // MARK: - Local caches (keyed per-account)
 
     /// 로컬 캐시 키 — **반드시 userId 별로 구분**한다. card id 만으로 키를 잡으면
-    /// 같은 기기에서 A가 받은 카드를 B(다른 계정)가 열 때 RPC 호출이 스킵돼
-    /// B의 정당한 보상이 누락된다(서버 dedup 은 (user_id, card_id) 단위라 안전한데도).
-    private func rewardKey(userId: Int, cardId: Int) -> String { "\(userId):\(cardId)" }
+    /// 같은 기기에서 A가 받은/연 카드를 B(다른 계정)가 열 때 보상 RPC 가 스킵되거나
+    /// (보상 누락) B가 A의 언락을 공짜로 물려받는다. reward·unlock 둘 다 이 키를 쓴다.
+    private func cacheKey(userId: Int, cardId: Int) -> String { "\(userId):\(cardId)" }
 
     func isCardRewarded(cardId: Int, userId: Int) -> Bool {
-        rewardedMap()[rewardKey(userId: userId, cardId: cardId)] != nil
+        rewardedMap()[cacheKey(userId: userId, cardId: cardId)] != nil
     }
 
     private func markCardRewarded(cardId: Int, userId: Int) {
         var map = rewardedMap()
-        map[rewardKey(userId: userId, cardId: cardId)] = Date().timeIntervalSince1970
+        map[cacheKey(userId: userId, cardId: cardId)] = Date().timeIntervalSince1970
         defaults.set(map, forKey: rewardedKey)
+    }
+
+    // MARK: - Per-card 3-day unlock (mirror PWA ds.yarnUnlocked)
+
+    func isCardUnlocked(cardId: Int, userId: Int) -> Bool {
+        guard let ts = unlockedMap()[cacheKey(userId: userId, cardId: cardId)] else { return false }
+        return Date().timeIntervalSince1970 - ts < unlockWindow
+    }
+
+    private func markCardUnlocked(cardId: Int, userId: Int) {
+        var map = unlockedMap()
+        let now = Date().timeIntervalSince1970
+        map = map.filter { now - $0.value < unlockWindow }   // 만료 항목 정리 (PWA 동일)
+        map[cacheKey(userId: userId, cardId: cardId)] = now
+        defaults.set(map, forKey: unlockedKey)
     }
 
     // MARK: - Reward
@@ -66,6 +92,26 @@ final class YarnStore: ObservableObject {
         }
     }
 
+    // MARK: - Open gate (spend)
+
+    /// 카드 열람 게이트 (PWA `spendYarn` 미러).
+    ///   · 3일 내 언락 카드 / 코치 투어 중 → 무료 (차감 없음)
+    ///   · 그 외 → `consume_yarn` 1 차감. −1(잔액 부족)이면 `.blocked`(미차감).
+    /// 네트워크 오류 시엔 하드 잠금을 피하려 열되, 차감/언락 마킹은 하지 않는다(다음 열람에 재평가).
+    func gateOpen(cardId: Int, userId: Int?, tourActive: Bool) async -> GateDecision {
+        if let userId, isCardUnlocked(cardId: cardId, userId: userId) { return .allowed }
+        if tourActive { return .allowed }
+        do {
+            let newBalance = try await Supa.shared.consumeYarn()
+            if newBalance < 0 { return .blocked }   // 잔액 부족 — 미차감
+            balance = newBalance
+            if let userId { markCardUnlocked(cardId: cardId, userId: userId) }
+            return .allowed
+        } catch {
+            return .allowed   // fail-open: 일시 오류로 독자를 잠그지 않음 (미차감/미언락)
+        }
+    }
+
     /// 실타래 충전 — 구매 mock("준비 중") + 출석체크 보상(+5) 공용 진입점.
     /// `grant_yarn` 노출(attendance UI 는 이후 PR 에서 호출). 성공 시 true.
     @discardableResult
@@ -82,6 +128,7 @@ final class YarnStore: ObservableObject {
     // MARK: - Storage helpers
 
     private func rewardedMap() -> [String: Double] { map(forKey: rewardedKey) }
+    private func unlockedMap() -> [String: Double] { map(forKey: unlockedKey) }
 
     private func map(forKey key: String) -> [String: Double] {
         guard let raw = defaults.dictionary(forKey: key) else { return [:] }
