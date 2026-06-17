@@ -150,9 +150,12 @@ struct RootView: View {
     /// present a free random-quote peek.
     private func handleShake() {
         guard scenePhase == .active, session.ready, prefs.prefSelected else { return }
-        // Not already in a modal/peek/onboarding flow…
-        guard randomCard == nil, !showAttendance, !showArchivePrompt,
-              !session.needsProfileSetup else { return }
+        // Not in a Root-owned peek/onboarding flow (the archive prompt + onboarding
+        // are .overlay-based, so they aren't UIKit modals the check below sees)…
+        guard randomCard == nil, !showArchivePrompt, !session.needsProfileSetup else { return }
+        // …no UIKit modal anywhere — including child-view sheets RootView doesn't own
+        // (Feed composer/picker, My Page profile/attendance, any .alert)…
+        guard !ShakeGate.isPresentingModal() else { return }
         // …and not currently reading a detail screen on the active tab.
         guard activeTabPathIsEmpty else { return }
         // Debounce: ignore repeat motion events within 1.5s of the last shake.

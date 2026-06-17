@@ -37,3 +37,21 @@ extension View {
         modifier(DeviceShakeViewModifier(action: action))
     }
 }
+
+enum ShakeGate {
+    /// True when ANY UIKit modal is currently presented in the foreground scene —
+    /// SwiftUI `.sheet` / `.fullScreenCover`, `.alert`, action sheets, etc. Walks
+    /// the window's presentation chain, so it catches modals owned by child views
+    /// (e.g. Feed composer, My Page profile/attendance sheets) that RootView can't
+    /// see via its own @State. Used to suppress shake handling so the random peek is
+    /// never presented over an existing modal. (Navigation pushes are NOT modals, so
+    /// detail screens are handled separately by the active tab's NavigationPath.)
+    @MainActor
+    static func isPresentingModal() -> Bool {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        let keyWindow = scene?.windows.first { $0.isKeyWindow } ?? scene?.windows.first
+        return keyWindow?.rootViewController?.presentedViewController != nil
+    }
+}
