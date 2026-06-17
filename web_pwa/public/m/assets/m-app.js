@@ -2925,7 +2925,7 @@ function renderDailyNewBooks() {
         <div style="flex:1;min-width:0;">
           <p style="font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.04em;color:var(--sand);margin:0 0 13px;">${dailyDateLabel}</p>
           <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
-          <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:28px;margin:15px 0 9px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.25;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
+          <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:28px;margin:10px 0 7px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.25;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
           <p style="font-size:11px;color:var(--sand);margin:0 0 15px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year ? main.year + '년' : ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
           <p style="font-size:14px;color:var(--latte);margin:0;font-style:italic;line-height:1.75;font-family:'Noto Serif KR',serif;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
         </div>
