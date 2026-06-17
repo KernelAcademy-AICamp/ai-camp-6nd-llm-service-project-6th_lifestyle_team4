@@ -209,6 +209,8 @@ struct RootView: View {
         .environment(\.requestLogin) { selectedTab = .settings }
         // 카드 상세 '서재로 가기' → LIBRARY 탭으로 (requestLogin 패턴 동일).
         .environment(\.requestLibrary) { selectedTab = .archive }
+        // 카드 상세 '오늘의 한줄' 작성 후 → FEED 탭으로.
+        .environment(\.requestFeed) { selectedTab = .feed }
         // Hide the tab bar while the comment composer is focused (keyboard up),
         // so the input can pin directly above the keyboard; restore on blur.
         .onPreferenceChange(ComposerFocusedPreferenceKey.self) { active in

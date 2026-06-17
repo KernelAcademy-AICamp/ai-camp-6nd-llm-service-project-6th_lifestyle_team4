@@ -6,7 +6,12 @@ struct CardDetailView: View {
     let onLoginRequested: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.requestLibrary) private var requestLibrary
+    @Environment(\.requestFeed) private var requestFeed
     @State private var scrolledPast = false
+    // 오늘의 한줄 — 피드 한줄(feed_posts) 작성 (카드 댓글이 아님; Android DetailScreen 패리티).
+    @State private var showFeedCompose = false
+    @State private var feedSubmitting = false
+    @State private var feedComposeError: String?
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var yarn: YarnStore
@@ -164,11 +169,18 @@ struct CardDetailView: View {
                     Hairline()
                     Spacer().frame(height: 32)
 
-                    // 오늘의 한줄 남기기 — 기존 댓글 작성 흐름으로 (회원: 컴포저 포커스,
-                    // 익명: 로그인 프롬프트). 북마크 토글은 상단 바에 그대로 둔다.
+                    // 오늘의 한줄 남기기 — 이 카드로 피드 한줄(feed_posts)을 작성한다
+                    // (Android DetailScreen: FeedComposeSheet → submitFeedPost → 피드 이동).
+                    // 카드 댓글(card_comments)이 아님. 먼저 북마크를 보장하고(Android 동일),
+                    // 익명은 토스트만. 상단 바 북마크 토글은 그대로.
                     Button {
-                        if session.isAnonymous { showAccountPrompt = true }
-                        else { composerFocused = true }
+                        if session.isAnonymous {
+                            showHighlightToast("로그인 후 나의 감상평을 남길 수 있어요.")
+                        } else {
+                            if !bookmarked { toggleBookmark() }
+                            feedComposeError = nil
+                            showFeedCompose = true
+                        }
                     } label: {
                         Text("오늘의 한줄 남기기")
                     }
@@ -330,6 +342,41 @@ struct CardDetailView: View {
                 onCancel: { showHighlightSheet = false },
                 onSave: { note in Task { await saveHighlight(note: note) } }
             )
+        }
+        .sheet(isPresented: $showFeedCompose) {
+            FeedOneLinerComposeSheet(
+                card: card,
+                submitting: feedSubmitting,
+                errorMessage: feedComposeError
+            ) { body in
+                Task { await submitFeedOneLiner(body) }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// Writes a feed one-liner (feed_posts) for this card, then routes to Feed —
+    /// the existing `addFeedPost` write the Feed tab uses, no new logic.
+    private func submitFeedOneLiner(_ body: String) async {
+        let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !feedSubmitting, let uid = session.userId else { return }
+        feedSubmitting = true
+        feedComposeError = nil
+        do {
+            let nick = session.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await Supa.shared.addFeedPost(
+                cardId: card.cardId,
+                userId: uid,
+                body: text,
+                authorNickname: nick.isEmpty ? nil : nick
+            )
+            feedSubmitting = false
+            showFeedCompose = false
+            requestFeed()   // 작성 후 피드로 이동 (Android)
+        } catch {
+            feedSubmitting = false
+            feedComposeError = "등록 실패: \(error.localizedDescription)"
         }
     }
 
@@ -617,11 +664,91 @@ private struct RequestLibraryKey: EnvironmentKey {
     static let defaultValue: () -> Void = {}
 }
 
+private struct RequestFeedKey: EnvironmentKey {
+    static let defaultValue: () -> Void = {}
+}
+
 extension EnvironmentValues {
     /// Switch to the LIBRARY (Archive) tab — injected by RootView, mirroring
     /// `requestLogin`. Used by Card Detail's "서재로 가기" button.
     var requestLibrary: () -> Void {
         get { self[RequestLibraryKey.self] }
         set { self[RequestLibraryKey.self] = newValue }
+    }
+
+    /// Switch to the FEED tab — injected by RootView. Used after the Card Detail
+    /// "오늘의 한줄 남기기" feed-post submit routes to Feed.
+    var requestFeed: () -> Void {
+        get { self[RequestFeedKey.self] }
+        set { self[RequestFeedKey.self] = newValue }
+    }
+}
+
+/// Compact feed one-liner composer for the current card (Card Detail "오늘의 한줄").
+/// Mirrors FeedView's compose sheet; the actual write is `Supa.addFeedPost`.
+private struct FeedOneLinerComposeSheet: View {
+    let card: Card
+    let submitting: Bool
+    let errorMessage: String?
+    let onSubmit: (String) -> Void
+
+    @State private var draft = ""
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(card.work.displayTitle(original: false))
+                        .font(.headlineSerif(22))
+                        .foregroundStyle(.espresso)
+                        .lineLimit(1)
+                    Text("#\(card.cardId)").labelCaps(size: 10)
+                }
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(.walnut)
+                        .frame(width: 38, height: 38)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(20)
+            Hairline()
+            VStack(alignment: .leading, spacing: 12) {
+                Text("이 명대사에 대한 한줄을 남겨보세요.")
+                    .font(.bodySans(14))
+                    .foregroundStyle(.walnut)
+                TextEditor(text: $draft)
+                    .font(.bodySans(15))
+                    .foregroundStyle(.espresso)
+                    .frame(minHeight: 120)
+                    .padding(8)
+                    .scrollContentBackground(.hidden)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
+                    .onChange(of: draft) { _, v in if v.count > 300 { draft = String(v.prefix(300)) } }
+                Text("\(draft.count)/300자")
+                    .font(.bodySans(12))
+                    .foregroundStyle(.walnut)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                if let errorMessage {
+                    Text(errorMessage).font(.bodySans(12)).foregroundStyle(.cta)
+                }
+                Button { onSubmit(draft) } label: {
+                    Text(submitting ? "등록 중⋯" : "등록 하기")
+                        .opacity(canSubmit ? 1 : 0.45)
+                }
+                .buttonStyle(EditorialButtonStyle(.filled))
+                .disabled(!canSubmit)
+            }
+            .padding(20)
+        }
+        .background(Color.paper)
+    }
+
+    private var canSubmit: Bool {
+        !submitting && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
