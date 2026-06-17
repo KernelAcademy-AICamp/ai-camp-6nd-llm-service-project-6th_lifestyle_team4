@@ -19,7 +19,8 @@ struct FeedView: View {
     @State private var composeCard: Card?
     @State private var selectedCard: Card?
     @State private var selectedHighlight: CardHighlight?
-    @State private var quotePopupCard: Card?
+    @State private var detailPost: FeedPost?
+    @State private var toastMessage: String?
     @State private var isSubmitting = false
     @State private var composeError: String?
 
@@ -40,10 +41,6 @@ struct FeedView: View {
                         Text("피드")
                             .font(.displaySerif(32))
                             .foregroundStyle(.espresso)
-                        Spacer().frame(height: 6)
-                        Text("매일 한 문장, 그리고 기억에 남은 장면들")
-                            .font(.bodySans(12))
-                            .foregroundStyle(.walnut)
                         Spacer().frame(height: 18)
                         categoryChips
                         Spacer().frame(height: 20)
@@ -56,7 +53,12 @@ struct FeedView: View {
                         if isLoading && isEmpty {
                             centeredNote("불러오는 중⋯")
                         } else if isEmpty {
-                            centeredNote(category.emptyText)
+                            // 나의 감상평이 비면 FEED_SAMPLES 폴백, 하이라이트는 안내문.
+                            if category == .today {
+                                feedSamples
+                            } else {
+                                centeredNote(category.emptyText)
+                            }
                         } else {
                             feedList
                         }
@@ -65,8 +67,6 @@ struct FeedView: View {
                     .padding(.horizontal, 20)
                 }
                 .refreshable { await reload() }
-                // Tapping the active Feed tab: dismiss any pushed detail, snap to
-                // the top, and re-fetch — the same refresh as pull-to-refresh.
                 .onChange(of: reselect) { _, _ in
                     selectedCard = nil
                     selectedHighlight = nil
@@ -77,17 +77,28 @@ struct FeedView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+        // 글쓰기 말풍선 pill — 로그인 여부와 무관하게 항상 표시 (비로그인은 토스트만).
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !session.isAnonymous {
-                HStack {
-                    Spacer()
-                    feedActionButton
-                }
-                .padding(.top, 12)
-                .padding(.trailing, 20)
-                .padding(.bottom, 16)
-                .background(Color.paper)
-                .overlay(alignment: .top) { Hairline() }
+            HStack {
+                Spacer()
+                writePill
+            }
+            .padding(.top, 12)
+            .padding(.trailing, 20)
+            .padding(.bottom, 16)
+            .background(Color.paper)
+            .overlay(alignment: .top) { Hairline() }
+        }
+        .overlay(alignment: .bottom) {
+            if let toastMessage {
+                Text(toastMessage)
+                    .font(.bodySans(13))
+                    .foregroundStyle(Color.paper)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.espresso))
+                    .padding(.bottom, 130)
+                    .transition(.opacity)
             }
         }
         .navigationDestination(item: $selectedCard) { card in
@@ -95,9 +106,6 @@ struct FeedView: View {
                 selectedTab = .settings
             }
         }
-        // Tapping a highlight opens its detail (comments/replies/likes); "카드 보기"
-        // inside routes back through selectedCard so the card push reuses the
-        // destination above (one Card destination per stack).
         .navigationDestination(item: $selectedHighlight) { highlight in
             HighlightDetailView(highlight: highlight) { card in
                 selectedCard = card
@@ -130,30 +138,55 @@ struct FeedView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .overlay {
-            if let quotePopupCard {
-                FeedQuotePopup(card: quotePopupCard) {
-                    self.quotePopupCard = nil
-                }
+        // 포스트 탭 → 인용 팝업 대신 상세 시트 (Android FeedPostDetailSheet).
+        .sheet(item: $detailPost) { post in
+            FeedPostDetailSheet(post: post) { card in
+                detailPost = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { selectedCard = card }
             }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
-    private var feedActionButton: some View {
-        Button { showPicker = true } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 22, weight: .regular))
-                .foregroundStyle(Color.paper)
-                .frame(width: 56, height: 56)
-                .background(Circle().fill(Color.espresso))
-                .shadow(color: Color.black.opacity(0.20), radius: 8, x: 0, y: 4)
+    // 글쓰기 말풍선 pill (cat_pen 고양이가 "글쓰기"라 말하는 듯한 모양). 익명은 토스트만.
+    private var writePill: some View {
+        Button {
+            if session.isAnonymous {
+                showToast(category == .highlight
+                          ? "로그인 후 하이라이트를 남길 수 있어요."
+                          : "로그인 후 나의 감상평을 남길 수 있어요.")
+            } else {
+                showPicker = true
+            }
+        } label: {
+            VStack(alignment: .trailing, spacing: 0) {
+                HStack(spacing: 6) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(.espresso)
+                    Text("글쓰기")
+                        .font(.custom("Pretendard-Medium", size: 14))
+                        .foregroundStyle(.espresso)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 18).fill(Color.paper))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.espresso, lineWidth: 1.5))
+                BubbleTail()
+                    .fill(Color.paper)
+                    .overlay(BubbleTail().stroke(Color.espresso, lineWidth: 1.5))
+                    .frame(width: 16, height: 9)
+                    .padding(.trailing, 18)
+                    .offset(y: -1.5)   // overlap the bubble border so the top edge is hidden
+            }
         }
         .buttonStyle(.plain)
     }
 
     private var categoryChips: some View {
         HStack(spacing: 8) {
-            FeedChip(title: "오늘의 한줄", isSelected: category == .today) {
+            FeedChip(title: "나의 감상평", isSelected: category == .today) {
                 category = .today
             }
             FeedChip(title: "하이라이트", isSelected: category == .highlight) {
@@ -167,9 +200,7 @@ struct FeedView: View {
             switch category {
             case .today:
                 ForEach(posts) { post in
-                    FeedPostCard(post: post) {
-                        if let card = post.card { quotePopupCard = card }
-                    }
+                    FeedPostCard(post: post) { detailPost = post }
                 }
             case .highlight:
                 ForEach(highlights) { highlight in
@@ -181,6 +212,15 @@ struct FeedView: View {
         }
     }
 
+    // 빈 피드 폴백 — Android FEED_SAMPLES 예시 글(탭 불가, 표지·댓글 없음).
+    private var feedSamples: some View {
+        VStack(spacing: 12) {
+            ForEach(FeedSample.all) { sample in
+                FeedSampleCard(sample: sample)
+            }
+        }
+    }
+
     private func centeredNote(_ text: String) -> some View {
         Text(text)
             .font(.bodySans(14))
@@ -188,6 +228,13 @@ struct FeedView: View {
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 60)
+    }
+
+    private func showToast(_ message: String) {
+        withAnimation { toastMessage = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            withAnimation { if toastMessage == message { toastMessage = nil } }
+        }
     }
 
     private func reload() async {
@@ -258,7 +305,7 @@ private enum FeedCategory {
         case .today:
             return "아직 올라온 한줄이 없어요.\n첫 글을 남겨보세요."
         case .highlight:
-            return "아직 하이라이트가 없어요."
+            return "아직 하이라이트가 없어요. 명대사 본문을 길게 눌러 저장해보세요."
         }
     }
 
@@ -267,7 +314,7 @@ private enum FeedCategory {
         case .today:
             return "어떤 명대사에 한줄을 남길까요?"
         case .highlight:
-            return "어떤 카드로 이동할까요?"
+            return "어떤 카드에 하이라이트를 남길까요?"
         }
     }
 }
@@ -291,6 +338,18 @@ private struct FeedChip: View {
     }
 }
 
+/// Speech-bubble tail triangle pointing down-right (Android Canvas tail).
+private struct BubbleTail: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: 0))
+        p.addLine(to: CGPoint(x: rect.width, y: 0))
+        p.addLine(to: CGPoint(x: rect.width * 0.38, y: rect.height))
+        p.closeSubpath()
+        return p
+    }
+}
+
 private struct FeedInlineError: View {
     let message: String
 
@@ -305,6 +364,36 @@ private struct FeedInlineError: View {
     }
 }
 
+/// Post card header — avatar + nickname + "한 줄 리뷰 · time". Shared by the real
+/// post card, the sample card, and the detail sheet.
+private struct FeedPostHeader: View {
+    let nickname: String
+    let timeText: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(Color.latte)
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(.walnut)
+            }
+            .frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(nickname)
+                    .font(.bodySans(15))
+                    .foregroundStyle(.espresso)
+                    .lineLimit(1)
+                Text("한 줄 리뷰 · \(timeText)")
+                    .font(.bodySans(11))
+                    .foregroundStyle(.roast)
+            }
+            Spacer()
+        }
+        .padding(16)
+    }
+}
+
 private struct FeedPostCard: View {
     let post: FeedPost
     let onTap: () -> Void
@@ -312,28 +401,10 @@ private struct FeedPostCard: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle().fill(Color.latte)
-                        Image(systemName: "pencil")
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(.walnut)
-                    }
-                    .frame(width: 42, height: 42)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(post.authorNickname?.ifEmpty("익명") ?? "익명")
-                            .font(.bodySans(15))
-                            .foregroundStyle(.espresso)
-                            .lineLimit(1)
-                        Text("한 줄 리뷰 · \(Self.relativeTime(post.createdAt))")
-                            .font(.bodySans(11))
-                            .foregroundStyle(.roast)
-                    }
-                    Spacer()
-                }
-                .padding(16)
-
+                FeedPostHeader(
+                    nickname: post.authorNickname?.ifEmpty("익명") ?? "익명",
+                    timeText: FeedTime.relative(post.createdAt)
+                )
                 Text(post.body)
                     .font(.headlineSerif(18))
                     .fontWeight(.bold)
@@ -342,45 +413,97 @@ private struct FeedPostCard: View {
                     .bookLeading(size: 18)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 28)
-                    .padding(.vertical, 36)
-                    .background(Color.feedCard)
+                    .padding(.vertical, 40)
+                    .background(Color.cardWarm)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(post.card?.work.feedTitle ?? "—")
-                        .font(.bodySans(15))
-                        .foregroundStyle(.espresso)
-                        .lineLimit(1)
-                    if let author = post.card?.work.author, !author.isEmpty {
-                        Text(author)
-                            .font(.bodySans(13))
-                            .foregroundStyle(.walnut)
+                // 책 줄 + 초판 표지가 오른쪽 아래로 '빼꼼' (cover_url, 없으면 가죽 폴백).
+                ZStack(alignment: .bottomTrailing) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(post.card?.work.feedTitle ?? "—")
+                            .font(.bodySans(15))
+                            .foregroundStyle(.espresso)
                             .lineLimit(1)
+                        if let author = post.card?.work.author, !author.isEmpty {
+                            Text(author)
+                                .font(.bodySans(13))
+                                .foregroundStyle(.walnut)
+                                .lineLimit(1)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .padding(.trailing, 68)   // keep the title clear of the cover
+                    WorkCover(work: post.card?.work, width: 60, height: 86, compact: true)
+                        .padding(.trailing, 20)
+                        .offset(y: 20)        // peek below the clipped card edge
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
+            .background(Color.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: Color.black.opacity(0.10), radius: 6, x: 0, y: 3)
         }
         .buttonStyle(.plain)
     }
+}
 
-    private static func relativeTime(_ iso: String) -> String {
-        guard let date = parseISODate(iso) else { return "" }
-        let diff = max(0, Date.now.timeIntervalSince(date))
-        let minutes = Int(diff / 60)
-        if minutes < 1 { return "방금" }
-        if minutes < 60 { return "\(minutes)분 전" }
-        let hours = minutes / 60
-        if hours < 24 { return "\(hours)시간 전" }
-        let days = hours / 24
-        if days < 7 { return "\(days)일 전" }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "yyyy.MM.dd"
-        return f.string(from: date)
+/// Empty-feed sample card — same layout as a post, no cover/tap (Android FEED_SAMPLES).
+private struct FeedSample: Identifiable {
+    let nick: String
+    let timeAgo: String
+    let body: String
+    let title: String
+    let author: String
+    var id: String { nick }
+
+    static let all: [FeedSample] = [
+        .init(nick: "춤추는 늑대", timeAgo: "방금",
+              body: "처음 읽었을 때보다 다시 펼쳤을 때 더 좋았다.\n홈즈의 관찰력은 결국 사람을 향한 관심이라는 걸 이제야 알겠다.",
+              title: "셜록 홈즈", author: "아서 코난 도일"),
+        .init(nick: "별 보는 고양이", timeAgo: "12시간 전",
+              body: "사느냐 죽느냐, 그 한 줄 앞에서 한참을 멈췄다.\n오래된 문장인데 하나도 낡지 않았다.",
+              title: "햄릿", author: "윌리엄 셰익스피어"),
+        .init(nick: "댄싱 울프", timeAgo: "3시간 전",
+              body: "추리보다 인물이 남는 이야기.\n다 읽고 나면 사건은 잊혀도 그 새벽의 공기는 오래 기억에 남는다.",
+              title: "셜록 홈즈", author: "아서 코난 도일"),
+        .init(nick: "노래하는 강아지", timeAgo: "3일 전",
+              body: "아무 일도 일어나지 않는데 자꾸 마음이 움직인다.\n체호프는 늘 그런 식이다.",
+              title: "바냐 아저씨", author: "안톤 체호프"),
+        .init(nick: "책 읽는 여우", timeAgo: "5일 전",
+              body: "개츠비가 바라본 초록 불빛이 오늘따라 내 것처럼 느껴졌다.",
+              title: "위대한 개츠비", author: "F. 스콧 피츠제럴드"),
+    ]
+}
+
+private struct FeedSampleCard: View {
+    let sample: FeedSample
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            FeedPostHeader(nickname: sample.nick, timeText: sample.timeAgo)
+            Text(sample.body)
+                .font(.headlineSerif(18))
+                .fontWeight(.bold)
+                .foregroundStyle(.espresso)
+                .multilineTextAlignment(.center)
+                .bookLeading(size: 18)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 40)
+                .background(Color.cardWarm)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(sample.title).font(.bodySans(15)).foregroundStyle(.espresso).lineLimit(1)
+                Text(sample.author).font(.bodySans(13)).foregroundStyle(.walnut).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.paper)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: Color.black.opacity(0.10), radius: 6, x: 0, y: 3)
     }
 }
 
@@ -393,14 +516,31 @@ private struct HighlightFeedCard: View {
             VStack(alignment: .center, spacing: 0) {
                 Text(highlight.authorNickname?.ifEmpty("익명") ?? "익명")
                     .font(.bodySans(14))
+                    .fontWeight(.semibold)
                     .foregroundStyle(.espresso)
                     .lineLimit(1)
-                Spacer().frame(height: 6)
-                Text(metaText)
-                    .labelCaps(size: 10)
-                    .lineLimit(1)
+                if !metaText.isEmpty {
+                    Spacer().frame(height: 6)
+                    Text(metaText).labelCaps(size: 10).lineLimit(1)
+                }
                 Spacer().frame(height: 22)
-                HighlightBookCover(work: highlight.card?.work)
+                // 실제 초판 표지 (cover_url) → 없으면 가죽 폴백.
+                WorkCover(work: highlight.card?.work)
+                // 표지 아래 — 제목 + 작가 · 연도 (Android .hl-book-info).
+                Spacer().frame(height: 12)
+                Text(highlight.card?.work.title ?? "—")
+                    .font(.titleSerif(14))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.espresso)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                if !authorYear.isEmpty {
+                    Spacer().frame(height: 3)
+                    Text(authorYear)
+                        .font(.bodySans(11))
+                        .foregroundStyle(.walnut)
+                        .multilineTextAlignment(.center)
+                }
                 Spacer().frame(height: 22)
                 Text("“")
                     .font(.headlineSerif(22))
@@ -419,36 +559,31 @@ private struct HighlightFeedCard: View {
                     .foregroundStyle(.sand)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.trailing, 22)
-                if let note = highlight.userNote, !note.isEmpty {
-                    Spacer().frame(height: 12)
-                    Text(note)
-                        .font(.bodySans(13))
-                        .foregroundStyle(.walnut)
-                        .multilineTextAlignment(.center)
-                        .bookLeading(size: 13)
-                        .padding(.horizontal, 24)
-                }
-                Spacer().frame(height: 16)
+                // userNote 는 상세 시트에서만 (Android 패리티) — 카드에선 제거.
+                Spacer().frame(height: 18)
                 Text("#\(highlight.cardId)")
                     .labelCaps(size: 10)
             }
-            .padding(.top, 26)
+            .padding(.horizontal, 18)
+            .padding(.top, 28)
             .padding(.bottom, 24)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.feedCard))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
+            // 사각 모서리 + cardWarm + 0.5 latte 테두리 (Android HighlightCard).
+            .background(Color.cardWarm)
+            .overlay(Rectangle().stroke(Color.latte, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
     }
 
     private var metaText: String {
-        let format = highlight.card?.work.format.displayName
-        let date = highlight.createdDate.map(Self.dateText)
-        return [format, date]
-            .compactMap { value in
-                guard let value, !value.isEmpty else { return nil }
-                return value
-            }
+        [highlight.card?.work.format.displayName, highlight.createdDate.map(Self.dateText)]
+            .compactMap { v in (v?.isEmpty == false) ? v : nil }
+            .joined(separator: "  ·  ")
+    }
+
+    private var authorYear: String {
+        [highlight.card?.work.author, highlight.card?.work.releaseYear.map(String.init)]
+            .compactMap { v in (v?.isEmpty == false) ? v : nil }
             .joined(separator: " · ")
     }
 
@@ -460,6 +595,77 @@ private struct HighlightFeedCard: View {
     }
 }
 
+/// Post detail sheet (Android FeedPostDetailSheet). Shows the review + its source
+/// card; "원문 카드 보기" opens the full card. NOTE: the feed_post_comments list/compose
+/// is deferred — iOS has no post-comments networking yet (separate backend PR).
+private struct FeedPostDetailSheet: View {
+    let post: FeedPost
+    let onOpenCard: (Card) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(.walnut)
+                        .frame(width: 38, height: 38)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    FeedPostHeader(
+                        nickname: post.authorNickname?.ifEmpty("익명") ?? "익명",
+                        timeText: FeedTime.relative(post.createdAt)
+                    )
+                    Text(post.body)
+                        .font(.headlineSerif(18))
+                        .fontWeight(.bold)
+                        .foregroundStyle(.espresso)
+                        .multilineTextAlignment(.center)
+                        .bookLeading(size: 18)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 32)
+                        .background(Color.cardWarm)
+                    if let card = post.card {
+                        HStack(alignment: .center, spacing: 14) {
+                            WorkCover(work: card.work, width: 56, height: 80, compact: true)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(card.work.feedTitle)
+                                    .font(.titleSerif(16))
+                                    .foregroundStyle(.espresso)
+                                    .lineLimit(2)
+                                if let author = card.work.author, !author.isEmpty {
+                                    Text(author).font(.bodySans(13)).foregroundStyle(.walnut).lineLimit(1)
+                                }
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 18)
+                        Button { onOpenCard(card) } label: {
+                            Text("원문 카드 보기")
+                        }
+                        .buttonStyle(EditorialButtonStyle(.outlined))
+                        .padding(.horizontal, 20)
+                    }
+                    Spacer().frame(height: 28)
+                }
+            }
+        }
+        .background(Color.paper)
+    }
+}
+
+/// Solid leather cover (used by HighlightDetailView / DailyDiscovery / ArchiveView).
+/// The feed now uses the shared `BookCover` (cover_url + leather); this stays for the
+/// other screens until they migrate (PR-I).
 struct HighlightBookCover: View {
     let work: Work?
 
@@ -508,9 +714,7 @@ struct HighlightBookCover: View {
         .frame(width: 132, height: 188)
     }
 
-    private var leatherHex: UInt32 {
-        Self.leatherColor(for: work?.title ?? "?")
-    }
+    private var leatherHex: UInt32 { Self.leatherColor(for: work?.title ?? "?") }
     private var leather: Color { Color(hex: leatherHex) }
     private var leatherShadow: Color { Self.blend(leatherHex, with: 0x000000, amount: 0.24) }
     private var leatherHighlight: Color { Self.blend(leatherHex, with: 0xFFFFFF, amount: 0.08) }
@@ -619,10 +823,7 @@ private struct FeedPickRow: View {
 
     private var metaText: String {
         [card.work.format.displayName, card.work.releaseYear.map(String.init)]
-            .compactMap { value in
-                guard let value, !value.isEmpty else { return nil }
-                return value
-            }
+            .compactMap { v in (v?.isEmpty == false) ? v : nil }
             .joined(separator: " · ")
     }
 
@@ -706,34 +907,21 @@ private struct FeedComposeSheet: View {
     }
 }
 
-private struct FeedQuotePopup: View {
-    let card: Card
-    let onClose: () -> Void
-
-    var body: some View {
-        ZStack {
-            Color.espresso.opacity(0.62)
-                .ignoresSafeArea()
-                .onTapGesture(perform: onClose)
-            VStack(spacing: 0) {
-                Text("“\(card.quote)”")
-                    .font(.headlineSerif(22))
-                    .foregroundStyle(.espresso)
-                    .multilineTextAlignment(.center)
-                    .bookLeading(size: 22)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer().frame(height: 18)
-                Text("— \(card.work.feedSource)")
-                    .labelCaps()
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 34)
-            .frame(maxWidth: 420)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
-            .padding(28)
-        }
+private enum FeedTime {
+    static func relative(_ iso: String) -> String {
+        guard let date = parseISODate(iso) else { return "" }
+        let diff = max(0, Date.now.timeIntervalSince(date))
+        let minutes = Int(diff / 60)
+        if minutes < 1 { return "방금" }
+        if minutes < 60 { return "\(minutes)분 전" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours)시간 전" }
+        let days = hours / 24
+        if days < 7 { return "\(days)일 전" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "yyyy.MM.dd"
+        return f.string(from: date)
     }
 }
 
