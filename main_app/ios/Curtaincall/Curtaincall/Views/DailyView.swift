@@ -10,6 +10,8 @@ struct DailyView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var heroNS
 
     @State private var allCards: [Card] = []
     @State private var trendingCounts: [Int: Int] = [:]
@@ -60,8 +62,14 @@ struct DailyView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+        // Hero morph: inject the surface namespace + per-card owner map to
+        // descendant cells (the Daily sections live in DailyDiscovery). nil under
+        // Reduce Motion disables it.
+        .environment(\.cardHeroNamespace, reduceMotion ? nil : heroNS)
+        .environment(\.cardHeroOwner, reduceMotion ? nil : heroOwner)
         .navigationDestination(for: Card.self) {
             CardDetailView(card: $0) { selectedTab = .settings }
+                .cardHeroDestination($0.cardId, in: heroNS, enabled: !reduceMotion)
         }
         .task { await load() }
         .task { await bookmarks.load(userId: session.userId) }
@@ -88,6 +96,36 @@ struct DailyView: View {
             .max { ($0.createdDate ?? .distantPast) < ($1.createdDate ?? .distantPast) }
         guard let latest, let card = latest.card else { return nil }
         return (card, latest.createdDate)
+    }
+
+    /// Assigns each card that appears in a *predictable* Daily section to exactly
+    /// one owner, by priority (newBooks > trending > oz > recent), so a card shown
+    /// in several sections morphs from a single cell. Cards absent from the map are
+    /// owned by the interactive Contextual cell (which DailyView can't predict).
+    /// Mirrors the sections' own derivations (buildNewBooks / trending score) so the
+    /// owner matches what each section actually renders.
+    private var heroOwner: [Int: DailyHeroSection] {
+        var owner: [Int: DailyHeroSection] = [:]
+        for book in buildNewBooks(allCards).prefix(9) where owner[book.representativeCard.cardId] == nil {
+            owner[book.representativeCard.cardId] = .newBooks
+        }
+        for id in trendingTopIDs() where owner[id] == nil {
+            owner[id] = .trending
+        }
+        if let id = ozCard?.cardId, owner[id] == nil { owner[id] = .oz }
+        if let id = recentBookmark?.card.cardId, owner[id] == nil { owner[id] = .recent }
+        return owner
+    }
+
+    /// Top-3 trending card ids — same scoring + tiebreak as `DailyTrendingSection`.
+    private func trendingTopIDs() -> [Int] {
+        allCards
+            .filter { !$0.quote.isEmpty }
+            .map { (id: $0.cardId,
+                    score: (trendingCounts[$0.cardId] ?? 0) * 10 + ($0.commentCount ?? 0) * 5 + ($0.viewCount ?? 0)) }
+            .sorted { $0.score != $1.score ? $0.score > $1.score : $0.id > $1.id }
+            .prefix(3)
+            .map(\.id)
     }
 
     private func load(force: Bool = false) async {

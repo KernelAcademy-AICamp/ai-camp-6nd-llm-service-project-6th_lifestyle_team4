@@ -5,6 +5,8 @@ struct HomeView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var heroNS
 
     @State private var allCards: [Card] = []
     @State private var todayCard: Card?
@@ -90,6 +92,7 @@ struct HomeView: View {
                             }
                             .buttonStyle(.plain)
                             .cardContextMenu(card)
+                            .cardHeroSource(card.cardId)
                         }
                     } else {
                         Text("새로고침하면 이전 카드가 여기에 쌓입니다.")
@@ -104,11 +107,15 @@ struct HomeView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+        // Hero morph: inject the surface namespace to descendant cells (nil under
+        // Reduce Motion disables the morph). Destination opts in explicitly below.
+        .environment(\.cardHeroNamespace, reduceMotion ? nil : heroNS)
         .navigationDestination(for: Card.self) {
             CardDetailView(card: $0) {
                 showAccountPrompt = false
                 selectedTab = .settings
             }
+            .cardHeroDestination($0.cardId, in: heroNS, enabled: !reduceMotion)
         }
         .navigationDestination(isPresented: $showNotice) { NoticeView() }
         .task { await loadOnce() }
@@ -146,6 +153,7 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .cardContextMenu(card)
+            .cardHeroSource(card.cardId)
 
             Button {
                 toggleBookmark(cardId: card.cardId)
