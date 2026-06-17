@@ -762,6 +762,15 @@ function buildShelfSection(group) {
   }
   wrap.appendChild(header);
 
+  // 작품 소개(intro) — 리스트에서 한눈에 채워짐 여부 확인 (편집은 카드 열어 '작품 정보'에서)
+  if (!isDeleteMode) {
+    const introVal = (work.intro || '').trim();
+    const introLine = document.createElement('p');
+    introLine.className = 'text-xs px-2 leading-snug ' + (introVal ? 'text-on-surface-variant' : 'text-amber-700');
+    introLine.textContent = introVal ? `📖 ${introVal}` : '📖 책 소개 없음 — 백필 또는 수동 입력 필요';
+    wrap.appendChild(introLine);
+  }
+
   // 책꽂이 행
   const bookshelf = document.createElement('div');
   bookshelf.className = 'bookshelf';
