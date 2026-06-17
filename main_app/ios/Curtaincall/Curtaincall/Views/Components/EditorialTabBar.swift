@@ -190,7 +190,7 @@ struct EditorialTabBar: View {
         VStack(spacing: 2) {
             ZStack {
                 Circle()
-                    .fill(active ? Color.espresso : Color.roast)
+                    .fill(Color.latte)
                     .frame(width: 54, height: 54)
                     .shadow(color: Color.black.opacity(0.18), radius: 4, x: 0, y: 2)
                 // 실타래가 메달리온을 가득 채우도록 fill+clip (이미지 좌우 투명 여백은 잘라낸다).
@@ -207,7 +207,7 @@ struct EditorialTabBar: View {
             Text(tab.title.uppercased())
                 .font(.custom("Pretendard-Medium", size: 10))
                 .tracking(1.6)
-                .foregroundStyle(active ? .espresso : .walnut)
+                .foregroundStyle(active ? .cta : .espresso)
                 .lineLimit(1)
                 .offset(y: -4)
         }

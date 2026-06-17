@@ -16,8 +16,6 @@ struct HomeView: View {
     @State private var isLoading = false
     @State private var fetchFailed = false
     @State private var showAccountPrompt = false
-    @State private var latestNotice: Notice?
-    @State private var showNotice = false
     @State private var bookmarkCounts: [Int: Int] = [:]
 
     var body: some View {
@@ -29,10 +27,6 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 32)
-                    if let latestNotice {
-                        NoticeBanner(notice: latestNotice) { showNotice = true }
-                        Spacer().frame(height: 24)
-                    }
                     Text(Self.formattedToday)
                         .labelCaps()
                         .frame(maxWidth: .infinity)
@@ -117,9 +111,7 @@ struct HomeView: View {
             }
             .cardHeroDestination($0.cardId, in: heroNS, enabled: !reduceMotion)
         }
-        .navigationDestination(isPresented: $showNotice) { NoticeView() }
         .task { await loadOnce() }
-        .task { await loadLatestNotice() }
         .task { await bookmarks.load(userId: session.userId) }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
@@ -248,13 +240,6 @@ struct HomeView: View {
         }
     }
 
-    private func loadLatestNotice() async {
-        do {
-            latestNotice = try await Supa.shared.fetchLatestNotice()
-        } catch {
-            latestNotice = nil
-        }
-    }
 
     /// 지난 기록 — recently shown cards (newest first), excluding the current one.
     private func buildRecent() -> [Card] {
@@ -351,55 +336,5 @@ private struct TodayCardBody: View {
             : "<\(displayTitle)>"
         let format = card.work.format.label(original: showOriginal)
         return format.isEmpty ? "— \(title)" : "— \(format) \(title)"
-    }
-}
-
-private struct NoticeBanner: View {
-    let notice: Notice
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(notice.tag.uppercased()).labelCaps(color: .cta)
-                    Text(notice.title)
-                        .font(.titleSerif(17))
-                        .foregroundStyle(.espresso)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(notice.body)
-                        .font(.bodySans(13))
-                        .foregroundStyle(.walnut)
-                        .lineLimit(2)
-                        .bookLeading(size: 13)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.sand)
-                    .padding(.top, 2)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(PressableCardStyle())
-    }
-}
-
-/// Subtle press feedback for tappable cards — a faint espresso wash on press,
-/// in design tokens (matches the EditorialButton press treatment).
-private struct PressableCardStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .overlay {
-                if configuration.isPressed {
-                    RoundedRectangle(cornerRadius: 8).fill(Color.espresso.opacity(0.06))
-                }
-            }
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }

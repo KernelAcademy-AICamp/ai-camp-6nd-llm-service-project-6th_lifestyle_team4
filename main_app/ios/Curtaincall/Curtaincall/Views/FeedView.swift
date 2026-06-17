@@ -343,7 +343,7 @@ private struct FeedPostCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 36)
-                    .background(Color(hex: 0xF4EFE6))
+                    .background(Color.feedCard)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(post.card?.work.feedTitle ?? "—")
@@ -435,7 +435,7 @@ private struct HighlightFeedCard: View {
             .padding(.top, 26)
             .padding(.bottom, 24)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: 0xF4EFE6)))
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.feedCard))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
         }
         .buttonStyle(.plain)

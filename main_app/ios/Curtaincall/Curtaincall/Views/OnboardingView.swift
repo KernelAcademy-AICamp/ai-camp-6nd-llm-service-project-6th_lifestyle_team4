@@ -176,7 +176,7 @@ struct OnboardingView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(selected ? Color.espresso : Color.paper)
+                    .fill(selected ? Color.espresso : Color.cardWarm)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
