@@ -119,9 +119,9 @@ struct MyPageView: View {
                     .buttonStyle(EditorialButtonStyle(.outlined))
 
                     // Account deletion (App Store Guideline 5.1.1(v)). Members
-                    // only, and gated behind a flag that stays OFF until the
-                    // delete-account Edge Function is deployed (no non-functional
-                    // control ships).
+                    // only, and gated behind a flag now enabled: the live
+                    // `delete_account()` Postgres RPC deletes the user's data +
+                    // auth.users row (no Edge Function involved).
                     if FeatureFlags.accountDeletionEnabled && !session.isAnonymous {
                         Spacer().frame(height: 16)
                         Button {
