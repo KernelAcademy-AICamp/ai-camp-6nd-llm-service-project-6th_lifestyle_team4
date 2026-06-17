@@ -2878,125 +2878,165 @@ function renderDailyNewBooks() {
   // 풀 크기 변경 시 idx 보정 (예: 9→8 줄면)
   if (_newbooksMainIdx >= sorted.length) _newbooksMainIdx = 0;
 
-  const renderBlock = (animate = false) => {
-    const main = sorted[_newbooksMainIdx];
-    if (!main) return;
-    const rest = sorted.filter((_, i) => i !== _newbooksMainIdx);
-    const sampleQuote = ((main.cards || [])[0]?.quote || '').slice(0, 60);
-    const mainWork = (main.cards || [])[0]?.works || { title: main.title, cover_url: null };
-    const applyHTML = () => {
-      sec.innerHTML = renderTemplate(main, rest, mainWork, sampleQuote);
-      attachClickHandlers(works);
-    };
-    if (animate) {
-      // 박스(button)는 고정. 내부 .daily-newbook-main-inner 만 좌측 아웃 → 우측 인.
-      const oldInner = sec.querySelector('.daily-newbook-main-inner');
-      if (oldInner) {
-        oldInner.style.transition = 'transform 380ms cubic-bezier(0.55, 0, 0.7, 1), opacity 300ms ease-in';
-        oldInner.style.transform = 'translateX(-40%)';
-        oldInner.style.opacity = '0';
-        setTimeout(() => {
-          applyHTML();
-          const newInner = sec.querySelector('.daily-newbook-main-inner');
-          if (newInner) {
-            newInner.style.transition = 'none';
-            newInner.style.transform = 'translateX(40%)';
-            newInner.style.opacity = '0';
-            requestAnimationFrame(() => {
-              newInner.style.transition = 'transform 420ms cubic-bezier(0.25, 0.8, 0.3, 1), opacity 340ms ease-out';
-              newInner.style.transform = 'translateX(0)';
-              newInner.style.opacity = '1';
-            });
-          }
-        }, 400);
-        return;
-      }
-    }
-    applyHTML();
+  // 카드 1장 — 가로 peek 캐러셀의 아이템(flex 86% + 스크롤 스냅). 폭이 100% 미만이라 옆 카드가 살짝 보임.
+  const cardHTML = (w, i) => {
+    const work = (w.cards || [])[0]?.works || { title: w.title, cover_url: null };
+    const sampleQuote = ((w.cards || [])[0]?.quote || '').slice(0, 60);
+    return `
+      <button type="button" class="daily-newbook-main" data-work-key="${escapeHtml(w.key)}" data-card-idx="${i}"
+        style="scroll-snap-align:center;flex:0 0 86%;display:block;background:var(--espresso);color:var(--paper);border:none;border-radius:14px;padding:20px 20px 24px;cursor:pointer;text-align:left;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;overflow:hidden;position:relative;">
+        <div class="daily-newbook-main-inner" style="display:flex;gap:16px;width:100%;align-items:center;">
+          <div style="flex:1;min-width:0;">
+            <p style="font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.04em;color:var(--sand);margin:0 0 12px;">${dailyDateLabel}</p>
+            <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
+            <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(w.series || displayTitle(w.title))}${w.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(w.subtitle)}</span>` : ''}</h3>
+            <p style="font-size:11px;color:var(--sand);margin:0 0 12px;letter-spacing:0.05em;">${escapeHtml(w.author || '')} · ${w.year ? w.year + '년' : ''} · ${escapeHtml(GENRE_LABEL[w.format] || '기타')}</p>
+            <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;font-family:'Noto Serif KR',serif;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
+          </div>
+          <!-- 책표지 — 얇은 베이지 림 + 그림자로 검은 표지 분리 (사용자 명세: 림 얇게) -->
+          <div style="flex-shrink:0;padding:1px;background:var(--latte);border-radius:2px;box-shadow:0 6px 18px rgba(0,0,0,0.5);">
+            ${dailyBookCoverHTML(work, { width: 88 })}
+          </div>
+        </div>
+      </button>`;
   };
 
-  const renderTemplate = (main, rest, mainWork, sampleQuote) => `
-    <div style="position:relative;">
-    <button type="button" class="daily-newbook-main" data-work-key="${escapeHtml(main.key)}"
-      style="display:block;width:100%;background:var(--espresso);color:var(--paper);border:none;padding:20px 20px 34px;cursor:pointer;text-align:left;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;overflow:hidden;position:relative;">
-      <div class="daily-newbook-main-inner" style="display:flex;gap:16px;width:100%;align-items:center;">
-        <div style="flex:1;min-width:0;">
-          <p style="font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.04em;color:var(--sand);margin:0 0 12px;">${dailyDateLabel}</p>
-          <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
-          <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:30px;margin:14px 0 8px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
-          <p style="font-size:11px;color:var(--sand);margin:0 0 12px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year || ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
-          <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;font-family:'Noto Serif KR',serif;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
-        </div>
-        <!-- 책표지 — 얇은 베이지 림 + 그림자로 검은 표지 분리 (사용자 명세: 림 얇게) -->
-        <div style="flex-shrink:0;padding:1px;background:var(--latte);border-radius:2px;box-shadow:0 6px 18px rgba(0,0,0,0.5);">
-          ${dailyBookCoverHTML(mainWork, { width: 88 })}
-        </div>
-      </div>
-    </button>
-    <!-- 페이지네이션 dots — 블랙 카드 하단에 오버레이 (카드 버튼 안에 중첩하면 button-in-button 무효라 래퍼에 absolute) -->
-    ${sorted.length > 1 ? `<div style="position:absolute;left:0;right:0;bottom:14px;display:flex;justify-content:center;gap:7px;">
-      ${sorted.map((_, i) => `<button type="button" data-dot-idx="${i}" aria-label="${i + 1}번째 새 책 보기" style="width:7px;height:7px;border-radius:50%;border:none;padding:0;cursor:pointer;background:${i === _newbooksMainIdx ? 'var(--paper)' : 'rgba(255,255,255,0.32)'};transition:background 0.2s;"></button>`).join('')}
-    </div>` : ''}
+  // 위치 표시 dots — 캐러셀 아래(밝은 페이지 배경)라 활성=espresso, 비활성=sand.
+  const dotsHTML = () => sorted.length > 1
+    ? `<div class="newbook-dots" style="display:flex;justify-content:center;gap:7px;padding:14px 0 0;">
+        ${sorted.map((_, i) => `<button type="button" data-dot-idx="${i}" aria-label="${i + 1}번째 새 책 보기" style="width:7px;height:7px;border-radius:50%;border:none;padding:0;cursor:pointer;background:${i === _newbooksMainIdx ? 'var(--espresso)' : 'var(--sand)'};transition:background 0.2s;"></button>`).join('')}
+      </div>`
+    : '';
+
+  // 작은 표지 줄(index) — 캐러셀과 다른 기능: 탭하면 해당 책으로 바로 점프(캐러셀을 그 카드로 스크롤).
+  // 캐러셀=넘겨보며 읽기, 이 줄=빠른 이동. 같은 9권이 양쪽에 나오지만 역할이 달라 함께 둔다(사용자 명세).
+  const stripHTML = () => sorted.length > 1
+    ? `<div class="newbook-strip" style="display:flex;gap:12px;overflow-x:auto;padding:18px 7% 4px;scrollbar-width:none;">
+        ${sorted.map((w, i) => {
+          const work = (w.cards || [])[0]?.works || { title: w.title, cover_url: null };
+          return `
+            <button type="button" class="newbook-strip-item" data-strip-idx="${i}" data-work-key="${escapeHtml(w.key)}"
+              style="background:transparent;border:none;cursor:pointer;flex-shrink:0;width:72px;text-align:center;padding:0;">
+              ${dailyBookCoverHTML(work, { width: 72 })}
+              <p style="font-size:11px;color:var(--espresso);margin:7px 0 0;font-weight:600;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;font-family:'Noto Serif KR',serif;">${escapeHtml(w.series || displayTitle(w.title))}</p>
+              <p style="font-size:10px;color:var(--walnut);margin:3px 0 0;line-height:1.3;">${escapeHtml(w.author || '')}</p>
+            </button>`;
+        }).join('')}
+      </div>`
+    : '';
+
+  // 가로 peek 캐러셀 — 86% 폭 카드 + 양옆 7% 패딩으로 다음/이전 카드가 살짝 보임. 스크롤-스냅으로 한 장씩 정렬.
+  const renderTemplate = () => `
+    <div class="newbook-carousel" style="display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:4px 7% 8px;">
+      ${sorted.map((w, i) => cardHTML(w, i)).join('')}
     </div>
-    <div style="display:flex;gap:12px;overflow-x:auto;padding:16px 0 8px;scrollbar-width:none;">
-      ${rest.map((w) => {
-        const work = (w.cards || [])[0]?.works || { title: w.title, cover_url: null };
-        return `
-          <button type="button" data-work-key="${escapeHtml(w.key)}"
-            style="background:transparent;border:none;cursor:pointer;flex-shrink:0;width:82px;text-align:center;padding:0;">
-            ${dailyBookCoverHTML(work, { width: 82 })}
-            <p style="font-size:11px;color:var(--espresso);margin:8px 0 0;font-weight:600;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;font-family:'Noto Serif KR',serif;">${escapeHtml(w.series || displayTitle(w.title))}</p>
-            <p style="font-size:10px;color:var(--walnut);margin:3px 0 0;line-height:1.3;">${escapeHtml(w.author || '')}</p>
-          </button>
-        `;
-      }).join('')}
-    </div>
+    ${dotsHTML()}
+    ${stripHTML()}
     <div style="height:36px;"></div>
   `;
 
-  const attachClickHandlers = (worksList) => {
-    sec.querySelectorAll('[data-work-key]').forEach((btn) => {
+  // 캐러셀 핸들러 — 카드 클릭(상세 모달)·dot 클릭(해당 카드로 스크롤)·스크롤 위치→dot 동기화·사용자 조작 시 자동재생 정지.
+  // 주의: 변수명 carousel — 전역 분석 함수 track() 과 충돌 방지(이전엔 track 으로 명명 금지).
+  const attachHandlers = () => {
+    const carousel = sec.querySelector('.newbook-carousel');
+    const dots = [...sec.querySelectorAll('[data-dot-idx]')];
+    const cards = carousel ? [...carousel.querySelectorAll('.daily-newbook-main')] : [];
+
+    const updateDots = (idx) => {
+      dots.forEach((d, i) => { d.style.background = i === idx ? 'var(--espresso)' : 'var(--sand)'; });
+    };
+    const scrollToIdx = (i, smooth = true) => {
+      const card = cards[i];
+      if (!card || !carousel) return;
+      const left = (card.offsetLeft + card.clientWidth / 2) - carousel.clientWidth / 2;
+      carousel.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });
+    };
+
+    // 가로 드래그(스와이프) 직후의 클릭은 상세 모달을 열지 않도록 가드.
+    let dragged = false, downX = 0;
+    if (carousel) {
+      carousel.addEventListener('pointerdown', (e) => { downX = e.clientX; dragged = false; }, { passive: true });
+      carousel.addEventListener('pointermove', (e) => { if (Math.abs(e.clientX - downX) > 10) dragged = true; }, { passive: true });
+    }
+    cards.forEach((btn) => {
       btn.addEventListener('click', () => {
+        if (dragged) { dragged = false; return; }
         const key = btn.dataset.workKey;
-        const w = worksList.find((x) => x.key === key);
+        const w = works.find((x) => x.key === key);
         if (!w) return;
         track('daily_newbook_clicked', { work_key: key });
         // daily 탭 그대로 머무름 + 팝업만 표시 (LIBRARY 이동 X). 실타래 게이트는 openDetail.
-        if (typeof openBookModal === 'function') openBookModal(w, worksList);
+        if (typeof openBookModal === 'function') openBookModal(w, works);
       });
     });
-    // 페이지네이션 dot — 누르면 자동 순환을 멈추고 해당 책 소개로 전환
-    sec.querySelectorAll('[data-dot-idx]').forEach((dot) => {
+
+    // dot 클릭 — 자동재생 멈추고 해당 카드로 스크롤.
+    dots.forEach((dot) => {
       dot.addEventListener('click', (e) => {
         e.stopPropagation();
-        const idx = parseInt(dot.dataset.dotIdx, 10);
-        if (Number.isNaN(idx) || idx === _newbooksMainIdx) return;
+        const i = parseInt(dot.dataset.dotIdx, 10);
+        if (Number.isNaN(i)) return;
         stopNewbooksRotation();
-        _newbooksMainIdx = idx;
-        renderBlock(true);
+        _newbooksMainIdx = i;
+        updateDots(i);
+        scrollToIdx(i);
       });
     });
+
+    // 작은 표지 줄 클릭 — 자동재생 멈추고 해당 책 카드로 캐러셀 점프(캐러셀과 다른 빠른 이동 기능).
+    sec.querySelectorAll('.newbook-strip-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        const i = parseInt(item.dataset.stripIdx, 10);
+        if (Number.isNaN(i)) return;
+        stopNewbooksRotation();
+        _newbooksMainIdx = i;
+        updateDots(i);
+        scrollToIdx(i);
+      });
+    });
+
+    // 스크롤 위치 → 가운데에 가장 가까운 카드 인덱스로 dot 동기화.
+    if (carousel) {
+      let rafId = null;
+      carousel.addEventListener('scroll', () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          const center = carousel.scrollLeft + carousel.clientWidth / 2;
+          let best = 0, bestD = Infinity;
+          cards.forEach((c, i) => {
+            const d = Math.abs((c.offsetLeft + c.clientWidth / 2) - center);
+            if (d < bestD) { bestD = d; best = i; }
+          });
+          if (best !== _newbooksMainIdx) { _newbooksMainIdx = best; updateDots(best); }
+        });
+      }, { passive: true });
+      // 사용자가 직접 만지면(터치/휠/포인터) 자동재생 정지.
+      ['touchstart', 'wheel', 'pointerdown'].forEach((ev) =>
+        carousel.addEventListener(ev, stopNewbooksRotation, { passive: true }));
+    }
+
+    return { scrollToIdx };
   };
 
   sec.style.display = 'block';
 
-  // 가장 큰 메인 카드 높이 측정 — 9개 후보 모두 offscreen 렌더해 max(height) 산출 → CSS var 로 적용.
-  // 카드마다 제목·인용 길이 달라 슬라이드 전환 시 화면이 튀는 문제 방지.
+  // 가장 큰 카드 높이 측정 — 9권 모두 실제 카드 폭(86%)으로 offscreen 렌더해 max(height) 산출 → CSS var 로 통일.
+  // 카드마다 제목·소개 길이 달라 peek 캐러셀에서 카드 높이가 들쭉날쭉하지 않도록.
   const measureMaxMainHeight = () => {
-    const width = sec.clientWidth || sec.getBoundingClientRect().width || 360;
+    const cardW = Math.round((sec.clientWidth || sec.getBoundingClientRect().width || 360) * 0.86);
     const probe = document.createElement('div');
-    probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;width:${width}px;pointer-events:none;`;
+    probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;width:${cardW}px;pointer-events:none;`;
     document.body.appendChild(probe);
     let max = 0;
     try {
       for (let i = 0; i < sorted.length; i++) {
-        const m = sorted[i];
-        const rest = sorted.filter((_, idx) => idx !== i);
-        const sq = ((m.cards || [])[0]?.quote || '').slice(0, 60);
-        const mw = (m.cards || [])[0]?.works || { title: m.title, cover_url: null };
-        probe.innerHTML = renderTemplate(m, rest, mw, sq);
+        probe.innerHTML = cardHTML(sorted[i], i);
         const btn = probe.querySelector('.daily-newbook-main');
-        if (btn) max = Math.max(max, btn.getBoundingClientRect().height);
+        if (btn) {
+          btn.style.flex = '0 0 100%';   // probe 는 flex 컨테이너가 아니므로 폭을 100%(=cardW)로 고정해 측정
+          btn.style.width = '100%';
+          max = Math.max(max, btn.getBoundingClientRect().height);
+        }
       }
     } finally {
       probe.remove();
@@ -3006,14 +3046,21 @@ function renderDailyNewBooks() {
   const maxH = measureMaxMainHeight();
   if (maxH > 0) sec.style.setProperty('--newbook-main-min-h', maxH + 'px');
 
-  renderBlock();
+  sec.innerHTML = renderTemplate();
+  const { scrollToIdx } = attachHandlers();
 
-  // 10초마다 메인 책 다음 인덱스 — 추가된 순서(최신 1번 → 오래된 9번) 순환, 슬라이드 인 애니메이션
+  // 초기 위치 — 직전 인덱스 카드로 바로 정렬(애니메이션 없이). 레이아웃 확정 후 스크롤.
+  const startIdx = _newbooksMainIdx < sorted.length ? _newbooksMainIdx : 0;
+  _newbooksMainIdx = startIdx;
+  requestAnimationFrame(() => scrollToIdx(startIdx, false));
+
+  // 10초마다 다음 카드로 자동 스크롤 — daily 탭 떠나거나 사용자가 만지면 정지.
   if (sorted.length > 1) {
     _newbooksTimer = setInterval(() => {
       if (state.currentView !== 'daily') { stopNewbooksRotation(); return; }
-      _newbooksMainIdx = (_newbooksMainIdx + 1) % sorted.length;
-      renderBlock(true);
+      const next = (_newbooksMainIdx + 1) % sorted.length;
+      _newbooksMainIdx = next;
+      scrollToIdx(next);
     }, 10000);
   }
 }
