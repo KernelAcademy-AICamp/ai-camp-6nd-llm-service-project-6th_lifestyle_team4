@@ -2920,18 +2920,18 @@ function renderDailyNewBooks() {
   // 단일 카드 + 아래 위치표시 dots + 작은 표지 줄(나머지). 좌우 스와이프로 카드 전환(아래 attachClickHandlers).
   const renderTemplate = (main, rest, mainWork, sampleQuote) => `
     <button type="button" class="daily-newbook-main" data-work-key="${escapeHtml(main.key)}"
-      style="display:block;width:100%;background:var(--espresso);color:var(--paper);border:none;border-radius:14px;padding:20px;cursor:pointer;text-align:left;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;overflow:hidden;position:relative;">
-      <div class="daily-newbook-main-inner" style="display:flex;gap:16px;width:100%;align-items:center;">
+      style="display:block;width:100%;background:var(--espresso);color:var(--paper);border:none;border-radius:14px;padding:24px 22px;cursor:pointer;text-align:left;min-height:var(--newbook-main-min-h,auto);box-sizing:border-box;overflow:hidden;position:relative;">
+      <div class="daily-newbook-main-inner" style="display:flex;gap:20px;width:100%;align-items:center;">
         <div style="flex:1;min-width:0;">
-          <p style="font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.04em;color:var(--sand);margin:0 0 10px;">${dailyDateLabel}</p>
+          <p style="font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.04em;color:var(--sand);margin:0 0 13px;">${dailyDateLabel}</p>
           <span style="display:inline-block;background:var(--cta);color:var(--paper);font-size:10px;letter-spacing:0.15em;font-weight:700;padding:4px 10px;border-radius:12px;">NEW · 새로 들어온 고전</span>
-          <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:28px;margin:12px 0 6px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.2;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
-          <p style="font-size:11px;color:var(--sand);margin:0 0 10px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year ? main.year + '년' : ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
-          <p style="font-size:13px;color:var(--latte);margin:0;font-style:italic;line-height:1.5;font-family:'Noto Serif KR',serif;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
+          <h3 style="font-family:'Noto Serif KR','Nanum Myeongjo',serif;font-size:28px;margin:15px 0 9px;color:var(--paper);font-weight:700;letter-spacing:-0.02em;line-height:1.25;">${escapeHtml(main.series || displayTitle(main.title))}${main.subtitle ? ` <span style="font-size:0.6em;color:var(--sand);font-weight:600;">${escapeHtml(main.subtitle)}</span>` : ''}</h3>
+          <p style="font-size:11px;color:var(--sand);margin:0 0 15px;letter-spacing:0.05em;">${escapeHtml(main.author || '')} · ${main.year ? main.year + '년' : ''} · ${escapeHtml(GENRE_LABEL[main.format] || '기타')}</p>
+          <p style="font-size:14px;color:var(--latte);margin:0;font-style:italic;line-height:1.75;font-family:'Noto Serif KR',serif;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">"${escapeHtml(sampleQuote)}${sampleQuote.length >= 60 ? '⋯' : ''}"</p>
         </div>
         <!-- 책표지 — 얇은 베이지 림 + 그림자로 검은 표지 분리 (사용자 명세: 림 얇게) -->
         <div style="flex-shrink:0;padding:1px;background:var(--latte);border-radius:2px;box-shadow:0 6px 18px rgba(0,0,0,0.5);">
-          ${dailyBookCoverHTML(mainWork, { width: 88 })}
+          ${dailyBookCoverHTML(mainWork, { width: 82 })}
         </div>
       </div>
     </button>
