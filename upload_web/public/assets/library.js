@@ -158,7 +158,7 @@ async function loadLibrary() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original)')
       .order('card_id', { ascending: false })
       .limit(500);
     if (error) throw error;
@@ -302,10 +302,11 @@ function computeKeywordFreq() {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));
 }
 
-// 6개 의미 범주 — 표시 순서. 분류에 없거나 애매한 키워드는 '미분류'로.
-const KEYWORD_CATEGORIES = ['관계·사랑', '상실·애도', '자기·정체성', '결단·행동', '세계관·환멸', '정서 상태'];
+// 10개 의미 범주 — 표시 순서. 분류에 없거나 애매한 키워드는 '미분류'로.
+const KEYWORD_CATEGORIES = ['관계·사랑', '상실·애도', '자기·정체성', '결단·행동', '세계관·환멸', '욕망·집착', '시간·기억', '희망·구원', '삶·일상', '정서 상태'];
 const KEYWORD_UNCLASSIFIED = '미분류';
-const KW_CAT_CACHE_KEY = 'sq-keyword-categories';
+// 범주 정의가 바뀌면 -v 숫자를 올려 옛 분류 캐시를 무효화한다. v2: 6→10 범주 확장.
+const KW_CAT_CACHE_KEY = 'sq-keyword-categories-v2';
 
 // distinct 키워드 집합의 서명 — 집합이 바뀌면 재분류가 트리거된다.
 function keywordSignature(distinct) {
@@ -1212,6 +1213,8 @@ function buildEditNode(card) {
   const subtitleOrigEl= node.querySelector('.lib-edit-subtitle-original');
   const authorEl      = node.querySelector('.lib-edit-author');
   const authorOrigEl  = node.querySelector('.lib-edit-author-original');
+  const introEl       = node.querySelector('.lib-edit-intro');
+  const introCountEl  = node.querySelector('.lib-edit-intro-count');
 
   // 본문 (좌/우)
   const quoteEl       = node.querySelector('.lib-edit-quote');
@@ -1239,6 +1242,12 @@ function buildEditNode(card) {
   if (subtitleOrigEl) subtitleOrigEl.value = work.subtitle_original || '';
   if (authorEl)       authorEl.value       = work.author || '';
   if (authorOrigEl)   authorOrigEl.value   = work.author_original || '';
+  if (introEl) {
+    introEl.value = work.intro || '';
+    const updateIntroCount = () => { if (introCountEl) introCountEl.textContent = `${introEl.value.trim().length}자`; };
+    updateIntroCount();
+    introEl.addEventListener('input', updateIntroCount);
+  }
 
   // 초기값 — 카드
   quoteEl.value       = card.quote || '';
@@ -1333,6 +1342,7 @@ function buildEditNode(card) {
     if (authorEl && authorEl.value.trim() !== (work.author || ''))                workUpdates.author            = authorEl.value.trim() || null;
     if (authorOrigEl && authorOrigEl.value.trim() !== (work.author_original || ''))
                                                                                   workUpdates.author_original   = authorOrigEl.value.trim() || null;
+    if (introEl && (introEl.value.trim() || null) !== (work.intro || null))       workUpdates.intro             = introEl.value.trim() || null;
 
     try {
       const sb = await getSupabase();
@@ -1530,7 +1540,7 @@ async function backfillAllCards() {
   if (libraryStatus) libraryStatus.textContent = 'DB 카드 목록 조회 중⋯';
 
   // 1) 모든 카드를 페이지네이션으로 가져옴 (한 번에 1000장씩, *_original 컬럼 포함)
-  const SELECT_COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original)';
+  const SELECT_COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original)';
   const PAGE = 1000;
   let all = [];
   for (let offset = 0; ; offset += PAGE) {
