@@ -74,6 +74,10 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
     let subtitleOriginal: String?
     let authorOriginal: String?
 
+    /// First-edition cover image URL (works.cover_url). Optional; nil/non-http →
+    /// the BookCover leather fallback. Read-only; no new data collection.
+    let coverUrl: String?
+
     init(
         title: String,
         subtitle: String? = nil,
@@ -84,7 +88,8 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         characters: [String] = [],
         titleOriginal: String? = nil,
         subtitleOriginal: String? = nil,
-        authorOriginal: String? = nil
+        authorOriginal: String? = nil,
+        coverUrl: String? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -96,6 +101,7 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         self.titleOriginal = titleOriginal
         self.subtitleOriginal = subtitleOriginal
         self.authorOriginal = authorOriginal
+        self.coverUrl = coverUrl
     }
 
     /// True only when an original-language work field is present.
@@ -127,6 +133,7 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         case titleOriginal = "title_original"
         case subtitleOriginal = "subtitle_original"
         case authorOriginal = "author_original"
+        case coverUrl = "cover_url"
     }
 
     private struct WorkGenreLink: Decodable {
@@ -150,6 +157,7 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         self.titleOriginal = try c.decodeIfPresent(String.self, forKey: .titleOriginal)
         self.subtitleOriginal = try c.decodeIfPresent(String.self, forKey: .subtitleOriginal)
         self.authorOriginal = try c.decodeIfPresent(String.self, forKey: .authorOriginal)
+        self.coverUrl = try c.decodeIfPresent(String.self, forKey: .coverUrl)
     }
 }
 
