@@ -7,8 +7,10 @@ enum Config {
 
 /// Build-time feature flags — flip on once the dependency is in place.
 enum FeatureFlags {
-    /// In-app account deletion (Settings → 회원 탈퇴). Keep OFF until the
-    /// `delete-account` Edge Function is deployed; otherwise the control is
-    /// non-functional (the invoke 404s). See `main_app/supabase/`.
-    static let accountDeletionEnabled = false
+    /// In-app account deletion (Settings → 회원 탈퇴), backed by the live
+    /// `public.delete_account()` Postgres RPC (SECURITY DEFINER, no args) —
+    /// NOT an Edge Function. It deletes the user's content, their
+    /// `public.users` row, AND the `auth.users` row (cascading identities /
+    /// sessions / refresh_tokens), so re-login is impossible after deletion.
+    static let accountDeletionEnabled = true
 }
