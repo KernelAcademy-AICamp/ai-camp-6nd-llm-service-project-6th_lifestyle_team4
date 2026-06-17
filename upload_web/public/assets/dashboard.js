@@ -111,6 +111,41 @@ backfillBtn?.addEventListener('click', async () => {
   }
 });
 
+// 책 소개(works.intro)가 비어 있는 기존 작품들을 일괄로 채운다.
+// 인물 백필과 동일한 패턴 — 남은 작품이 0이 될 때까지 반복 호출.
+const backfillIntroBtn = $('#backfill-intro-btn');
+backfillIntroBtn?.addEventListener('click', async () => {
+  if (!confirm('책 소개가 비어 있는 작품들의 소개 문구를 LLM으로 생성해 채웁니다.\n작품 수에 따라 몇 분 걸릴 수 있어요. 진행할까요?')) return;
+  backfillIntroBtn.disabled = true;
+  const orig = backfillIntroBtn.innerHTML;
+  let totalProcessed = 0;
+  try {
+    let remaining = Infinity;
+    let guard = 0;
+    while (remaining > 0 && guard < 300) {
+      guard += 1;
+      backfillIntroBtn.innerHTML =
+        `<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>` +
+        `<span class="text-sm">채우는 중⋯ (${totalProcessed})</span>`;
+      const token = await getAccessToken();
+      const json = await apiFetch('/api/backfill-intro?limit=3', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      totalProcessed += json.processed || 0;
+      remaining = json.remaining ?? 0;
+      if ((json.processed || 0) === 0) break;
+      toast(`책 소개 채우는 중 · 누적 ${totalProcessed}개 / 남음 ${remaining}`, 'info');
+    }
+    toast(`책 소개 채우기 완료 (총 ${totalProcessed}개 작품)`, 'success');
+  } catch (err) {
+    toast(err.message || '책 소개 채우기 실패', 'error');
+  } finally {
+    backfillIntroBtn.disabled = false;
+    backfillIntroBtn.innerHTML = orig;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Category toggle (영화/드라마 · 오페라/뮤지컬 · 연극 · 소설/시/에세이)
 // ---------------------------------------------------------------------------

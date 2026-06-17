@@ -5,6 +5,7 @@
     "api/translate-fields.js": { "maxDuration": 90 },
     "api/save.js": { "maxDuration": 60 },
     "api/backfill-characters.js": { "maxDuration": 300 },
+    "api/backfill-intro.js": { "maxDuration": 300 },
     "api/classify-keywords.js": { "maxDuration": 60 }
   },
   "headers": [

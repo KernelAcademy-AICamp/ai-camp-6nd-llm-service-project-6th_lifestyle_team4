@@ -5,6 +5,7 @@ import {
   TRANSLATE_SYSTEM,
   CHARACTERS_PROMPT,
   CLASSIFY_KEYWORDS_PROMPT,
+  BOOK_INTRO_PROMPT,
 } from './prompts.js';
 
 // SDK 기본 재시도(2회)에 더해 우리도 직접 백오프 재시도를 한 번 더 감쌉니다.
@@ -1490,7 +1491,23 @@ export async function runExtractCharacters(scriptText) {
   return [...new Set(arr.map((s) => String(s).trim()).filter(Boolean))];
 }
 
-// 키워드 배열을 6개 의미 범주(+미분류)로 분류. { 키워드: 범주 } 맵 반환.
+// 작품 메타(+본문 일부)로 "읽고 싶게 만드는" 책 소개 1~2문장 생성. (works.intro 백필용)
+// 반환: 소개 문자열(실패 시 빈 문자열). NEW 카드에서 명대사 대신 표시.
+export async function runGenerateBookIntro(work = {}) {
+  const title = String(work.title || '').trim();
+  if (!title) return '';
+  const snippet = String(work.full_script_text || '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+  const prompt = BOOK_INTRO_PROMPT
+    .replace('{{TITLE}}', title)
+    .replace('{{AUTHOR}}', String(work.author || '미상').trim())
+    .replace('{{YEAR}}', work.release_year == null ? '미상' : String(work.release_year).trim())
+    .replace('{{FORMAT}}', String(work.format || '').trim() || '문학')
+    .replace('{{SCRIPT_SNIPPET}}', snippet);
+  const result = await callClaude(prompt, { maxTokens: 512 });
+  return String(result?.intro || '').trim();
+}
+
+// 키워드 배열을 10개 의미 범주(+미분류)로 분류. { 키워드: 범주 } 맵 반환.
 // 화면 표시용 — DB 저장 안 함.
 export async function runClassifyKeywords(keywords) {
   const list = [...new Set((keywords || []).map((k) => String(k).trim()).filter(Boolean))];

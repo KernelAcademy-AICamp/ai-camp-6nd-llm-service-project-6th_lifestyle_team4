@@ -1233,7 +1233,7 @@ function loadAllCards() {
     const sb = await getSupabase();
     const { data, error } = await sb
       .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original, cover_url)')
+      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url)')
       .order('card_id', { ascending: false }).limit(500);
     if (error) throw error;
     state.allCards = Array.isArray(data) ? data : [];
@@ -1250,7 +1250,7 @@ function loadBookmarks() {
     // ★ *_original 컬럼 포함 — 영문 토글 동작에 필요. loadAllCards SELECT 와 동일.
     const { data, error } = await sb
       .from('user_bookmarks')
-      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, characters, title_original, subtitle_original, author_original, cover_url))')
+      .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url))')
       .eq('user_id', state.userId)
       .order('created_at', { ascending: false });
     if (error) { console.warn('[m] bookmarks load failed:', error); return; }
@@ -1646,7 +1646,7 @@ async function toggleBookmark(cardId) {
     } else {
       const { data, error } = await sb.from('user_bookmarks')
         .insert({ user_id: state.userId, card_id: cardId })
-        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, characters, cover_url))')
+        .select('bookmark_id, card_id, created_at, cards(card_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, works(work_id, title, subtitle, format, author, release_year, intro, characters, cover_url))')
         .single();
       if (error) throw error;
       state.bookmarks = [data, ...state.bookmarks];
@@ -2211,6 +2211,7 @@ function groupBookmarksByWork() {
         format: (work.format || '').toLowerCase(),
         author: work.author || null,
         year: work.release_year || null,
+        intro: work.intro || null,
         cards: [],
       });
     }
@@ -2284,6 +2285,7 @@ function groupAllCardsByWork() {
         format: (work.format || '').toLowerCase(),
         author: work.author || null,
         year: work.release_year || null,
+        intro: work.intro || null,
         cards: [],
       });
     }
