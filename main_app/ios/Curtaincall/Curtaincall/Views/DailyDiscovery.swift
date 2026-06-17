@@ -461,20 +461,50 @@ struct DailyTrendingSection: View {
 
 // MARK: - Oz Pick
 
-/// Choose the daily Oz card: prefer a card whose keywords intersect the user's
-/// bookmark-keyword "taste", else any card. Cached once per calendar day, but
-/// re-promoted to a taste-matching card once taste exists (Android
-/// `DailyViewModel.chooseOzPick`). `today` is a yyyy-MM-dd string.
+/// Choose the daily Oz card, mirroring Android `DailyViewModel.chooseOzPick`:
+/// build the pool from **selected themes (+ genre)** first, else **bookmark-keyword
+/// taste**, else any card — so the personalized reason/meta the UI shows actually
+/// reflects the card that was picked. Cached once per calendar day; the cache is
+/// validated against theme first when themes are chosen, else against taste.
+/// `today` is a yyyy-MM-dd string.
 @MainActor
 func chooseOzPick(cards: [Card], taste: Set<String>, prefs: PrefsStore, today: String) -> Card? {
     guard !cards.isEmpty else { return nil }
-    if let id = prefs.ozDailyCardId(today: today),
-       let cached = cards.first(where: { $0.cardId == id }),
-       taste.isEmpty || cached.keywords.contains(where: { taste.contains($0) }) {
-        return cached
+    let userPrefs = prefs.userPrefs
+    // "상관없음"(any) 이면 주제 무시 (Android `!prefs.any` 게이트).
+    let chosenThemes: Set<String> = userPrefs.any ? [] : Set(userPrefs.themes)
+    let chosenGenres = Set(userPrefs.genres)
+
+    func matchedTheme(_ card: Card) -> String? {
+        guard !chosenThemes.isEmpty else { return nil }
+        return CardTheme.cardThemeSet(card.keywords).first { chosenThemes.contains($0) }
     }
-    let matched = taste.isEmpty ? [] : cards.filter { card in card.keywords.contains { taste.contains($0) } }
-    let pick = (matched.isEmpty ? cards : matched).randomElement()
+
+    // Cached daily pick — keep only if it still fits the active preference signal.
+    if let id = prefs.ozDailyCardId(today: today),
+       let cached = cards.first(where: { $0.cardId == id }) {
+        let keep = chosenThemes.isEmpty
+            ? (taste.isEmpty || cached.keywords.contains { taste.contains($0) })
+            : (matchedTheme(cached) != nil)
+        if keep { return cached }
+    }
+
+    // Pool — 주제 매칭(+장르 교집합) > 북마크 취향 > 전체.
+    let pool: [Card]
+    if !chosenThemes.isEmpty {
+        var matched = cards.filter { matchedTheme($0) != nil }
+        if !chosenGenres.isEmpty {
+            let both = matched.filter { chosenGenres.contains($0.work.format.rawValue) }
+            if !both.isEmpty { matched = both }   // 주제+장르 둘 다 맞으면 우선
+        }
+        pool = matched.isEmpty ? cards : matched
+    } else if !taste.isEmpty {
+        let m = cards.filter { card in card.keywords.contains { taste.contains($0) } }
+        pool = m.isEmpty ? cards : m
+    } else {
+        pool = cards
+    }
+    let pick = pool.randomElement()
     if let pick { prefs.setOzDailyCard(today: today, cardId: pick.cardId) }
     return pick
 }

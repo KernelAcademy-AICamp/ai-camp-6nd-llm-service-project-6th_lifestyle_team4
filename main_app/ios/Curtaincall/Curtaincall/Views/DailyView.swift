@@ -97,6 +97,11 @@ struct DailyView: View {
             guard !allCards.isEmpty else { return }
             recomputeOz()
         }
+        // 취향(테마/장르)이 바뀌면(예: 게스트 CTA로 설정) Oz 픽을 다시 고른다.
+        .onChange(of: prefs.prefSelected) { _, _ in
+            guard !allCards.isEmpty else { return }
+            recomputeOz()
+        }
     }
 
     /// Bookmark-keyword "taste" for Oz personalization.
