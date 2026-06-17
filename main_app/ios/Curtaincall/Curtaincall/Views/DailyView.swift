@@ -10,6 +10,8 @@ struct DailyView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var heroNS
 
     @State private var allCards: [Card] = []
     @State private var trendingCounts: [Int: Int] = [:]
@@ -60,8 +62,12 @@ struct DailyView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+        // Hero morph: inject the surface namespace to descendant cells (the Daily
+        // sections live in DailyDiscovery). nil under Reduce Motion disables it.
+        .environment(\.cardHeroNamespace, reduceMotion ? nil : heroNS)
         .navigationDestination(for: Card.self) {
             CardDetailView(card: $0) { selectedTab = .settings }
+                .cardHeroDestination($0.cardId, in: heroNS, enabled: !reduceMotion)
         }
         .task { await load() }
         .task { await bookmarks.load(userId: session.userId) }
