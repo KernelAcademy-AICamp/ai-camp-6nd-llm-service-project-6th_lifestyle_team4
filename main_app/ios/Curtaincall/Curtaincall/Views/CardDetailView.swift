@@ -5,6 +5,8 @@ struct CardDetailView: View {
     let card: Card
     let onLoginRequested: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.requestLibrary) private var requestLibrary
+    @State private var scrolledPast = false
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var yarn: YarnStore
@@ -95,21 +97,25 @@ struct CardDetailView: View {
         VStack(spacing: 0) {
             detailTopBar
             Hairline()
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .center, spacing: 0) {
+                    Color.clear.frame(height: 0).id("detailTop")
                     Spacer().frame(height: 40)
-                    metadataChipsRow
-                    Spacer().frame(height: 10)
-                    CardCountsRow(viewCount: displayedViewCount, bookmarkCount: bookmarkCount)
+                    metadataBlock
                     Spacer().frame(height: 28)
 
                     if card.hasOriginalLanguage {
+                        Hairline()
                         HStack {
-                            Text(showOriginal ? "View in Korean" : "원문(영문)으로 보기")
-                                .labelCaps()
+                            Text(showOriginal ? "한국어로 보기" : "원문(영문)으로 보기")
+                                .font(.bodySans(14))
+                                .foregroundStyle(.walnut)
                             Spacer()
                             LangToggle(showOriginal: $showOriginal)
                         }
+                        .padding(.vertical, 14)
+                        Hairline()
                         Spacer().frame(height: 24)
                     }
 
@@ -148,23 +154,37 @@ struct CardDetailView: View {
                         Text(sig)
                             .font(.bodySans(16))
                             .foregroundStyle(.espresso)
+                            .multilineTextAlignment(.center)
                             .bookLeading(size: 16)
                             .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(maxWidth: .infinity)
                     }
 
                     Spacer().frame(height: 48)
                     Hairline()
                     Spacer().frame(height: 32)
 
+                    // 오늘의 한줄 남기기 — 기존 댓글 작성 흐름으로 (회원: 컴포저 포커스,
+                    // 익명: 로그인 프롬프트). 북마크 토글은 상단 바에 그대로 둔다.
                     Button {
-                        toggleBookmark()
+                        if session.isAnonymous { showAccountPrompt = true }
+                        else { composerFocused = true }
                     } label: {
-                        Text(bookmarked ? "Collected" : "Collect Script Artifact")
+                        Text("오늘의 한줄 남기기")
+                    }
+                    .buttonStyle(EditorialButtonStyle(.filled))
+
+                    Spacer().frame(height: 10)
+                    Button {
+                        requestLibrary()
+                    } label: {
+                        Text("서재로 가기")
                     }
                     .buttonStyle(EditorialButtonStyle(.outlined))
 
                     Spacer().frame(height: 16)
+                    // edition_note: Android는 고정 문자열 리소스("Limited Edition Digital
+                    // Manuscript") + 카드 id — per-card 필드가 없어 기존 텍스트가 이미 동일.
                     Text("Limited Edition Digital Manuscript #\(String(format: "%04d", card.cardId))")
                         .labelCaps()
 
@@ -188,6 +208,15 @@ struct CardDetailView: View {
                 .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
             }
             .scrollDismissesKeyboard(.interactively)
+            // 본문을 80% 이상 스크롤하면 상단 이동 FAB 노출.
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                let maxY = geo.contentSize.height - geo.containerSize.height
+                return maxY > 1 && geo.contentOffset.y > maxY * 0.8
+            } action: { _, past in
+                if past != scrolledPast {
+                    withAnimation(.easeInOut(duration: 0.15)) { scrolledPast = past }
+                }
+            }
             // Docked composer: solid bar, scroll content inset by its height
             // (nothing hides behind it), flush above the tab bar when unfocused,
             // dropping into the safe area above the keyboard when focused.
@@ -198,6 +227,27 @@ struct CardDetailView: View {
                     nickname: session.nickname,
                     focused: $composerFocused
                 )
+            }
+            // 상단 이동 FAB — 하이라이트 핀과 겹치지 않게 선택 중엔 숨김.
+            .overlay(alignment: .bottomTrailing) {
+                if scrolledPast && trimmedHighlight.isEmpty {
+                    Button {
+                        withAnimation { proxy.scrollTo("detailTop", anchor: .top) }
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.espresso)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color.paper))
+                            .overlay(Circle().stroke(Color.latte, lineWidth: 0.5))
+                            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 18)
+                    .padding(.bottom, session.isAnonymous ? 28 : 92)
+                    .transition(.opacity)
+                }
+            }
             }
         }
         .preference(key: ComposerFocusedPreferenceKey.self, value: composerFocused)
@@ -527,16 +577,51 @@ struct CardDetailView: View {
         }
     }
 
-    private var metadataChipsRow: some View {
-        HStack(spacing: 12) {
-            let items: [String] = [
+    /// Two centered lines (Android MetadataChipsRow): FORMAT · AUTHOR / YEAR · 👁 · 💬.
+    private var metadataBlock: some View {
+        VStack(spacing: 6) {
+            let head: [String] = [
                 card.work.format.label(original: showOriginal),
                 card.work.displayAuthor(original: showOriginal)?.uppercased() ?? "",
-                card.work.releaseYear.map(String.init) ?? "",
             ].filter { !$0.isEmpty }
-            ForEach(items, id: \.self) { v in
-                Text(v).labelCaps()
+            if !head.isEmpty {
+                HStack(spacing: 12) {
+                    ForEach(head, id: \.self) { Text($0).labelCaps() }
+                }
             }
+            HStack(spacing: 6) {
+                if let year = card.work.releaseYear.map(String.init) {
+                    Text(year).labelCaps()
+                    Text("·").font(.bodySans(12)).foregroundStyle(.walnut)
+                }
+                Label(Self.countLabel(displayedViewCount), systemImage: "eye")
+                Text("·").font(.bodySans(12)).foregroundStyle(.walnut)
+                Label(Self.countLabel(comments.comments.count), systemImage: "bubble.right")
+            }
+            .font(.bodySans(12))
+            .foregroundStyle(.walnut)
+            .labelStyle(.titleAndIcon)
         }
+        .frame(maxWidth: .infinity)
+    }
+
+    private static func countLabel(_ value: Int) -> String {
+        if value < 1_000 { return "\(value)" }
+        let thousands = Double(value) / 1_000
+        if thousands >= 10 { return "\(Int(thousands.rounded()))k" }
+        return "\((thousands * 10).rounded() / 10)k"
+    }
+}
+
+private struct RequestLibraryKey: EnvironmentKey {
+    static let defaultValue: () -> Void = {}
+}
+
+extension EnvironmentValues {
+    /// Switch to the LIBRARY (Archive) tab — injected by RootView, mirroring
+    /// `requestLogin`. Used by Card Detail's "서재로 가기" button.
+    var requestLibrary: () -> Void {
+        get { self[RequestLibraryKey.self] }
+        set { self[RequestLibraryKey.self] = newValue }
     }
 }

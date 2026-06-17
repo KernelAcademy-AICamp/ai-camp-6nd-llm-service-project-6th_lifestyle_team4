@@ -16,9 +16,10 @@ struct LangToggle: View {
             segment("KR", active: !showOriginal) { showOriginal = false }
             segment("ENG", active: showOriginal) { showOriginal = true }
         }
+        // LangSegmented pill (Android `LangSegmented`): latte track, walnut active
+        // fill + paper text.
         .padding(2)
-        .background(RoundedRectangle(cornerRadius: 7).fill(Color.paper))
-        .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.latte, lineWidth: 0.5))
+        .background(Capsule().fill(Color.latte))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("언어")
         .accessibilityValue(showOriginal ? "원문" : "한국어")
@@ -27,16 +28,15 @@ struct LangToggle: View {
     private func segment(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.custom("Pretendard-Medium", size: 11))
-                .tracking(11 * 0.16)
+                .font(.custom("Pretendard-Medium", size: 10))
+                .fontWeight(.bold)
+                .tracking(10 * 0.08)
                 .foregroundStyle(active ? Color.paper : Color.walnut)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(active ? Color.espresso : Color.clear)
-                )
-                .contentShape(Rectangle())
+                .frame(minWidth: 32)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(active ? Color.walnut : Color.clear))
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }

@@ -157,7 +157,7 @@ struct CommentsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("댓글 \(model.comments.count)").labelCaps()
+            Text("READER NOTES").labelCaps()
             Spacer().frame(height: 16)
 
             if isAnonymous {
@@ -241,13 +241,13 @@ struct CommentsSection: View {
                         Button {
                             model.editingCommentId = nil
                             editDraft = ""
-                        } label: { Text("CANCEL").labelCaps() }
+                        } label: { Text("취소").labelCaps() }
                             .buttonStyle(.plain)
                         Button {
                             if let uid = userId {
                                 Task { await model.update(userId: uid, commentId: c.commentId, body: editDraft) }
                             }
-                        } label: { Text("SAVE").labelCaps(color: .cta) }
+                        } label: { Text("저장").labelCaps(color: .cta) }
                             .buttonStyle(.plain)
                             .disabled(model.submitting || editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     } else {
