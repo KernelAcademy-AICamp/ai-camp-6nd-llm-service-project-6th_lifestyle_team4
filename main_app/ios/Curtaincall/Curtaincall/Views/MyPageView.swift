@@ -6,6 +6,7 @@ struct MyPageView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @EnvironmentObject private var yarn: YarnStore
 
     @State private var loginId = ""
     @State private var loginPassword = ""
@@ -13,6 +14,10 @@ struct MyPageView: View {
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
     @State private var showAttendance = false
+    @State private var latestNoticeId: Int?
+
+    /// Unread-notice dot for the 공지 row — same signal as RootView's MY-tab dot.
+    private var hasUnreadNotice: Bool { (latestNoticeId ?? 0) > prefs.noticeLastSeenId }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,27 +60,34 @@ struct MyPageView: View {
                             .foregroundStyle(.walnut)
                     }
 
-                    if session.isAnonymous {
-                        signInBlock
-                        Spacer().frame(height: 32)
-                        Hairline()
-                    }
-
                     if let msg = session.authMessage {
                         Spacer().frame(height: 12)
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
 
+                    // 공지 — 익명·로그인 모두 노출 (Android: 내 활동 위 top-level 섹션).
                     Spacer().frame(height: 20)
-                    sectionLabel("내 활동")
-                    // 계정 전용 활동(서재/댓글/피드)은 회원만.
-                    if !session.isAnonymous {
-                        activityRow(
-                            title: "내 서재",
-                            subtitle: "보관한 명대사와 작품별 책장 보기"
-                        ) {
-                            selectedTab = .archive
+                    sectionLabel("공지")
+                    navRow(title: "공지사항", subtitle: "업데이트와 소식", trailing: {
+                        if hasUnreadNotice {
+                            Circle().fill(Color.cta).frame(width: 7, height: 7)
                         }
+                    }) {
+                        NoticeView()
+                    }
+
+                    // 익명 — '내 활동' 위 로그인 CTA (Android ACCOUNT 블록).
+                    if session.isAnonymous {
+                        Spacer().frame(height: 20)
+                        signInBlock
+                        Spacer().frame(height: 32)
+                        Hairline()
+                    }
+
+                    Spacer().frame(height: 40)
+                    sectionLabel("내 활동")
+                    // 내 댓글·내 피드는 회원만.
+                    if !session.isAnonymous {
                         activityLink(title: "내 댓글", subtitle: "내가 남긴 댓글 보기") {
                             MyCommentsView()
                         }
@@ -83,46 +95,66 @@ struct MyPageView: View {
                             MyFeedView()
                         }
                     }
-                    // 출석체크는 익명 사용자도 보상을 받으므로 항상 노출 (PWA/Android 패리티).
+                    // 북마크 — 익명도 노출(빈 책장 보기). Android 패리티.
+                    activityRow(title: "북마크", subtitle: "수집한 명대사를 책으로 모아 봅니다") {
+                        selectedTab = .archive
+                    }
+                    // 출석체크 — 익명도 보상을 받으므로 항상 노출.
                     activityRow(title: "출석체크", subtitle: "내 출석현황 보기") {
                         showAttendance = true
                     }
+                    // 실타래 충전 — 잔액 표시 + 충전 화면.
+                    navRow(title: "실타래 충전", subtitle: "실타래로 명장면 전문을 열람하세요", trailing: {
+                        HStack(spacing: 5) {
+                            Image("daily-script-bar")
+                                .resizable().scaledToFill()
+                                .frame(width: 15, height: 15)
+                                .clipShape(Circle())
+                            Text("\(yarn.balance)")
+                                .font(.custom("Pretendard-Medium", size: 12))
+                                .foregroundStyle(.espresso)
+                        }
+                    }) {
+                        YarnPurchaseView()
+                    }
 
                     Spacer().frame(height: 40)
-                    sectionLabel("GENERAL PREFERENCES")
+                    sectionLabel("일반 설정")
                     settingRow(
-                        title: "취향 추천",
-                        subtitle: prefs.tasteEnabled ? tasteProfileText : "북마크 기반 맞춤 추천"
-                    ) {
-                        EditorialToggle(isOn: $prefs.tasteEnabled)
-                    }
-                    settingRow(
-                        title: "Theme Settings",
-                        subtitle: prefs.darkTheme ? "Dark · espresso night" : "Light · cream paper"
+                        title: "테마 설정",
+                        subtitle: prefs.darkTheme ? "다크 · 에스프레소 나이트" : "라이트 · 크림 페이퍼"
                     ) {
                         EditorialToggle(isOn: $prefs.darkTheme)
+                    }
+                    settingRow(
+                        title: "맞춤 추천",
+                        subtitle: prefs.tasteEnabled ? tasteProfileText : "북마크와 비슷한 카드를 추천합니다"
+                    ) {
+                        EditorialToggle(isOn: $prefs.tasteEnabled)
                     }
 
                     Spacer().frame(height: 40)
                     sectionLabel("약관 및 정보")
-                    legalRow(title: "공지사항") { NoticeView() }
                     legalRow(title: "의견 보내기") { FeedbackView() }
                     legalRow(title: "이용약관") { LegalView(doc: .terms) }
                     legalRow(title: "개인정보 처리방침") { LegalView(doc: .privacy) }
                     settingRow(title: "버전 정보", trailingText: appVersion)
 
+                    // 로그아웃 — outline 블록 버튼 대신 중앙 밑줄 텍스트 링크 (Android/PWA MY).
                     Spacer().frame(height: 40)
                     Button {
                         Task { await session.signOut() }
                     } label: {
-                        Text(session.isAnonymous ? "Reset Anonymous" : "Sign Out")
+                        Text("로그아웃")
+                            .font(.custom("Pretendard-Medium", size: 10))
+                            .underline()
+                            .foregroundStyle(.walnut)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
                     }
-                    .buttonStyle(EditorialButtonStyle(.outlined))
+                    .buttonStyle(.plain)
 
-                    // Account deletion (App Store Guideline 5.1.1(v)). Members
-                    // only, and gated behind a flag now enabled: the live
-                    // `delete_account()` Postgres RPC deletes the user's data +
-                    // auth.users row (no Edge Function involved).
+                    // Account deletion (App Store Guideline 5.1.1(v)). Members only.
                     if FeatureFlags.accountDeletionEnabled && !session.isAnonymous {
                         Spacer().frame(height: 16)
                         Button {
@@ -157,7 +189,13 @@ struct MyPageView: View {
             ProfileEditor(
                 initialNickname: session.nickname,
                 initialGender: session.gender,
-                initialAge: session.ageGroup
+                initialAge: session.ageGroup,
+                initialPrefs: prefs.userPrefs,
+                showPreferences: true,
+                onSavePreferences: { genres, themes, any in
+                    // 로컬 저장(온보딩과 동일 경로). users.pref_* DB 동기화는 백엔드 대기.
+                    prefs.savePrefs(genres: genres, themes: themes, any: any)
+                }
             ) { name, g, a in
                 Task { await session.updateProfile(name, gender: g, ageGroup: a) }
                 showNicknameSheet = false
@@ -169,6 +207,7 @@ struct MyPageView: View {
             AttendanceView()   // 보기 전용 (보상 지급 없음)
         }
         .task { await bookmarks.load(userId: session.userId) }
+        .task { latestNoticeId = (try? await Supa.shared.fetchLatestNotice())?.noticeId }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
         }
@@ -329,6 +368,41 @@ struct MyPageView: View {
         }
     }
 
+    /// Like `activityLink` but with a custom trailing view (unread dot / yarn
+    /// balance) before the chevron — for the 공지 and 실타래 충전 rows.
+    private func navRow<Destination: View, Trailing: View>(
+        title: String,
+        subtitle: String,
+        @ViewBuilder trailing: () -> Trailing,
+        @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        VStack(spacing: 0) {
+            NavigationLink {
+                destination()
+            } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.titleSerif(16))
+                            .foregroundStyle(.espresso)
+                        Text(subtitle)
+                            .font(.bodySans(12))
+                            .foregroundStyle(.walnut)
+                    }
+                    Spacer()
+                    trailing()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(.walnut)
+                }
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Hairline()
+        }
+    }
+
     /// A settings row that pushes a destination (mirrors Android's trailing-arrow
     /// rows). Matches `settingRow`'s metrics but is tappable, so the Legal docs
     /// read as navigable rather than the old dead "Terms of Service" label.
@@ -436,27 +510,65 @@ struct ProfileEditor: View {
     let initialNickname: String
     let initialGender: String   // "" | male | female | other
     let initialAge: String      // "" | 10s..90s
+    let initialPrefs: UserPrefs
+    let showPreferences: Bool
+    let onSavePreferences: ([String], [String], Bool) -> Void
     let onSave: (String, String?, String?) -> Void
     let onCancel: () -> Void
 
     @State private var nickname: String
     @State private var gender: String
     @State private var age: String
+    @State private var genres: Set<String>
+    @State private var themes: Set<String>
+    @State private var any: Bool
 
     init(initialNickname: String, initialGender: String, initialAge: String,
+         initialPrefs: UserPrefs = UserPrefs(genres: [], themes: [], any: false),
+         showPreferences: Bool = false,
+         onSavePreferences: @escaping ([String], [String], Bool) -> Void = { _, _, _ in },
          onSave: @escaping (String, String?, String?) -> Void, onCancel: @escaping () -> Void) {
         self.initialNickname = initialNickname
         self.initialGender = initialGender
         self.initialAge = initialAge
+        self.initialPrefs = initialPrefs
+        self.showPreferences = showPreferences
+        self.onSavePreferences = onSavePreferences
         self.onSave = onSave
         self.onCancel = onCancel
         _nickname = State(initialValue: initialNickname)
         _gender = State(initialValue: initialGender)
         _age = State(initialValue: initialAge)
+        _genres = State(initialValue: Set(initialPrefs.genres))
+        _themes = State(initialValue: Set(initialPrefs.themes))
+        _any = State(initialValue: initialPrefs.any)
     }
 
     private let genderValues = ["", "male", "female", "other"]
     private let ageValues = ["", "10s", "20s", "30s", "40s", "50s", "60s", "70s", "80s", "90s"]
+
+    // 온보딩(OnboardingView)과 값이 일치해야 저장된 취향이 카드에 반영됨 — 스코프상 로컬 복제.
+    private struct PrefGenre { let ko: String; let format: String }
+    private let genreOptions: [PrefGenre] = [
+        .init(ko: "소설", format: "novel"),
+        .init(ko: "연극(희곡)", format: "play"),
+        .init(ko: "에세이", format: "essay"),
+        .init(ko: "오페라(대본)", format: "opera"),
+        .init(ko: "산문", format: "prose"),
+    ]
+    private struct PrefTheme { let ko: String; let color: Color }
+    private let themeOptions: [PrefTheme] = [
+        .init(ko: "관계·사랑", color: Color(hex: 0xC75D4A)),
+        .init(ko: "상실·애도", color: Color(hex: 0x5E6B7A)),
+        .init(ko: "자기·정체성", color: Color(hex: 0xB98A3E)),
+        .init(ko: "결단·행동", color: Color(hex: 0xA64238)),
+        .init(ko: "세계관·환멸", color: Color(hex: 0x4A5240)),
+        .init(ko: "욕망·집착", color: Color(hex: 0x8E3B52)),
+        .init(ko: "시간·기억", color: Color(hex: 0x6E7B86)),
+        .init(ko: "희망·구원", color: Color(hex: 0xC99A2E)),
+        .init(ko: "삶·일상", color: Color(hex: 0x7A6A52)),
+        .init(ko: "정서 상태", color: Color(hex: 0x88736B)),
+    ]
 
     private func genderLabel(_ v: String) -> String {
         switch v {
@@ -469,51 +581,105 @@ struct ProfileEditor: View {
     private func ageLabel(_ v: String) -> String { v.isEmpty ? "선택 안 함" : String(v.dropLast()) + "대" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 0) {
             Text("프로필 편집").font(.headlineSerif(22)).foregroundStyle(.espresso)
-            FieldBox(placeholder: "표시할 이름", text: $nickname)
-            Button { nickname = AuthSession.randomCuteNickname() } label: {
-                Text("랜덤 이름 생성").labelCaps()
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("성별 · 선택").labelCaps()
-                Menu {
-                    ForEach(genderValues, id: \.self) { v in
-                        Button(genderLabel(v)) { gender = v }
+                .padding(.bottom, 16)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    FieldBox(placeholder: "표시할 이름", text: $nickname)
+                    Button { nickname = AuthSession.randomCuteNickname() } label: {
+                        Text("랜덤 이름 생성").labelCaps()
                     }
-                } label: { menuLabel(genderLabel(gender)) }
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("나이대 · 선택").labelCaps()
-                Menu {
-                    ForEach(ageValues, id: \.self) { v in
-                        Button(ageLabel(v)) { age = v }
-                    }
-                } label: { menuLabel(ageLabel(age)) }
-            }
-            Text("성별·나이대를 알려주시면 취향에 맞는 명대사를 추천해드려요. (선택 입력)")
-                .font(.bodySans(12))
-                .foregroundStyle(.walnut)
+                    .buttonStyle(.plain)
 
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("성별 · 선택").labelCaps()
+                        Menu {
+                            ForEach(genderValues, id: \.self) { v in
+                                Button(genderLabel(v)) { gender = v }
+                            }
+                        } label: { menuLabel(genderLabel(gender)) }
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("나이대 · 선택").labelCaps()
+                        Menu {
+                            ForEach(ageValues, id: \.self) { v in
+                                Button(ageLabel(v)) { age = v }
+                            }
+                        } label: { menuLabel(ageLabel(age)) }
+                    }
+                    Text("성별·나이대를 알려주시면 취향에 맞는 명대사를 추천해드려요. (선택 입력)")
+                        .font(.bodySans(12))
+                        .foregroundStyle(.walnut)
+
+                    if showPreferences { preferenceSection }
+                }
+                .padding(.bottom, 8)
+            }
             HStack {
-                Button { onCancel() } label: {
-                    Text("취소")
-                }
-                .buttonStyle(EditorialButtonStyle(.outlined))
-                Button {
-                    onSave(nickname, gender.isEmpty ? nil : gender, age.isEmpty ? nil : age)
-                } label: {
-                    Text("저장")
-                }
-                .buttonStyle(EditorialButtonStyle(.filled))
+                Button { onCancel() } label: { Text("취소") }
+                    .buttonStyle(EditorialButtonStyle(.outlined))
+                Button { save() } label: { Text("저장") }
+                    .buttonStyle(EditorialButtonStyle(.filled))
             }
-            Spacer()
+            .padding(.top, 16)
         }
         .padding(24)
         .background(Color.paper.ignoresSafeArea())
         .presentationDetents([.medium, .large])
+    }
+
+    // 취향(장르·주제) 칩 — Android ProfileDialog showPreferences 블록 미러.
+    private var preferenceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("좋아하는 장르").labelCaps()
+            FlowLayout(spacing: 8, lineSpacing: 8) {
+                ForEach(genreOptions, id: \.format) { g in
+                    prefChip(label: g.ko, selected: genres.contains(g.format), accent: .cta) {
+                        if genres.contains(g.format) { genres.remove(g.format) } else { genres.insert(g.format) }
+                    }
+                }
+            }
+            Spacer().frame(height: 6)
+            Text("관심 주제").labelCaps()
+            FlowLayout(spacing: 8, lineSpacing: 8) {
+                ForEach(themeOptions, id: \.ko) { t in
+                    prefChip(label: t.ko, selected: !any && themes.contains(t.ko), accent: t.color) {
+                        if themes.contains(t.ko) { themes.remove(t.ko) } else { themes.insert(t.ko) }
+                        if !themes.isEmpty { any = false }
+                    }
+                }
+                // "상관없음" — 켜면 주제 선택을 비우고 폭넓게 추천 (Android any).
+                prefChip(label: "상관없음", selected: any, accent: .cta) {
+                    any.toggle()
+                    if any { themes.removeAll() }
+                }
+            }
+        }
+    }
+
+    private func prefChip(label: String, selected: Bool, accent: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.custom(selected ? "Pretendard-Medium" : "Pretendard-Regular", size: 13))
+                .foregroundStyle(selected ? .espresso : .walnut)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 20).fill(selected ? accent.opacity(0.12) : Color.paper))
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(selected ? accent : Color.latte, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func save() {
+        // 취향은 바뀐 경우에만 저장(로컬). 안 건드렸으면 그대로 둔다 — Android 동일.
+        if showPreferences {
+            let changed = genres != Set(initialPrefs.genres)
+                || themes != Set(initialPrefs.themes)
+                || any != initialPrefs.any
+            if changed { onSavePreferences(Array(genres), Array(themes), any) }
+        }
+        onSave(nickname, gender.isEmpty ? nil : gender, age.isEmpty ? nil : age)
     }
 
     private func menuLabel(_ text: String) -> some View {
