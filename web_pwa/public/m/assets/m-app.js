@@ -149,6 +149,7 @@ const bookModal = $('#book-modal');
 const bookEyebrow = $('#book-eyebrow');
 const bookTitleEl = $('#book-title');
 const bookMetaEl = $('#book-meta');
+const bookIntroEl = $('#book-intro');
 const bookList = $('#book-list');
 const bookClose = $('#book-close');
 
@@ -2618,6 +2619,13 @@ function openBookModal(work, worksList) {
   bookTitleEl.textContent = work.subtitle || displayTitle(work.title);
   bookMetaEl.textContent = [label.toUpperCase(), work.author, work.year]
     .filter(Boolean).join(' · ');
+
+  // 책 소개(intro) — 있으면 상단에 노출, 없으면 숨김
+  if (bookIntroEl) {
+    const introText = (work.intro || '').trim();
+    bookIntroEl.textContent = introText;
+    bookIntroEl.style.display = introText ? 'block' : 'none';
+  }
 
   const book = bookModal.querySelector('.book');
   book.style.borderLeftColor = leatherColorFor(work.title);

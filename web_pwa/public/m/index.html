@@ -1251,6 +1251,11 @@
   .book .book-divider {
     margin: 20px 0 12px; height: 0.5px; background: var(--sand);
   }
+  .book .book-intro {
+    margin: 0 0 18px; font-family: 'Noto Serif KR', serif;
+    font-size: 15px; line-height: 1.6; font-weight: 600;
+    color: var(--espresso);
+  }
   #book-list { counter-reset: quote-counter; }
   .book .book-quote-item {
     background: var(--card-warm);
@@ -2618,6 +2623,7 @@
       </button>
     </div>
     <div class="book-divider"></div>
+    <p id="book-intro" class="book-intro" style="display:none;"></p>
     <div id="book-list"></div>
     <p class="book-pagefoot">— Daily Script · Limited Edition —</p>
   </div>
