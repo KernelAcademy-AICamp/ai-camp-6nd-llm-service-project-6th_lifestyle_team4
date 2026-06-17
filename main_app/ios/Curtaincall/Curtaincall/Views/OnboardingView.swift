@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// First-run preference picker (Android `PreferenceOverlay` / PWA preferences.js).
-/// Two steps — genres, then themes (or "상관없음") — feeding the local `UserPrefs`
-/// that weight recommendations. Skipping finishes with `any = true` (recommend
-/// broadly) and never re-prompts.
+/// Two steps — genres (2-column card grid), then themes (or "아직 잘 모르겠어요") —
+/// feeding the local `UserPrefs` that weight recommendations. Skipping finishes with
+/// `any = true` (recommend broadly) and never re-prompts. UI/layout/copy only — no
+/// pref_* persistence here (the caller persists via onFinish).
 struct OnboardingView: View {
     /// (genres, themes, any). Called on Done or Skip.
     let onFinish: (_ genres: [String], _ themes: [String], _ any: Bool) -> Void
@@ -13,18 +14,18 @@ struct OnboardingView: View {
     @State private var themes: Set<String> = []
     @State private var any = false
 
-    // `en` shown under the Korean label (Android onboarding genre buttons).
-    private struct Genre { let ko: String; let en: String; let format: String }
+    // `en` shown under the Korean label; `full` spans the full grid width (산문).
+    private struct Genre { let ko: String; let en: String; let format: String; var full = false }
     private let genreOptions: [Genre] = [
         Genre(ko: "소설", en: "Novel", format: "novel"),
         Genre(ko: "연극(희곡)", en: "Play", format: "play"),
         Genre(ko: "에세이", en: "Essay", format: "essay"),
         Genre(ko: "오페라(대본)", en: "Opera", format: "opera"),
-        Genre(ko: "산문", en: "Prose", format: "prose"),
+        Genre(ko: "산문", en: "Prose", format: "prose", full: true),
     ]
 
     // ko must match CardTheme category names exactly so a saved theme weights cards.
-    // color = the per-theme accent dot, mirroring Android's PrefTheme colors.
+    // color = the per-theme accent bar, mirroring Android's PrefTheme colors.
     private struct Theme { let ko: String; let kw: String; let color: Color }
     private let themeOptions: [Theme] = [
         Theme(ko: "관계·사랑", kw: "사랑 · 연애 · 가족 · 우정", color: Color(hex: 0xC75D4A)),
@@ -47,13 +48,17 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             header
             progress
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if step == 1 { genreStep } else { themeStep }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Color.clear.frame(height: 0).id("top")
+                        if step == 1 { genreStep } else { themeStep }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 6)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-                .padding(.bottom, 24)
+                .onChange(of: step) { _, _ in proxy.scrollTo("top", anchor: .top) }
             }
             footer
         }
@@ -64,14 +69,14 @@ struct OnboardingView: View {
 
     private var header: some View {
         HStack(alignment: .center) {
-            Text("CURTAINCALL").labelCaps(color: .espresso, size: 12)
+            BrandWordmark()
             Spacer()
             Button {
                 // Skip = recommend broadly (any), keep any genres already tapped,
                 // never re-prompt. Mirrors Android's 건너뛰기.
                 onFinish(Array(genres), [], true)
             } label: {
-                Text("건너뛰기").labelCaps()
+                Text("건너뛰기").font(.bodySans(13)).foregroundStyle(.walnut)
             }
             .buttonStyle(.plain)
         }
@@ -89,8 +94,8 @@ struct OnboardingView: View {
     }
 
     private func segment(filled: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 2)
-            .fill(filled ? Color.espresso : Color.latte)
+        RoundedRectangle(cornerRadius: 3)
+            .fill(filled ? Color.cta : Color.latte)
             .frame(height: 3)
     }
 
@@ -98,104 +103,212 @@ struct OnboardingView: View {
 
     private var genreStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            stepHead(title: "어떤 장르를 좋아하세요?",
-                     subtitle: "고른 장르의 명대사를 더 자주 만나요. (복수 선택)")
-            ForEach(genreOptions, id: \.format) { g in
-                selectRow(label: g.ko, sublabel: g.en, selected: genres.contains(g.format)) {
-                    toggle(&genres, g.format)
-                }
-            }
+            stepHead(
+                num: "STEP 1 / 2",
+                title: "어떤 글을 즐겨 읽으세요?",
+                desc: "읽고 싶은 장르를 골라주세요. 선택한 장르의 명대사를 더 자주 만나게 돼요."
+            )
+            genreGrid
         }
     }
 
     private var themeStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            stepHead(title: "어떤 주제에 끌리시나요?",
-                     subtitle: "관심 주제를 고르거나 ‘상관없음’으로 폭넓게 받아보세요.")
-            selectRow(label: "상관없음", sublabel: "모든 주제에서 추천", selected: any) {
-                any.toggle()
-                if any { themes.removeAll() }
-            }
-            ForEach(themeOptions, id: \.ko) { t in
-                selectRow(label: t.ko, sublabel: t.kw, accent: t.color, selected: themes.contains(t.ko)) {
-                    if any { any = false }
-                    toggle(&themes, t.ko)
-                }
-            }
+            stepHead(
+                num: "STEP 2 / 2",
+                title: "어떤 이야기에 마음이 가나요?",
+                desc: "관심 가는 주제를 골라주세요."
+            )
+            themeList
+            anyButton
         }
     }
 
-    private func stepHead(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func stepHead(num: String, title: String, desc: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(num)
+                .font(.custom("Pretendard-Medium", size: 11))
+                .tracking(11 * 0.22)
+                .foregroundStyle(.cta)
             Text(title)
-                .font(.headlineSerif(24))
+                .font(.titleSerif(24))
                 .foregroundStyle(.espresso)
-            Text(subtitle)
+                .padding(.vertical, 8)
+            Text(desc)
                 .font(.bodySans(13))
                 .foregroundStyle(.walnut)
                 .bookLeading(size: 13)
-            Spacer().frame(height: 8)
+            Text("복수 선택 가능")
+                .font(.bodySans(11.5))
+                .foregroundStyle(.sand)
+                .padding(.top, 8)
         }
+        .padding(.top, 16)
+        .padding(.bottom, 4)
     }
 
-    // Selectable row — filled (espresso) when selected, outlined when not.
-    //  - sublabel: secondary line under the label (genre English / theme keywords).
-    //  - accent: leading 10pt color dot (theme color), mirroring Android. nil = none.
-    private func selectRow(
-        label: String,
-        sublabel: String? = nil,
-        accent: Color? = nil,
-        selected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(alignment: .center, spacing: 12) {
-                if let accent {
-                    Circle()
-                        .fill(accent)
-                        .frame(width: 10, height: 10)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(label)
-                        .font(.titleSerif(16))
-                        .foregroundStyle(selected ? Color.paper : .espresso)
-                    if let sublabel {
-                        Text(sublabel)
-                            .font(.bodySans(12))
-                            .foregroundStyle(selected ? Color.paper.opacity(0.7) : .walnut)
-                            .lineLimit(1)
+    // MARK: - Genre grid (2-column cards; 산문 full-width)
+
+    private var genreGrid: some View {
+        let halves = genreOptions.filter { !$0.full }
+        let fulls = genreOptions.filter { $0.full }
+        let rows = stride(from: 0, to: halves.count, by: 2).map { i in
+            Array(halves[i ..< min(i + 2, halves.count)])
+        }
+        return VStack(spacing: 11) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, rowItems in
+                HStack(spacing: 11) {
+                    ForEach(rowItems, id: \.format) { g in
+                        genreTile(g)
                     }
+                    if rowItems.count == 1 { Color.clear.frame(maxWidth: .infinity) }
                 }
-                Spacer()
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(selected ? Color.paper : .sand)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            ForEach(fulls, id: \.format) { g in
+                genreTile(g)
+            }
+        }
+        .padding(.top, 18)
+    }
+
+    private func genreTile(_ g: Genre) -> some View {
+        let sel = genres.contains(g.format)
+        return Button { toggle(&genres, g.format) } label: {
+            ZStack(alignment: .topTrailing) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(g.ko)
+                        .font(.titleSerif(18))
+                        .foregroundStyle(.espresso)
+                    Text(g.en.uppercased())
+                        .font(.custom("Pretendard-Regular", size: 10))
+                        .tracking(10 * 0.16)
+                        .foregroundStyle(.sand)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, 24)   // keep the label clear of the check
+                checkCircle(selected: sel, size: 21)
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(selected ? Color.espresso : Color.cardWarm)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(selected ? Color.clear : Color.latte, lineWidth: 0.5)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .background(RoundedRectangle(cornerRadius: 16).fill(sel ? Color.cta.opacity(0.08) : Color.cardWarm))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(sel ? Color.cta : Color.latte, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
-        .padding(.bottom, 10)
     }
 
-    // MARK: - Footer (info + next/done)
+    // MARK: - Theme list + AnyButton
+
+    private var themeList: some View {
+        VStack(spacing: 9) {
+            ForEach(themeOptions, id: \.ko) { t in
+                themeRow(t)
+            }
+        }
+        .padding(.top, 18)
+        // "아직 잘 모르겠어요" 선택 중엔 흐리게 + 탭 차단 (Android muted).
+        .opacity(any ? 0.4 : 1)
+        .allowsHitTesting(!any)
+    }
+
+    private func themeRow(_ t: Theme) -> some View {
+        let sel = themes.contains(t.ko)
+        return Button { toggle(&themes, t.ko) } label: {
+            HStack(spacing: 13) {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(t.color)
+                    .frame(width: 9, height: 42)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(t.ko)
+                        .font(.titleSerif(16.5))
+                        .foregroundStyle(.espresso)
+                    Text(t.kw)
+                        .font(.bodySans(11.5))
+                        .foregroundStyle(.walnut)
+                        .lineLimit(1)
+                }
+                Spacer()
+                checkCircle(selected: sel, size: 20)
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 13)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 14).fill(sel ? Color.cta.opacity(0.08) : Color.cardWarm))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(sel ? Color.cta : Color.latte, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var anyButton: some View {
+        VStack(spacing: 0) {
+            Hairline()
+            Button {
+                any.toggle()
+                if any { themes.removeAll() }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("아직 잘 모르겠어요")
+                            .font(.custom("Pretendard-Medium", size: 14))
+                            .foregroundStyle(any ? Color.paper : .espresso)
+                        Text("모든 주제에서 폭넓게 추천받기")
+                            .font(.bodySans(11.5))
+                            .foregroundStyle(any ? .sand : .walnut)
+                    }
+                    Spacer()
+                    if any {
+                        ZStack {
+                            Circle().fill(Color.highlight)
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.espresso)
+                        }
+                        .frame(width: 20, height: 20)
+                    } else {
+                        Circle().stroke(Color.sand, lineWidth: 1.5).frame(width: 20, height: 20)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 14).fill(any ? Color.espresso : Color.clear))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(any ? Color.espresso : Color.latte, lineWidth: 1.5))
+                .contentShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 14)
+        }
+        .padding(.top, 14)
+    }
+
+    private func checkCircle(selected: Bool, size: CGFloat) -> some View {
+        Group {
+            if selected {
+                ZStack {
+                    Circle().fill(Color.cta)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: size * 0.5, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            } else {
+                Circle().stroke(Color.sand, lineWidth: 1.5)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+
+    // MARK: - Footer (info + CTA + back)
 
     private var footer: some View {
-        VStack(spacing: 12) {
-            Hairline()
+        VStack(spacing: 0) {
             Text(infoText)
-                .font(.bodySans(12))
+                .font(.bodySans(11.5))
                 .foregroundStyle(.walnut)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 10)
             Button {
                 if step == 1 {
                     step = 2
@@ -203,15 +316,31 @@ struct OnboardingView: View {
                     onFinish(Array(genres), Array(themes), any)
                 }
             } label: {
-                Text(step == 1 ? "다음" : "시작하기")
+                Text(step == 1 ? "다음" : "내 추천 받기")
+                    .font(.custom("Pretendard-Medium", size: 14.5))
+                    .tracking(14.5 * 0.04)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(canAdvance ? Color.cta : Color.sand.opacity(0.7)))
             }
-            .buttonStyle(EditorialButtonStyle(.filled))
+            .buttonStyle(.plain)
             .disabled(!canAdvance)
-            .opacity(canAdvance ? 1 : 0.4)
+            if step == 2 {
+                Button { step = 1 } label: {
+                    Text("← 이전")
+                        .font(.bodySans(13))
+                        .foregroundStyle(.walnut)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
         }
         .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 22)
     }
 
     private var infoText: String {
@@ -219,7 +348,7 @@ struct OnboardingView: View {
             return genres.isEmpty ? "장르를 1개 이상 골라주세요" : "\(genres.count)개 장르 선택됨"
         }
         if any { return "모든 주제에서 추천받아요" }
-        return themes.isEmpty ? "주제를 고르거나 ‘상관없음’을 선택하세요" : "\(themes.count)개 주제 선택됨"
+        return themes.isEmpty ? "주제를 고르거나 '상관없음'을 눌러주세요" : "\(themes.count)개 주제 선택됨"
     }
 
     private func toggle(_ set: inout Set<String>, _ value: String) {
