@@ -48,10 +48,17 @@ struct DailyView: View {
                         DailyTrendingSection(cards: allCards, bookmarkCounts: trendingCounts) {
                             selectedTab = .archive
                         }
-                        if let ozCard {
-                            Spacer().frame(height: 36)
-                            DailyOzPickSection(card: ozCard, taste: taste)
-                        }
+                        // Oz Pick — 개인화 카드 또는 게스트(취향 미설정) CTA. 섹션이 분기.
+                        Spacer().frame(height: 36)
+                        DailyOzPickSection(
+                            card: ozCard,
+                            prefs: prefs.userPrefs,
+                            isAnonymous: session.isAnonymous,
+                            nickname: session.nickname,
+                            loginId: session.loginId,
+                            taste: taste,
+                            onRequestPreferences: { prefs.prefSelected = false }
+                        )
                         if let recent = recentBookmark {
                             Spacer().frame(height: 36)
                             DailyRecentSection(card: recent.card, bookmarkedAt: recent.date)
@@ -90,6 +97,11 @@ struct DailyView: View {
             guard !allCards.isEmpty else { return }
             recomputeOz()
         }
+        // 취향(테마/장르)이 바뀌면(예: 게스트 CTA로 설정) Oz 픽을 다시 고른다.
+        .onChange(of: prefs.prefSelected) { _, _ in
+            guard !allCards.isEmpty else { return }
+            recomputeOz()
+        }
     }
 
     /// Bookmark-keyword "taste" for Oz personalization.
@@ -120,17 +132,26 @@ struct DailyView: View {
         for id in trendingTopIDs() where owner[id] == nil {
             owner[id] = .trending
         }
-        if let id = ozCard?.cardId, owner[id] == nil { owner[id] = .oz }
+        // Guest Oz shows the CTA (no card), so don't claim ozCard for `.oz`.
+        if !ozIsGuest, let id = ozCard?.cardId, owner[id] == nil { owner[id] = .oz }
         if let id = recentBookmark?.card.cardId, owner[id] == nil { owner[id] = .recent }
         return owner
     }
 
-    /// Top-3 trending card ids — same scoring + tiebreak as `DailyTrendingSection`.
+    /// True when the Oz Pick renders the guest CTA (no personalized card).
+    private var ozIsGuest: Bool {
+        let p = prefs.userPrefs
+        let hasActive = !p.genres.isEmpty || (!p.any && !p.themes.isEmpty)
+        return session.isAnonymous && !hasActive
+    }
+
+    /// Top-3 trending card ids — same equal-weight score + tiebreak as
+    /// `DailyTrendingSection` (must stay in sync so hero-owner matches what renders).
     private func trendingTopIDs() -> [Int] {
         allCards
             .filter { !$0.quote.isEmpty }
             .map { (id: $0.cardId,
-                    score: (trendingCounts[$0.cardId] ?? 0) * 10 + ($0.commentCount ?? 0) * 5 + ($0.viewCount ?? 0)) }
+                    score: (trendingCounts[$0.cardId] ?? 0) + ($0.commentCount ?? 0) + ($0.viewCount ?? 0)) }
             .sorted { $0.score != $1.score ? $0.score > $1.score : $0.id > $1.id }
             .prefix(3)
             .map(\.id)

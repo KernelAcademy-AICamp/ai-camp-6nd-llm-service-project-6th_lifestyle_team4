@@ -51,63 +51,55 @@ struct ContextCategory: Identifiable {
     let id: String
     let label: String
     let keywords: [String]
-    /// (normalized temperature, normalized intensity) → score, per Android.
-    let toneScore: (Double?, Double?) -> Int
 }
 
+// Android ContextCategories — 3 moods, matched purely on a card's structured
+// keywords (flutter/"설레는 날" dropped; tone-score matching removed).
 let contextCategories: [ContextCategory] = [
     ContextCategory(
         id: "comfort",
         label: "위로가 필요할 때",
-        keywords: ["위로", "슬픔", "아픔", "눈물", "치유", "회복", "안식", "평온", "포근", "따뜻", "따스", "기댐", "감싸", "쓰다듬", "받아들", "용서", "슬퍼", "아파"],
-        toneScore: { t, i in
-            (t != nil && t! < 0.6 ? 2 : (t != nil && t! < 0.8 ? 1 : 0)) + (i != nil && i! < 0.7 ? 1 : 0)
-        }
-    ),
-    ContextCategory(
-        id: "flutter",
-        label: "설레는 날",
-        keywords: ["사랑", "설렘", "첫사랑", "두근", "떨림", "봄", "꽃", "만남", "청춘", "달콤", "가슴", "설레", "연인", "키스", "입맞춤", "미소", "눈빛", "입술"],
-        toneScore: { t, i in
-            (t != nil && t! > 0.5 ? 2 : (t != nil && t! > 0.3 ? 1 : 0)) + (i != nil && i! > 0.4 ? 1 : 0)
-        }
+        keywords: ["위로", "슬픔", "아픔", "상처", "눈물", "치유", "회복", "안식", "위안", "평온", "평화", "포근", "온기", "따뜻", "따스", "용서", "연민", "공감", "고통"]
     ),
     ContextCategory(
         id: "lonely",
         label: "먹먹한 밤",
-        keywords: ["외로움", "그리움", "고독", "적막", "침묵", "회상", "공허", "먹먹", "쓸쓸", "낙엽", "회한", "밤하늘", "혼자", "홀로", "잊혀", "그립", "추억", "낙심", "비"],
-        toneScore: { t, i in
-            (t != nil && t! < 0.5 ? 2 : 0) + (i != nil && i! < 0.5 ? 2 : (i != nil && i! < 0.7 ? 1 : 0))
-        }
+        keywords: ["외로움", "그리움", "고독", "적막", "침묵", "회상", "공허", "먹먹", "쓸쓸", "회한", "이별", "상실", "그늘", "밤", "혼자", "홀로", "추억", "미련", "허무"]
     ),
     ContextCategory(
         id: "resolve",
         label: "결심이 필요할 때",
-        keywords: ["결심", "의지", "도전", "용기", "운명", "신념", "다짐", "각오", "맞서", "투지", "이겨", "포기하지", "나아", "극복", "굳건", "강인", "싸움", "꿈", "희망", "믿음"],
-        toneScore: { t, i in
-            (i != nil && i! > 0.6 ? 2 : (i != nil && i! > 0.4 ? 1 : 0)) + (t != nil && t! > 0.5 ? 1 : 0)
-        }
+        keywords: ["결심", "의지", "도전", "용기", "운명", "신념", "다짐", "각오", "투지", "극복", "강인", "싸움", "꿈", "희망", "믿음", "열정", "성장", "자유", "선택", "시작", "변화", "두려움"]
     ),
 ]
 
-/// Score each card by keyword hits (×3) plus the category tone bonus; keep the
-/// top 12. A stable descending sort (score, then original order) mirrors
-/// Kotlin's `sortedByDescending` on the card_id-desc input list.
+/// PWA `_kwMatch`: equality, or a ≥2-char substring match in either direction.
+private func kwMatch(_ catKw: String, _ cardKw: String) -> Bool {
+    if catKw.isEmpty || cardKw.isEmpty { return false }
+    if catKw == cardKw { return true }
+    if catKw.count >= 2 && cardKw.contains(catKw) { return true }
+    if cardKw.count >= 2 && catKw.contains(cardKw) { return true }
+    return false
+}
+
+/// Keyword-only structured match (Android `filterContextualCards`): count the
+/// category keywords that hit any of the card's structured keywords; keep cards with
+/// ≥1 hit, sorted by hits desc then view-count desc, top 12. No quote/script
+/// haystack, no tone score.
 func filterContextualCards(_ cards: [Card], category: ContextCategory) -> [Card] {
-    let scored: [(index: Int, card: Card, score: Int)] = cards.enumerated().compactMap { index, card in
-        let haystack = (
-            card.keywords.joined(separator: " ") + " " +
-            card.quote + " " +
-            card.scriptExcerpt + " " +
-            (card.significance ?? "")
-        ).lowercased()
-        let hits = category.keywords.filter { haystack.contains($0.lowercased()) }.count
-        guard hits > 0 else { return nil }
-        let score = hits * 3 + category.toneScore(normTone(Double(card.temperature)), normTone(Double(card.intensity)))
-        return (index, card, score)
+    let scored: [(card: Card, hits: Int)] = cards.compactMap { card in
+        let kws = card.keywords
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty }
+        guard !kws.isEmpty else { return nil }
+        let hits = category.keywords.filter { ck in
+            let c = ck.lowercased()
+            return kws.contains { kwMatch(c, $0) }
+        }.count
+        return hits == 0 ? nil : (card, hits)
     }
     return scored
-        .sorted { $0.score != $1.score ? $0.score > $1.score : $0.index < $1.index }
+        .sorted { $0.hits != $1.hits ? $0.hits > $1.hits : ($0.card.viewCount ?? 0) > ($1.card.viewCount ?? 0) }
         .prefix(12)
         .map { $0.card }
 }
@@ -412,9 +404,11 @@ struct DailyTrendingSection: View {
             .filter { !$0.quote.isEmpty }
             .map { card in
                 let bm = bookmarkCounts[card.cardId] ?? 0
+                // 댓글 수: denormalized comment_count 컬럼(= Android의 aggregated map 폴백;
+                // iOS엔 별도 집계 fetch가 없어 컬럼을 사용). 조회수와 함께 동일 가중치.
                 let cm = card.commentCount ?? 0
                 let vw = card.viewCount ?? 0
-                return Ranked(card: card, bookmarks: bm, comments: cm, views: vw, score: bm * 10 + cm * 5 + vw)
+                return Ranked(card: card, bookmarks: bm, comments: cm, views: vw, score: bm + cm + vw)
             }
             .sorted { $0.score != $1.score ? $0.score > $1.score : $0.card.cardId > $1.card.cardId }
         let top = Array(scored.prefix(3))
@@ -467,110 +461,216 @@ struct DailyTrendingSection: View {
 
 // MARK: - Oz Pick
 
-/// Choose the daily Oz card: prefer a card whose keywords intersect the user's
-/// bookmark-keyword "taste", else any card. Cached once per calendar day, but
-/// re-promoted to a taste-matching card once taste exists (Android
-/// `DailyViewModel.chooseOzPick`). `today` is a yyyy-MM-dd string.
+/// Choose the daily Oz card, mirroring Android `DailyViewModel.chooseOzPick`:
+/// build the pool from **selected themes (+ genre)** first, else **bookmark-keyword
+/// taste**, else any card — so the personalized reason/meta the UI shows actually
+/// reflects the card that was picked. Cached once per calendar day; the cache is
+/// validated against theme first when themes are chosen, else against taste.
+/// `today` is a yyyy-MM-dd string.
 @MainActor
 func chooseOzPick(cards: [Card], taste: Set<String>, prefs: PrefsStore, today: String) -> Card? {
     guard !cards.isEmpty else { return nil }
-    if let id = prefs.ozDailyCardId(today: today),
-       let cached = cards.first(where: { $0.cardId == id }),
-       taste.isEmpty || cached.keywords.contains(where: { taste.contains($0) }) {
-        return cached
+    let userPrefs = prefs.userPrefs
+    // "상관없음"(any) 이면 주제 무시 (Android `!prefs.any` 게이트).
+    let chosenThemes: Set<String> = userPrefs.any ? [] : Set(userPrefs.themes)
+    let chosenGenres = Set(userPrefs.genres)
+
+    func matchedTheme(_ card: Card) -> String? {
+        guard !chosenThemes.isEmpty else { return nil }
+        return CardTheme.cardThemeSet(card.keywords).first { chosenThemes.contains($0) }
     }
-    let matched = taste.isEmpty ? [] : cards.filter { card in card.keywords.contains { taste.contains($0) } }
-    let pick = (matched.isEmpty ? cards : matched).randomElement()
+
+    // Cached daily pick — keep only if it still fits the active preference signal.
+    if let id = prefs.ozDailyCardId(today: today),
+       let cached = cards.first(where: { $0.cardId == id }) {
+        let keep = chosenThemes.isEmpty
+            ? (taste.isEmpty || cached.keywords.contains { taste.contains($0) })
+            : (matchedTheme(cached) != nil)
+        if keep { return cached }
+    }
+
+    // Pool — 주제 매칭(+장르 교집합) > 북마크 취향 > 전체.
+    let pool: [Card]
+    if !chosenThemes.isEmpty {
+        var matched = cards.filter { matchedTheme($0) != nil }
+        if !chosenGenres.isEmpty {
+            let both = matched.filter { chosenGenres.contains($0.work.format.rawValue) }
+            if !both.isEmpty { matched = both }   // 주제+장르 둘 다 맞으면 우선
+        }
+        pool = matched.isEmpty ? cards : matched
+    } else if !taste.isEmpty {
+        let m = cards.filter { card in card.keywords.contains { taste.contains($0) } }
+        pool = m.isEmpty ? cards : m
+    } else {
+        pool = cards
+    }
+    let pick = pool.randomElement()
     if let pick { prefs.setOzDailyCard(today: today, cardId: pick.cardId) }
     return pick
 }
 
+/// Oz Pick (Android `DailyOzPick`). Personalized: nickname header + 장르/주제 meta +
+/// theme-hit reason + library-cat-2 + book line. Guest (anon + no active prefs):
+/// the "취향 알려주기" CTA instead. Read-only over existing prefs/nickname/taste.
 struct DailyOzPickSection: View {
-    let card: Card
-    /// The user's bookmark-keyword taste — drives the personalized reason line.
+    let card: Card?
+    let prefs: UserPrefs
+    let isAnonymous: Bool
+    let nickname: String
+    let loginId: String
+    /// The user's bookmark-keyword taste — drives the taste-hit reason line.
     let taste: Set<String>
+    let onRequestPreferences: () -> Void
+
+    /// Android `UserPrefs.hasActive()`: chose genres, or (not "상관없음" and chose themes).
+    private var hasActive: Bool {
+        !prefs.genres.isEmpty || (!prefs.any && !prefs.themes.isEmpty)
+    }
 
     var body: some View {
-        let matched = card.keywords.first { taste.contains($0) }
-        let reason = matched.map { "'\($0)'에 자주 머무는 당신이라면, 좋아할 한 문장이에요." }
-            ?? "오즈가 오늘 골라드린 한 문장이에요."
-        let work = card.work
-        let meta = ["당신의 취향", work.format.displayName.isEmpty ? nil : work.format.displayName, matched]
-            .compactMap { $0 }
-            .joined(separator: " · ")
-
         VStack(alignment: .leading, spacing: 0) {
-            Text("오즈의 오늘의 추천")
-                .font(.headlineSerif(22))
-                .foregroundStyle(.espresso)
+            heading
             Spacer().frame(height: 14)
-            NavigationLink(value: card) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Header — 오즈 label + meta. The Android cat image is optional
-                    // and not bundled on iOS, so it's simply omitted.
-                    HStack(spacing: 12) {
-                        if let catImage = UIImage(named: "cat_shelf_few") {
-                            Image(uiImage: catImage)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 72)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("오즈")
-                                .font(.bodySans(14))
-                                .fontWeight(.bold)
-                                .foregroundStyle(.espresso)
-                            Text(meta)
-                                .font(.bodySans(11))
-                                .foregroundStyle(.walnut)
-                                .lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
+            if isAnonymous && !hasActive {
+                ctaCard
+            } else if let card {
+                personalizedCard(card)
+            }
+        }
+    }
+
+    /// "당신을 위한 Daily Script." — trailing period in Cta. (Text concatenation needs
+    /// `foregroundColor`, the Text-returning variant.)
+    private var heading: some View {
+        Text("당신을 위한 ").font(.titleSerif(17)).foregroundColor(.espresso)
+            + Text("Daily Script").font(.headlineSerif(22)).fontWeight(.bold).foregroundColor(.espresso)
+            + Text(".").font(.headlineSerif(22)).fontWeight(.bold).foregroundColor(.cta)
+    }
+
+    private func personalizedCard(_ card: Card) -> some View {
+        let work = card.work
+        // 추천 한마디 — 고른 주제(themeHit) > 행동 취향(tasteHit) > 일반.
+        let themeHit: String? = (!prefs.any && !prefs.themes.isEmpty)
+            ? CardTheme.cardThemeSet(card.keywords).first { prefs.themes.contains($0) }
+            : nil
+        let tasteHit = card.keywords.first { taste.contains($0) }
+        let personLabel: String = (!isAnonymous && (!nickname.isEmpty || !loginId.isEmpty))
+            ? "'\(nickname.isEmpty ? loginId : nickname)'"
+            : "당신"
+        let reason: String = {
+            if let themeHit { return "'\(themeHit)' 주제를 고른 \(personLabel)에게 추천해요." }
+            if let tasteHit { return "'\(tasteHit)'에 자주 머무는 당신이라면, 좋아할 한 문장이에요." }
+            return "오즈가 오늘 골라드린 한 문장이에요."
+        }()
+        let genresJoined = prefs.genres.map(Self.genreLabel).joined(separator: ", ")
+        let genreText = genresJoined.isEmpty ? "상관없음" : genresJoined
+        let themesJoined = prefs.themes.joined(separator: ", ")
+        let themeText = prefs.any ? "상관없음" : (themesJoined.isEmpty ? "상관없음" : themesJoined)
+
+        return NavigationLink(value: card) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center, spacing: 16) {
+                    Image("library-cat-2").resizable().scaledToFit().frame(width: 140)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(nickname.isEmpty ? "오즈" : nickname)
+                            .font(.bodySans(14)).fontWeight(.bold)
+                            .foregroundStyle(.espresso).lineLimit(1)
+                        Spacer().frame(height: 8)
+                        Text("당신의 취향")
+                            .font(.custom("Pretendard-Medium", size: 11))
+                            .foregroundStyle(.espresso)
+                        Spacer().frame(height: 3)
+                        ozMetaLine("장르", genreText)
+                        Spacer().frame(height: 2)
+                        ozMetaLine("주제", themeText)
                     }
-                    Spacer().frame(height: 14)
-                    Text(reason)
-                        .font(.titleSerif(13))
-                        .foregroundStyle(.espresso)
-                        .bookLeading(size: 13)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.latte))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.sand, lineWidth: 0.5))
-                    Spacer().frame(height: 14)
-                    HStack(alignment: .top, spacing: 12) {
-                        HighlightBookCover(work: work)
-                            .scaleEffect(56.0 / 132.0, anchor: .center)
-                            .frame(width: 56, height: 188 * 56 / 132)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(work.title.isEmpty ? "—" : work.title)
-                                .font(.titleSerif(15))
-                                .fontWeight(.bold)
-                                .foregroundStyle(.espresso)
-                                .lineLimit(2)
-                            let line = [work.author, work.releaseYear.map(String.init)]
-                                .compactMap { $0 }
-                                .filter { !$0.isEmpty }
-                                .joined(separator: " · ")
-                            if !line.isEmpty {
-                                Text(line)
-                                    .font(.bodySans(13))
-                                    .foregroundStyle(.walnut)
-                                    .lineLimit(1)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
+                    Spacer(minLength: 0)
                 }
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color.cardWarm))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
+                Spacer().frame(height: 14)
+                reasonBox(reason)
+                Spacer().frame(height: 14)
+                workRow(work)
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color.cardWarm))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .cardContextMenu(card)
+        .cardHeroSource(card.cardId, dailyOwner: .oz)
+    }
+
+    private var ctaCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 16) {
+                Image("library-cat-2").resizable().scaledToFit().frame(width: 140)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(nickname.isEmpty ? "게스트" : nickname)
+                        .font(.bodySans(14)).fontWeight(.bold)
+                        .foregroundStyle(.espresso).lineLimit(1)
+                    Spacer().frame(height: 6)
+                    Text("아직 당신의 취향을 몰라요")
+                        .font(.custom("Pretendard-Medium", size: 11))
+                        .foregroundStyle(.walnut)
+                }
+                Spacer(minLength: 0)
+            }
+            Spacer().frame(height: 14)
+            reasonBox("취향을 알려주시면 오즈가 매일 꼭 맞는 한 문장을 골라드릴게요.")
+            Spacer().frame(height: 14)
+            Button(action: onRequestPreferences) {
+                Text("취향 알려주기")
+                    .font(.custom("Pretendard-Medium", size: 14)).fontWeight(.bold)
+                    .foregroundStyle(Color.paper)
+                    .frame(maxWidth: .infinity).padding(.vertical, 14)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.cta))
             }
             .buttonStyle(.plain)
-            .cardContextMenu(card)
-            .cardHeroSource(card.cardId, dailyOwner: .oz)
         }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.cardWarm))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
+    }
+
+    private func reasonBox(_ text: String) -> some View {
+        Text(text)
+            .font(.titleSerif(13)).foregroundStyle(.espresso).bookLeading(size: 13)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.latte))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.sand, lineWidth: 0.5))
+    }
+
+    private func workRow(_ work: Work) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            HighlightBookCover(work: work)
+                .scaleEffect(56.0 / 132.0, anchor: .center)
+                .frame(width: 56, height: 188 * 56 / 132)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(work.title.isEmpty ? "—" : work.title)
+                    .font(.titleSerif(15)).fontWeight(.bold)
+                    .foregroundStyle(.espresso).lineLimit(2)
+                let line = [work.author, work.releaseYear.map(String.init)]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                if !line.isEmpty {
+                    Text(line).font(.bodySans(13)).foregroundStyle(.walnut).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func ozMetaLine(_ label: String, _ value: String) -> some View {
+        (Text(label).font(.custom("Pretendard-Medium", size: 11)).foregroundColor(.espresso)
+            + Text(" : \(value)").font(.custom("Pretendard-Regular", size: 11)).foregroundColor(.walnut))
+            .lineLimit(2)
+    }
+
+    private static func genreLabel(_ format: String) -> String {
+        let label = WorkFormat(rawValue: format.lowercased())?.displayName ?? ""
+        return label.isEmpty ? "기타" : label
     }
 }
 
@@ -593,7 +693,7 @@ struct DailyNoticeCarousel: View {
                         : 0
                     HStack(spacing: 10) {
                         Image(systemName: "megaphone")
-                            .font(.system(size: 16, weight: .regular))
+                            .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(Color.cta)
                         Text(items[min(idx, items.count - 1)].title)
                             .font(.bodySans(13))
@@ -610,6 +710,7 @@ struct DailyNoticeCarousel: View {
                     .frame(maxWidth: .infinity)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.latte))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.sand, lineWidth: 0.5))
+                    .shadow(color: Color.black.opacity(0.08), radius: 5, x: 0, y: 2)
                     .contentShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
