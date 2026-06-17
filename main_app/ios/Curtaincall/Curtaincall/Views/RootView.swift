@@ -37,8 +37,15 @@ struct RootView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
     @EnvironmentObject private var attendance: AttendanceStore
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var selectedTab: Tab = .daily
+
+    // Shake-for-a-random-명대사 (iOS-only delight).
+    @State private var cardPool: [Card] = []
+    @State private var randomCard: Card?
+    @State private var shakeHaptic = 0
+    @State private var lastShakeAt: Date?
     @State private var showAttendance = false
     @State private var attendanceRewarded = false
     @State private var attendanceChecked = false   // 앱 실행당 1회만 자동 체크
@@ -118,6 +125,65 @@ struct RootView: View {
             } onCancel: {
                 session.consumeProfileSetup()
             }
+        }
+        // Shake → random 명대사 peek. Load a pool once; pick on shake.
+        .task {
+            if cardPool.isEmpty {
+                cardPool = (try? await Supa.shared.fetchCards()) ?? []
+            }
+        }
+        .onShake { handleShake() }
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: shakeHaptic)
+        .sheet(item: $randomCard) { card in
+            RandomQuotePeek(card: card) {
+                openRandomFull(card)
+            } onClose: {
+                randomCard = nil
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// A shake fires only when foregrounded and NOT already in a modal/detail flow,
+    /// debounced so one physical shake can't trigger twice. Then: soft haptic +
+    /// present a free random-quote peek.
+    private func handleShake() {
+        guard scenePhase == .active, session.ready, prefs.prefSelected else { return }
+        // Not already in a modal/peek/onboarding flow…
+        guard randomCard == nil, !showAttendance, !showArchivePrompt,
+              !session.needsProfileSetup else { return }
+        // …and not currently reading a detail screen on the active tab.
+        guard activeTabPathIsEmpty else { return }
+        // Debounce: ignore repeat motion events within 1.5s of the last shake.
+        let now = Date()
+        if let last = lastShakeAt, now.timeIntervalSince(last) < 1.5 { return }
+        lastShakeAt = now
+        guard let pick = cardPool.randomElement() else { return }
+        shakeHaptic += 1
+        randomCard = pick
+    }
+
+    /// Whether the active tab is at its root (i.e. not in a card-detail flow).
+    private var activeTabPathIsEmpty: Bool {
+        switch selectedTab {
+        case .daily: return dailyPath.isEmpty
+        case .home: return homePath.isEmpty
+        case .archive: return archivePath.isEmpty
+        case .feed: return feedPath.isEmpty
+        case .settings: return true
+        }
+    }
+
+    /// "전문 읽기" → open the full read through the NORMAL yarn gate. Routes via the
+    /// Home stack (its `navigationDestination(for: Card.self)` builds CardDetailView,
+    /// whose `runOpenFlow` runs the gate) — same path as a widget deep-link, so the
+    /// economy is never bypassed. Dismiss the peek first so the push isn't swallowed.
+    private func openRandomFull(_ card: Card) {
+        randomCard = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            selectedTab = .home
+            homePath.append(card)
         }
     }
 
