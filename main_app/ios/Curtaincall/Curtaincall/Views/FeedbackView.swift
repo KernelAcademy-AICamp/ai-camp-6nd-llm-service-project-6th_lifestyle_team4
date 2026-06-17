@@ -85,12 +85,15 @@ struct FeedbackView: View {
 
                 ratingField
 
+                // Caps match the Android/PWA server limits (web_pwa/api/feedback.js
+                // maxLen): liked/improve 2000, message 4000 — so iOS doesn't
+                // truncate earlier than the other clients.
                 textAreaField(label: "무엇이 좋았나요?", placeholder: "좋았던 점을 알려주세요",
-                              text: $liked, maxLen: 1000)
+                              text: $liked, maxLen: 2000)
                 textAreaField(label: "더 필요한 게 있으셨나요?", placeholder: "아쉬웠거나 더 있었으면 하는 점",
-                              text: $improve, maxLen: 1000)
+                              text: $improve, maxLen: 2000)
                 textAreaField(label: "기타 의견", placeholder: "편하게 남겨주세요!",
-                              text: $message, maxLen: 1000)
+                              text: $message, maxLen: 4000)
 
                 emailField
 

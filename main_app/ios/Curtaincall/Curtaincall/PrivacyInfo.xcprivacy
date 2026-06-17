@@ -61,7 +61,9 @@
                 <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
             </array>
         </dict>
-        <!-- Demographics: optional gender + age group in the feedback form -->
+        <!-- Demographics: optional gender + age group in the feedback form.
+             Analytics in addition to App Functionality — fits Apple's "measure
+             audience characteristics" definition. -->
         <dict>
             <key>NSPrivacyCollectedDataType</key>
             <string>NSPrivacyCollectedDataTypeOtherDataTypes</string>
@@ -72,6 +74,7 @@
             <key>NSPrivacyCollectedDataTypePurposes</key>
             <array>
                 <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+                <string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
             </array>
         </dict>
     </array>
