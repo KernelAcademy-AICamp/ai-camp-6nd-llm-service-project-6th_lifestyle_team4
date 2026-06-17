@@ -237,7 +237,7 @@ struct DailyNewBooksSection: View {
         }
         .buttonStyle(.plain)
         .cardContextMenu(book.representativeCard)
-        .cardHeroSource(book.representativeCard.cardId)
+        .cardHeroSource(book.representativeCard.cardId, dailyOwner: .newBooks)
     }
 
     private func restCover(_ book: DiscoveryWork) -> some View {
@@ -263,7 +263,7 @@ struct DailyNewBooksSection: View {
         }
         .buttonStyle(.plain)
         .cardContextMenu(book.representativeCard)
-        .cardHeroSource(book.representativeCard.cardId)
+        .cardHeroSource(book.representativeCard.cardId, dailyOwner: .newBooks)
     }
 
     /// Reuse the existing `Work`-based leather cover (shared with Feed /
@@ -457,7 +457,7 @@ struct DailyTrendingSection: View {
                     }
                     .buttonStyle(.plain)
                     .cardContextMenu(item.card)
-                    .cardHeroSource(item.card.cardId)
+                    .cardHeroSource(item.card.cardId, dailyOwner: .trending)
                     Rectangle().fill(Color.latte).frame(height: 0.5)
                 }
             }
@@ -569,7 +569,7 @@ struct DailyOzPickSection: View {
             }
             .buttonStyle(.plain)
             .cardContextMenu(card)
-            .cardHeroSource(card.cardId)
+            .cardHeroSource(card.cardId, dailyOwner: .oz)
         }
     }
 }
@@ -660,7 +660,7 @@ struct DailyRecentSection: View {
             }
             .buttonStyle(.plain)
             .cardContextMenu(card)
-            .cardHeroSource(card.cardId)
+            .cardHeroSource(card.cardId, dailyOwner: .recent)
         }
     }
 }

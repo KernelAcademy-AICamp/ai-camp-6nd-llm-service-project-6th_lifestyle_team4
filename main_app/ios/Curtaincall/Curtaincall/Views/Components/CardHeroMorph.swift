@@ -27,12 +27,47 @@ extension EnvironmentValues {
     }
 }
 
+/// Daily-surface sections whose card sets can overlap (all draw from `allCards`).
+/// Used to dedupe hero sources so a card shown in several sections morphs from
+/// exactly ONE cell — otherwise duplicate `matchedTransitionSource` ids in one
+/// namespace make the zoom pick the wrong source or fail to animate.
+enum DailyHeroSection: Hashable {
+    case newBooks, trending, oz, recent
+}
+
+private struct CardHeroOwnerKey: EnvironmentKey {
+    static let defaultValue: [Int: DailyHeroSection]? = nil
+}
+
+extension EnvironmentValues {
+    /// Per-card hero-source owner for the Daily surface (cardId → the one section
+    /// allowed to morph it), or nil where dedup doesn't apply (Home, Reduce Motion).
+    /// Injected by DailyView. A card absent from the map is owned by the Contextual
+    /// cell (the interactive section DailyView can't predict).
+    var cardHeroOwner: [Int: DailyHeroSection]? {
+        get { self[CardHeroOwnerKey.self] }
+        set { self[CardHeroOwnerKey.self] = newValue }
+    }
+}
+
 private struct CardHeroSourceModifier: ViewModifier {
     let id: Int
+    let dailyOwner: DailyHeroSection?
     @Environment(\.cardHeroNamespace) private var namespace
+    @Environment(\.cardHeroOwner) private var owner
+
+    /// Whether THIS cell is the single active source for `id`. With no owner map
+    /// (e.g. Home), every cell is active. With a map, a predictable section's cell
+    /// is active only if it owns the card; the Contextual cell (dailyOwner == nil)
+    /// owns only cards no higher-priority section claimed.
+    private var isActiveSource: Bool {
+        guard let owner else { return true }
+        if let dailyOwner { return owner[id] == dailyOwner }
+        return owner[id] == nil
+    }
 
     func body(content: Content) -> some View {
-        if let namespace {
+        if isActiveSource, let namespace {
             content.matchedTransitionSource(id: id, in: namespace)
         } else {
             content
@@ -41,10 +76,12 @@ private struct CardHeroSourceModifier: ViewModifier {
 }
 
 extension View {
-    /// Marks a card cell as the zoom-transition source. No-op (plain push) when the
-    /// surface hasn't injected a namespace, i.e. Reduce Motion is on.
-    func cardHeroSource(_ id: Int) -> some View {
-        modifier(CardHeroSourceModifier(id: id))
+    /// Marks a card cell as the zoom-transition source. Pass `dailyOwner` on the
+    /// Daily surface so a duplicated card morphs from exactly one cell; omit it on
+    /// surfaces without overlap (Home) or for Daily's Contextual cell. No-op (plain
+    /// push) when the surface injected no namespace (Reduce Motion).
+    func cardHeroSource(_ id: Int, dailyOwner: DailyHeroSection? = nil) -> some View {
+        modifier(CardHeroSourceModifier(id: id, dailyOwner: dailyOwner))
     }
 
     /// Applies the zoom navigation transition to a pushed CardDetail. Pass the
