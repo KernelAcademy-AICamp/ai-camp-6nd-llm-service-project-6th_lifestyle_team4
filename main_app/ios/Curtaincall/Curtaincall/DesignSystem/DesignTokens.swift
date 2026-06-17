@@ -30,6 +30,11 @@ extension Color {
     static let sand = adaptive(light: 0xC9B89A, dark: 0x7A6B57)
     static let highlight = adaptive(light: 0xF4C20D, dark: 0xF4C20D)
     static let cta = adaptive(light: 0xD85A30, dark: 0xE0683E)
+    /// Warm card surface — slightly off the page so cards read as raised panels in
+    /// both themes (Daily / Onboarding / Notice cards).
+    static let cardWarm = adaptive(light: 0xFFFDF7, dark: 0x15120E)
+    /// Feed post/card surface (replaces the old hardcoded 0xF4EFE6).
+    static let feedCard = adaptive(light: 0xE6E1D7, dark: 0x1C1813)
 
     init(hex: UInt32) {
         let r = Double((hex >> 16) & 0xFF) / 255
@@ -48,6 +53,8 @@ extension ShapeStyle where Self == Color {
     static var sand: Color { .sand }
     static var highlight: Color { .highlight }
     static var cta: Color { .cta }
+    static var cardWarm: Color { .cardWarm }
+    static var feedCard: Color { .feedCard }
 }
 
 struct Hairline: View {

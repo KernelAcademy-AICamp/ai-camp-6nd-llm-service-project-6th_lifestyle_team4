@@ -291,7 +291,7 @@ struct DailyContextualSection: View {
                     .foregroundStyle(.espresso)
                 Spacer().frame(height: 4)
                 Text("지금 마음에 맞춰 한 문장을 골라드려요")
-                    .font(.bodySans(13))
+                    .font(.bodySans(12))
                     .foregroundStyle(.walnut)
                 Spacer().frame(height: 14)
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -352,7 +352,7 @@ struct DailyContextualSection: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color.paper))
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color.cardWarm))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
@@ -564,7 +564,7 @@ struct DailyOzPickSection: View {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color.paper))
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color.cardWarm))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
             }
             .buttonStyle(.plain)
@@ -632,7 +632,7 @@ struct DailyRecentSection: View {
                 .foregroundStyle(.espresso)
             Spacer().frame(height: 6)
             Text("지난주 담아둔 문장, 다시 읽어볼까요")
-                .font(.bodySans(13))
+                .font(.bodySans(12))
                 .foregroundStyle(.walnut)
             Spacer().frame(height: 14)
             NavigationLink(value: card) {
@@ -655,7 +655,7 @@ struct DailyRecentSection: View {
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color.paper))
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color.cardWarm))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte, lineWidth: 0.5))
             }
             .buttonStyle(.plain)

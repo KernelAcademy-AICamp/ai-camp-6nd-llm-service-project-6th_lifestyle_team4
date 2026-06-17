@@ -398,6 +398,7 @@ private struct EditorialToggle: View {
                     .fill(isOn ? Color.espresso : Color.latte)
                 Circle()
                     .fill(Color.paper)
+                    .overlay(Circle().stroke(isOn ? Color.espresso : Color.walnut, lineWidth: 0.5))
                     .frame(width: 18, height: 18)
                     .padding(3)
             }

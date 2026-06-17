@@ -53,7 +53,6 @@ struct RootView: View {
     @State private var homePath = NavigationPath()
     @State private var archivePath = NavigationPath()
     @State private var feedPath = NavigationPath()
-    @State private var showArchivePrompt = false
     @State private var composerActive = false
     @State private var feedReselect = 0
     @State private var latestNoticeId: Int?
@@ -94,12 +93,6 @@ struct RootView: View {
         .onChange(of: prefs.prefSelected) { _, _ in checkAttendance() }
         .sheet(isPresented: $showAttendance) {
             AttendanceView(rewarded: attendanceRewarded)
-        }
-        .onChange(of: selectedTab) { _, newValue in
-            if newValue == .archive && session.isAnonymous {
-                selectedTab = .daily
-                showArchivePrompt = true
-            }
         }
         .task {
             if let id = pendingCardId { await resolveAndPush(id: id) }
@@ -152,7 +145,7 @@ struct RootView: View {
         guard scenePhase == .active, session.ready, prefs.prefSelected else { return }
         // Not in a Root-owned peek/onboarding flow (the archive prompt + onboarding
         // are .overlay-based, so they aren't UIKit modals the check below sees)…
-        guard randomCard == nil, !showArchivePrompt, !session.needsProfileSetup else { return }
+        guard randomCard == nil, !session.needsProfileSetup else { return }
         // …no UIKit modal anywhere — including child-view sheets RootView doesn't own
         // (Feed composer/picker, My Page profile/attendance, any .alert)…
         guard !ShakeGate.isPresentingModal() else { return }
@@ -223,19 +216,6 @@ struct RootView: View {
             if !composerActive {
                 EditorialTabBar(selection: $selectedTab, noticeUnread: hasUnreadNotice, onReselect: popToRoot)
                     .transition(.move(edge: .bottom))
-            }
-        }
-        .overlay {
-            if showArchivePrompt {
-                AccountRequiredPrompt(
-                    title: "북마크 보관함은 회원 전용",
-                    message: "보관한 명대사를 모아보려면 로그인이 필요해요."
-                ) {
-                    showArchivePrompt = false
-                    selectedTab = .settings
-                } onClose: {
-                    showArchivePrompt = false
-                }
             }
         }
     }

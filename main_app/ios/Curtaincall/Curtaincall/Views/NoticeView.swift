@@ -111,7 +111,7 @@ private struct NoticeCard: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.cardWarm))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
     }
 

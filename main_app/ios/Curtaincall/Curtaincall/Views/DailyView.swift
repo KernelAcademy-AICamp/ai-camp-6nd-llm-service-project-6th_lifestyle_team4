@@ -28,7 +28,15 @@ struct DailyView: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Spacer().frame(height: 20)
+                    // Android Daily header (DailyScreen.kt:120-137): date · "디스커버리".
+                    Spacer().frame(height: 24)
+                    Text(Self.dailyDateLabel)
+                        .labelCaps()
+                    Spacer().frame(height: 8)
+                    Text("디스커버리")
+                        .font(.displaySerif(34))
+                        .foregroundStyle(.espresso)
+                    Spacer().frame(height: 28)
                     DailyNoticeCarousel(notices: notices)
                     if !notices.isEmpty { Spacer().frame(height: 28) }
 
@@ -154,5 +162,15 @@ struct DailyView: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: .now)
+    }
+
+    /// "YYYY · MM · DD · {요일}" — mirrors Android `dailyDateLabel()`
+    /// (DailyScreen.kt:859).
+    private static var dailyDateLabel: String {
+        let cal = Calendar(identifier: .gregorian)
+        let c = cal.dateComponents([.year, .month, .day, .weekday], from: .now)
+        let days = ["일", "월", "화", "수", "목", "금", "토"]   // Calendar weekday: 1 = Sunday
+        let weekday = days[((c.weekday ?? 1) - 1) % 7]
+        return String(format: "%04d · %02d · %02d · %@", c.year ?? 0, c.month ?? 0, c.day ?? 0, weekday)
     }
 }
