@@ -8,6 +8,7 @@ struct NoticeView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @State private var notices: [Notice] = []
     @State private var isLoading = false
+    @State private var loadError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,6 +18,8 @@ struct NoticeView: View {
                     Spacer().frame(height: 4)
                     if isLoading && notices.isEmpty {
                         centeredNote("불러오는 중⋯")
+                    } else if let loadError, notices.isEmpty {
+                        centeredNote(loadError, error: true)
                     } else if notices.isEmpty {
                         centeredNote("등록된 공지가 없습니다.")
                     } else {
@@ -58,10 +61,11 @@ struct NoticeView: View {
         .overlay(alignment: .bottom) { Hairline() }
     }
 
-    private func centeredNote(_ text: String) -> some View {
+    // Android CenteredNote — 에러일 때 Cta(코랄)로 표시.
+    private func centeredNote(_ text: String, error: Bool = false) -> some View {
         Text(text)
             .font(.bodySans(14))
-            .foregroundStyle(.walnut)
+            .foregroundStyle(error ? Color.cta : Color.walnut)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 80)
     }
@@ -69,12 +73,15 @@ struct NoticeView: View {
     private func load() async {
         guard !isLoading else { return }
         isLoading = true
+        loadError = nil
         defer { isLoading = false }
         do {
             notices = try await Supa.shared.fetchNotices()
             prefs.markNoticesSeen(notices.map(\.noticeId).max() ?? 0)
         } catch {
+            // Android: state.error = e.message ?: "불러오기 실패" — 조용히 삼키지 않고 노출.
             notices = []
+            loadError = error.localizedDescription.isEmpty ? "불러오기 실패" : error.localizedDescription
         }
     }
 }
@@ -117,7 +124,7 @@ private struct NoticeCard: View {
                         .font(.bodySans(11))
                         .foregroundStyle(.walnut)
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .regular))
+                        .font(.system(size: 18, weight: .regular))
                         .foregroundStyle(.walnut)
                 }
             }
@@ -137,11 +144,7 @@ private struct NoticeCard: View {
     @ViewBuilder
     private var bodyView: some View {
         if expanded {
-            Text(Self.markdownBody(notice.body))
-                .font(.bodySans(14))
-                .foregroundStyle(.roast)
-                .bookLeading(size: 14)
-                .fixedSize(horizontal: false, vertical: true)
+            NoticeMarkdownBody(source: notice.body)
         } else {
             // 3줄 미리보기. 숨은 전체-높이 사본과 비교해 넘칠 때만 더보기 토글을 노출
             // (Android onTextLayout hasVisualOverflow 대응).
@@ -237,34 +240,77 @@ private struct NoticeCard: View {
             .joined(separator: " ")
     }
 
-    /// Expanded body — render the markdown subset (bold/italic/links + line breaks)
-    /// via native `AttributedString(markdown:)`, no dependency. Headings → bold and
-    /// bullets → "• " are pre-normalised into that inline subset; image lines are
-    /// dropped (no image loader), mirroring Android NoticeBody.
-    static func markdownBody(_ body: String) -> AttributedString {
-        let normalised = body.split(separator: "\n", omittingEmptySubsequences: false)
-            .map { String($0).trimmingCharacters(in: .whitespaces) }
-            .filter { !isImageLine($0) }
-            .map { line -> String in
-                if let h = line.range(of: #"^#{1,3}\s+"#, options: .regularExpression) {
-                    return "**" + line[h.upperBound...].trimmingCharacters(in: .whitespaces) + "**"
-                }
-                if let b = line.range(of: #"^[-•]\s+"#, options: .regularExpression) {
-                    return "•\u{00A0}" + line[b.upperBound...].trimmingCharacters(in: .whitespaces)
-                }
-                return line
-            }
-            .joined(separator: "\n")
+    private static func isImageLine(_ line: String) -> Bool {
+        line.range(of: #"^!\[.*\]\(https://.*\)$"#, options: .regularExpression) != nil
+    }
+}
 
+/// Expanded notice body — rendered line-by-line to mirror Android `NoticeBody`:
+/// headings in Espresso (6pt before / 2pt after), bullets "•  " with 2pt row
+/// padding, blank lines as 10pt gaps, inline **bold** via `AttributedString`.
+/// Image lines are dropped (no image loader).
+private struct NoticeMarkdownBody: View {
+    let source: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                switch line.kind {
+                case .blank:
+                    Spacer().frame(height: 10)
+                case .heading:
+                    Spacer().frame(height: 6)
+                    Text(Self.inline(line.text))
+                        .font(.custom("Pretendard-Medium", size: 14))
+                        .foregroundStyle(.espresso)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer().frame(height: 2)
+                case .bullet:
+                    HStack(alignment: .top, spacing: 0) {
+                        Text("•  ").font(.bodySans(14)).foregroundStyle(.roast)
+                        Text(Self.inline(line.text))
+                            .font(.bodySans(14))
+                            .foregroundStyle(.roast)
+                            .bookLeading(size: 14)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.vertical, 2)
+                case .text:
+                    Text(Self.inline(line.text))
+                        .font(.bodySans(14))
+                        .foregroundStyle(.roast)
+                        .bookLeading(size: 14)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private enum Kind { case blank, heading, bullet, text }
+    private struct Line { let kind: Kind; let text: String }
+
+    private var lines: [Line] {
+        source.split(separator: "\n", omittingEmptySubsequences: false).compactMap { raw in
+            let t = raw.trimmingCharacters(in: .whitespaces)
+            if t.range(of: #"^!\[.*\]\(https://.*\)$"#, options: .regularExpression) != nil { return nil }
+            if t.isEmpty { return Line(kind: .blank, text: "") }
+            if let h = t.range(of: #"^#{1,3}\s+"#, options: .regularExpression) {
+                return Line(kind: .heading, text: String(t[h.upperBound...]).trimmingCharacters(in: .whitespaces))
+            }
+            if let b = t.range(of: #"^[-•]\s+"#, options: .regularExpression) {
+                return Line(kind: .bullet, text: String(t[b.upperBound...]).trimmingCharacters(in: .whitespaces))
+            }
+            return Line(kind: .text, text: t)
+        }
+    }
+
+    private static func inline(_ s: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: true,
             interpretedSyntax: .inlineOnlyPreservingWhitespace
         )
-        return (try? AttributedString(markdown: normalised, options: options))
-            ?? AttributedString(normalised)
-    }
-
-    private static func isImageLine(_ line: String) -> Bool {
-        line.range(of: #"^!\[.*\]\(https://.*\)$"#, options: .regularExpression) != nil
+        return (try? AttributedString(markdown: s, options: options)) ?? AttributedString(s)
     }
 }

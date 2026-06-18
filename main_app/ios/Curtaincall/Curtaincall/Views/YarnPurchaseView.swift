@@ -43,10 +43,6 @@ struct YarnPurchaseView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 20)
-                    header
-                    Spacer().frame(height: 16)
-                    tabSwitcher
-                    Spacer().frame(height: 20)
                     if aboutTab {
                         aboutContent
                     } else {
@@ -72,8 +68,10 @@ struct YarnPurchaseView: View {
         }
     }
 
+    // Android: 탭 라벨(충전/ABOUT)을 상단 바 안에 둔다(별도 타이틀 없음).
+    // 명조 굵은 글자체가 없어 선택 강조는 Pretendard Medium↔Regular 굵기 + 색 대비.
     private var topBar: some View {
-        HStack {
+        HStack(spacing: 4) {
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .regular))
@@ -82,47 +80,13 @@ struct YarnPurchaseView: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            Text("실타래 충전").labelCaps()
-            Spacer()
-            // 균형용 더미(타이틀 가운데 정렬).
-            Color.clear.frame(width: 44, height: 44)
+            tabLabel("충전", selected: !aboutTab) { aboutTab = false }
+            tabLabel("ABOUT", selected: aboutTab) { aboutTab = true }
         }
         .padding(.horizontal, 8)
         .frame(height: 44)
         .background(Color.paper)
         .overlay(alignment: .bottom) { Hairline() }
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Image("daily-script-bar")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
-            VStack(alignment: .leading, spacing: 4) {
-                Text("실타래")
-                    .font(.displaySerif(28))
-                    .foregroundStyle(.espresso)
-                Text("실타래로 명장면 전문을 열람하세요")
-                    .font(.bodySans(13))
-                    .foregroundStyle(.walnut)
-                Text("보유 실타래 \(yarn.balance)")
-                    .font(.bodySans(14))
-                    .foregroundStyle(.espresso)
-            }
-            Spacer()
-        }
-    }
-
-    // 충전 ↔ ABOUT 탭 전환. 명조 굵은 글자체가 없어(no-op) 강조는 색/세리프 대신
-    // Pretendard Medium↔Regular 굵기 + 색 대비로 표현한다.
-    private var tabSwitcher: some View {
-        HStack(spacing: 4) {
-            tabLabel("충전", selected: !aboutTab) { aboutTab = false }
-            tabLabel("ABOUT", selected: aboutTab) { aboutTab = true }
-            Spacer()
-        }
     }
 
     private func tabLabel(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -137,9 +101,20 @@ struct YarnPurchaseView: View {
         .buttonStyle(.plain)
     }
 
-    // 충전 탭 본문: 안내 노트(yarn_daily_note) + 티어 목록 + 결제 준비중 고지.
+    // 충전 탭 본문(Android ChargeContent): 제목·설명 + 보유 실타래 박스 +
+    // 안내 노트(yarn_daily_note) + 티어 목록 + 결제 준비중 고지.
     private var chargeContent: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Text("실타래")
+                .font(.displaySerif(32))
+                .foregroundStyle(.espresso)
+            Spacer().frame(height: 6)
+            Text("실타래로 명장면 전문을 열람하세요")
+                .font(.bodySans(13))
+                .foregroundStyle(.walnut)
+            Spacer().frame(height: 18)
+            balanceBox
+            Spacer().frame(height: 8)
             dailyNote
             Spacer().frame(height: 8)
             ForEach(YarnStore.tiers, id: \.count) { tier in
@@ -151,13 +126,31 @@ struct YarnPurchaseView: View {
         }
     }
 
-    // Android yarn_daily_note — 결제 UI 대신 매일 출석 적립을 안내.
+    // 보유 실타래 — Sand 0.3 박스(Android balance row): 실타래 아이콘 + 잔액.
+    private var balanceBox: some View {
+        HStack(spacing: 10) {
+            Image("daily-script-bar")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 20, height: 20)
+                .clipShape(Circle())
+            Text("보유 실타래 \(yarn.balance)")
+                .font(.titleSerif(18))
+                .foregroundStyle(.espresso)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.sand.opacity(0.3)))
+    }
+
+    // Android yarn_daily_note — 결제 UI 대신 매일 출석 적립을 안내(좌측 정렬).
     private var dailyNote: some View {
         Text("매일 출석으로 실타래를 모아보세요.\n\n실타래로 나만의 공간을 꾸며보세요.")
             .font(.bodySans(13))
             .foregroundStyle(.walnut)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // yarn_daily_note 는 결제가 실서비스인지 말하지 않으므로, 테스터에게
@@ -206,7 +199,7 @@ struct YarnPurchaseView: View {
     private var aboutContent: some View {
         VStack(spacing: 0) {
             Text("실타래")
-                .font(.displaySerif(28))
+                .font(.displaySerif(32))
                 .foregroundStyle(.espresso)
                 .multilineTextAlignment(.center)
             Spacer().frame(height: 8)
@@ -217,7 +210,7 @@ struct YarnPurchaseView: View {
                 .multilineTextAlignment(.center)
             Spacer().frame(height: 20)
             Text("실타래는 명대사가 포함된 명장면을 읽을 때\n지급되는 한 올입니다.")
-                .font(.bodySans(15))
+                .font(.bodySans(16))
                 .foregroundStyle(.walnut)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

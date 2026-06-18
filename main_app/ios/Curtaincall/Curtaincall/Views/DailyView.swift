@@ -185,13 +185,13 @@ struct DailyView: View {
         return f.string(from: .now)
     }
 
-    /// "YYYY · MM · DD · {요일}" — mirrors Android `dailyDateLabel()`
+    /// "YYYY년 M월 D일 {요일}요일" — Android 날짜 표기(DailyScreen.kt) 형식.
     /// (DailyScreen.kt:859).
     private static var dailyDateLabel: String {
         let cal = Calendar(identifier: .gregorian)
         let c = cal.dateComponents([.year, .month, .day, .weekday], from: .now)
         let days = ["일", "월", "화", "수", "목", "금", "토"]   // Calendar weekday: 1 = Sunday
         let weekday = days[((c.weekday ?? 1) - 1) % 7]
-        return String(format: "%04d · %02d · %02d · %@", c.year ?? 0, c.month ?? 0, c.day ?? 0, weekday)
+        return "\(c.year ?? 0)년 \(c.month ?? 0)월 \(c.day ?? 0)일 \(weekday)요일"
     }
 }

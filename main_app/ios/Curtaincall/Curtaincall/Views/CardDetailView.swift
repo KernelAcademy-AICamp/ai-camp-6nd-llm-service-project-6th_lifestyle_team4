@@ -182,7 +182,7 @@ struct CardDetailView: View {
                             showFeedCompose = true
                         }
                     } label: {
-                        Text("오늘의 한줄 남기기")
+                        Text("북마크하고 나의 감상평 작성하기")
                     }
                     .buttonStyle(EditorialButtonStyle(.filled))
 
@@ -190,7 +190,7 @@ struct CardDetailView: View {
                     Button {
                         requestLibrary()
                     } label: {
-                        Text("서재로 가기")
+                        Text("라이브러리 가서 책 더 읽어보기")
                     }
                     .buttonStyle(EditorialButtonStyle(.outlined))
 
