@@ -1,8 +1,12 @@
 import SwiftUI
 import UIKit
 
+/// 설정 내비게이션 스택에 push 되는 라우트(북마크 서가).
+struct BookshelfRoute: Hashable {}
+
 struct MyPageView: View {
     @Binding var selectedTab: Tab
+    @Binding var path: NavigationPath
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
@@ -14,8 +18,6 @@ struct MyPageView: View {
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
     @State private var showAttendance = false
-    @State private var showBookshelf = false
-    @State private var bookshelfPath = NavigationPath()
     @State private var latestNoticeId: Int?
 
     /// Unread-notice dot for the 공지 row — same signal as RootView's MY-tab dot.
@@ -93,14 +95,14 @@ struct MyPageView: View {
                         activityLink(title: "내 댓글", subtitle: "내가 남긴 댓글 보기") {
                             MyCommentsView()
                         }
-                        activityLink(title: "내 피드", subtitle: "내가 쓴 한줄과 하이라이트 보기") {
+                        activityLink(title: "내 피드", subtitle: "내가 공유한 한 줄과 하이라이트 보기") {
                             MyFeedView()
                         }
                     }
                     // 북마크(서가) — Library 탭이 도서 카탈로그로 바뀌어, 북마크 서가는
                     // 여기 설정에서 연다(Android: 설정 > 북마크 → ArchiveScreen). 익명도 노출.
                     activityRow(title: "북마크", subtitle: "수집한 명대사를 책으로 모아 봅니다") {
-                        showBookshelf = true
+                        path.append(BookshelfRoute())
                     }
                     // 출석체크 — 익명도 보상을 받으므로 항상 노출.
                     activityRow(title: "출석체크", subtitle: "내 출석현황 보기") {
@@ -123,6 +125,14 @@ struct MyPageView: View {
 
                     Spacer().frame(height: 40)
                     sectionLabel("일반 설정")
+                    // 푸시 알림 — Android(SettingsScreen.kt) 패리티. 로컬 pref 만 저장
+                    // (양 플랫폼 모두 푸시 인프라 없음).
+                    settingRow(
+                        title: "푸시 알림",
+                        subtitle: "데일리 다이제스트와 주요 소식"
+                    ) {
+                        EditorialToggle(isOn: $prefs.pushEnabled)
+                    }
                     settingRow(
                         title: "테마 설정",
                         subtitle: prefs.darkTheme ? "다크 · 에스프레소 나이트" : "라이트 · 크림 페이퍼"
@@ -138,7 +148,7 @@ struct MyPageView: View {
 
                     Spacer().frame(height: 40)
                     sectionLabel("약관 및 정보")
-                    legalRow(title: "의견 보내기") { FeedbackView() }
+                    legalRow(title: "의견 남기기") { FeedbackView() }
                     legalRow(title: "이용약관") { LegalView(doc: .terms) }
                     legalRow(title: "개인정보 처리방침") { LegalView(doc: .privacy) }
                     settingRow(title: "버전 정보", trailingText: appVersion)
@@ -209,12 +219,10 @@ struct MyPageView: View {
         .sheet(isPresented: $showAttendance) {
             AttendanceView()   // 보기 전용 (보상 지급 없음)
         }
-        // 북마크 서가 — 자체 NavigationStack 으로 띄워 카드 상세 push 를 자체 처리.
-        // 익명도 접근 가능(빈 책장 표시).
-        .sheet(isPresented: $showBookshelf) {
-            NavigationStack(path: $bookshelfPath) {
-                ArchiveView(selectedTab: $selectedTab, path: $bookshelfPath)
-            }
+        // 북마크 서가 — Android(Routes.BOOKMARKS)처럼 풀스크린 push. ArchiveView 가
+        // 카드 상세를 같은 스택(path)에 push 한다. 익명도 접근 가능(빈 책장 표시).
+        .navigationDestination(for: BookshelfRoute.self) { _ in
+            ArchiveView(selectedTab: $selectedTab, path: $path, asSubPage: true)
         }
         .task { await bookmarks.load(userId: session.userId) }
         .task { latestNoticeId = (try? await Supa.shared.fetchLatestNotice())?.noticeId }

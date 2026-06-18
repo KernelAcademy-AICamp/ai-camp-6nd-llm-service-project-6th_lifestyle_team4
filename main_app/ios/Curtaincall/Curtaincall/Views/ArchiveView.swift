@@ -3,8 +3,12 @@ import SwiftUI
 struct ArchiveView: View {
     @Binding var selectedTab: Tab
     @Binding var path: NavigationPath
+    /// True when pushed as the Settings 북마크 sub-page — shows a back bar instead
+    /// of the app masthead (Android's full-screen ArchiveScreen has a back top bar).
+    var asSubPage = false
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var session: AuthSession
+    @Environment(\.dismiss) private var dismiss
 
     @State private var searchText = ""
     @State private var selectedGenre: WorkFormat?
@@ -27,7 +31,11 @@ struct ArchiveView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AppMasthead(onMyPage: { selectedTab = .settings })
+            if asSubPage {
+                subPageBar
+            } else {
+                AppMasthead(onMyPage: { selectedTab = .settings })
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 24)
@@ -82,6 +90,24 @@ struct ArchiveView: View {
             }
         }
         .task { await bookmarks.load(userId: session.userId) }
+    }
+
+    // 설정에서 push 됐을 때의 상단 바 — 다른 하위 페이지(공지·내 댓글)와 동일한
+    // chevron.left 백 버튼. 본문 상단의 큰 "수집한 대본" 타이틀이 제목 역할.
+    private var subPageBar: some View {
+        HStack(alignment: .center) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(.espresso)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 56)
+        .overlay(alignment: .bottom) { Hairline() }
     }
 
     private var genreChips: some View {

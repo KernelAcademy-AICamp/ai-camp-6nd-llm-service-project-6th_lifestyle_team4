@@ -282,7 +282,7 @@ struct DailyContextualSection: View {
                     .font(.headlineSerif(22))
                     .foregroundStyle(.espresso)
                 Spacer().frame(height: 4)
-                Text("지금 마음에 맞춰 한 문장을 골라드려요")
+                Text("끌리는 주제를 골라, 새로운 문장을 만나보세요.")
                     .font(.bodySans(12))
                     .foregroundStyle(.walnut)
                 Spacer().frame(height: 14)
@@ -321,7 +321,6 @@ struct DailyContextualSection: View {
     }
 
     private func contextualCard(_ card: Card) -> some View {
-        let labels = toneLabels(card)
         let meta = [card.work.title, card.work.author]
             .compactMap { $0 }
             .filter { !$0.isEmpty }
@@ -340,7 +339,7 @@ struct DailyContextualSection: View {
                         .labelCaps(color: .walnut, size: 11)
                         .multilineTextAlignment(.center)
                 }
-                toneLabelRow(labels)
+                keywordChips(card)
             }
             .padding(24)
             .frame(maxWidth: .infinity)
@@ -352,18 +351,25 @@ struct DailyContextualSection: View {
         .cardHeroSource(card.cardId)
     }
 
+    /// Android(DailyScreen.kt:657-675): 온도/감도/여운 톤 라벨 대신 카드 키워드
+    /// 칩(#키워드, 최대 3개) — Cta 글자, Latte 알약 배경.
     @ViewBuilder
-    private func toneLabelRow(_ labels: ToneLabelSet) -> some View {
-        let items: [(String, String)] = [
-            ("온도", labels.temp), ("감도", labels.intensity), ("여운", labels.aftertaste),
-        ].compactMap { key, value in value.map { (key, $0) } }
-        if !items.isEmpty {
-            Spacer().frame(height: 14)
-            HStack(spacing: 14) {
-                ForEach(items, id: \.0) { key, value in
-                    Text("\(key) \(value)")
+    private func keywordChips(_ card: Card) -> some View {
+        let keywords = card.keywords
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .prefix(3)
+        if !keywords.isEmpty {
+            Spacer().frame(height: 16)
+            HStack(spacing: 8) {
+                ForEach(Array(keywords), id: \.self) { kw in
+                    Text("#\(kw)")
                         .font(.custom("Pretendard-Medium", size: 11))
+                        .fontWeight(.semibold)
                         .foregroundStyle(Color.cta)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.latte))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -530,10 +536,15 @@ struct DailyOzPickSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             heading
-            Spacer().frame(height: 14)
             if isAnonymous && !hasActive {
+                Spacer().frame(height: 14)
                 ctaCard
             } else if let card {
+                Spacer().frame(height: 4)
+                Text("오즈가 당신의 취향을 살펴 골랐어요.")
+                    .font(.bodySans(13))
+                    .foregroundStyle(.walnut)
+                Spacer().frame(height: 12)
                 personalizedCard(card)
             }
         }
@@ -554,11 +565,9 @@ struct DailyOzPickSection: View {
             ? CardTheme.cardThemeSet(card.keywords).first { prefs.themes.contains($0) }
             : nil
         let tasteHit = card.keywords.first { taste.contains($0) }
-        let personLabel: String = (!isAnonymous && (!nickname.isEmpty || !loginId.isEmpty))
-            ? "'\(nickname.isEmpty ? loginId : nickname)'"
-            : "당신"
+        // 추천 한마디 — Android reason 문구와 동일(themeHit > tasteHit > 일반).
         let reason: String = {
-            if let themeHit { return "'\(themeHit)' 주제를 고른 \(personLabel)에게 추천해요." }
+            if let themeHit { return "'\(themeHit)' 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요." }
             if let tasteHit { return "'\(tasteHit)'에 자주 머무는 당신이라면, 좋아할 한 문장이에요." }
             return "오즈가 오늘 골라드린 한 문장이에요."
         }()
@@ -617,7 +626,7 @@ struct DailyOzPickSection: View {
                 Spacer(minLength: 0)
             }
             Spacer().frame(height: 14)
-            reasonBox("취향을 알려주시면 오즈가 매일 꼭 맞는 한 문장을 골라드릴게요.")
+            reasonBox("좋아하는 장르와 주제만 알려주시면, 오즈가 매일 딱 맞는 한 문장을 골라드려요.")
             Spacer().frame(height: 14)
             Button(action: onRequestPreferences) {
                 Text("취향 알려주기")

@@ -53,6 +53,7 @@ struct RootView: View {
     @State private var homePath = NavigationPath()
     @State private var archivePath = NavigationPath()
     @State private var feedPath = NavigationPath()
+    @State private var settingsPath = NavigationPath()
     @State private var composerActive = false
     @State private var feedReselect = 0
     /// Bumped to re-create FeedView (resetting its private `category` @State to the
@@ -205,8 +206,10 @@ struct RootView: View {
                 LibraryCatalogView(selectedTab: $selectedTab, path: $archivePath)
             }
             .tag(Tab.archive)
-            NavigationStack { MyPageView(selectedTab: $selectedTab) }
-                .tag(Tab.settings)
+            NavigationStack(path: $settingsPath) {
+                MyPageView(selectedTab: $selectedTab, path: $settingsPath)
+            }
+            .tag(Tab.settings)
         }
         .toolbar(.hidden, for: .tabBar)
         // 카드 컨텍스트 메뉴(비회원 북마크 프롬프트)의 '로그인' → MY 탭으로.

@@ -605,61 +605,79 @@ private struct FeedPostDetailSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Header — "DAILY SCRIPT" 라벨 + 닫기 (Android HeaderRow 공용).
             HStack {
+                Text("DAILY SCRIPT")
+                    .font(.custom("Pretendard-Medium", size: 11))
+                    .tracking(2.2)
+                    .foregroundStyle(.walnut)
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(.walnut)
+                        .foregroundStyle(.espresso)
                         .frame(width: 38, height: 38)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 16)
             .padding(.top, 6)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    if let card = post.card {
+                        quoteCard(card)
+                        Spacer().frame(height: 20)
+                    }
                     FeedPostHeader(
                         nickname: post.authorNickname?.ifEmpty("익명") ?? "익명",
                         timeText: FeedTime.relative(post.createdAt)
                     )
+                    Spacer().frame(height: 16)
                     Text(post.body)
-                        .font(.headlineSerif(18))
-                        .fontWeight(.bold)
+                        .font(.titleSerif(16))
                         .foregroundStyle(.espresso)
-                        .multilineTextAlignment(.center)
-                        .bookLeading(size: 18)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 32)
-                        .background(Color.cardWarm)
-                    if let card = post.card {
-                        HStack(alignment: .center, spacing: 14) {
-                            WorkCover(work: card.work, width: 56, height: 80, compact: true)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(card.work.feedTitle)
-                                    .font(.titleSerif(16))
-                                    .foregroundStyle(.espresso)
-                                    .lineLimit(2)
-                                if let author = card.work.author, !author.isEmpty {
-                                    Text(author).font(.bodySans(13)).foregroundStyle(.walnut).lineLimit(1)
-                                }
-                            }
-                            Spacer()
-                        }
+                        .bookLeading(size: 16)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 20)
-                        .padding(.vertical, 18)
-                        Button { onOpenCard(card) } label: {
-                            Text("원문 카드 보기")
-                        }
-                        .buttonStyle(EditorialButtonStyle(.outlined))
-                        .padding(.horizontal, 20)
-                    }
                     Spacer().frame(height: 28)
                 }
             }
         }
         .background(Color.paper)
+    }
+
+    /// 명대사 카드 — 인용 + 출처 + "명대사 읽어보기"(카드 상세로). Android QuoteCard 미러.
+    private func quoteCard(_ card: Card) -> some View {
+        let source = [card.work.feedTitle, card.work.author]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+        return VStack(spacing: 0) {
+            Text("\"\(card.quote)\"")
+                .font(.headlineSerif(22))
+                .foregroundStyle(.espresso)
+                .multilineTextAlignment(.center)
+                .bookLeading(size: 22)
+                .fixedSize(horizontal: false, vertical: true)
+            if !source.isEmpty {
+                Spacer().frame(height: 16)
+                Text("— \(source)")
+                    .labelCaps(color: .walnut, size: 11)
+                    .multilineTextAlignment(.center)
+            }
+            Spacer().frame(height: 24)
+            Button { onOpenCard(card) } label: {
+                Text("명대사 읽어보기")
+            }
+            .buttonStyle(EditorialButtonStyle(.outlined))
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 32)
+        .frame(maxWidth: .infinity)
+        .background(Color.cardWarm)
+        .overlay(Rectangle().stroke(Color.latte, lineWidth: 0.5))
     }
 }
 
