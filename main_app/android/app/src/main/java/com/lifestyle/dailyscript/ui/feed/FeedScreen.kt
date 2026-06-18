@@ -142,7 +142,15 @@ fun FeedScreen(
                 color = Espresso,
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
-            Box(modifier = Modifier.height(16.dp))
+            Box(modifier = Modifier.height(6.dp))
+            // PWA 피드 헤더 부제 (t-label-sm c-walnut).
+            Text(
+                text = "매일 한 문장, 그리고 기억에 남은 장면들",
+                style = MaterialTheme.typography.labelSmall,
+                color = Walnut,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Box(modifier = Modifier.height(18.dp))
 
             // Category tabs
             Row(

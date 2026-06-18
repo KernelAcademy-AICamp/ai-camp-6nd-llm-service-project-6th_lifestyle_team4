@@ -1,15 +1,23 @@
 package com.lifestyle.dailyscript.ui.daily
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +31,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,15 +46,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -80,8 +97,10 @@ import com.lifestyle.dailyscript.ui.util.displayTitle
 import com.lifestyle.dailyscript.ui.util.formatCount
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import com.lifestyle.dailyscript.ui.util.parseEpochMillis
-import java.time.LocalDate
 import kotlinx.coroutines.delay
+import java.time.LocalDate
+import java.time.ZoneId
+import kotlin.math.abs
 
 @Composable
 fun DailyScreen(
@@ -118,23 +137,6 @@ fun DailyScreen(
                 .padding(horizontal = 20.dp),
         ) {
             Box(modifier = Modifier.height(24.dp))
-            Text(
-                text = dailyDateLabel(),
-                style = MetaCaps,
-                color = Walnut,
-            )
-            Box(modifier = Modifier.height(8.dp))
-            Text(
-                text = "디스커버리",
-                style = TextStyle(
-                    fontFamily = EditorialSerif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 34.sp,
-                    lineHeight = 41.sp,
-                ),
-                color = Espresso,
-            )
-            Box(modifier = Modifier.height(28.dp))
 
             state.error?.let {
                 Text(
@@ -280,142 +282,339 @@ private fun DailyNewBooks(books: List<DailyWork>, onOpenWork: (Long) -> Unit) {
     // PWA renderDailyNewBooks: pool = latest 9 works; the featured hero rotates every 10s.
     val pool = remember(books) { books.take(9) }
     var mainIdx by remember(pool) { mutableStateOf(0) }
-    LaunchedEffect(pool) {
-        mainIdx = 0
+    // 슬라이드 방향(1=다음, -1=이전) — 자동순환/스와이프/점에서 갱신해 AnimatedContent 전환에 사용.
+    var direction by remember(pool) { mutableStateOf(1) }
+    // 사용자가 스와이프·점을 누르면 자동순환 정지(PWA stopNewbooksRotation 과 동일).
+    var paused by remember(pool) { mutableStateOf(false) }
+    LaunchedEffect(pool, paused) {
+        if (paused) return@LaunchedEffect
         while (pool.size > 1) {
             delay(10_000)
+            direction = 1
             mainIdx = (mainIdx + 1) % pool.size
         }
     }
     val safeIdx = mainIdx.coerceIn(0, pool.lastIndex)
-    val main = pool[safeIdx]
-    val rest = pool.filterIndexed { i, _ -> i != safeIdx }.take(8)
-    val shape = RoundedCornerShape(14.dp)
 
-    Crossfade(targetState = main, animationSpec = tween(500), label = "daily-newbook-hero") { hero ->
-        val work = hero.work
-        val sampleQuote = Markdown.cleanQuote(hero.cards.firstOrNull()?.quote).take(60)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .shadow(2.dp, shape)
-                .clip(shape)
-                .background(Espresso)
-                .border(0.5.dp, Latte.copy(alpha = 0.25f), shape)
-                .clickable { onOpenWork(hero.workId) }
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "NEW · 새로 들어온 고전",
-                    style = TextStyle(fontSize = 10.sp, letterSpacing = 0.15.em, fontWeight = FontWeight.Bold),
-                    color = Paper,
-                    modifier = Modifier
-                        .background(Cta, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                )
-                Box(modifier = Modifier.height(14.dp))
-                Text(
-                    text = work.displayTitle().ifBlank { "—" },
-                    style = TextStyle(
-                        fontFamily = EditorialSerif,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 30.sp,
-                        lineHeight = 36.sp,
-                    ),
-                    color = Paper,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Box(modifier = Modifier.height(8.dp))
-                Text(
-                    text = listOfNotNull(work.author, work.releaseYear?.toString(), genreLabel(work.format)).joinToString(" · "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Sand,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (sampleQuote.isNotBlank()) {
-                    Box(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "\"$sampleQuote${if (sampleQuote.length >= 60) "⋯" else ""}\"",
-                        style = TextStyle(
-                            fontFamily = EditorialSerif,
-                            fontStyle = FontStyle.Italic,
-                            fontSize = 13.sp,
-                            lineHeight = 20.sp,
-                        ),
-                        color = Latte,
-                    )
-                }
+    // 날짜 — PWA 와 동일하게 블랙 카드 상단 안쪽에 표시(날짜=Sand 굵게, 요일=Cta).
+    // Cta 는 @Composable 게터라 remember 계산 람다 밖(컴포지션)에서 읽어 캡처.
+    val ctaColor = Cta
+    val today = remember { LocalDate.now() }
+    val dateLabel = remember(today, ctaColor) {
+        val dayKo = listOf("일", "월", "화", "수", "목", "금", "토")[today.dayOfWeek.value % 7]
+        buildAnnotatedString {
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                append("${today.year}년 ${today.monthValue}월 ${today.dayOfMonth}일 ")
             }
-            DailyBookCover(work = work, width = 90.dp)
+            withStyle(SpanStyle(color = ctaColor)) {
+                append("${dayKo}요일")
+            }
         }
     }
 
-    if (rest.isNotEmpty()) {
+    // 높이 고정 + 방향성 슬라이드. 고스트(alpha 0)로 9권 중 최대 높이를 잡고,
+    // 그 위에 AnimatedContent 로 현재 카드만 슬라이드 전환(PWA: 왼쪽=다음, 오른쪽=이전).
+    Box(modifier = Modifier.fillMaxWidth()) {
+        pool.forEach { ghost ->
+            DailyNewBookHero(
+                hero = ghost,
+                dateLabel = dateLabel,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(0f),
+            )
+        }
+        AnimatedContent(
+            targetState = safeIdx,
+            modifier = Modifier.matchParentSize(),
+            transitionSpec = {
+                val dir = direction
+                (slideInHorizontally(animationSpec = tween(420)) { w -> dir * w } + fadeIn(tween(340))) togetherWith
+                    (slideOutHorizontally(animationSpec = tween(380)) { w -> -dir * w } + fadeOut(tween(300)))
+            },
+            label = "daily-newbook-hero",
+        ) { idx ->
+            val hero = pool[idx.coerceIn(0, pool.lastIndex)]
+            DailyNewBookHero(
+                hero = hero,
+                dateLabel = dateLabel,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(pool.size) {
+                        if (pool.size <= 1) return@pointerInput
+                        var total = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { total = 0f },
+                            onHorizontalDrag = { change, amount ->
+                                total += amount
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                if (abs(total) >= 45.dp.toPx()) {
+                                    val cur = mainIdx.coerceIn(0, pool.lastIndex)
+                                    val dir = if (total < 0) 1 else -1
+                                    direction = dir
+                                    mainIdx = (cur + dir + pool.size) % pool.size
+                                    paused = true
+                                }
+                            },
+                        )
+                    }
+                    .clickable { onOpenWork(hero.workId) },
+            )
+        }
+    }
+
+    // 위치 표시 점 — 현재=Espresso, 나머지=Sand. 탭하면 해당 책으로 전환(자동순환 정지).
+    if (pool.size > 1) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(top = 16.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(top = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            rest.forEach { book ->
-                Column(
+            pool.forEachIndexed { i, _ ->
+                Box(
                     modifier = Modifier
-                        .width(82.dp)
-                        .clickable { onOpenWork(book.workId) },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    DailyBookCover(work = book.work, width = 82.dp)
-                    Box(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = book.work.displayTitle().ifBlank { "—" },
-                        style = TextStyle(fontFamily = EditorialSerif, fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
-                        color = Espresso,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                    )
-                    book.work.author?.takeIf { it.isNotBlank() }?.let {
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(if (i == safeIdx) Espresso else Sand)
+                        .clickable {
+                            if (i != safeIdx) {
+                                direction = if (i > safeIdx) 1 else -1
+                                paused = true
+                                mainIdx = i
+                            }
+                        },
+                )
+            }
+        }
+    }
+
+    // 아래 작은 표지 줄 — 큰 카드 회전과 무관하게 전체 풀을 고정 순서로 나열(재배열·현재 책 제외 안 함).
+    if (pool.size > 1) {
+        // 가로 스크롤 가능함을 알리는 좌/우 연한 화살표 힌트. 더 넘길 수 있는 방향에만 표시.
+        val coverScroll = rememberScrollState()
+        val coverHeight = 82.dp * (188f / 132f)
+        val leftCaret by animateFloatAsState(
+            targetValue = if (coverScroll.canScrollBackward) 0.5f else 0f,
+            label = "newbook-caret-left",
+        )
+        val rightCaret by animateFloatAsState(
+            targetValue = if (coverScroll.canScrollForward) 0.5f else 0f,
+            label = "newbook-caret-right",
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 18.dp, bottom = 4.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(coverScroll),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                pool.forEach { book ->
+                    Column(
+                        modifier = Modifier
+                            .width(82.dp)
+                            .clickable { onOpenWork(book.workId) },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        DailyBookCover(work = book.work, width = 82.dp)
+                        Box(modifier = Modifier.height(8.dp))
                         Text(
-                            text = it,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Walnut,
+                            text = book.work.displayTitle().ifBlank { "—" },
+                            style = TextStyle(fontFamily = EditorialSerif, fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                            color = Espresso,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center,
                         )
+                        book.work.author?.takeIf { it.isNotBlank() }?.let {
+                            Text(
+                                text = it,
+                                // PWA 작은 표지 작가: 10px (제목 11px 보다 한 단계 작게).
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = Walnut,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
                     }
                 }
+            }
+            // 좌/우 끝 화살표 — coverHeight 만큼만 차지해 표지 세로 중앙에 정렬, 더 넘길 수 있을 때만 보임.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .height(coverHeight)
+                    .width(34.dp)
+                    .alpha(leftCaret)
+                    .background(Brush.horizontalGradient(listOf(Paper, Color.Transparent))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.ChevronLeft,
+                    contentDescription = null,
+                    tint = Espresso,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .height(coverHeight)
+                    .width(34.dp)
+                    .alpha(rightCaret)
+                    .background(Brush.horizontalGradient(listOf(Color.Transparent, Paper))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.ChevronRight,
+                    contentDescription = null,
+                    tint = Espresso,
+                    modifier = Modifier.size(26.dp),
+                )
             }
         }
     }
     SectionGap()
 }
 
+// 새 책 hero 카드(블랙 박스) — 날짜·NEW 뱃지·제목·저자·인용 + 표지.
+// modifier 로 사이즈/클릭/스와이프를 외부에서 주입(고스트는 alpha 0, 보이는 카드는 클릭·드래그).
+@Composable
+private fun DailyNewBookHero(
+    hero: DailyWork,
+    dateLabel: AnnotatedString,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    val work = hero.work
+    val intro = work.intro?.trim().orEmpty()
+    val sampleQuote = Markdown.cleanQuote(hero.cards.firstOrNull()?.quote).take(60)
+    Row(
+        modifier = modifier
+            .shadow(2.dp, shape)
+            .clip(shape)
+            .background(Espresso)
+            .border(0.5.dp, Latte.copy(alpha = 0.25f), shape)
+            .padding(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        // PWA .daily-newbook-main-inner: align-items:center → 표지를 텍스트 기준 세로 중앙 정렬.
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = dateLabel,
+                style = TextStyle(fontSize = 11.sp, letterSpacing = 0.04.em),
+                color = Sand,
+            )
+            Box(modifier = Modifier.height(13.dp))
+            Text(
+                text = "NEW · 새로 들어온 고전",
+                style = TextStyle(fontSize = 10.sp, letterSpacing = 0.15.em, fontWeight = FontWeight.Bold),
+                color = Paper,
+                modifier = Modifier
+                    .background(Cta, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+            Box(modifier = Modifier.height(14.dp))
+            Text(
+                text = work.displayTitle().ifBlank { "—" },
+                style = TextStyle(
+                    fontFamily = EditorialSerif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 30.sp,
+                    lineHeight = 36.sp,
+                ),
+                color = Paper,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Box(modifier = Modifier.height(8.dp))
+            Text(
+                text = listOfNotNull(work.author, work.releaseYear?.toString(), genreLabel(work.format)).joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = Sand,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // PWA renderDailyNewBooks: 책 소개(intro) 우선 노출(정자체), 없으면 명대사 폴백(italic + 따옴표).
+            // 둘 다 14sp / line-height 1.75(≈24.5sp) / 3줄 클램프.
+            if (intro.isNotBlank()) {
+                Box(modifier = Modifier.height(12.dp))
+                Text(
+                    text = intro,
+                    style = TextStyle(
+                        fontFamily = EditorialSerif,
+                        fontSize = 14.sp,
+                        lineHeight = 24.5.sp,
+                    ),
+                    color = Latte,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else if (sampleQuote.isNotBlank()) {
+                Box(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "\"$sampleQuote${if (sampleQuote.length >= 60) "⋯" else ""}\"",
+                    style = TextStyle(
+                        fontFamily = EditorialSerif,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 14.sp,
+                        lineHeight = 24.5.sp,
+                    ),
+                    color = Latte,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        DailyBookCover(work = work, width = 90.dp)
+    }
+}
+
 @Composable
 private fun DailyContextual(cards: List<CardDto>, onOpenCard: (CardDto) -> Unit) {
     if (cards.isEmpty()) return
-    var selected by remember { mutableStateOf(ContextCategories.first().id) }
-    val category = ContextCategories.firstOrNull { it.id == selected } ?: ContextCategories.first()
-    val picks = remember(cards, selected) { filterContextualCards(cards, category) }
-    val card = picks.firstOrNull()
+    // PWA renderDailyContextual: 카드가 1장 이상 매칭되는 카테고리만 후보로(빈 칩 방지).
+    val allCats = remember(cards) { ContextCategories.filter { filterContextualCards(cards, it).isNotEmpty() } }
+    if (allCats.isEmpty()) return
+    // PWA _dailySeed(): 로컬 자정 epoch ms / 86,400,000 (자정마다 +1). 칩 시작점·카드 오프셋에 사용.
+    val seed = remember {
+        LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() / 86_400_000L
+    }
+    // 하루 3개씩만 노출 — 일별 시드로 시작점을 돌려 매일 다른 조합. (후보 3개 이하면 전부.)
+    val dailyCats = remember(allCats, seed) {
+        val count = 3
+        if (allCats.size <= count) allCats
+        else {
+            val start = (seed % allCats.size).toInt()
+            List(count) { k -> allCats[(start + k) % allCats.size] }
+        }
+    }
+    var selected by remember(dailyCats) { mutableStateOf(dailyCats.first().id) }
+    val category = dailyCats.firstOrNull { it.id == selected } ?: dailyCats.first()
+    val picks = remember(cards, category) { filterContextualCards(cards, category) }
+    // 일별 시드를 오프셋으로 더해 매일 다른 카드가 첫 화면에 오도록.
+    val card = if (picks.isEmpty()) null else picks[(seed % picks.size).toInt()]
 
     Text(text = "이럴 땐, 이런 문장", style = MaterialTheme.typography.headlineMedium, color = Espresso)
     Box(modifier = Modifier.height(4.dp))
-    Text(text = "지금 마음에 맞춰 한 문장을 골라드려요", style = MaterialTheme.typography.bodySmall, color = Walnut)
-    Box(modifier = Modifier.height(14.dp))
+    Text(text = "끌리는 주제를 골라, 새로운 문장을 만나보세요.", style = MaterialTheme.typography.bodySmall, color = Walnut)
+    Box(modifier = Modifier.height(12.dp))
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ContextCategories.forEach { c ->
+        dailyCats.forEach { c ->
             Chip(text = c.label, active = selected == c.id) { selected = c.id }
         }
     }
@@ -432,7 +631,7 @@ private fun DailyContextual(cards: List<CardDto>, onOpenCard: (CardDto) -> Unit)
                 .padding(vertical = 24.dp),
         )
     } else {
-        val labels = toneLabels(card)
+        val keywords = card.keywordList().map { it.trim() }.filter { it.isNotEmpty() }.take(3)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -442,20 +641,38 @@ private fun DailyContextual(cards: List<CardDto>, onOpenCard: (CardDto) -> Unit)
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "\"${Markdown.cleanQuote(card.quote).take(120)}\"",
+                text = "\"${card.quote.take(120)}\"",
                 style = TextStyle(fontFamily = EditorialSerif, fontSize = 18.sp, lineHeight = 29.sp),
                 color = Espresso,
                 textAlign = TextAlign.Center,
             )
             Box(modifier = Modifier.height(14.dp))
             Text(
-                text = listOfNotNull(card.works?.displayTitle()?.ifBlank { null }, card.works?.author?.ifBlank { null })
+                text = listOfNotNull(card.works?.title?.ifBlank { null }, card.works?.author?.ifBlank { null })
                     .joinToString(" · "),
                 style = MetaCaps,
                 color = Walnut,
                 textAlign = TextAlign.Center,
             )
-            ToneLabels(labels)
+            // PWA: 온도/감도/여운 대신 카드 키워드 칩(#키워드, 최대 3개)을 보여준다.
+            if (keywords.isNotEmpty()) {
+                Box(modifier = Modifier.height(16.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                ) {
+                    keywords.forEach { kw ->
+                        Text(
+                            text = "#$kw",
+                            style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                            color = Cta,
+                            modifier = Modifier
+                                .background(Latte, CircleShape)
+                                .padding(horizontal = 11.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+            }
         }
     }
     SectionGap()
@@ -559,26 +776,49 @@ private fun DailyOzPick(
         null
     }
     val tasteHit = card.keywordList().firstOrNull { it in taste }
-    // 로그인 상태면 '당신' 대신 표시 이름(닉네임>아이디)으로 호명 (PWA personLabel).
-    val personLabel = if (!isAnonymous && (nickname.isNotBlank() || !loginId.isNullOrBlank())) {
-        "'${nickname.ifBlank { loginId.orEmpty() }}'"
-    } else {
-        "당신"
-    }
-    val reason = when {
-        themeHit != null -> "'$themeHit' 주제를 고른 ${personLabel}에게 추천해요."
-        tasteHit != null -> "'$tasteHit'에 자주 머무는 당신이라면, 좋아할 한 문장이에요."
-        else -> "오즈가 오늘 골라드린 한 문장이에요."
-    }
     val work = card.works
-    val cat = rememberAssetBitmap("cat/library-cat-2.png")
+    val cat = rememberAssetBitmap("cat/cat_computer.png")
     // 선호 메타 — 고른 장르/주제(없으면 상관없음). PWA genreText/themeText.
     val genreText = (prefs?.genres ?: emptyList()).joinToString(", ") { genreLabel(it) }.ifBlank { "상관없음" }
     val themeText = if (prefs?.any == true) "상관없음"
         else (prefs?.themes ?: emptyList()).joinToString(", ").ifBlank { "상관없음" }
+    // Cta/Espresso 는 @Composable 게터라 AnnotatedString 빌더 밖(컴포지션)에서 읽어 캡처.
+    val ctaColor = Cta
+    val espressoColor = Espresso
+    // PWA reasonHtml — 매칭 키워드만 굵게.
+    val reason = buildAnnotatedString {
+        when {
+            themeHit != null -> {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("'$themeHit'") }
+                append(" 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요.")
+            }
+            tasteHit != null -> {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("'$tasteHit'") }
+                append("에 자주 머무는 당신이라면, 좋아할 한 문장이에요.")
+            }
+            else -> append("오즈가 오늘 골라드린 한 문장이에요.")
+        }
+    }
+    // PWA 카드 헤더 메타 — 닉네임(>아이디>당신) 굵게 + '님', 장르/주제 라벨 코랄. 한 블록.
+    val userName = nickname.ifBlank { loginId.orEmpty() }
+    val metaText = buildAnnotatedString {
+        if (userName.isNotBlank()) {
+            withStyle(SpanStyle(fontSize = 15.sp, color = espressoColor, fontWeight = FontWeight.Bold)) { append(userName) }
+            append(" 님")
+        } else {
+            withStyle(SpanStyle(fontSize = 15.sp, color = espressoColor, fontWeight = FontWeight.Bold)) { append("당신") }
+        }
+        append("\n")
+        withStyle(SpanStyle(color = ctaColor, fontWeight = FontWeight.Bold)) { append("장르") }
+        append(" : $genreText\n")
+        withStyle(SpanStyle(color = ctaColor, fontWeight = FontWeight.Bold)) { append("주제") }
+        append(" : $themeText")
+    }
 
     DailyOzPickHeading()
-    Box(modifier = Modifier.height(14.dp))
+    Box(modifier = Modifier.height(4.dp))
+    Text(text = "오즈가 당신의 취향을 살펴 골랐어요.", style = MaterialTheme.typography.bodySmall, color = Walnut)
+    Box(modifier = Modifier.height(12.dp))
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -590,21 +830,12 @@ private fun DailyOzPick(
             if (cat != null) {
                 Image(bitmap = cat, contentDescription = "오즈", contentScale = ContentScale.Fit, modifier = Modifier.width(140.dp))
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = nickname.ifBlank { "오즈" },
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = Espresso,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Box(modifier = Modifier.height(8.dp))
-                Text(text = "당신의 취향", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = Espresso)
-                Box(modifier = Modifier.height(3.dp))
-                OzPickMetaLine("장르", genreText)
-                Box(modifier = Modifier.height(2.dp))
-                OzPickMetaLine("주제", themeText)
-            }
+            Text(
+                text = metaText,
+                style = TextStyle(fontSize = 11.sp, lineHeight = 21.sp),
+                color = Walnut,
+                modifier = Modifier.weight(1f),
+            )
         }
         Box(modifier = Modifier.height(14.dp))
         Box(
@@ -625,7 +856,7 @@ private fun DailyOzPick(
             DailyBookCover(work = work, width = 56.dp)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = work.displayTitle().ifBlank { "—" },
+                    text = work?.title?.takeIf { it.isNotBlank() } ?: "—",
                     style = TextStyle(fontFamily = EditorialSerif, fontSize = 15.sp, fontWeight = FontWeight.Bold),
                     color = Espresso,
                     maxLines = 2,
@@ -650,33 +881,18 @@ private fun DailyOzPickHeading() {
     Row(verticalAlignment = Alignment.Bottom) {
         Text(
             text = "당신을 위한 ",
-            style = MaterialTheme.typography.titleMedium.copy(fontFamily = EditorialSerif),
+            style = MaterialTheme.typography.titleMedium.copy(fontFamily = EditorialSerif, fontSize = 17.sp),
             color = Espresso,
         )
         Text(
             text = "Daily Script",
-            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = EditorialSerif, fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = EditorialSerif, fontWeight = FontWeight.Bold, fontSize = 24.sp),
             color = Espresso,
         )
         Text(
             text = ".",
-            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = EditorialSerif, fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = EditorialSerif, fontWeight = FontWeight.Bold, fontSize = 24.sp),
             color = Cta,
-        )
-    }
-}
-
-/** OZ Pick 헤더의 "장르 : …" / "주제 : …" 한 줄 (라벨 굵게, 값 walnut). PWA 메타 블록. */
-@Composable
-private fun OzPickMetaLine(label: String, value: String) {
-    Row {
-        Text(text = label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = Espresso)
-        Text(
-            text = " : $value",
-            style = MaterialTheme.typography.labelSmall,
-            color = Walnut,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -684,9 +900,9 @@ private fun OzPickMetaLine(label: String, value: String) {
 /** 게스트/무선호 사용자에게 취향 설정을 유도하는 OZ Pick CTA (PWA renderDailyOzPick guest 카드). */
 @Composable
 private fun DailyOzPickCta(nickname: String, onRequestPreferences: () -> Unit) {
-    val cat = rememberAssetBitmap("cat/library-cat-2.png")
+    val cat = rememberAssetBitmap("cat/cat_computer.png")
     DailyOzPickHeading()
-    Box(modifier = Modifier.height(14.dp))
+    Box(modifier = Modifier.height(8.dp))
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -722,7 +938,7 @@ private fun DailyOzPickCta(nickname: String, onRequestPreferences: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
             Text(
-                text = "취향을 알려주시면 오즈가 매일 꼭 맞는 한 문장을 골라드릴게요.",
+                text = "좋아하는 장르와 주제만 알려주시면, 오즈가 매일 딱 맞는 한 문장을 골라드려요.",
                 style = TextStyle(fontFamily = EditorialSerif, fontSize = 13.sp, lineHeight = 21.sp),
                 color = Espresso,
             )
@@ -731,7 +947,7 @@ private fun DailyOzPickCta(nickname: String, onRequestPreferences: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(Cta)
                 .clickable(onClick = onRequestPreferences)
                 .padding(vertical = 14.dp),
@@ -760,7 +976,7 @@ private fun DailyRecent(bookmarks: List<BookmarkRow>, onOpenCard: (CardDto) -> U
         color = Espresso,
     )
     Box(modifier = Modifier.height(6.dp))
-    Text(text = "지난주 담아둔 문장, 다시 읽어볼까요", style = MaterialTheme.typography.bodySmall, color = Walnut)
+    Text(text = "담아둔 문장, 다시 읽어볼까요?", style = MaterialTheme.typography.bodySmall, color = Walnut)
     Box(modifier = Modifier.height(14.dp))
     Row(
         modifier = Modifier
@@ -822,26 +1038,6 @@ private fun DailyBookCover(work: WorkDto?, width: Dp) {
 }
 
 @Composable
-private fun ToneLabels(labels: ToneLabelSet) {
-    val items = listOfNotNull(
-        labels.temp?.let { "온도" to it },
-        labels.intensity?.let { "감도" to it },
-        labels.aftertaste?.let { "여운" to it },
-    )
-    if (items.isEmpty()) return
-    Box(modifier = Modifier.height(14.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth()) {
-        items.forEach { (label, value) ->
-            Text(
-                text = "$label $value",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = Cta,
-            )
-        }
-    }
-}
-
-@Composable
 private fun Modifier.dailyCard(): Modifier {
     val shape = RoundedCornerShape(14.dp)
     return this
@@ -856,20 +1052,15 @@ private fun SectionGap() {
     Box(modifier = Modifier.height(36.dp))
 }
 
-private fun dailyDateLabel(): String {
-    val d = LocalDate.now()
-    val day = listOf("월", "화", "수", "목", "금", "토", "일")[d.dayOfWeek.value - 1]
-    return "%04d · %02d · %02d · %s".format(d.year, d.monthValue, d.dayOfMonth, day)
-}
-
 private data class ContextCategory(
     val id: String,
     val label: String,
     val keywords: List<String>,
 )
 
-// PWA CONTEXT_CATEGORIES (renderDailyContextual): 3 moods, matched purely on a card's
+// PWA CONTEXT_CATEGORIES (renderDailyContextual): 14 moods, matched purely on a card's
 // structured keywords (LLM 3 tags) — quote/script/significance·tone are NOT used for matching.
+// 하루 3개씩 일별 시드로 회전 노출(아래 DailyContextual).
 private val ContextCategories = listOf(
     ContextCategory(
         id = "comfort",
@@ -885,6 +1076,61 @@ private val ContextCategories = listOf(
         id = "resolve",
         label = "결심이 필요할 때",
         keywords = listOf("결심", "의지", "도전", "용기", "운명", "신념", "다짐", "각오", "투지", "극복", "강인", "싸움", "꿈", "희망", "믿음", "열정", "성장", "자유", "선택", "시작", "변화", "두려움"),
+    ),
+    ContextCategory(
+        id = "love",
+        label = "사랑에 빠졌을 때",
+        keywords = listOf("사랑", "연애", "연정", "애정", "설렘", "첫사랑", "열정", "마음", "동경", "끌림", "입맞춤", "고백", "연인", "애틋", "정열", "구애", "연모"),
+    ),
+    ContextCategory(
+        id = "ambition",
+        label = "야망이 끓을 때",
+        keywords = listOf("야망", "야심", "권력", "욕망", "성공", "지배", "정복", "명예", "출세", "패권", "군림", "권세", "왕좌", "승리", "쟁취", "도약"),
+    ),
+    ContextCategory(
+        id = "anger",
+        label = "분노가 차오를 때",
+        keywords = listOf("분노", "복수", "증오", "격분", "원한", "적개심", "울분", "노여움", "응징", "저항", "반항", "항거", "울화", "독기", "앙심"),
+    ),
+    ContextCategory(
+        id = "mortal",
+        label = "삶과 죽음을 생각할 때",
+        keywords = listOf("죽음", "삶", "생명", "인생", "운명", "허무", "종말", "소멸", "영원", "유한", "무상", "존재", "필멸", "생사", "덧없음", "세월"),
+    ),
+    ContextCategory(
+        id = "desire",
+        label = "유혹에 흔들릴 때",
+        keywords = listOf("유혹", "욕망", "쾌락", "본능", "충동", "호색", "관능", "탐닉", "중독", "갈망", "끌림", "타락", "방종", "쾌감"),
+    ),
+    ContextCategory(
+        id = "faith",
+        label = "믿음이 흔들릴 때",
+        keywords = listOf("믿음", "신앙", "양심", "기도", "위선", "죄", "구원", "회개", "영혼", "도덕", "종교", "참회", "심판", "용서"),
+    ),
+    ContextCategory(
+        id = "freedom",
+        label = "자유를 꿈꿀 때",
+        keywords = listOf("자유", "해방", "독립", "탈출", "속박", "억압", "굴레", "저항", "권리", "평등", "존엄", "굴종", "해탈", "구속"),
+    ),
+    ContextCategory(
+        id = "vocation",
+        label = "일과 소명",
+        keywords = listOf("글쓰기", "직업", "강박", "소명", "창작", "예술", "노동", "일", "천직", "몰두", "장인", "재능", "직분", "소임"),
+    ),
+    ContextCategory(
+        id = "greed",
+        label = "욕심과 소유",
+        keywords = listOf("소유", "집착", "욕심", "탐욕", "재물", "돈", "물질", "인색", "미련", "소유욕", "재산", "부", "이익", "가난"),
+    ),
+    ContextCategory(
+        id = "society",
+        label = "시대와 민중",
+        keywords = listOf("민중", "복종", "회복력", "사회", "계급", "권위", "부조리", "시대", "군중", "혁명", "신분", "억압", "체제", "저항"),
+    ),
+    ContextCategory(
+        id = "growth",
+        label = "깨달음과 성장",
+        keywords = listOf("질문", "인내", "성장", "깨달음", "배움", "지혜", "통찰", "성찰", "각성", "자각", "성숙", "깨우침", "수양", "경험"),
     ),
 )
 
@@ -910,48 +1156,6 @@ private fun filterContextualCards(cards: List<CardDto>, category: ContextCategor
         .sortedWith(compareByDescending<Pair<CardDto, Int>> { it.second }.thenByDescending { it.first.viewCount ?: 0 })
         .take(12)
         .map { it.first }
-
-private data class ToneLabelSet(val temp: String?, val intensity: String?, val aftertaste: String?)
-
-private fun toneLabels(card: CardDto): ToneLabelSet {
-    val t = normTone(card.temperature.toDouble())
-    val i = normTone(card.intensity.toDouble())
-    val temp = when {
-        t == null -> null
-        t < 0.2 -> "차가움"
-        t < 0.4 -> "차분함"
-        t < 0.6 -> "미지근"
-        t < 0.8 -> "따스함"
-        else -> "뜨거움"
-    }
-    val intensity = when {
-        i == null -> null
-        i < 0.2 -> "잔잔"
-        i < 0.4 -> "조용"
-        i < 0.6 -> "적당"
-        i < 0.8 -> "짙음"
-        else -> "강렬"
-    }
-    val baseLen = (card.significance?.length ?: 0).takeIf { it > 0 } ?: (card.scriptExcerpt.length / 8)
-    val aftertaste = when {
-        baseLen <= 0 -> null
-        baseLen < 40 -> "짧음"
-        baseLen < 80 -> "담백"
-        baseLen < 140 -> "보통"
-        baseLen < 220 -> "깊음"
-        else -> "길음"
-    }
-    return ToneLabelSet(temp, intensity, aftertaste)
-}
-
-private fun normTone(n: Double): Double? {
-    if (!n.isFinite()) return null
-    return when {
-        n > 10.0 -> (n / 100.0).coerceIn(0.0, 1.0)
-        n > 1.0 -> (n / 10.0).coerceIn(0.0, 1.0)
-        else -> n.coerceIn(0.0, 1.0)
-    }
-}
 
 private data class TrendingCard(
     val card: CardDto,

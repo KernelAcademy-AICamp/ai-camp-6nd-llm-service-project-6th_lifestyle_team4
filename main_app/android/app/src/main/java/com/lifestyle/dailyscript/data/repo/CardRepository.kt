@@ -31,7 +31,7 @@ class CardRepository {
         excerpt_description_original,
         significance_original,
         keywords_original,
-        works ( work_id, title, subtitle, format, author, release_year, cover_url, characters, title_original, subtitle_original, author_original )
+        works ( work_id, title, subtitle, format, author, release_year, intro, cover_url, characters, title_original, subtitle_original, author_original )
         """.trimIndent()
     )
 
