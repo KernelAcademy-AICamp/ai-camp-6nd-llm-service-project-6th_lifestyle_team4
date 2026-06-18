@@ -202,7 +202,7 @@ struct RootView: View {
             }
             .tag(Tab.home)
             NavigationStack(path: $archivePath) {
-                ArchiveView(selectedTab: $selectedTab, path: $archivePath)
+                LibraryCatalogView(selectedTab: $selectedTab, path: $archivePath)
             }
             .tag(Tab.archive)
             NavigationStack { MyPageView(selectedTab: $selectedTab) }
