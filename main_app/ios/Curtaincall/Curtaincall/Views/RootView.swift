@@ -55,6 +55,9 @@ struct RootView: View {
     @State private var feedPath = NavigationPath()
     @State private var composerActive = false
     @State private var feedReselect = 0
+    /// Bumped to re-create FeedView (resetting its private `category` @State to the
+    /// default `.today`) after a Card Detail "오늘의 한줄" post routes to Feed.
+    @State private var feedResetToken = 0
     @State private var latestNoticeId: Int?
 
     var body: some View {
@@ -191,6 +194,7 @@ struct RootView: View {
             .tag(Tab.daily)
             NavigationStack(path: $feedPath) {
                 FeedView(selectedTab: $selectedTab, reselect: feedReselect)
+                    .id(feedResetToken)   // re-create → category resets to .today
             }
             .tag(Tab.feed)
             NavigationStack(path: $homePath) {
@@ -207,6 +211,17 @@ struct RootView: View {
         .toolbar(.hidden, for: .tabBar)
         // 카드 컨텍스트 메뉴(비회원 북마크 프롬프트)의 '로그인' → MY 탭으로.
         .environment(\.requestLogin) { selectedTab = .settings }
+        // 카드 상세 '서재로 가기' → LIBRARY 탭으로 (requestLogin 패턴 동일).
+        .environment(\.requestLibrary) { selectedTab = .archive }
+        // 카드 상세 '오늘의 한줄' 작성 후 → FEED 탭 + '나의 감상평'(today) 카테고리로.
+        // FeedView가 category를 private @State로 가지므로 id를 바꿔 재생성해 기본
+        // 카테고리(.today)로 리셋한다 — 새 한줄이 '하이라이트' 등 다른 탭에 가려 안 보이는
+        // 문제 방지(Android는 라우팅 전에 today 카테고리로 전환).
+        .environment(\.requestFeed) {
+            selectedTab = .feed
+            feedPath = NavigationPath()
+            feedResetToken += 1
+        }
         // Hide the tab bar while the comment composer is focused (keyboard up),
         // so the input can pin directly above the keyboard; restore on blur.
         .onPreferenceChange(ComposerFocusedPreferenceKey.self) { active in
