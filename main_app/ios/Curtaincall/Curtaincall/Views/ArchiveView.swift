@@ -36,12 +36,12 @@ struct ArchiveView: View {
                         .foregroundStyle(.espresso)
                     if !bookmarks.bookmarks.isEmpty {
                         Spacer().frame(height: 6)
-                        Text("소장 \(allWorks.count)권 · 명대사 \(bookmarks.bookmarks.count)편").labelCaps()
+                        Text("소장 \(allWorks.count)권  ·  명대사 \(bookmarks.bookmarks.count)편").labelCaps()
                     }
 
-                    Spacer().frame(height: 24)
+                    Spacer().frame(height: 12)
                     genreChips
-                    Spacer().frame(height: 14)
+                    Spacer().frame(height: 10)
                     searchField
                     Spacer().frame(height: 24)
 
@@ -86,20 +86,25 @@ struct ArchiveView: View {
 
     private var genreChips: some View {
         let available = Set(allWorks.map(\.format))
-        return FlowLayout(spacing: 6, lineSpacing: 8) {
-            ArchiveFilterChip(
-                title: "All · \(allWorks.count)",
-                isSelected: selectedGenre == nil
-            ) {
-                selectedGenre = nil
-            }
-            ForEach(Self.genreOrder.filter { available.contains($0) }, id: \.self) { format in
-                let count = allWorks.filter { $0.format == format }.count
-                ArchiveFilterChip(
-                    title: "\(format.displayName) · \(count)",
-                    isSelected: selectedGenre == format
-                ) {
-                    selectedGenre = format
+        let otherCount = allWorks.filter { !Self.genreOrder.contains($0.format) }.count
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button { selectedGenre = nil } label: {
+                    Chip(text: "All · \(allWorks.count)", filled: selectedGenre == nil)
+                }
+                .buttonStyle(.plain)
+                ForEach(Self.genreOrder.filter { available.contains($0) }, id: \.self) { format in
+                    let count = allWorks.filter { $0.format == format }.count
+                    Button { selectedGenre = format } label: {
+                        Chip(text: "\(format.displayName) · \(count)", filled: selectedGenre == format)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if otherCount > 0 {
+                    Button { selectedGenre = .unknown } label: {
+                        Chip(text: "기타 · \(otherCount)", filled: selectedGenre == .unknown)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -110,14 +115,22 @@ struct ArchiveView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(.walnut)
-            TextField("작품 제목으로 검색", text: $searchText)
+            TextField("", text: $searchText)
                 .font(.bodySans(14))
                 .foregroundStyle(.espresso)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
+                .overlay(alignment: .leading) {
+                    if searchText.isEmpty {
+                        Text("작품 제목으로 검색")
+                            .font(.bodySans(14))
+                            .foregroundStyle(.sand)
+                            .allowsHitTesting(false)
+                    }
+                }
         }
         .padding(.horizontal, 14)
-        .frame(height: 44)
+        .padding(.vertical, 12)
         .background(Color.paper)
         .overlay(Rectangle().stroke(Color.walnut, lineWidth: 0.5))
     }
@@ -141,35 +154,19 @@ struct ArchiveView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "bookmark")
-                .font(.system(size: 54, weight: .regular))
-                .foregroundStyle(.sand)
-            Text("아직 수집한 대본이 없습니다.")
-                .font(.titleSerif(18))
-                .foregroundStyle(.espresso)
-            Text("오늘의 명대사를 북마크하면 여기에 모입니다.")
-                .font(.bodySans(14))
-                .foregroundStyle(.walnut)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        Text("아직 북마크한 카드가 없습니다.")
+            .font(.bodySans(14))
+            .foregroundStyle(.walnut)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 24)
     }
 
     private var noResultState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 48, weight: .regular))
-                .foregroundStyle(.sand)
-            Text("검색 결과가 없습니다")
-                .font(.titleSerif(18))
-                .foregroundStyle(.espresso)
-            Text("다른 단어로 시도해보세요")
-                .font(.bodySans(14))
-                .foregroundStyle(.walnut)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        Text("검색 결과가 없습니다.")
+            .font(.bodySans(14))
+            .foregroundStyle(.walnut)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 24)
     }
 
     private static let genreOrder: [WorkFormat] = [
@@ -226,30 +223,14 @@ private struct ShelfWork: Identifiable {
     var cards: [Card] { rows.compactMap(\.card) }
 }
 
-private struct ArchiveFilterChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.custom("Pretendard-Medium", size: 11))
-                .tracking(1.1)
-                .foregroundStyle(isSelected ? Color.paper : Color.walnut)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(isSelected ? Color.espresso : Color.paper)
-                .overlay(Rectangle().stroke(isSelected ? Color.espresso : Color.walnut, lineWidth: 0.5))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 private struct GenreShelf: View {
     let format: WorkFormat
     let works: [ShelfWork]
     let onSelect: (ShelfWork) -> Void
+
+    private var tallestSpine: CGFloat {
+        works.map { BookSpine.spineHeight(for: $0) }.max() ?? 200
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -277,7 +258,9 @@ private struct GenreShelf: View {
                     .padding(.bottom, 18)
                 }
             }
-            .frame(height: 232)
+            // Size to the tallest spine (Android's spine height grows with the
+            // title) plus the top/bottom shelf padding, so nothing clips.
+            .frame(height: tallestSpine + 38)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .shadow(color: Color.black.opacity(0.28), radius: 8, x: 0, y: 4)
         }
@@ -321,34 +304,16 @@ private struct ShelfWood: View {
                 .fill(Color(hex: palette.frame))
             VStack(spacing: 0) {
                 woodBand(height: 14)
-                ZStack {
-                    LinearGradient(
-                        colors: [
-                            Color(hex: palette.back),
-                            Color(hex: 0x1B0E06),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    LinearGradient(
-                        colors: [
-                            Color.black.opacity(0.22),
-                            Color.black.opacity(0.48),
-                            Color.black.opacity(0.58),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    ShelfShadowTexture()
-                }
+                LinearGradient(
+                    colors: [
+                        Color(hex: palette.back),
+                        Color(hex: 0x1B0E06),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
                 .padding(.horizontal, 10)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color(hex: 0xFFEBC0).opacity(0.14))
-                        .frame(height: 1)
-                        .padding(.horizontal, 10)
-                }
                 woodBand(height: 16)
             }
         }
@@ -359,28 +324,31 @@ private struct ShelfWood: View {
     }
 
     private func woodBand(height: CGFloat) -> some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(hex: palette.frameLight),
-                    Color(hex: palette.frame),
-                    Color(hex: 0x2E180B),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            WoodGrain()
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color(hex: 0xFFEBC0).opacity(0.18))
-                    .frame(height: 0.5)
-                Spacer()
-                Rectangle()
-                    .fill(Color.black.opacity(0.42))
-                    .frame(height: 0.5)
-            }
-        }
+        LinearGradient(
+            colors: [
+                Color(hex: palette.frameLight),
+                Color(hex: palette.frame),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         .frame(height: height)
+    }
+}
+
+/// The gilt ribbon-bookmark glyph stamped at the head of each spine — a
+/// rectangle notched into an inverted-V at the bottom (matching Android's
+/// `BookmarkGilt` vector), so it reads as a bookmark rather than SF's filled pin.
+private struct BookmarkGiltShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - rect.height * 0.32))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -389,19 +357,32 @@ private struct BookSpine: View {
     let action: () -> Void
 
     private var count: Int { work.rows.count }
-    private var width: CGFloat { CGFloat(36 + min(12, count * 2)) }
-    private var height: CGFloat {
-        let titleLen = compactTitle.count
-        return CGFloat(154 + min(34, titleLen * 3))
+    private var width: CGFloat { CGFloat(44 + min(20, count * 3)) }
+    private var fontSize: CGFloat { Self.spineFontSize(work.title.count) }
+    private var height: CGFloat { Self.spineHeight(for: work) }
+
+    /// The title split into words; each word renders as a vertical run of its
+    /// glyphs (every glyph, never truncated) with a gap between words — the
+    /// same spine layout Android uses.
+    private var titleWords: [[String]] {
+        work.title
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .map { $0.map(String.init) }
     }
-    private var compactTitle: String {
-        let title = work.title.components(separatedBy: .whitespacesAndNewlines).joined()
-        return title.isEmpty ? work.title : title
+
+    /// Android's spine font ramp by full title length.
+    static func spineFontSize(_ titleLen: Int) -> CGFloat {
+        if titleLen <= 5 { return 16 }
+        if titleLen <= 8 { return 14 }
+        if titleLen <= 12 { return 12 }
+        return 11
     }
-    private var spineTitleCharacters: [String] {
-        let limit = 8
-        let visible = compactTitle.prefix(limit).map(String.init)
-        return compactTitle.count > limit ? visible + ["…"] : visible
+
+    /// Android's spine height: `max(200, 110 + titleLen * (fontSize + 4))`.
+    static func spineHeight(for work: ShelfWork) -> CGFloat {
+        let titleLen = work.title.count
+        let perChar = spineFontSize(titleLen) + 4
+        return max(200, 110 + CGFloat(titleLen) * perChar)
     }
 
     var body: some View {
@@ -435,27 +416,35 @@ private struct BookSpine: View {
 
                 VStack(spacing: 5) {
                     VStack(spacing: 1) {
-                        Image(systemName: "bookmark.fill")
-                            .font(.system(size: 8, weight: .regular))
+                        BookmarkGiltShape()
+                            .fill(gold)
+                            .frame(width: 8, height: 11)
                         Text("\(count)")
                             .font(.headlineSerif(9))
                     }
                     .frame(height: 24)
                     Spacer(minLength: 3)
-                    VStack(spacing: 1) {
-                        ForEach(Array(spineTitleCharacters.enumerated()), id: \.offset) { _, character in
-                            Text(character)
-                                .font(.headlineSerif(10))
-                                .fontWeight(.bold)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                                .frame(width: width - 10, height: 11)
+                    VStack(spacing: 0) {
+                        ForEach(Array(titleWords.enumerated()), id: \.offset) { wordIndex, word in
+                            if wordIndex > 0 {
+                                Spacer().frame(height: fontSize * 0.45)
+                            }
+                            ForEach(Array(word.enumerated()), id: \.offset) { _, character in
+                                Text(character)
+                                    .font(.headlineSerif(fontSize))
+                                    .fontWeight(.bold)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .frame(width: width - 10, height: fontSize + 4)
+                            }
                         }
                     }
                     .frame(maxHeight: .infinity)
                     Spacer(minLength: 3)
                     Text(work.format.displayName.uppercased())
-                        .font(.custom("Pretendard-Medium", size: 6.5))
+                        .font(.headlineSerif(8))
+                        .tracking(1.2)
+                        .foregroundStyle(gilt)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
@@ -540,48 +529,6 @@ private func bookLeatherBlend(_ hex: UInt32, with target: UInt32, amount: Double
         green: (g + (tg - g) * clamped) / 255,
         blue: (b + (tb - b) * clamped) / 255
     )
-}
-
-private struct WoodGrain: View {
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                ForEach(0..<18, id: \.self) { index in
-                    Rectangle()
-                        .fill(Color.black.opacity(index.isMultiple(of: 3) ? 0.11 : 0.06))
-                        .frame(width: index.isMultiple(of: 4) ? 1 : 0.5)
-                        .offset(x: proxy.size.width * CGFloat(index) / 17)
-                }
-            }
-        }
-        .clipped()
-    }
-}
-
-private struct ShelfShadowTexture: View {
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.08),
-                    Color.clear,
-                    Color.black.opacity(0.30),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            GeometryReader { proxy in
-                ZStack(alignment: .topLeading) {
-                    ForEach(0..<6, id: \.self) { index in
-                        Rectangle()
-                            .fill(Color.black.opacity(0.08))
-                            .frame(height: 1)
-                            .offset(y: proxy.size.height * CGFloat(index + 1) / 7)
-                    }
-                }
-            }
-        }
-    }
 }
 
 /// Centered "open the book" modal. A leather cover (matching the shelf spine)
@@ -754,11 +701,11 @@ private struct BookPage: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(work.subtitle == nil
-                         ? "COLLECTED · VOLUME \(volumeNo)"
-                         : "\(work.series.uppercased()) · VOLUME \(volumeNo)")
+                         ? "COLLECTED · VOLUME #\(String(format: "%02d", volumeNo))"
+                         : "\(work.series.uppercased()) · VOLUME #\(String(format: "%02d", volumeNo))")
                         .labelCaps(size: 12)
                     Text(work.title)
-                        .font(.displaySerif(32))
+                        .font(.displaySerif(26))
                         .foregroundStyle(.espresso)
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
@@ -810,17 +757,25 @@ private struct BookPage: View {
                                 }
                                 .padding(18)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.paper.opacity(0.6)))
-                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.latte, lineWidth: 0.5))
+                                .background(Color.cardWarm)
+                                // Sand left-accent bar + faint hairline border.
+                                .overlay(alignment: .leading) {
+                                    Rectangle().fill(Color.sand).frame(width: 3)
+                                }
+                                .overlay(Rectangle().stroke(Color.latte, lineWidth: 0.5))
+                                // "#cardId" serial, top-right.
+                                .overlay(alignment: .topTrailing) {
+                                    Text("#\(card.cardId)")
+                                        .font(.bodySans(9))
+                                        .foregroundStyle(.sand)
+                                        .padding(.top, 10)
+                                        .padding(.trailing, 12)
+                                }
                             }
                             .buttonStyle(.plain)
                             .cardContextMenu(card)
                         }
                     }
-                    Text("— Daily Script · Limited Edition —")
-                        .labelCaps()
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 16)
                 }
                 .padding(.leading, 30)
                 .padding(.trailing, 16)
