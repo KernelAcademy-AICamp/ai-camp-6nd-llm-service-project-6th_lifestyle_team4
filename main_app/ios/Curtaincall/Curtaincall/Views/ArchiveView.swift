@@ -197,10 +197,11 @@ struct ArchiveView: View {
                     format: work.format,
                     author: work.author,
                     releaseYear: work.releaseYear,
+                    work: work,
                     rows: []
                 )
             }
-            grouped[key]?.rows.append(row)
+            grouped[key]?.rows.append(ShelfRow(card: card, createdDate: row.createdDate))
         }
         return grouped.values.sorted {
             let s = $0.series.localizedCompare($1.series)
@@ -210,7 +211,11 @@ struct ArchiveView: View {
     }
 }
 
-private struct ShelfWork: Identifiable {
+/// A "book" on the shelf — a work grouped from its cards. Shared by the bookmark
+/// bookshelf (ArchiveView) and the Library catalog (LibraryCatalogView): the
+/// bookshelf fills `rows` from bookmarks (with saved dates), the catalog from all
+/// cards (no dates). Both feed the same `OpenedBookView`.
+struct ShelfWork: Identifiable {
     let id: String
     let series: String
     let subtitle: String?
@@ -218,9 +223,18 @@ private struct ShelfWork: Identifiable {
     let format: WorkFormat
     let author: String?
     let releaseYear: Int?
-    var rows: [BookmarkRow]
+    /// Representative work — for the catalog cell's `WorkCover` (cover_url).
+    let work: Work?
+    var rows: [ShelfRow]
 
-    var cards: [Card] { rows.compactMap(\.card) }
+    var cards: [Card] { rows.map(\.card) }
+}
+
+/// One card in a `ShelfWork`, with an optional saved-date (bookmarks only).
+struct ShelfRow: Identifiable {
+    let card: Card
+    let createdDate: Date?
+    var id: Int { card.cardId }
 }
 
 private struct GenreShelf: View {
@@ -536,7 +550,7 @@ private func bookLeatherBlend(_ hex: UInt32, with target: UInt32, amount: Double
 /// a dimming scrim that stops above the tab bar so the nav buttons stay live.
 /// The swing + haptic are gated on Reduce Motion: with it on, the book is
 /// presented already-open (no rotation, no haptic).
-private struct OpenedBookView: View {
+struct OpenedBookView: View {
     let work: ShelfWork
     let volumeNo: Int
     let onOpen: (Card) -> Void
@@ -735,46 +749,45 @@ private struct BookPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ForEach(work.rows) { row in
-                        if let card = row.card {
-                            Button {
-                                onOpen(card)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    if let date = row.createdDate {
-                                        Text(Self.dateText(date)).labelCaps(size: 12)
-                                    }
-                                    Text("\"\(card.quote)\"")
-                                        .font(.titleSerif(18))
-                                        .foregroundStyle(.espresso)
-                                        .lineSpacing(3)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                    if let desc = card.excerptDescription, !desc.isEmpty {
-                                        Text(desc)
-                                            .font(.bodySans(13))
-                                            .foregroundStyle(.walnut)
-                                            .lineLimit(2)
-                                    }
+                        let card = row.card
+                        Button {
+                            onOpen(card)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 12) {
+                                if let date = row.createdDate {
+                                    Text(Self.dateText(date)).labelCaps(size: 12)
                                 }
-                                .padding(18)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.cardWarm)
-                                // Sand left-accent bar + faint hairline border.
-                                .overlay(alignment: .leading) {
-                                    Rectangle().fill(Color.sand).frame(width: 3)
-                                }
-                                .overlay(Rectangle().stroke(Color.latte, lineWidth: 0.5))
-                                // "#cardId" serial, top-right.
-                                .overlay(alignment: .topTrailing) {
-                                    Text("#\(card.cardId)")
-                                        .font(.bodySans(9))
-                                        .foregroundStyle(.sand)
-                                        .padding(.top, 10)
-                                        .padding(.trailing, 12)
+                                Text("\"\(card.quote)\"")
+                                    .font(.titleSerif(18))
+                                    .foregroundStyle(.espresso)
+                                    .lineSpacing(3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if let desc = card.excerptDescription, !desc.isEmpty {
+                                    Text(desc)
+                                        .font(.bodySans(13))
+                                        .foregroundStyle(.walnut)
+                                        .lineLimit(2)
                                 }
                             }
-                            .buttonStyle(.plain)
-                            .cardContextMenu(card)
+                            .padding(18)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.cardWarm)
+                            // Sand left-accent bar + faint hairline border.
+                            .overlay(alignment: .leading) {
+                                Rectangle().fill(Color.sand).frame(width: 3)
+                            }
+                            .overlay(Rectangle().stroke(Color.latte, lineWidth: 0.5))
+                            // "#cardId" serial, top-right.
+                            .overlay(alignment: .topTrailing) {
+                                Text("#\(card.cardId)")
+                                    .font(.bodySans(9))
+                                    .foregroundStyle(.sand)
+                                    .padding(.top, 10)
+                                    .padding(.trailing, 12)
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .cardContextMenu(card)
                     }
                 }
                 .padding(.leading, 30)
