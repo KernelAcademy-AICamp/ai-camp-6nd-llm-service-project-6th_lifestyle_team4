@@ -34,6 +34,8 @@ struct YarnPurchaseView: View {
     @EnvironmentObject private var yarn: YarnStore
     @State private var toast: String?
     @State private var purchasing = false
+    /// 충전 탭(false) ↔ ABOUT 탭(true) — Android `aboutTab` 미러.
+    @State private var aboutTab = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,15 +44,14 @@ struct YarnPurchaseView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 20)
                     header
+                    Spacer().frame(height: 16)
+                    tabSwitcher
                     Spacer().frame(height: 20)
-                    preparingBanner
-                    Spacer().frame(height: 8)
-                    ForEach(YarnStore.tiers, id: \.count) { tier in
-                        tierRow(count: tier.count, won: tier.won)
-                        Hairline()
+                    if aboutTab {
+                        aboutContent
+                    } else {
+                        chargeContent
                     }
-                    Spacer().frame(height: 28)
-                    aboutNote
                     Spacer().frame(height: 40)
                 }
                 .padding(.horizontal, 20)
@@ -103,27 +104,74 @@ struct YarnPurchaseView: View {
                 Text("실타래")
                     .font(.displaySerif(28))
                     .foregroundStyle(.espresso)
-                Text("보유 \(yarn.balance)개")
-                    .font(.bodySans(14))
+                Text("실타래로 명장면 전문을 열람하세요")
+                    .font(.bodySans(13))
                     .foregroundStyle(.walnut)
+                Text("보유 실타래 \(yarn.balance)")
+                    .font(.bodySans(14))
+                    .foregroundStyle(.espresso)
             }
             Spacer()
         }
     }
 
-    private var preparingBanner: some View {
-        HStack(spacing: 8) {
+    // 충전 ↔ ABOUT 탭 전환. 명조 굵은 글자체가 없어(no-op) 강조는 색/세리프 대신
+    // Pretendard Medium↔Regular 굵기 + 색 대비로 표현한다.
+    private var tabSwitcher: some View {
+        HStack(spacing: 4) {
+            tabLabel("충전", selected: !aboutTab) { aboutTab = false }
+            tabLabel("ABOUT", selected: aboutTab) { aboutTab = true }
+            Spacer()
+        }
+    }
+
+    private func tabLabel(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.custom(selected ? "Pretendard-Medium" : "Pretendard-Regular", size: 12))
+                .tracking(1.2)
+                .foregroundStyle(selected ? Color.espresso : Color.walnut)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // 충전 탭 본문: 안내 노트(yarn_daily_note) + 티어 목록 + 결제 준비중 고지.
+    private var chargeContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            dailyNote
+            Spacer().frame(height: 8)
+            ForEach(YarnStore.tiers, id: \.count) { tier in
+                tierRow(count: tier.count, won: tier.won)
+                Hairline()
+            }
+            Spacer().frame(height: 16)
+            purchaseDisclaimer
+        }
+    }
+
+    // Android yarn_daily_note — 결제 UI 대신 매일 출석 적립을 안내.
+    private var dailyNote: some View {
+        Text("매일 출석으로 실타래를 모아보세요.\n\n실타래로 나만의 공간을 꾸며보세요.")
+            .font(.bodySans(13))
+            .foregroundStyle(.walnut)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+    }
+
+    // yarn_daily_note 는 결제가 실서비스인지 말하지 않으므로, 테스터에게
+    // "준비 중 · 즉시 충전(mock)" 의미를 잃지 않도록 작은 고지를 유지한다.
+    private var purchaseDisclaimer: some View {
+        HStack(spacing: 6) {
             Image(systemName: "hourglass")
-                .font(.system(size: 13, weight: .regular))
+                .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(.walnut)
-            Text("결제 기능은 준비 중이에요. 지금은 바로 충전됩니다.")
-                .font(.bodySans(13))
+            Text("결제 기능 준비 중 · 지금은 바로 충전됩니다.")
+                .font(.bodySans(11))
                 .foregroundStyle(.walnut)
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.sand.opacity(0.25)))
     }
 
     private func tierRow(count: Int, won: Int) -> some View {
@@ -145,7 +193,7 @@ struct YarnPurchaseView: View {
                     .foregroundStyle(.paper)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(Capsule().fill(Color.cta))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.cta))
             }
             .buttonStyle(.plain)
             .disabled(purchasing)
@@ -153,15 +201,42 @@ struct YarnPurchaseView: View {
         .padding(.vertical, 16)
     }
 
-    private var aboutNote: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("실타래란?").labelCaps()
-            Text("모든 명대사 카드는 자유롭게 열람할 수 있어요. 카드를 처음 열 때마다 실타래를 +1 모을 수 있어요.")
+    // ABOUT 탭 — Android AboutContent 미러(제목/리드/본문/노트/아웃트로).
+    // 명조엔 굵은 글자체가 없어 제목 강조는 크기로만 준다(.bold 미사용).
+    private var aboutContent: some View {
+        VStack(spacing: 0) {
+            Text("실타래")
+                .font(.displaySerif(28))
+                .foregroundStyle(.espresso)
+                .multilineTextAlignment(.center)
+            Spacer().frame(height: 8)
+            Text("DAILY SCRIPT의 화폐")
+                .font(.custom("Pretendard-Medium", size: 11))
+                .tracking(2.2)
+                .foregroundStyle(.cta)
+                .multilineTextAlignment(.center)
+            Spacer().frame(height: 20)
+            Text("실타래는 명대사가 포함된 명장면을 읽을 때\n지급되는 한 올입니다.")
+                .font(.bodySans(15))
+                .foregroundStyle(.walnut)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer().frame(height: 20)
+            Text("text(텍스트)의 어원은 라틴어 textere ‘짜다’. 문장은 한 올, 한 올을 엮은 것입니다.")
+                .font(.bodySans(14))
+                .foregroundStyle(.espresso)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(18)
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.sand.opacity(0.3)))
+            Spacer().frame(height: 20)
+            Text("한올의 실타래로 나만의 공간을 꾸며보세요")
                 .font(.bodySans(14))
                 .foregroundStyle(.walnut)
-                .bookLeading(size: 14)
-                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func purchase(count: Int) {

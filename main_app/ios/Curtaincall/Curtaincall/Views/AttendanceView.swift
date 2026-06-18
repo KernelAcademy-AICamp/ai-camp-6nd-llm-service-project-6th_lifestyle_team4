@@ -75,7 +75,7 @@ struct AttendanceView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.sand.opacity(0.25)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.sand.opacity(0.30)))
         .padding(.top, 18)
     }
 
@@ -124,7 +124,7 @@ struct AttendanceView: View {
         .frame(height: 44)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(attended ? Color.sand.opacity(0.18) : Color.clear)
+                .fill(attended ? Color.sand.opacity(0.35) : Color.clear)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
