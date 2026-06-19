@@ -1251,9 +1251,25 @@
   .book .book-divider {
     margin: 20px 0 12px; height: 0.5px; background: var(--sand);
   }
+  /* 작품 소개 — 인용 카드와 구별되는 '메모/노트' 박스. 따뜻한 종이톤 + 라벨로 설명임을 명확히. */
   .book .book-intro {
-    margin: 0 0 18px; font-size: 13px;
-    line-height: 1.7; color: var(--espresso);
+    position: relative;
+    margin: 2px 0 22px;
+    padding: 13px 15px 14px;
+    background: var(--latte);
+    border: 0.5px solid var(--sand);
+    border-radius: 3px;
+    box-shadow: 0 6px 18px rgba(14,12,10,0.18), 0 2px 5px rgba(14,12,10,0.12);
+    font-size: 13px;
+    line-height: 1.75;
+    color: var(--espresso);
+  }
+  .book .book-intro::before {
+    content: '작품 소개';
+    display: block;
+    font-size: 9px; letter-spacing: 0.22em;
+    color: var(--walnut); font-weight: 700;
+    margin-bottom: 7px;
   }
   #book-list { counter-reset: quote-counter; }
   .book .book-quote-item {
@@ -2485,7 +2501,7 @@
 
   <!-- 스크롤 80% 이상에서 노출되는 '맨 위로' fab — 왼쪽 하단, 클릭 시 detailBody 최상단 -->
   <button id="detail-scroll-top-fab" aria-label="맨 위로"
-          style="position:absolute;left:16px;bottom:calc(24px + env(safe-area-inset-bottom));z-index:55;display:none;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:var(--espresso);color:var(--paper);border:none;cursor:pointer;box-shadow:0 6px 16px rgba(14,12,10,.28);opacity:0;transition:opacity .2s, transform .2s;transform:translateY(8px);">
+          style="position:fixed;left:16px;bottom:calc(112px + env(safe-area-inset-bottom));z-index:55;display:none;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:var(--espresso);color:var(--paper);border:none;cursor:pointer;box-shadow:0 6px 16px rgba(14,12,10,.28);opacity:0;transition:opacity .2s, transform .2s;transform:translateY(8px);">
     <span class="material-symbols-outlined" style="font-size:22px;">arrow_upward</span>
   </button>
 
@@ -2846,31 +2862,43 @@
   </div>
 </div>
 
-<!-- ===== 공유 모달 (배경 선택 + 미리보기 + 다운로드/공유) — 9:16 비율 ===== -->
-<div id="share-modal" style="position:fixed;inset:0;background:rgba(14,12,10,.72);display:none;align-items:flex-end;justify-content:center;z-index:130;">
-  <div style="background:var(--paper);width:100%;max-width:480px;max-height:92vh;display:flex;flex-direction:column;border-radius:18px 18px 0 0;">
+<!-- ===== 공유 모달 (배경 선택 + 미리보기 + 다운로드/공유) — 9:16 비율, 전체화면 ===== -->
+<div id="share-modal" style="position:fixed;inset:0;background:var(--paper);display:none;align-items:stretch;justify-content:center;z-index:130;">
+  <div style="background:var(--paper);width:100%;max-width:520px;height:100%;display:flex;flex-direction:column;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;border-bottom:1px solid var(--latte);">
       <p class="t-headline-sm c-espresso" style="margin:0;">공유 카드</p>
       <button id="share-close" aria-label="닫기" style="background:transparent;border:none;cursor:pointer;padding:6px;">
         <span class="material-symbols-outlined c-walnut" style="font-size:22px;">close</span>
       </button>
     </div>
-    <!-- 미리보기 — 9:16 비율 캔버스 -->
-    <div style="display:flex;justify-content:center;padding:14px 16px 10px;background:#F4ECDB;">
-      <canvas id="share-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:50vh;aspect-ratio:9/16;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.18);"></canvas>
+    <!-- 미리보기 토글 — 기본 접힘. 펼치기 누르면 캔버스 노출 -->
+    <div style="display:flex;justify-content:center;padding:10px 16px 8px;background:var(--paper);flex-shrink:0;border-bottom:1px solid var(--latte);">
+      <button id="share-preview-toggle" type="button"
+              style="background:transparent;border:1px solid var(--latte);border-radius:18px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--espresso);cursor:pointer;display:inline-flex;align-items:center;gap:6px;letter-spacing:.04em;">
+        <span class="material-symbols-outlined" id="share-preview-icon" style="font-size:16px;line-height:1;">unfold_more</span>
+        <span id="share-preview-label">카드 펼치기</span>
+      </button>
     </div>
-    <!-- 배경 탭 -->
+    <!-- 미리보기 — 9:16 비율 캔버스 (기본 hidden, 토글로 노출) -->
+    <div id="share-preview-wrap" style="display:none;justify-content:center;padding:12px 16px 8px;background:#F4ECDB;flex-shrink:0;">
+      <canvas id="share-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:42vh;aspect-ratio:9/16;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.18);"></canvas>
+    </div>
+    <!-- 배경 탭 — Free / Premium / Royal -->
     <div style="display:flex;gap:6px;padding:8px 18px 0;border-bottom:1px solid var(--latte);">
-      <button class="share-tab" data-tab="free"  style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:700;color:var(--espresso);border-bottom:2px solid var(--espresso);cursor:pointer;">무료</button>
-      <button class="share-tab" data-tab="paid"  style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;">유료 (30실타래)</button>
+      <button class="share-tab" data-tab="free"    style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:700;color:var(--espresso);border-bottom:2px solid var(--espresso);cursor:pointer;letter-spacing:.04em;">Free</button>
+      <button class="share-tab" data-tab="premium" style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:12px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.04em;">Premium · 999🧶</button>
+      <button class="share-tab" data-tab="royal"   style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:12px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.04em;">Royal · 2999🧶</button>
     </div>
-    <!-- 배경 선택 그리드 (가로 스크롤) -->
-    <div id="share-bg-list" style="display:flex;gap:10px;padding:12px 18px;overflow-x:auto;background:var(--paper);"></div>
+    <!-- 배경 선택 — 4열 그리드, 한 화면에 4×4 보이고 그 이상은 세로 스크롤 -->
+    <div id="share-bg-list" style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:10px 8px;padding:12px 14px 16px;overflow-y:auto;background:var(--paper);flex:1;min-height:0;"></div>
     <!-- 액션 -->
     <div style="display:flex;gap:8px;padding:10px 18px calc(14px + env(safe-area-inset-bottom)) 18px;background:var(--paper);border-top:1px solid var(--latte);">
       <button id="share-download" class="sharp-btn outline" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;">
         <span class="material-symbols-outlined" style="font-size:18px;">download</span>
         다운로드
+      </button>
+      <button id="share-send-kakao" type="button" class="sharp-btn" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#FEE500;color:#191919;">
+        <span style="font-weight:700;">카카오톡</span>
       </button>
       <button id="share-send" class="sharp-btn" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;">
         <span class="material-symbols-outlined" style="font-size:18px;">ios_share</span>
@@ -3046,6 +3074,10 @@
 <!-- ===== Toast ===== -->
 <div id="toast" class="t-label-sm"></div>
 
+<!-- Kakao SDK (카카오톡 공유) — m-app.js 에서 Kakao.init 호출 후 Kakao.Share.uploadImage / sendDefault 사용 -->
+<script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"
+        integrity="sha384-DKYJZ8NLiK8MN4/C5P2dtSmLQ4KwPaoqAfyA/DfmEc1VDxu4yyC7wy6K1Hs90nka"
+        crossorigin="anonymous"></script>
 <script type="module" src="/m/assets/m-app.js"></script>
 <script type="module" src="/assets/pwa.js"></script>
 </body>

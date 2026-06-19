@@ -7484,6 +7484,7 @@ document.getElementById('hl-compose-share')?.addEventListener('click', () => {
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
+    referralUrl: buildReferralUrl(),
   });
 });
 
@@ -8220,6 +8221,7 @@ function toast(msg) {
 // 후속: 카드 상세 텍스트 블록 선택 → 블록 부분 공유, 유료 배경 구매 RPC
 // ============================================================
 const SHARE_BACKGROUNDS = [
+  /* Free — 기본 편지지 + 톤·질감 강화본까지 모두 무료 */
   { id: 'beige',     name: '크림 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#F4ECDB', '#E0D5BC', '#3B2A1A') },
   { id: 'rose',      name: '로즈 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#FAEAE2', '#E6C9BD', '#4A2A24') },
   { id: 'mint',      name: '민트 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8F1E4', '#C6D6BF', '#2B3B2A') },
@@ -8228,6 +8230,8 @@ const SHARE_BACKGROUNDS = [
   { id: 'kraft',     name: '크라프트',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#C8A876', '#A88858', '#1F140A') },
   { id: 'midnight',  name: '미드나잇',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#1B2436', '#0E1626', '#F4ECDB') },
   { id: 'rosegold',  name: '로즈골드',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8C9B7', '#C9A88E', '#3A1F18') },
+  /* Premium — 999 실타래, 후속 turn 에 이미지 추가 예정 */
+  /* Royal   — 2999 실타래, 후속 turn 에 이미지 추가 예정 */
 ];
 
 function paintLetter(ctx, W, H, bgTop, bgBot, ink) {
@@ -8256,6 +8260,15 @@ function paintParchment(ctx, W, H) {
   return ink;
 }
 
+/* 작품명 정규화 — 공백/대소문자/관사/구두점 제거. 한국어 표기 우선. */
+function normalizeWorkTitle(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^(the|a|an)\s+/i, '')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}
+
 function wrapText(ctx, text, maxWidth) {
   const lines = [];
   for (const para of String(text || '').split('\n')) {
@@ -8272,26 +8285,33 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-/* 메인 렌더 — quote / speaker / work·author 를 9:16 캔버스에 그림 (책 표지 없음).
+/* 메인 렌더 — quote / speaker / work·author 를 9:16 캔버스에 그림.
    영역 분할 (W=540, H=960 기준):
-   · 따옴표:       y = 180 (상단, 매우 여린 농도)
-   · 본문:         y = 220 ~ 760  (자동 줄바꿈 + 크기 점진 축소, 위로 확장)
-   · meta:        y = 800 ~ 870 (본문 아래·워터마크 위)
-   · 워터마크:     y = 910 */
+   · 'Daily Script' 워터마크 (상단):  y = 100
+   · 따옴표:                          y = 260 (본문 위, 매우 여린 농도)
+   · 본문:                            y = 290 ~ 760  (자동 줄바꿈 + 크기 점진 축소)
+   · speaker:                         y = 800
+   · 작품 · 작가 (하단):              y = 870 */
 function renderShareCard(canvas, bg, payload) {
   const W = canvas.width, H = canvas.height;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
   const ink = bg.paint(ctx, W, H) || '#3B2A1A';
 
-  /* 따옴표 — 상단, 매우 여린 농도(약 22%) */
+  /* 'Daily Script' — 카드 상단 워터마크 */
+  ctx.fillStyle = ink + '80';
+  ctx.font = `700 22px "Pretendard", "Noto Sans KR", sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('Daily Script', W/2, 110);
+
+  /* 따옴표 — 본문 위, 매우 여린 농도(약 22%) */
   ctx.fillStyle = ink + '38';
   ctx.font = '400 48px "Times New Roman", serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('“', 90, 200);
+  ctx.fillText('“', 90, 270);
 
-  /* 본문 — 영역(220~760) 안에서 자동 줄바꿈 + 크기 점진 축소 */
-  const bodyTop = 220, bodyBot = 760;
+  /* 본문 — 영역(290~760) 안에서 자동 줄바꿈 + 크기 점진 축소 */
+  const bodyTop = 290, bodyBot = 760;
   const bodyMaxH = bodyBot - bodyTop;
   const bodyMaxW = W - 160;
   ctx.fillStyle = ink;
@@ -8311,20 +8331,17 @@ function renderShareCard(canvas, bg, payload) {
   let y = bodyTop + Math.max(0, (bodyMaxH - totalH) / 2);
   for (const ln of lines) { ctx.fillText(ln, W/2, y); y += lineH; }
 
-  /* speaker / work · author — 본문 영역 아래 하단 정렬 (워터마크 바로 위) */
+  /* speaker — 본문 아래 */
   ctx.fillStyle = ink + 'CC';
   ctx.textBaseline = 'top';
+  ctx.textAlign = 'center';
   ctx.font = `500 24px "Pretendard", "Noto Sans KR", sans-serif`;
-  let metaY = 800;
-  if (payload.speaker) { ctx.fillText(`— ${payload.speaker}`, W/2, metaY); metaY += 36; }
-  ctx.font = `italic 22px "Times New Roman", serif`;
-  const workLine = [payload.work, payload.author].filter(Boolean).join(' · ');
-  if (workLine) ctx.fillText(workLine, W/2, metaY);
+  if (payload.speaker) ctx.fillText(`— ${payload.speaker}`, W/2, 800);
 
-  /* 워터마크 */
-  ctx.fillStyle = ink + '80';
-  ctx.font = `700 20px "Pretendard", "Noto Sans KR", sans-serif`;
-  ctx.fillText('Daily Script', W/2, 910);
+  /* 작품 · 작가 — 카드 최하단 */
+  ctx.font = `italic 24px "Times New Roman", serif`;
+  const workLine = [payload.work, payload.author].filter(Boolean).join(' · ');
+  if (workLine) ctx.fillText(workLine, W/2, 880);
 }
 
 const shareState = { tab: 'free', bgId: 'beige', payload: null, lastBlob: null };
@@ -8333,24 +8350,36 @@ function renderShareBgList() {
   const list = document.getElementById('share-bg-list');
   if (!list) return;
   list.innerHTML = '';
-  const items = SHARE_BACKGROUNDS.filter((b) => b.tier === shareState.tab);
+  let items = SHARE_BACKGROUNDS.filter((b) => b.tier === shareState.tab);
+  /* Premium / Royal — 카드지 name(=책 제목)이 현재 공유 카드의 책 제목과 같은 것을 맨 앞으로.
+     예: 프랑켄슈타인 카드 공유 → name:'프랑켄슈타인' 카드지가 그리드 첫번째. */
+  if (shareState.tab === 'premium' || shareState.tab === 'royal') {
+    const target = normalizeWorkTitle(shareState.payload?.work);
+    if (target) {
+      items.sort((a, b) => {
+        const am = normalizeWorkTitle(a.name) === target ? 1 : 0;
+        const bm = normalizeWorkTitle(b.name) === target ? 1 : 0;
+        return bm - am;
+      });
+    }
+  }
   if (items.length === 0) {
     list.innerHTML = '<div style="padding:24px 8px;width:100%;text-align:center;font-size:12px;color:var(--walnut);line-height:1.6;">곧 만나요 ✨<br/>새 배경을 준비하고 있어요.</div>';
     return;
   }
   for (const b of items) {
     const cell = document.createElement('button');
-    const locked = b.tier === 'paid';   /* 1차 MVP — 유료는 클릭 시 안내. 후속 turn 에서 구매 RPC 연결 */
+    const locked = b.tier !== 'free';   /* Free 외엔 잠금 표시 (구매 RPC 는 후속 turn 에서 연결) */
     cell.type = 'button';
     cell.dataset.bg = b.id;
     const active = shareState.bgId === b.id && !locked;
-    cell.style.cssText = `flex:0 0 88px;display:flex;flex-direction:column;align-items:center;gap:6px;background:transparent;border:none;cursor:pointer;padding:0;`;
+    cell.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:none;cursor:pointer;padding:0;width:100%;`;
     cell.innerHTML = `
-      <div style="position:relative;width:72px;height:128px;border-radius:8px;overflow:hidden;border:2px solid ${active ? 'var(--cta)' : 'transparent'};box-shadow:0 2px 6px rgba(0,0,0,.12);">
+      <div style="position:relative;width:100%;aspect-ratio:9/16;border-radius:6px;overflow:hidden;border:2px solid ${active ? 'var(--cta)' : 'transparent'};box-shadow:0 2px 5px rgba(0,0,0,.12);">
         <canvas data-thumb="${b.id}" width="144" height="256" style="width:100%;height:100%;display:block;"></canvas>
-        ${locked ? '<div style="position:absolute;inset:0;background:rgba(14,12,10,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FAF8F2;font-size:11px;font-weight:700;letter-spacing:.02em;"><span class="material-symbols-outlined" style="font-size:18px;">lock</span><span style="margin-top:2px;">30🧶</span></div>' : ''}
+        ${locked ? `<div style="position:absolute;inset:0;background:rgba(14,12,10,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FAF8F2;font-size:11px;font-weight:700;letter-spacing:.02em;"><span class="material-symbols-outlined" style="font-size:18px;">lock</span><span style="margin-top:2px;">${b.price || 0}🧶</span></div>` : ''}
       </div>
-      <span style="font-size:11px;color:var(--espresso);text-align:center;line-height:1.2;">${b.name}</span>
+      <span style="font-size:10px;color:var(--espresso);text-align:center;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${b.name}</span>
     `;
     list.appendChild(cell);
     /* 썸네일 렌더 — 같은 paint 함수, 작은 캔버스 */
@@ -8362,7 +8391,7 @@ function renderShareBgList() {
     }
     cell.addEventListener('click', () => {
       if (locked) {
-        toast('유료 배경 — 다음 업데이트에서 실타래로 잠금 해제됩니다.');
+        toast(`${b.tier === 'royal' ? 'Royal' : 'Premium'} 배경 — 실타래 ${b.price}개로 잠금 해제 (준비 중)`);
         return;
       }
       shareState.bgId = b.id;
@@ -8458,15 +8487,29 @@ async function sendShareCard() {
   const blob = await canvasToBlob(canvas); if (!blob) return;
   const file = new File([blob], 'daily-script.png', { type: 'image/png' });
   const payload = shareState.payload || {};
+  /* 항상 이미지 파일 + 명대사 텍스트 + 앱 링크를 함께 전송.
+     일부 메신저(카카오톡 등)는 navigator.share 의 url 만 보고 text 를 버리거나 반대.
+     양쪽 케이스 모두 안전하게 동작하도록 text 끝에 URL 을 명시적으로 한 번 더 박음. */
   const refUrl = buildReferralUrl();
-  const text = `"${payload.quote || ''}" — ${payload.work || 'Daily Script'}${refUrl ? '\n\n' + refUrl : ''}`;
+  const quote  = payload.quote ? `"${payload.quote}"` : '';
+  const credit = payload.work  ? ` — ${payload.work}` : '';
+  const text   = [
+    quote + credit,
+    refUrl ? `📖 Daily Script\n${refUrl}` : '',
+  ].filter(Boolean).join('\n\n');
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      /* 이미지 + 텍스트(명대사 + 링크) + url 모두 함께 */
       await navigator.share({ files: [file], text, title: 'Daily Script', url: refUrl || undefined });
       return;
     }
+    /* 파일 공유 미지원 환경 — 텍스트 + url 이라도 함께 */
+    if (navigator.share) {
+      await navigator.share({ text, title: 'Daily Script', url: refUrl || undefined });
+      return;
+    }
   } catch (e) { /* AbortError 등 무시 */ }
-  /* 폴백 — 다운로드 */
+  /* Web Share 자체 미지원 (데스크탑 등) — 이미지 다운로드만. */
   await downloadShareCard();
 }
 
@@ -8476,6 +8519,13 @@ function openShareModal(payload) {
   shareState.payload = payload || {};
   shareState.tab = 'free';
   shareState.bgId = 'beige';
+  /* 미리보기 — 기본 접힘 상태로 reset (배경 그리드가 한눈에 보이게) */
+  const wrap = document.getElementById('share-preview-wrap');
+  const icon = document.getElementById('share-preview-icon');
+  const label = document.getElementById('share-preview-label');
+  if (wrap)  wrap.style.display = 'none';
+  if (icon)  icon.textContent  = 'unfold_more';
+  if (label) label.textContent = '카드 펼치기';
   /* 탭 표시 동기화 */
   document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
     const active = el.dataset.tab === shareState.tab;
@@ -8491,6 +8541,19 @@ function closeShareModal() {
   const modal = document.getElementById('share-modal');
   if (modal) modal.style.display = 'none';
 }
+
+/* 미리보기 펼치기/접기 토글 — 기본 접힘, 펼칠 때 캔버스 렌더 */
+document.getElementById('share-preview-toggle')?.addEventListener('click', () => {
+  const wrap = document.getElementById('share-preview-wrap');
+  const icon = document.getElementById('share-preview-icon');
+  const label = document.getElementById('share-preview-label');
+  if (!wrap) return;
+  const opening = wrap.style.display === 'none' || !wrap.style.display;
+  wrap.style.display = opening ? 'flex' : 'none';
+  if (icon)  icon.textContent  = opening ? 'unfold_less' : 'unfold_more';
+  if (label) label.textContent = opening ? '카드 접기'   : '카드 펼치기';
+  if (opening) { try { renderShareCardCurrent(); } catch {} }
+});
 
 document.getElementById('share-close')?.addEventListener('click', closeShareModal);
 document.getElementById('share-modal')?.addEventListener('click', (e) => {
@@ -8511,6 +8574,55 @@ document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
 document.getElementById('share-download')?.addEventListener('click', async () => { await downloadShareCard(); bumpShareCount(); });
 document.getElementById('share-send')?.addEventListener('click', async () => { await sendShareCard(); bumpShareCount(); });
 
+/* === 카카오톡 공유 (Kakao SDK) ===
+   카카오톡은 navigator.share 의 text/url 을 무시하고 이미지만 받음 → SDK 직접 호출로 우회.
+   Kakao.Share.uploadImage 로 캔버스 PNG 를 카카오 CDN 에 업로드 후 sendDefault 의 feed objectType 으로
+   이미지 + 제목 + 설명 + 'Daily Script' 카드 보기 버튼(앱 링크) 함께 전송. */
+const KAKAO_JS_KEY = ''; // ← 카카오 개발자 콘솔에서 발급한 JavaScript 키 입력
+(function initKakao() {
+  try {
+    if (window.Kakao && KAKAO_JS_KEY && !window.Kakao.isInitialized()) {
+      window.Kakao.init(KAKAO_JS_KEY);
+    }
+  } catch (e) { console.warn('[m] Kakao init failed:', e); }
+})();
+
+async function shareToKakao() {
+  if (!window.Kakao) { toast('카카오 SDK 로드 실패 — 잠시 후 다시 시도'); return; }
+  if (!window.Kakao.isInitialized()) {
+    toast('카카오 공유 준비 중 — KAKAO_JS_KEY 미설정');
+    return;
+  }
+  const canvas = document.getElementById('share-canvas'); if (!canvas) return;
+  const blob = await canvasToBlob(canvas); if (!blob) { toast('이미지 생성 실패'); return; }
+  const payload  = shareState.payload || {};
+  const refUrl   = buildReferralUrl();
+  try {
+    const file = new File([blob], 'daily-script.png', { type: 'image/png' });
+    /* 1) 캔버스 PNG → 카카오 CDN 업로드 (URL 반환) */
+    const uploaded = await window.Kakao.Share.uploadImage({ file: [file] });
+    const imageUrl = uploaded?.infos?.original?.url;
+    if (!imageUrl) throw new Error('uploadImage 응답에 URL 없음');
+    /* 2) feed objectType — 제목·설명·이미지·앱 링크 카드 형태로 전송 */
+    await window.Kakao.Share.sendDefault({
+      objectType: 'feed',
+      content: {
+        title: payload.work ? `${payload.work}${payload.author ? ' · ' + payload.author : ''}` : 'Daily Script',
+        description: payload.quote || '',
+        imageUrl,
+        link: { mobileWebUrl: refUrl, webUrl: refUrl },
+      },
+      buttons: [
+        { title: '카드 보러가기', link: { mobileWebUrl: refUrl, webUrl: refUrl } },
+      ],
+    });
+  } catch (e) {
+    console.warn('[m] kakao share failed:', e);
+    toast('카카오톡 공유 실패 — 잠시 후 다시 시도');
+  }
+}
+document.getElementById('share-send-kakao')?.addEventListener('click', async () => { await shareToKakao(); bumpShareCount(); });
+
 /* payload 추출 — 오늘의 카드 / 카드 상세에서 공통 */
 function payloadForToday() {
   const c = state.todayCard || {};
@@ -8521,6 +8633,7 @@ function payloadForToday() {
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
+    referralUrl: buildReferralUrl(),
   };
 }
 function payloadForDetail() {
@@ -8532,6 +8645,7 @@ function payloadForDetail() {
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
+    referralUrl: buildReferralUrl(),
   };
 }
 
