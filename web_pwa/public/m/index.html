@@ -2846,9 +2846,9 @@
   </div>
 </div>
 
-<!-- ===== 공유 모달 (배경 선택 + 미리보기 + 다운로드/공유) — 9:16 비율 ===== -->
-<div id="share-modal" style="position:fixed;inset:0;background:rgba(14,12,10,.72);display:none;align-items:flex-end;justify-content:center;z-index:130;">
-  <div style="background:var(--paper);width:100%;max-width:480px;max-height:92vh;display:flex;flex-direction:column;border-radius:18px 18px 0 0;">
+<!-- ===== 공유 모달 (배경 선택 + 미리보기 + 다운로드/공유) — 9:16 비율, 전체화면 ===== -->
+<div id="share-modal" style="position:fixed;inset:0;background:var(--paper);display:none;align-items:stretch;justify-content:center;z-index:130;">
+  <div style="background:var(--paper);width:100%;max-width:520px;height:100%;display:flex;flex-direction:column;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;border-bottom:1px solid var(--latte);">
       <p class="t-headline-sm c-espresso" style="margin:0;">공유 카드</p>
       <button id="share-close" aria-label="닫기" style="background:transparent;border:none;cursor:pointer;padding:6px;">
@@ -2856,17 +2856,17 @@
       </button>
     </div>
     <!-- 미리보기 — 9:16 비율 캔버스 -->
-    <div style="display:flex;justify-content:center;padding:14px 16px 10px;background:#F4ECDB;">
-      <canvas id="share-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:50vh;aspect-ratio:9/16;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.18);"></canvas>
+    <div style="display:flex;justify-content:center;padding:14px 16px 10px;background:#F4ECDB;flex-shrink:0;">
+      <canvas id="share-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:38vh;aspect-ratio:9/16;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.18);"></canvas>
     </div>
     <!-- 배경 탭 — Free / Premium / Royal -->
     <div style="display:flex;gap:6px;padding:8px 18px 0;border-bottom:1px solid var(--latte);">
       <button class="share-tab" data-tab="free"    style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:700;color:var(--espresso);border-bottom:2px solid var(--espresso);cursor:pointer;letter-spacing:.04em;">Free</button>
-      <button class="share-tab" data-tab="premium" style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.04em;">Premium</button>
-      <button class="share-tab" data-tab="royal"   style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.04em;">Royal</button>
+      <button class="share-tab" data-tab="premium" style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:12px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.04em;">Premium · 999🧶</button>
+      <button class="share-tab" data-tab="royal"   style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:12px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.04em;">Royal · 2999🧶</button>
     </div>
-    <!-- 배경 선택 그리드 (가로 스크롤) -->
-    <div id="share-bg-list" style="display:flex;gap:10px;padding:12px 18px;overflow-x:auto;background:var(--paper);"></div>
+    <!-- 배경 선택 — 세로 3열 그리드, 세로 스크롤 -->
+    <div id="share-bg-list" style="display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:12px 10px;padding:14px 18px 18px;overflow-y:auto;background:var(--paper);flex:1;min-height:0;"></div>
     <!-- 액션 -->
     <div style="display:flex;gap:8px;padding:10px 18px calc(14px + env(safe-area-inset-bottom)) 18px;background:var(--paper);border-top:1px solid var(--latte);">
       <button id="share-download" class="sharp-btn outline" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;">

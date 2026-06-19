@@ -8221,16 +8221,16 @@ function toast(msg) {
 // ============================================================
 const SHARE_BACKGROUNDS = [
   /* Free — 기본 편지지 4종 */
-  { id: 'beige',     name: '크림 편지지',  tier: 'free',    paint: (ctx, W, H) => paintLetter(ctx, W, H, '#F4ECDB', '#E0D5BC', '#3B2A1A') },
-  { id: 'rose',      name: '로즈 편지지',  tier: 'free',    paint: (ctx, W, H) => paintLetter(ctx, W, H, '#FAEAE2', '#E6C9BD', '#4A2A24') },
-  { id: 'mint',      name: '민트 편지지',  tier: 'free',    paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8F1E4', '#C6D6BF', '#2B3B2A') },
-  { id: 'sky',       name: '스카이 편지지', tier: 'free',    paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E4ECF5', '#C0CDDC', '#2A344A') },
-  /* Premium — 톤·질감 강한 4종 */
-  { id: 'parchment', name: '양피지',       tier: 'premium', paint: (ctx, W, H) => paintParchment(ctx, W, H) },
-  { id: 'kraft',     name: '크라프트',     tier: 'premium', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#C8A876', '#A88858', '#1F140A') },
-  { id: 'midnight',  name: '미드나잇',     tier: 'premium', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#1B2436', '#0E1626', '#F4ECDB') },
-  { id: 'rosegold',  name: '로즈골드',     tier: 'premium', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8C9B7', '#C9A88E', '#3A1F18') },
-  /* Royal — 후속 turn 에 이미지 추가 예정 */
+  { id: 'beige',     name: '크림 편지지',  tier: 'free',                 paint: (ctx, W, H) => paintLetter(ctx, W, H, '#F4ECDB', '#E0D5BC', '#3B2A1A') },
+  { id: 'rose',      name: '로즈 편지지',  tier: 'free',                 paint: (ctx, W, H) => paintLetter(ctx, W, H, '#FAEAE2', '#E6C9BD', '#4A2A24') },
+  { id: 'mint',      name: '민트 편지지',  tier: 'free',                 paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8F1E4', '#C6D6BF', '#2B3B2A') },
+  { id: 'sky',       name: '스카이 편지지', tier: 'free',                 paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E4ECF5', '#C0CDDC', '#2A344A') },
+  /* Premium — 999 실타래 */
+  { id: 'parchment', name: '양피지',       tier: 'premium', price: 999,  paint: (ctx, W, H) => paintParchment(ctx, W, H) },
+  { id: 'kraft',     name: '크라프트',     tier: 'premium', price: 999,  paint: (ctx, W, H) => paintLetter(ctx, W, H, '#C8A876', '#A88858', '#1F140A') },
+  { id: 'midnight',  name: '미드나잇',     tier: 'premium', price: 999,  paint: (ctx, W, H) => paintLetter(ctx, W, H, '#1B2436', '#0E1626', '#F4ECDB') },
+  { id: 'rosegold',  name: '로즈골드',     tier: 'premium', price: 999,  paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8C9B7', '#C9A88E', '#3A1F18') },
+  /* Royal — 2999 실타래, 후속 turn 에서 이미지 추가 예정 */
 ];
 
 function paintLetter(ctx, W, H, bgTop, bgBot, ink) {
@@ -8343,15 +8343,15 @@ function renderShareBgList() {
   }
   for (const b of items) {
     const cell = document.createElement('button');
-    const locked = b.tier === 'paid';   /* 1차 MVP — 유료는 클릭 시 안내. 후속 turn 에서 구매 RPC 연결 */
+    const locked = b.tier !== 'free';   /* Free 외엔 잠금 표시 (구매 RPC 는 후속 turn 에서 연결) */
     cell.type = 'button';
     cell.dataset.bg = b.id;
     const active = shareState.bgId === b.id && !locked;
-    cell.style.cssText = `flex:0 0 88px;display:flex;flex-direction:column;align-items:center;gap:6px;background:transparent;border:none;cursor:pointer;padding:0;`;
+    cell.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:6px;background:transparent;border:none;cursor:pointer;padding:0;width:100%;`;
     cell.innerHTML = `
-      <div style="position:relative;width:72px;height:128px;border-radius:8px;overflow:hidden;border:2px solid ${active ? 'var(--cta)' : 'transparent'};box-shadow:0 2px 6px rgba(0,0,0,.12);">
+      <div style="position:relative;width:100%;aspect-ratio:9/16;border-radius:8px;overflow:hidden;border:2px solid ${active ? 'var(--cta)' : 'transparent'};box-shadow:0 2px 6px rgba(0,0,0,.12);">
         <canvas data-thumb="${b.id}" width="144" height="256" style="width:100%;height:100%;display:block;"></canvas>
-        ${locked ? '<div style="position:absolute;inset:0;background:rgba(14,12,10,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FAF8F2;font-size:11px;font-weight:700;letter-spacing:.02em;"><span class="material-symbols-outlined" style="font-size:18px;">lock</span><span style="margin-top:2px;">30🧶</span></div>' : ''}
+        ${locked ? `<div style="position:absolute;inset:0;background:rgba(14,12,10,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FAF8F2;font-size:11px;font-weight:700;letter-spacing:.02em;"><span class="material-symbols-outlined" style="font-size:18px;">lock</span><span style="margin-top:2px;">${b.price || 0}🧶</span></div>` : ''}
       </div>
       <span style="font-size:11px;color:var(--espresso);text-align:center;line-height:1.2;">${b.name}</span>
     `;
@@ -8365,7 +8365,7 @@ function renderShareBgList() {
     }
     cell.addEventListener('click', () => {
       if (locked) {
-        toast('유료 배경 — 다음 업데이트에서 실타래로 잠금 해제됩니다.');
+        toast(`${b.tier === 'royal' ? 'Royal' : 'Premium'} 배경 — 실타래 ${b.price}개로 잠금 해제 (준비 중)`);
         return;
       }
       shareState.bgId = b.id;
