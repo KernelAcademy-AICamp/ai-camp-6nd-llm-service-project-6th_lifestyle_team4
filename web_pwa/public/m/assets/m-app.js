@@ -8337,21 +8337,7 @@ function renderShareCard(canvas, bg, payload) {
   /* 워터마크 */
   ctx.fillStyle = ink + '80';
   ctx.font = `700 20px "Pretendard", "Noto Sans KR", sans-serif`;
-  ctx.fillText('Daily Script', W/2, 880);
-
-  /* 친구 초대 referral URL — 이미지 자체에 박혀, 받은 사람이 보고 진입 가능 */
-  if (payload.referralUrl) {
-    ctx.fillStyle = ink + '70';
-    ctx.font = `500 16px "Pretendard", "Noto Sans KR", sans-serif`;
-    /* URL 이 길면 점선 자르기 — 끝 처리 */
-    let urlText = payload.referralUrl.replace(/^https?:\/\//i, '');
-    const maxW = W - 80;
-    while (ctx.measureText(urlText).width > maxW && urlText.length > 8) {
-      urlText = urlText.slice(0, -1);
-    }
-    if (urlText !== payload.referralUrl.replace(/^https?:\/\//i, '')) urlText += '…';
-    ctx.fillText(urlText, W/2, 920);
-  }
+  ctx.fillText('Daily Script', W/2, 910);
 }
 
 const shareState = { tab: 'free', bgId: 'beige', payload: null, lastBlob: null };
@@ -8497,16 +8483,26 @@ async function sendShareCard() {
   const blob = await canvasToBlob(canvas); if (!blob) return;
   const file = new File([blob], 'daily-script.png', { type: 'image/png' });
   const payload = shareState.payload || {};
+  /* 항상 referral URL + 명대사 한 줄을 텍스트로 같이 보냄.
+     이미지에는 URL 박지 않고, 메시지/SNS 가 text/url 을 함께 첨부하도록 navigator.share 에 그대로 전달. */
   const refUrl = buildReferralUrl();
-  const text = `"${payload.quote || ''}" — ${payload.work || 'Daily Script'}${refUrl ? '\n\n' + refUrl : ''}`;
+  const quote = payload.quote ? `"${payload.quote}"` : '';
+  const credit = payload.work ? ` — ${payload.work}` : '';
+  const text = [quote + credit, refUrl].filter(Boolean).join('\n\n');
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file], text, title: 'Daily Script', url: refUrl || undefined });
       return;
     }
+    /* 파일 공유 미지원 환경 — 텍스트+URL 만이라도 공유 */
+    if (navigator.share && refUrl) {
+      await navigator.share({ text, title: 'Daily Script', url: refUrl });
+      return;
+    }
   } catch (e) { /* AbortError 등 무시 */ }
-  /* 폴백 — 다운로드 */
+  /* 폴백 — 다운로드(이미지) + URL 은 클립보드 복사 */
   await downloadShareCard();
+  try { if (refUrl && navigator.clipboard?.writeText) { await navigator.clipboard.writeText(refUrl); toast('앱 링크가 클립보드에 복사됨'); } } catch {}
 }
 
 function openShareModal(payload) {
