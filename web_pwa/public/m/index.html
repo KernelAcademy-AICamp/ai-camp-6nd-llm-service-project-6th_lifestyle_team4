@@ -1251,9 +1251,25 @@
   .book .book-divider {
     margin: 20px 0 12px; height: 0.5px; background: var(--sand);
   }
+  /* 작품 소개 — 인용 카드와 구별되는 '메모/노트' 박스. 따뜻한 종이톤 + 라벨로 설명임을 명확히. */
   .book .book-intro {
-    margin: 0 0 18px; font-size: 13px;
-    line-height: 1.7; color: var(--espresso);
+    position: relative;
+    margin: 2px 0 22px;
+    padding: 13px 15px 14px;
+    background: var(--card-warm);
+    border: 0.5px solid var(--latte);
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(14,12,10,0.05);
+    font-size: 13px;
+    line-height: 1.75;
+    color: var(--espresso);
+  }
+  .book .book-intro::before {
+    content: '작품 소개';
+    display: block;
+    font-size: 9px; letter-spacing: 0.22em;
+    color: var(--walnut); font-weight: 700;
+    margin-bottom: 7px;
   }
   #book-list { counter-reset: quote-counter; }
   .book .book-quote-item {
