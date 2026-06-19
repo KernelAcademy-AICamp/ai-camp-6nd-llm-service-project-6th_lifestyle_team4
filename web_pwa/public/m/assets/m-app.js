@@ -6531,19 +6531,27 @@ function openFeedPostDetail(post) {
   state.currentHighlight = null;
   if (feedFab) feedFab.style.display = 'none';   // 댓글 화면에서는 글쓰기 말풍선 숨김
   hideBottomNavCat();   // 피드 카드 상세에서는 하단바 cat 숨김
-  // 명대사 박스 복원 (하이라이트 모드에서 숨겼던 경우)
-  const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
-  if (quoteBox) quoteBox.style.display = '';
-  // 명대사 읽어보기 표시, 카드 보기 숨김 (피드 글 모드)
-  const openCardBtn = document.getElementById('fp-open-card');
+  /* 명대사 박스 — 하이라이트 모드에서 innerHTML 을 '카드 보기' 로 덮어썼을 수 있으므로 항상 원본 형태로 복원.
+     원본 element 들(fpQuote 등) 이 stale 될 수 있어 매번 fresh query 로 set. */
+  const quoteBox = document.querySelector('#feedpost-body > div:first-child');
+  if (quoteBox) {
+    quoteBox.style.display = '';
+    quoteBox.innerHTML = `
+      <p id="fp-quote" class="t-headline-md c-espresso" style="line-height:1.5;"></p>
+      <p id="fp-source" class="t-label-sm c-walnut" style="margin-top:16px;letter-spacing:0.1em;"></p>
+      <button id="fp-open-card" class="sharp-btn" style="width:100%;margin-top:24px;">명대사 읽어보기</button>
+    `;
+    quoteBox.querySelector('#fp-open-card')?.addEventListener('click', openCardFromFeedPost);
+  }
   const highlightCardViewBtn = document.getElementById('fp-highlight-card-view');
-  if (openCardBtn) openCardBtn.style.display = '';
   if (highlightCardViewBtn) highlightCardViewBtn.style.display = 'none';
   const card = post.cards || {};
   const w = card.works || {};
-  if (fpQuote) fpQuote.textContent = cleanQuote(card.quote) || '명대사 준비 중';
+  const fpQuoteEl = document.getElementById('fp-quote');
+  if (fpQuoteEl) fpQuoteEl.textContent = cleanQuote(card.quote) || '명대사 준비 중';
   const src = [displayTitle(w.title), w.author].filter(Boolean).join(' · ');
-  if (fpSource) fpSource.textContent = src ? `— ${src}` : '';
+  const fpSourceEl = document.getElementById('fp-source');
+  if (fpSourceEl) fpSourceEl.textContent = src ? `— ${src}` : '';
   if (fpAuthor) fpAuthor.textContent = post.author_nickname || '익명';
   if (fpDate) fpDate.textContent = formatBookmarkDate(post.created_at) || formatRelativeTime(post.created_at);
   if (fpBody) fpBody.textContent = post.body || '';
@@ -8075,11 +8083,11 @@ function renderShareCard(canvas, bg, payload) {
   ctx.clearRect(0, 0, W, H);
   const ink = bg.paint(ctx, W, H) || '#3B2A1A';
 
-  /* 따옴표 — 본문 영역과 절대 겹치지 않게 윗단 고정 + 사이즈 축소 */
+  /* 따옴표 — 본문 영역과 절대 겹치지 않게 윗단 고정 + 사이즈 작게 */
   ctx.fillStyle = ink + 'AA';
-  ctx.font = 'bold 96px "Times New Roman", serif';
+  ctx.font = 'bold 56px "Times New Roman", serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('“', 70, 200);   /* 유니코드 진짜 따옴표 — webapp 폰트 fallback 안전 */
+  ctx.fillText('“', 80, 180);   /* 유니코드 진짜 따옴표 — webapp 폰트 fallback 안전 */
 
   /* 본문 — 영역(290~690) 안에서 자동 줄바꿈 + 크기 점진 축소 */
   const bodyTop = 290, bodyBot = 690;
@@ -8174,14 +8182,39 @@ function canvasToBlob(canvas) {
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png', 0.95));
 }
 async function downloadShareCard() {
-  const canvas = document.getElementById('share-canvas'); if (!canvas) return;
-  const blob = await canvasToBlob(canvas); if (!blob) return;
+  const canvas = document.getElementById('share-canvas');
+  if (!canvas) return;
+  const blob = await canvasToBlob(canvas);
+  if (!blob) { toast('이미지 생성 실패'); return; }
+  const filename = `daily-script-${Date.now()}.png`;
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `daily-script-${Date.now()}.png`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  toast('이미지 저장됨');
+  /* 1차 — anchor.download (Chrome / Edge / Firefox / Android Chrome) */
+  let downloaded = false;
+  try {
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); a.remove();
+    downloaded = true;
+  } catch (e) { console.warn('[share] anchor download failed:', e); }
+  /* 2차 — iOS Safari / PWA standalone: anchor.download 무동작 → Web Share API 폴백 */
+  if (!downloaded || /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    try {
+      const file = new File([blob], filename, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Daily Script' });
+        URL.revokeObjectURL(url);
+        return;
+      }
+    } catch (e) { /* AbortError 무시 */ }
+  }
+  /* 3차 — 새 탭으로 띄움 (사용자가 길게 눌러 저장) */
+  if (!downloaded) {
+    window.open(url, '_blank');
+    toast('이미지를 길게 눌러 저장하세요');
+  } else {
+    toast('이미지 저장됨');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 6000);
 }
 async function sendShareCard() {
   const canvas = document.getElementById('share-canvas'); if (!canvas) return;
