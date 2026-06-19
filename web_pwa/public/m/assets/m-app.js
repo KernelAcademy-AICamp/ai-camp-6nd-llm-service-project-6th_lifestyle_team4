@@ -8083,9 +8083,9 @@ function renderShareCard(canvas, bg, payload) {
   ctx.clearRect(0, 0, W, H);
   const ink = bg.paint(ctx, W, H) || '#3B2A1A';
 
-  /* 따옴표 — 본문 영역과 절대 겹치지 않게 윗단 고정 + 사이즈 작게 */
-  ctx.fillStyle = ink + 'AA';
-  ctx.font = 'bold 56px "Times New Roman", serif';
+  /* 따옴표 — 본문 영역과 절대 겹치지 않게 윗단 고정 + 사이즈 작게 + 매우 여린 농도(약 22%) */
+  ctx.fillStyle = ink + '38';
+  ctx.font = '400 56px "Times New Roman", serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   ctx.fillText('“', 80, 180);   /* 유니코드 진짜 따옴표 — webapp 폰트 fallback 안전 */
 
