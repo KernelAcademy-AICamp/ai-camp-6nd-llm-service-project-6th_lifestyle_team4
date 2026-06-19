@@ -5469,6 +5469,8 @@ function openDetail(card) {
   if (!card) return;
   // 카드 상세 진입 직후 cat_today 가 잠깐 보이는 깜빡임 방지 — 클릭 즉시 cat 자세 변경
   setBottomNavCat('cat_library.png', 'right-far', 'large');
+  // 피드의 글쓰기 연필 fab 은 카드 상세 화면에서 보이면 안 됨 (피드 탭 진입 시에만)
+  if (feedFab) feedFab.style.display = 'none';
   rewardYarnForFirstView(card.card_id);
   openDetailApproved(card);
 }
@@ -5712,6 +5714,8 @@ function closeDetailInternal() {
   unsubscribeFromDetailComments();
   cancelReply();
   updateBottomNavCatForView(state.currentView);   // 카드 상세 닫힘 → 탭별 기본 자세 복귀
+  // 피드 탭으로 돌아간 경우 연필 fab 다시 표시
+  if (feedFab) feedFab.style.display = (state.currentView === 'feed') ? 'inline-flex' : 'none';
   setTimeout(() => {
     detailScreen.style.display = 'none';
     document.body.style.overflow = '';
@@ -6605,13 +6609,18 @@ function openHighlightDetail(highlight) {
       <div style="height:24px;"></div>
       <button id="fp-open-card" class="sharp-btn" style="width:100%;">카드 보기</button>
     `;
-    // fp-open-card 새로 만든 요소 — 핸들러 재등록 (실타래 게이트 자동)
+    // fp-open-card 새로 만든 요소 — 핸들러 재등록.
+    //   하이라이트(feedpost) 화면이 열린 채로 openDetail 호출하면 두 화면이 겹쳐
+    //   클릭이 무반응처럼 보임 → openCardFromFeedPost 와 동일하게 close → setTimeout → openDetail.
     quoteBox.querySelector('#fp-open-card')?.addEventListener('click', () => {
       const h = state.currentHighlight;
       if (!h) return;
       const cardObj = (state.allCards || []).find((c) => c && c.card_id === h.card_id);
+      const target = cardObj || { card_id: h.card_id, ...(h.cards || {}) };
       track('highlight_card_view', { highlight_id: h.highlight_id, card_id: h.card_id });
-      openDetail(cardObj || { card_id: h.card_id, ...(h.cards || {}) });
+      closeFeedPostDetailInternal();
+      if (history.state?.overlay === 'feedPost') history.replaceState(null, '');
+      setTimeout(() => openDetail(target), 200);
     });
   }
   if (fpAuthor) fpAuthor.textContent = highlight.author_nickname || '익명';
@@ -8041,12 +8050,7 @@ function paintLetter(ctx, W, H, bgTop, bgBot, ink) {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, bgTop); g.addColorStop(1, bgBot);
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  /* 미세 가로줄 (편지지 라인 느낌) */
-  ctx.strokeStyle = ink + '14'; ctx.lineWidth = 1;
-  for (let y = 240; y < H - 240; y += 80) {
-    ctx.beginPath(); ctx.moveTo(80, y); ctx.lineTo(W - 80, y); ctx.stroke();
-  }
-  /* 좌상단 모서리 점선 */
+  /* 테두리만 — 점선 모서리 (가로줄 제거) */
   ctx.strokeStyle = ink + '40'; ctx.lineWidth = 2; ctx.setLineDash([6, 8]);
   ctx.strokeRect(36, 36, W - 72, H - 72);
   ctx.setLineDash([]);
