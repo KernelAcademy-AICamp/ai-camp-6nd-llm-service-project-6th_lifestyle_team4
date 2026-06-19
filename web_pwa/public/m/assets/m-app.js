@@ -1785,6 +1785,9 @@ function applyTodayCard(card) {
   // 북마크 버튼 아래 카운트 갱신
   const bmCountEl = document.getElementById('today-bookmark-count');
   if (bmCountEl) bmCountEl.textContent = formatCount(state.bookmarkCounts?.get(card?.card_id) || 0);
+  // 공유 버튼 아래 카운트 갱신 — cards.share_count
+  const shCountEl = document.getElementById('today-share-count');
+  if (shCountEl) shCountEl.textContent = formatCount(card?.share_count || 0);
   const kws = Array.isArray(card.keywords) ? card.keywords : [];
 
   // Speaker (인용문 위, 볼드) + Work (인용문 아래, "- 작품명")
@@ -8229,6 +8232,34 @@ function renderShareCardCurrent() {
 function canvasToBlob(canvas) {
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png', 0.95));
 }
+// 공유/다운로드 카운트 + 1 — 서버 RPC + 로컬 카드 share_count 갱신 + TODAY chip 갱신.
+//  share-modal 의 다운로드 + 공유하기 두 액션 모두 호출.
+async function bumpShareCount() {
+  const cardId = state.todayCard?.card_id || state.detailCardId;
+  if (!cardId) return;
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb.rpc('increment_share_count', { p_card_id: cardId });
+    if (error) throw error;
+    const newCount = typeof data === 'number' ? data : parseInt(data, 10);
+    if (Number.isFinite(newCount) && newCount >= 0) {
+      const candidates = [
+        state.todayCard,
+        state.detailCard,
+        ...(state.allCards || []).filter((c) => c && c.card_id === cardId),
+      ];
+      candidates.forEach((c) => { if (c) c.share_count = newCount; });
+      paintShareCounts(cardId, newCount);
+    }
+  } catch (e) { console.warn('[m] bumpShareCount failed:', e); }
+}
+function paintShareCounts(cardId, count) {
+  if (state.todayCard?.card_id === cardId) {
+    const el = document.getElementById('today-share-count');
+    if (el) el.textContent = String(count);
+  }
+}
+
 async function downloadShareCard() {
   const canvas = document.getElementById('share-canvas');
   if (!canvas) return;
@@ -8328,8 +8359,8 @@ document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
     renderShareBgList();
   });
 });
-document.getElementById('share-download')?.addEventListener('click', downloadShareCard);
-document.getElementById('share-send')?.addEventListener('click', sendShareCard);
+document.getElementById('share-download')?.addEventListener('click', async () => { await downloadShareCard(); bumpShareCount(); });
+document.getElementById('share-send')?.addEventListener('click', async () => { await sendShareCard(); bumpShareCount(); });
 
 /* payload 추출 — 오늘의 카드 / 카드 상세에서 공통 */
 function payloadForToday() {
