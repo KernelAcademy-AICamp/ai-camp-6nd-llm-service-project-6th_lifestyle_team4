@@ -8572,6 +8572,8 @@ document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
   });
 });
 document.getElementById('share-download')?.addEventListener('click', async () => { await downloadShareCard(); bumpShareCount(); });
+/* '그 외 공유' — OS 공유 시트 (Web Share API). 카카오톡은 이 경로로 보내면 text/url 을 무시해
+   이미지만 가므로 별도 '카카오톡' 버튼(아래) 으로 안내. */
 document.getElementById('share-send')?.addEventListener('click', async () => { await sendShareCard(); bumpShareCount(); });
 
 /* === 카카오톡 공유 (Kakao SDK) ===
