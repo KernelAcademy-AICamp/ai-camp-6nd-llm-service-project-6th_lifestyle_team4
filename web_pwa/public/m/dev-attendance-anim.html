@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>출석 보상 애니메이션 — 프로토타입</title>
+  <style>
+    :root{
+      --paper:#FAF8F2; --espresso:#3B2A1A; --walnut:#7C6B57; --latte:#E6DBC6; --cta:#D85A30;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0; background:var(--paper); color:var(--espresso);
+      font-family:'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+
+    /* 가짜 헤더 — 우측 상단 chip (실제 PWA 의 #yarn-chip 위치 모사)
+       backdrop 보다 위 z-index → 보상 시퀀스 중에도 chip 이 또렷하게 보임 */
+    header{
+      position:fixed; top:0; left:0; right:0; height:64px; padding:0 18px;
+      display:flex; align-items:center; justify-content:space-between;
+      background:var(--paper); border-bottom:1px solid var(--latte);
+      z-index:55;
+    }
+    .brand{
+      font-family:'Bodoni 72','Bodoni 72 Oldstyle',Didot,'Nanum Myeongjo',Georgia,serif;
+      font-size:22px; letter-spacing:.02em;
+    }
+    .brand .dot{ color:var(--cta); }
+    .yarn-chip{
+      display:inline-flex; align-items:center; gap:6px;
+      background:var(--paper); border:1px solid var(--latte); border-radius:999px;
+      padding:5px 12px 5px 6px;
+    }
+    .yarn-chip img{ width:22px; height:22px; object-fit:cover; border-radius:50%; display:block; }
+    .yarn-chip .num{ font-weight:700; font-size:14px; color:var(--espresso); font-variant-numeric:tabular-nums; }
+    /* 도착 강조 효과 — 보상 도착 시점에 chip 잠깐 글로우 */
+    .yarn-chip.pulse{
+      animation: chip-pulse .6s ease-out;
+      box-shadow: 0 0 0 8px rgba(216,90,48,.0);
+    }
+    @keyframes chip-pulse{
+      0%   { transform:scale(1);    box-shadow:0 0 0 0 rgba(216,90,48,.35); }
+      40%  { transform:scale(1.10); box-shadow:0 0 0 14px rgba(216,90,48,.0); }
+      100% { transform:scale(1);    box-shadow:0 0 0 0 rgba(216,90,48,0); }
+    }
+
+    main{
+      padding:96px 22px 40px;
+    }
+    h1{ font-size:22px; margin:0 0 8px; }
+    p.dim{ color:var(--walnut); font-size:13px; line-height:1.6; margin:0 0 24px; }
+    button.cta{
+      appearance:none; border:none; cursor:pointer;
+      background:var(--cta); color:#fff; font-weight:700; letter-spacing:.05em;
+      padding:14px 22px; border-radius:14px; font-size:14px;
+      box-shadow:0 6px 16px rgba(216,90,48,.32);
+    }
+    button.cta:active{ transform:scale(.98); }
+
+    /* ===== 보상 시퀀스 ===== */
+    /* 1) 화면 전체 backdrop (배경 흐리게) */
+    .reward-backdrop{
+      position:fixed; inset:0; z-index:50;
+      background:rgba(14,12,10,.42);
+      -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+      opacity:0; pointer-events:none;
+      transition: opacity .35s ease;
+    }
+    .reward-backdrop.show{ opacity:1; pointer-events:auto; }
+
+    /* 2) 보상 그래픽 — 화면 중앙 시작 → 우측 상단 chip 위치로 이동.
+          이동 중에도 또렷하게 보이도록 opacity 유지, 도착 직전에만 살짝 fade. */
+    .reward-burst{
+      position:fixed; z-index:51;
+      left:50%; top:50%; transform:translate(-50%,-50%) scale(1);
+      transform-origin:center center;
+      display:flex; flex-direction:column; align-items:center; gap:14px;
+      opacity:0; pointer-events:none;
+      transition: opacity .35s ease,
+                  transform 1.4s cubic-bezier(.45,.05,.25,1),
+                  left 1.4s cubic-bezier(.45,.05,.25,1),
+                  top 1.4s cubic-bezier(.45,.05,.25,1);
+    }
+    .reward-burst.show{ opacity:1; }
+    .reward-burst.fly{
+      /* 우측 상단 chip 정확한 위치로 — 작아지면서 chip 안으로 흡수되는 느낌 */
+      left: calc(100% - 62px);
+      top: 32px;
+      transform: translate(-50%,-50%) scale(.16);
+      opacity: 1;   /* 이동 끝까지 또렷 — fade 는 JS 가 마지막에 별도 처리 */
+    }
+    .reward-burst.fade{ opacity: 0; transition: opacity .25s ease; }
+    .reward-yarn{
+      width:180px; height:180px; border-radius:50%;
+      background-image:url('assets/daily-script-bar.png');
+      background-size:cover; background-position:center;
+      box-shadow:0 18px 40px rgba(60,38,18,.35), 0 0 0 8px rgba(255,255,255,.18);
+      animation: yarn-bounce 1.2s ease-in-out infinite;
+    }
+    .reward-times{
+      font-family:'Bodoni 72',Georgia,serif;
+      font-size:64px; font-weight:700; color:#fff;
+      letter-spacing:.02em;
+      text-shadow:0 4px 18px rgba(0,0,0,.35);
+      font-variant-numeric:tabular-nums;
+    }
+    .reward-times .x{ opacity:.78; margin-right:4px; }
+    .reward-label{
+      color:#fff; font-size:13px; letter-spacing:.2em; opacity:.78; text-transform:uppercase;
+    }
+    @keyframes yarn-bounce{
+      0%,100% { transform:translateY(0) rotate(-4deg); }
+      50%     { transform:translateY(-10px) rotate(4deg); }
+    }
+
+    /* 작은 스파클 */
+    .spark{
+      position:absolute; width:6px; height:6px; border-radius:50%;
+      background:#FBD68A; box-shadow:0 0 12px 3px rgba(251,214,138,.7);
+      animation: spark-fly 1.6s ease-out infinite;
+      pointer-events:none;
+    }
+    .spark.s1{ left:14%; top:14%; animation-delay:.0s; }
+    .spark.s2{ left:80%; top:18%; animation-delay:.25s; }
+    .spark.s3{ left:18%; top:78%; animation-delay:.5s; }
+    .spark.s4{ left:82%; top:74%; animation-delay:.75s; }
+    @keyframes spark-fly{
+      0%   { transform:translate(0,0) scale(.6); opacity:0; }
+      30%  { opacity:1; }
+      100% { transform:translate(0,-30px) scale(1.1); opacity:0; }
+    }
+
+    /* ===== 출석 달력 모달 (보상 애니 직후 노출) ===== */
+    .cal-backdrop{
+      position:fixed; inset:0; background:rgba(14,12,10,.55); z-index:60;
+      display:none; align-items:center; justify-content:center; padding:24px;
+      opacity:0; transition: opacity .25s ease;
+    }
+    .cal-backdrop.show{ display:flex; opacity:1; }
+    .cal-modal{
+      width:100%; max-width:380px; background:var(--paper); border-radius:18px;
+      padding:22px 20px 20px; box-shadow:0 20px 50px rgba(14,12,10,.35);
+      transform:translateY(8px); transition: transform .25s ease;
+    }
+    .cal-backdrop.show .cal-modal{ transform:translateY(0); }
+    .cal-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; }
+    .cal-title{ font-weight:700; font-size:16px; }
+    .cal-month{ color:var(--walnut); font-size:12px; letter-spacing:.1em; }
+    .cal-week, .cal-grid{
+      display:grid; grid-template-columns:repeat(7, minmax(0, 1fr));
+      gap:6px 4px;
+    }
+    .cal-week{ margin-bottom:6px; }
+    .cal-week .d{ text-align:center; font-size:10px; color:var(--walnut); }
+    .cal-grid .cell{
+      aspect-ratio:1/1.3; border-radius:8px; background:#F3EBD8;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:2px; font-size:12px; color:var(--espresso); position:relative;
+    }
+    .cal-grid .cell.empty{ background:transparent; }
+    .cal-grid .cell .yn{ display:none; width:14px; height:14px; }
+    .cal-grid .cell.attended .yn{ display:block; background-image:url('assets/daily-script-bar.png'); background-size:cover; border-radius:50%; }
+    .cal-grid .cell.today{ outline:2px solid var(--cta); outline-offset:1px; }
+    .cal-foot{ display:flex; justify-content:space-between; align-items:center; margin-top:14px; }
+    .cal-streak{ color:var(--walnut); font-size:12px; }
+    .cal-close{
+      appearance:none; border:none; background:var(--espresso); color:#fff;
+      padding:8px 16px; border-radius:10px; font-size:12px; letter-spacing:.06em; cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="brand">Daily Script<span class="dot">.</span></span>
+    <span class="yarn-chip" id="yarnChip">
+      <img src="assets/daily-script-bar.png" alt="" />
+      <span class="num" id="yarnNum">12,340</span>
+    </span>
+  </header>
+
+  <main>
+    <h1>출석 보상 애니메이션 — 프로토타입</h1>
+    <p class="dim">
+      "출석 체크 시작" 버튼을 누르면 현재 PWA 의 출석 모달 통과 후<br/>
+      실타래 ×100 그래픽이 중앙에 등장 → 우측 상단 chip 으로 축소 이동 → 보유 숫자 +100 카운팅.
+    </p>
+    <button type="button" class="cta" id="play">출석 체크 시작</button>
+  </main>
+
+  <!-- 출석 달력 모달 (보상 애니 끝나고 노출) -->
+  <div class="cal-backdrop" id="calBd">
+    <div class="cal-modal">
+      <div class="cal-head">
+        <span class="cal-title">출석 달력</span>
+        <span class="cal-month" id="calMonth">2026 · 6월</span>
+      </div>
+      <div class="cal-week">
+        <span class="d">일</span><span class="d">월</span><span class="d">화</span>
+        <span class="d">수</span><span class="d">목</span><span class="d">금</span><span class="d">토</span>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-foot">
+        <span class="cal-streak" id="calStreak">연속 출석 3일 🔥</span>
+        <button class="cal-close" id="calClose">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 보상 시퀀스 (default hidden) -->
+  <div class="reward-backdrop" id="bd"></div>
+  <div class="reward-burst" id="burst" aria-hidden="true">
+    <div class="reward-label">ATTENDANCE</div>
+    <div style="position:relative;">
+      <div class="reward-yarn"></div>
+      <div class="spark s1"></div>
+      <div class="spark s2"></div>
+      <div class="spark s3"></div>
+      <div class="spark s4"></div>
+    </div>
+    <div class="reward-times"><span class="x">×</span>100</div>
+  </div>
+
+  <script>
+    const REWARD = 100;
+    const yarnChip = document.getElementById('yarnChip');
+    const yarnNum  = document.getElementById('yarnNum');
+    const bd       = document.getElementById('bd');
+    const burst    = document.getElementById('burst');
+
+    function parseNum(s){ return parseInt(String(s).replace(/[^0-9]/g,''), 10) || 0; }
+    function fmt(n){ return n.toLocaleString('ko-KR'); }
+
+    /* 숫자 카운팅 애니메이션 (start → end). 보상 도착 직전부터 0.6s. */
+    function countTo(fromN, toN, ms){
+      const t0 = performance.now();
+      function step(t){
+        const k = Math.min(1, (t - t0) / ms);
+        const eased = 1 - Math.pow(1 - k, 3);   // ease-out cubic
+        const cur = Math.round(fromN + (toN - fromN) * eased);
+        yarnNum.textContent = fmt(cur);
+        if (k < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    async function playReward(){
+      /* 1) backdrop on, burst 등장 */
+      bd.classList.add('show');
+      burst.classList.add('show');
+      await wait(1000);   // 사용자 눈에 또렷이 노출
+
+      /* 2) burst → chip 으로 1.4초 동안 천천히 축소·이동 (이동 과정이 보임) */
+      burst.classList.add('fly');
+
+      /* 3) 도착 직전부터 chip 강조 + 숫자 카운팅 */
+      await wait(1100);   // 이동 중 90% 지점
+      yarnChip.classList.add('pulse');
+      const cur = parseNum(yarnNum.textContent);
+      countTo(cur, cur + REWARD, 700);
+
+      /* 4) chip 안으로 흡수되는 fade — 이동 끝나는 시점에 짧게 */
+      await wait(300);
+      burst.classList.add('fade');
+
+      /* 5) 정리 */
+      await wait(280);
+      bd.classList.remove('show');
+      yarnChip.classList.remove('pulse');
+      burst.classList.remove('show');
+      burst.classList.remove('fly');
+      burst.classList.remove('fade');
+
+      /* 6) 출석 달력 모달 노출 */
+      await wait(150);
+      openCalendar();
+    }
+    function wait(ms){ return new Promise(r => setTimeout(r, ms)); }
+    document.getElementById('play').addEventListener('click', playReward);
+
+    /* === 출석 달력 (가짜 데이터) === */
+    function openCalendar(){
+      buildCalendar(new Date(2026, 5, 17), [3, 8, 12, 13, 15, 16, 17]); // 6월, 출석한 날 배열
+      document.getElementById('calBd').classList.add('show');
+    }
+    document.getElementById('calClose').addEventListener('click', () => {
+      document.getElementById('calBd').classList.remove('show');
+    });
+    function buildCalendar(today, attendedDays){
+      const grid = document.getElementById('calGrid');
+      const year = today.getFullYear(), month = today.getMonth();
+      const first = new Date(year, month, 1).getDay();
+      const last  = new Date(year, month + 1, 0).getDate();
+      document.getElementById('calMonth').textContent = `${year} · ${month + 1}월`;
+      let html = '';
+      for (let i = 0; i < first; i++) html += '<div class="cell empty"></div>';
+      for (let d = 1; d <= last; d++) {
+        const cls = ['cell'];
+        if (attendedDays.includes(d)) cls.push('attended');
+        if (d === today.getDate()) cls.push('today');
+        html += `<div class="${cls.join(' ')}"><span>${d}</span><i class="yn"></i></div>`;
+      }
+      grid.innerHTML = html;
+    }
+  </script>
+
+</body>
+</html>

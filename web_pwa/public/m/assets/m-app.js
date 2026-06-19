@@ -4850,13 +4850,18 @@ async function maybeShowAttendance() {
   if (safeStorageGet(ATTENDANCE_LAST_SHOWN_KEY) === today) return;
   safeStorageSet(ATTENDANCE_LAST_SHOWN_KEY, today);
   const newAttendance = markAttendanceToday();  // true = 오늘 출석 첫 기록 → 보상 지급
+  let newBalance = null;
   if (newAttendance) {
     try {
-      const balance = await grantYarnRpc(ATTENDANCE_REWARD);
-      state.yarnPurchased = balance;
-      renderYarnChip();
+      newBalance = await grantYarnRpc(ATTENDANCE_REWARD);
+      /* chip 갱신은 애니메이션 도착 시점에 — 여기서는 state 만 미리 적용 X */
     } catch (e) { console.warn('[m] attendance grant failed:', e); }
     try { track('attendance_check', { date: today }); } catch {}
+  }
+  /* 첫 출석이고 보상이 잡혔으면 → 보상 애니메이션 (burst → chip) 끝나고 달력 노출 */
+  if (newAttendance && Number.isFinite(newBalance) && newBalance >= 0) {
+    try { await playAttendanceRewardAnim(ATTENDANCE_REWARD, newBalance); }
+    catch (e) { console.warn('[m] attendance anim failed:', e); state.yarnPurchased = newBalance; renderYarnChip(); }
   }
   const modal = document.getElementById('attendance-modal');
   if (!modal) return;
@@ -4871,6 +4876,93 @@ async function maybeShowAttendance() {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.style.display = 'none';
   }, { once: true });
+}
+
+/* 출석 보상 애니메이션 — 중앙 burst(실타래 ×N) → 우측 상단 yarn-chip 으로 축소 이동 → 잔액 카운팅 */
+async function playAttendanceRewardAnim(amount, finalBalance) {
+  if (!yarnChip) { state.yarnPurchased = finalBalance; renderYarnChip(); return; }
+  /* 1회용 CSS — head 에 한 번만 inject */
+  if (!document.getElementById('attendance-anim-css')) {
+    const css = document.createElement('style');
+    css.id = 'attendance-anim-css';
+    css.textContent = `
+      .ar-backdrop{ position:fixed; inset:0; background:rgba(14,12,10,.42); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); opacity:0; transition:opacity .35s ease; z-index:140; pointer-events:none; }
+      .ar-backdrop.show{ opacity:1; pointer-events:auto; }
+      .ar-burst{ position:fixed; left:50%; top:50%; transform:translate(-50%,-50%) scale(1); transform-origin:center center; display:flex; flex-direction:column; align-items:center; gap:14px; opacity:0; z-index:141; pointer-events:none;
+        transition: opacity .35s ease, transform 1.4s cubic-bezier(.45,.05,.25,1), left 1.4s cubic-bezier(.45,.05,.25,1), top 1.4s cubic-bezier(.45,.05,.25,1); }
+      .ar-burst.show{ opacity:1; }
+      .ar-burst.fly{ transform:translate(-50%,-50%) scale(.16); opacity:1; }
+      .ar-burst.fade{ opacity:0; transition:opacity .25s ease; }
+      .ar-yarn{ width:180px; height:180px; border-radius:50%; background:url('assets/daily-script-bar.png') center/cover; box-shadow:0 18px 40px rgba(60,38,18,.35), 0 0 0 8px rgba(255,255,255,.18); animation:ar-bounce 1.2s ease-in-out infinite; }
+      .ar-times{ font-family:'Bodoni 72',Georgia,serif; font-size:64px; font-weight:700; color:#fff; letter-spacing:.02em; text-shadow:0 4px 18px rgba(0,0,0,.35); font-variant-numeric:tabular-nums; }
+      .ar-times .x{ opacity:.78; margin-right:4px; }
+      .ar-label{ color:#fff; font-size:13px; letter-spacing:.2em; opacity:.78; text-transform:uppercase; }
+      @keyframes ar-bounce{ 0%,100%{ transform:translateY(0) rotate(-4deg); } 50%{ transform:translateY(-10px) rotate(4deg); } }
+      /* 시퀀스 중 yarn-chip 만 또렷하게 (backdrop 위로) */
+      body.ar-active #yarn-chip{ position:relative; z-index:142 !important; }
+      body.ar-active #yarn-chip.ar-pulse{ animation: ar-chip-pulse .6s ease-out; }
+      @keyframes ar-chip-pulse{ 0%{ transform:scale(1); box-shadow:0 0 0 0 rgba(216,90,48,.35);} 40%{ transform:scale(1.10); box-shadow:0 0 0 14px rgba(216,90,48,0);} 100%{ transform:scale(1); } }
+    `;
+    document.head.appendChild(css);
+  }
+  /* element 생성 */
+  const bd = document.createElement('div'); bd.className = 'ar-backdrop';
+  const burst = document.createElement('div');
+  burst.className = 'ar-burst';
+  burst.innerHTML = `
+    <div class="ar-label">ATTENDANCE</div>
+    <div class="ar-yarn"></div>
+    <div class="ar-times"><span class="x">×</span>${amount}</div>
+  `;
+  document.body.appendChild(bd);
+  document.body.appendChild(burst);
+  document.body.classList.add('ar-active');
+  /* chip 위치 계산 — viewport 기준 center */
+  const rect = yarnChip.getBoundingClientRect();
+  const chipCx = rect.left + rect.width / 2;
+  const chipCy = rect.top + rect.height / 2;
+  /* 시퀀스 */
+  await sleep(20);
+  bd.classList.add('show');
+  burst.classList.add('show');
+  await sleep(1000);
+  burst.style.left = chipCx + 'px';
+  burst.style.top  = chipCy + 'px';
+  burst.classList.add('fly');
+  await sleep(1100);
+  yarnChip.classList.add('ar-pulse');
+  /* 잔액 카운팅 (현재 표시값 → finalBalance) */
+  const label = yarnChip.querySelector('.yarn-chip-count');
+  const startN = label ? (parseInt(String(label.textContent).replace(/[^0-9]/g, ''), 10) || 0) : (state.yarnPurchased || 0);
+  countYarnTo(startN, finalBalance, 700);
+  /* state 는 카운팅 완료 시점에 set (renderYarnChip 이 덮어쓰지 않도록 잠시 보류) */
+  await sleep(300);
+  burst.classList.add('fade');
+  await sleep(420);
+  state.yarnPurchased = finalBalance;
+  renderYarnChip();
+  /* 정리 */
+  bd.classList.remove('show');
+  yarnChip.classList.remove('ar-pulse');
+  await sleep(280);
+  bd.remove(); burst.remove();
+  document.body.classList.remove('ar-active');
+}
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+function countYarnTo(fromN, toN, ms) {
+  if (!yarnChip) return;
+  const label = yarnChip.querySelector('.yarn-chip-count');
+  const balanceEl = yarnBalanceNum;
+  const t0 = performance.now();
+  function step(t){
+    const k = Math.min(1, (t - t0) / ms);
+    const eased = 1 - Math.pow(1 - k, 3);
+    const cur = Math.round(fromN + (toN - fromN) * eased);
+    if (label) label.textContent = String(cur);
+    if (balanceEl) balanceEl.textContent = String(cur);
+    if (k < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
 function renderYarnChip() {
@@ -7405,8 +7497,17 @@ function openHlCompose() {
   }
   if (hlCardIdEl) hlCardIdEl.textContent = `#${String(card.card_id).padStart(5, '0')}`;
   if (hlCoverFallback) {
-    // 표지 fallback — 작품 제목 일부를 박스 안에
-    hlCoverFallback.textContent = subtitle || title || '';
+    /* cover_url 있으면 실제 책 표지 적용, 없으면 기존 가죽색 폴백 */
+    const cu = w.cover_url || '';
+    if (cu) {
+      hlCoverFallback.textContent = '';
+      hlCoverFallback.style.background = `#1B0D08 url("${cu}") center/cover no-repeat`;
+      hlCoverFallback.style.color = 'transparent';
+    } else {
+      hlCoverFallback.textContent = subtitle || title || '';
+      hlCoverFallback.style.background = 'linear-gradient(160deg,#B33A2E 0%,#7A1F15 100%)';
+      hlCoverFallback.style.color = '#fff';
+    }
   }
   if (hlSelectedTextEl) hlSelectedTextEl.textContent = selectedText;
 
