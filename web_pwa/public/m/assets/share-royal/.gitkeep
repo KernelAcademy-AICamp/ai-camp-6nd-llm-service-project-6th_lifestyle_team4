@@ -1,0 +1,14 @@
+# 공유 카드 — Royal tier 카드지 이미지 폴더
+# 가격: 실타래 2999
+#
+# 비율: 9:16 (권장 해상도 1080 x 1920)
+# 포맷: PNG / JPG / WebP (PNG 권장)
+#
+# 파일명 = m-app.js 의 SHARE_BACKGROUNDS 배열 id 와 매칭:
+#   <id>.png  →  카드지 이름
+#
+# 추가 흐름:
+#   1) 이 폴더에 <id>.png 업로드
+#   2) m-app.js 의 SHARE_BACKGROUNDS 배열에 항목 추가
+#        { id: 'foo', name: '…', tier: 'royal', price: 2999,
+#          paint: (ctx, W, H) => paintImageBg(ctx, W, H, 'assets/share-royal/foo.png') }
