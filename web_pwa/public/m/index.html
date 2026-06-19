@@ -2881,6 +2881,9 @@
         <span class="material-symbols-outlined" style="font-size:18px;">download</span>
         다운로드
       </button>
+      <button id="share-send-kakao" type="button" class="sharp-btn" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#FEE500;color:#191919;">
+        <span style="font-weight:700;">카카오톡</span>
+      </button>
       <button id="share-send" class="sharp-btn" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;">
         <span class="material-symbols-outlined" style="font-size:18px;">ios_share</span>
         공유하기
@@ -3055,6 +3058,10 @@
 <!-- ===== Toast ===== -->
 <div id="toast" class="t-label-sm"></div>
 
+<!-- Kakao SDK (카카오톡 공유) — m-app.js 에서 Kakao.init 호출 후 Kakao.Share.uploadImage / sendDefault 사용 -->
+<script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"
+        integrity="sha384-DKYJZ8NLiK8MN4/C5P2dtSmLQ4KwPaoqAfyA/DfmEc1VDxu4yyC7wy6K1Hs90nka"
+        crossorigin="anonymous"></script>
 <script type="module" src="/m/assets/m-app.js"></script>
 <script type="module" src="/assets/pwa.js"></script>
 </body>

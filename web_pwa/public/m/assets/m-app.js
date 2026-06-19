@@ -8574,6 +8574,55 @@ document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
 document.getElementById('share-download')?.addEventListener('click', async () => { await downloadShareCard(); bumpShareCount(); });
 document.getElementById('share-send')?.addEventListener('click', async () => { await sendShareCard(); bumpShareCount(); });
 
+/* === 카카오톡 공유 (Kakao SDK) ===
+   카카오톡은 navigator.share 의 text/url 을 무시하고 이미지만 받음 → SDK 직접 호출로 우회.
+   Kakao.Share.uploadImage 로 캔버스 PNG 를 카카오 CDN 에 업로드 후 sendDefault 의 feed objectType 으로
+   이미지 + 제목 + 설명 + 'Daily Script' 카드 보기 버튼(앱 링크) 함께 전송. */
+const KAKAO_JS_KEY = ''; // ← 카카오 개발자 콘솔에서 발급한 JavaScript 키 입력
+(function initKakao() {
+  try {
+    if (window.Kakao && KAKAO_JS_KEY && !window.Kakao.isInitialized()) {
+      window.Kakao.init(KAKAO_JS_KEY);
+    }
+  } catch (e) { console.warn('[m] Kakao init failed:', e); }
+})();
+
+async function shareToKakao() {
+  if (!window.Kakao) { toast('카카오 SDK 로드 실패 — 잠시 후 다시 시도'); return; }
+  if (!window.Kakao.isInitialized()) {
+    toast('카카오 공유 준비 중 — KAKAO_JS_KEY 미설정');
+    return;
+  }
+  const canvas = document.getElementById('share-canvas'); if (!canvas) return;
+  const blob = await canvasToBlob(canvas); if (!blob) { toast('이미지 생성 실패'); return; }
+  const payload  = shareState.payload || {};
+  const refUrl   = buildReferralUrl();
+  try {
+    const file = new File([blob], 'daily-script.png', { type: 'image/png' });
+    /* 1) 캔버스 PNG → 카카오 CDN 업로드 (URL 반환) */
+    const uploaded = await window.Kakao.Share.uploadImage({ file: [file] });
+    const imageUrl = uploaded?.infos?.original?.url;
+    if (!imageUrl) throw new Error('uploadImage 응답에 URL 없음');
+    /* 2) feed objectType — 제목·설명·이미지·앱 링크 카드 형태로 전송 */
+    await window.Kakao.Share.sendDefault({
+      objectType: 'feed',
+      content: {
+        title: payload.work ? `${payload.work}${payload.author ? ' · ' + payload.author : ''}` : 'Daily Script',
+        description: payload.quote || '',
+        imageUrl,
+        link: { mobileWebUrl: refUrl, webUrl: refUrl },
+      },
+      buttons: [
+        { title: '카드 보러가기', link: { mobileWebUrl: refUrl, webUrl: refUrl } },
+      ],
+    });
+  } catch (e) {
+    console.warn('[m] kakao share failed:', e);
+    toast('카카오톡 공유 실패 — 잠시 후 다시 시도');
+  }
+}
+document.getElementById('share-send-kakao')?.addEventListener('click', async () => { await shareToKakao(); bumpShareCount(); });
+
 /* payload 추출 — 오늘의 카드 / 카드 상세에서 공통 */
 function payloadForToday() {
   const c = state.todayCard || {};
