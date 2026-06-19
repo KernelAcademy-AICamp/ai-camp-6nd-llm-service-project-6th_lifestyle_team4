@@ -1145,6 +1145,8 @@ async function bootstrapAuth() {
   if (!state.isAnonymous) {
     // 회원가입 직후라면 저장해둔 프로필(로그인 ID·성별·나이대)을 새 행에 기록
     await applySignupProfile(sb, state.userId);
+    // 친구 초대 referral — URL 의 ?ref=<referrer_id> 가 있으면 양쪽 +600 정산
+    await redeemPendingReferral(sb, state.userId);
     // 소셜 첫 가입(이메일 가입은 폼에서 이미 받음) → 직후 1회 성별·나이 입력 프롬프트
     if ((state.authProvider === 'google' || state.authProvider === 'kakao')
         && !state.userGender && !state.userAgeGroup) {
@@ -1226,6 +1228,46 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
 
 // 회원가입 시 보존해둔 프로필(로그인 ID·성별·나이대)을 users 행에 기록.
 // 핵심 행 생성과 분리해 별도 update — 실패해도 앱 동작에는 지장 없게 처리.
+// Referral — URL 의 ?ref=<user_id> 를 localStorage 에 보관 (가입까지 살아남게).
+//   이미 들어와있으면 덮어쓰지 않음 (최초 1회만).
+(function _captureReferralFromUrl() {
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    const ref = sp.get('ref');
+    if (ref && /^\d+$/.test(ref) && !safeStorageGet('ds.pendingReferrerId')) {
+      safeStorageSet('ds.pendingReferrerId', ref);
+    }
+  } catch {}
+})();
+
+// 회원가입 완료 직후 referral 정산.
+async function redeemPendingReferral(sb, newUserId) {
+  const ref = safeStorageGet('ds.pendingReferrerId');
+  if (!ref || !/^\d+$/.test(ref)) return;
+  const referrerId = parseInt(ref, 10);
+  if (!Number.isFinite(referrerId) || referrerId === Number(newUserId)) {
+    safeStorageRemove('ds.pendingReferrerId');
+    return;
+  }
+  try {
+    const { data, error } = await sb.rpc('redeem_referral', {
+      p_referrer_id: referrerId,
+      p_referee_id: newUserId,
+    });
+    if (error) throw error;
+    const newBalance = typeof data === 'number' ? data : parseInt(data, 10);
+    if (Number.isFinite(newBalance) && newBalance >= 0) {
+      state.yarnPurchased = newBalance;
+      try { renderYarnChip(); } catch {}
+      try { toast('친구 초대 보상 +600 실타래'); } catch {}
+    }
+  } catch (e) {
+    console.warn('[m] redeem_referral failed:', e);
+  } finally {
+    safeStorageRemove('ds.pendingReferrerId');
+  }
+}
+
 async function applySignupProfile(sb, userId) {
   let profile = null;
   try { profile = JSON.parse(safeStorageGet('ds.signupProfile', 'null') || 'null'); } catch {}
@@ -8306,15 +8348,24 @@ async function downloadShareCard() {
   }
   setTimeout(() => URL.revokeObjectURL(url), 6000);
 }
+// 친구 초대 referral 링크 — 본인 user_id 기반. 공유 받는 사람이 가입 시 양쪽 +600.
+function buildReferralUrl() {
+  const me = state.userId;
+  try {
+    const base = `${window.location.origin}/m/`;
+    return me ? `${base}?ref=${me}` : base;
+  } catch { return ''; }
+}
 async function sendShareCard() {
   const canvas = document.getElementById('share-canvas'); if (!canvas) return;
   const blob = await canvasToBlob(canvas); if (!blob) return;
   const file = new File([blob], 'daily-script.png', { type: 'image/png' });
   const payload = shareState.payload || {};
-  const text = `"${payload.quote || ''}" — ${payload.work || 'Daily Script'}`;
+  const refUrl = buildReferralUrl();
+  const text = `"${payload.quote || ''}" — ${payload.work || 'Daily Script'}${refUrl ? '\n\n' + refUrl : ''}`;
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], text, title: 'Daily Script' });
+      await navigator.share({ files: [file], text, title: 'Daily Script', url: refUrl || undefined });
       return;
     }
   } catch (e) { /* AbortError 등 무시 */ }
