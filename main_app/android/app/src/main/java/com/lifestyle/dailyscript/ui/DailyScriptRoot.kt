@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -149,21 +150,52 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     // OZ Pick "취향 알려주기" CTA → 선호도 온보딩 강제 재노출 (이미 완료한 사용자도 다시 설정 가능).
     var forcePrefOverlay by remember { mutableStateOf(false) }
 
-    // 출석체크 — 00시 기준 그날 첫 진입이면 1회 다이얼로그 + 실타래 +5
+    // 출석체크 — 00시 기준 그날 첫 진입이면 1회 보상 애니(+100) → 다이얼로그.
     var attendanceVisible by remember { mutableStateOf(false) }
     var attendanceRewarded by remember { mutableStateOf(false) }
+    // 출석 보상 애니메이션 상태 — 버스트→실타래 칩으로 이동→칩 bounce→잔액 카운트업.
+    var rewardAnimAmount by remember { mutableStateOf<Int?>(null) }  // >0 이면 애니 재생 중
+    var rewardAnimStart by remember { mutableStateOf(0) }
+    var rewardAnimFinal by remember { mutableStateOf(0) }
+    var yarnChipCenter by remember { mutableStateOf(Offset.Zero) }   // 칩 중심 window px (버스트 목표)
+    var chipDisplayOverride by remember { mutableStateOf<Int?>(null) } // 카운트업 동안 칩 표시값 덮어쓰기
+    var chipBounceKey by remember { mutableStateOf(0) }               // ++ 하면 칩 실타래 이미지 bounce
     LaunchedEffect(session.userId, session.isAnonymous) {
         if (session.isAnonymous) return@LaunchedEffect
         val today = java.time.LocalDate.now().toString()
         if (AppPreferences.attendanceLastShown() == today) return@LaunchedEffect
         AppPreferences.markAttendanceShown(today)
+        val start = yarnVm.available.value
         attendanceRewarded = yarnVm.rewardAttendance()
-        attendanceVisible = true
+        val finalBal = yarnVm.available.value
+        if (attendanceRewarded && finalBal > start) {
+            chipDisplayOverride = start          // 카운트업 전까지 칩을 시작값에 고정
+            rewardAnimStart = start
+            rewardAnimFinal = finalBal
+            rewardAnimAmount = finalBal - start  // 애니 재생 트리거 (끝나면 달력 표시)
+        } else {
+            attendanceVisible = true             // 보상 없으면 달력만
+        }
     }
     if (attendanceVisible) {
         com.lifestyle.dailyscript.ui.yarn.AttendanceDialog(
             rewardedToday = attendanceRewarded,
             onDismiss = { attendanceVisible = false },
+        )
+    }
+    rewardAnimAmount?.takeIf { it > 0 }?.let { amt ->
+        com.lifestyle.dailyscript.ui.yarn.YarnRewardAnimation(
+            amount = amt,
+            startBalance = rewardAnimStart,
+            finalBalance = rewardAnimFinal,
+            chipCenter = { yarnChipCenter },
+            onCountTo = { chipDisplayOverride = it },
+            onBounce = { chipBounceKey++ },
+            onFinished = {
+                chipDisplayOverride = null
+                rewardAnimAmount = null
+                attendanceVisible = true
+            },
         )
     }
 
@@ -231,11 +263,13 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         if (showTopBar) {
             when (currentRoute) {
                 Routes.DAILY, Routes.HOME, Routes.ARCHIVE, Routes.FEED -> HomeTopBar(
-                    yarn = yarnAvailable,
+                    yarn = chipDisplayOverride ?: yarnAvailable,
                     onYarnClick = {
                         AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
                         navController.navigate(Routes.YARN_PURCHASE) { launchSingleTop = true }
                     },
+                    yarnBounceKey = chipBounceKey,
+                    onYarnChipPositioned = { yarnChipCenter = it },
                 )
                 Routes.SETTINGS -> SettingsTopBar(onFeedback = {
                     AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.FEEDBACK))

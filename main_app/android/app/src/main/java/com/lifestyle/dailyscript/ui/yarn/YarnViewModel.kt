@@ -12,9 +12,9 @@ import java.time.LocalDate
  * 실타래 잔액 + 보상을 한곳에서 관리. 상단바 칩이 [available] 을 구독한다.
  *
  * 사용자 명세(2026-06):
- *  - 카드 열람 게이트 제거 → spend 사용처 없음. 첫 열람 시 +1 보상([rewardFirstView]).
+ *  - 카드 열람 게이트 제거 → spend 사용처 없음. 첫 열람 시 +300 보상([rewardFirstView]).
  *  - 매일 5개 무료분 폐지 → 잔액 = 서버 충전분(users.yarn_balance) 만.
- *  - 출석체크: 그날 첫 진입이면 +5 ([rewardAttendance]).
+ *  - 출석체크: 그날 첫 진입이면 +100 ([rewardAttendance]). (PWA d10cfd3: 출석 +100 / 첫열람 +300)
  */
 class YarnViewModel : ViewModel() {
 
@@ -30,16 +30,16 @@ class YarnViewModel : ViewModel() {
     /** 세션의 서버 잔액으로 시드(재bootstrap 동기화). */
     fun setPurchased(balance: Int) { purchased.value = balance }
 
-    /** 카드 첫 열람 보상 — 카드당 1회 +1. */
+    /** 카드 첫 열람 보상 — 카드당 1회 +300. */
     suspend fun rewardFirstView(cardId: Long) {
         if (AppPreferences.isRewarded(cardId)) return
         AppPreferences.markRewarded(cardId)
-        val newBalance = runCatching { repo.grantYarn(1) }.getOrNull() ?: return
+        val newBalance = runCatching { repo.grantYarn(FIRST_VIEW_REWARD) }.getOrNull() ?: return
         purchased.value = newBalance
     }
 
     /**
-     * 출석체크 — 00시 기준 그날 첫 진입이면 +5 지급 후 true.
+     * 출석체크 — 00시 기준 그날 첫 진입이면 +100 지급 후 true.
      * 이미 지급됐거나 RPC 실패면 false.
      */
     suspend fun rewardAttendance(): Boolean {
@@ -69,7 +69,10 @@ class YarnViewModel : ViewModel() {
         return SpendResult.SUCCESS
     }
 
-    companion object { const val ATTENDANCE_REWARD = 5 }
+    companion object {
+        const val ATTENDANCE_REWARD = 100
+        const val FIRST_VIEW_REWARD = 300
+    }
 }
 
 /** [YarnViewModel.spend] 결과 — 구매 차감 성공/잔액부족/오류. */

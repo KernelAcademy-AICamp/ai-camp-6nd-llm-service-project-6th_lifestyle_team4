@@ -1,5 +1,8 @@
 package com.lifestyle.dailyscript.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,9 +26,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -90,19 +99,49 @@ fun BrandWordmark() {
 }
 
 @Composable
-fun HomeTopBar(yarn: Int, onYarnClick: () -> Unit) {
+fun HomeTopBar(
+    yarn: Int,
+    onYarnClick: () -> Unit,
+    yarnBounceKey: Int = 0,
+    onYarnChipPositioned: (Offset) -> Unit = {},
+) {
     TopBarContainer {
         BrandWordmark()
-        YarnChip(yarn = yarn, onClick = onYarnClick)
+        YarnChip(
+            yarn = yarn,
+            onClick = onYarnClick,
+            bounceKey = yarnBounceKey,
+            onPositioned = onYarnChipPositioned,
+        )
     }
 }
 
-/** 로고 우측 실타래 칩 — 아이콘 + 남은 개수. 탭하면 충전 페이지로 이동. */
+/**
+ * 로고 우측 실타래 칩 — 아이콘 + 남은 개수. 탭하면 충전 페이지로 이동.
+ * [bounceKey] 가 바뀌면 칩 박스는 그대로 두고 안의 실타래 이미지만 공 튀기듯 bounce(출석 보상 애니).
+ * [onPositioned] 로 칩 중심 좌표(window px)를 알려 보상 버스트가 날아올 목표로 쓴다.
+ */
 @Composable
-fun YarnChip(yarn: Int, onClick: () -> Unit) {
+fun YarnChip(
+    yarn: Int,
+    onClick: () -> Unit,
+    bounceKey: Int = 0,
+    onPositioned: (Offset) -> Unit = {},
+) {
     val shape = RoundedCornerShape(50)
+    val iconScale = remember { Animatable(1f) }
+    LaunchedEffect(bounceKey) {
+        if (bounceKey > 0) {
+            iconScale.snapTo(1f)
+            iconScale.animateTo(1.55f, tween(110))
+            iconScale.animateTo(0.82f, tween(120))
+            iconScale.animateTo(1.18f, tween(110))
+            iconScale.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 520f))
+        }
+    }
     Row(
         modifier = Modifier
+            .onGloballyPositioned { onPositioned(it.boundsInWindow().center) }
             .background(Sand.copy(alpha = 0.35f), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 9.dp, vertical = 4.dp),
@@ -110,7 +149,9 @@ fun YarnChip(yarn: Int, onClick: () -> Unit) {
     ) {
         YarnIcon(
             contentDescription = stringResource(R.string.yarn_chip_cd),
-            modifier = Modifier.size(15.dp),
+            modifier = Modifier
+                .size(15.dp)
+                .graphicsLayer { scaleX = iconScale.value; scaleY = iconScale.value },
         )
         Spacer(Modifier.width(5.dp))
         Text(

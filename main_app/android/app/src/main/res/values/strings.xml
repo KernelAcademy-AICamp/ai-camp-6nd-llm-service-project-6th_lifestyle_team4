@@ -101,7 +101,7 @@
     <string name="yarn_about_outro">한올의 실타래로 나만의 공간을 꾸며보세요</string>
     <string name="yarn_daily_note">매일 출석으로 실타래를 모아보세요.\n\n실타래로 나만의 공간을 꾸며보세요.</string>
     <string name="attendance_title">출석체크</string>
-    <string name="attendance_reward">출석체크 완료! 실타래 +5</string>
+    <string name="attendance_reward">출석체크 완료! 실타래 +100</string>
     <string name="yarn_confirm_title">실타래 사용</string>
     <string name="yarn_confirm_body">이 카드를 읽으면 실타래 1개가 사용됩니다.</string>
     <string name="yarn_confirm_use">사용하기</string>
