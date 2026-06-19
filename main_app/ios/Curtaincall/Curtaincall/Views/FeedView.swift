@@ -77,29 +77,22 @@ struct FeedView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        // 장식 고양이(펼친 책) — 우하단. 아래 글쓰기 pill 의 safeAreaInset 이 이 overlay
-        // '뒤에(나중에)' 적용돼 pill 이 고양이 머리 위에 그려진다(Android 동일).
-        // click-through 라 pill/콘텐츠 탭을 막지 않는다.
+        // 글쓰기 말풍선 + cat_pen 고양이 = 한 덩어리(Android FeedScreen 구성 일치).
+        // 하단 고정(safeAreaInset)이 아니라 고양이 '바로 위'에 말풍선을 앵커해, 꼬리가
+        // 고양이 머리를 가리키며 "고양이가 글쓰기라고 말하는" 말풍선이 된다. 고양이는
+        // 펼친 책(+펜) 위에 앉아 있고 책 아랫부분은 탭바 뒤로 내려간다. 말풍선만 탭 가능.
         .overlay(alignment: .bottomTrailing) {
-            Image("cat_pen")
-                .resizable()
-                .scaledToFit()
-                .frame(height: 104)
-                .padding(.trailing, 34)
-                .padding(.bottom, -26)   // 책은 탭바 뒤로 내려가고 머리에 pill 이 얹히게
-                .allowsHitTesting(false)
-        }
-        // 글쓰기 말풍선 pill — 로그인 여부와 무관하게 항상 표시 (비로그인은 토스트만).
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack {
-                Spacer()
+            VStack(alignment: .trailing, spacing: 0) {
                 writePill
+                Image("cat_pen")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 104)
+                    .offset(y: -4)            // 꼬리 끝이 고양이 머리에 살짝 겹치게
+                    .allowsHitTesting(false)
             }
-            .padding(.top, 12)
-            .padding(.trailing, 20)
-            .padding(.bottom, 16)
-            .background(Color.paper)
-            .overlay(alignment: .top) { Hairline() }
+            .padding(.trailing, 18)
+            .padding(.bottom, -22)            // 책 아랫부분을 탭바 뒤로 tuck
         }
         .overlay(alignment: .bottom) {
             if let toastMessage {
