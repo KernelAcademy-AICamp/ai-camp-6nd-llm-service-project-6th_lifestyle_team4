@@ -1228,14 +1228,19 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
 
 // 회원가입 시 보존해둔 프로필(로그인 ID·성별·나이대)을 users 행에 기록.
 // 핵심 행 생성과 분리해 별도 update — 실패해도 앱 동작에는 지장 없게 처리.
-// Referral — URL 의 ?ref=<user_id> 를 localStorage 에 보관 (가입까지 살아남게).
-//   이미 들어와있으면 덮어쓰지 않음 (최초 1회만).
+// Referral / Shared card — URL 의 ?ref=<user_id>&card=<card_id> 를 localStorage 에 보관.
+//   ref: 가입까지 살아남아 redeem 에 사용 (이미 있으면 덮어쓰지 않음)
+//   card: 페이지 로드 후 1회만 자동 openDetail — 사용 후 즉시 제거
 (function _captureReferralFromUrl() {
   try {
     const sp = new URLSearchParams(window.location.search);
     const ref = sp.get('ref');
+    const card = sp.get('card');
     if (ref && /^\d+$/.test(ref) && !safeStorageGet('ds.pendingReferrerId')) {
       safeStorageSet('ds.pendingReferrerId', ref);
+    }
+    if (card && /^\d+$/.test(card)) {
+      safeStorageSet('ds.pendingShareCardId', card);
     }
   } catch {}
 })();
@@ -1301,8 +1306,21 @@ function loadAllCards() {
       .order('card_id', { ascending: false }).limit(500);
     if (error) throw error;
     state.allCards = Array.isArray(data) ? data : [];
+    /* 공유받은 카드(?card=) 자동 열기 — 카드 데이터 들어온 직후 1회만 */
+    try { maybeOpenSharedCard(); } catch (e) { console.warn('[m] maybeOpenSharedCard failed:', e); }
   })().finally(() => { loadAllCardsInFlight = null; });
   return loadAllCardsInFlight;
+}
+
+/* URL ?card=<id> 로 진입한 사용자에게 그 카드 자동 표시.
+   localStorage 의 ds.pendingShareCardId 1회 사용 후 즉시 제거. */
+function maybeOpenSharedCard() {
+  const cid = safeStorageGet('ds.pendingShareCardId');
+  if (!cid) return;
+  const card = (state.allCards || []).find((c) => c && String(c.card_id) === String(cid));
+  if (!card) return;   /* allCards 에 없으면 retry 위해 키 유지 */
+  safeStorageRemove('ds.pendingShareCardId');
+  setTimeout(() => { try { openDetail(card); } catch {} }, 300);
 }
 
 let loadBookmarksInFlight = null;
@@ -7486,7 +7504,7 @@ document.getElementById('hl-compose-share')?.addEventListener('click', () => {
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
-    referralUrl: buildReferralUrl(),
+    referralUrl: buildReferralUrl(card.card_id),
   });
 });
 
@@ -8476,12 +8494,14 @@ async function downloadShareCard() {
   }
   setTimeout(() => URL.revokeObjectURL(url), 6000);
 }
-// 친구 초대 referral 링크 — 본인 user_id 기반. 공유 받는 사람이 가입 시 양쪽 +600.
-function buildReferralUrl() {
-  const me = state.userId;
+// 친구 초대 referral 링크 — 본인 user_id + 공유한 카드 id. 공유 받는 사람 진입 시 그 카드 자동 표시 + 가입 시 양쪽 +600.
+function buildReferralUrl(cardId) {
   try {
     const base = `${window.location.origin}/m/`;
-    return me ? `${base}?ref=${me}` : base;
+    const params = [];
+    if (state.userId) params.push(`ref=${state.userId}`);
+    if (cardId)       params.push(`card=${cardId}`);
+    return params.length ? `${base}?${params.join('&')}` : base;
   } catch { return ''; }
 }
 async function sendShareCard() {
@@ -8625,7 +8645,7 @@ function payloadForToday() {
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
-    referralUrl: buildReferralUrl(),
+    referralUrl: buildReferralUrl(c.card_id),
   };
 }
 function payloadForDetail() {
@@ -8637,7 +8657,7 @@ function payloadForDetail() {
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
-    referralUrl: buildReferralUrl(),
+    referralUrl: buildReferralUrl(c.card_id),
   };
 }
 
