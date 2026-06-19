@@ -4692,7 +4692,7 @@ async function rewardYarnForFirstView(cardId) {
       renderYarnChip();
       /* 잔액이 실제로 늘었을 때만 토스트 — 이미 보상 받은 카드면 노이즈 X */
       if (newBalance > prev) {
-        try { toast('실타래 +1 (카드 첫 열람)'); } catch {}
+        try { toast('실타래 +300 (카드 첫 열람)'); } catch {}
       }
     }
   } catch (e) {
@@ -4721,7 +4721,7 @@ async function spendYarn(cardId) {
 //   ds.attendance.lastShown = 오늘 모달을 띄웠는지(매일 1회로 제한)
 const ATTENDANCE_HISTORY_KEY = 'ds.attendance.history';
 const ATTENDANCE_LAST_SHOWN_KEY = 'ds.attendance.lastShown';
-const ATTENDANCE_REWARD = 5;
+const ATTENDANCE_REWARD = 100;
 
 function getAttendanceHistory() {
   try {
