@@ -5478,6 +5478,7 @@ function openDetail(card) {
 function openDetailApproved(card) {
   if (!card) return;
   setBottomNavCat('cat_library.png', 'right-far', 'large');   // 카드 상세 — 책장 앞 자세, 우측 하단 + 크게
+  if (feedFab) feedFab.style.display = 'none';                // 카드 상세에서는 글쓰기 연필 fab 절대 안 보임
   // 카드 열람 누적 카운트 — 임계치 도달 시, 카드를 가리지 않도록 '닫힐 때' 유도 팝업 예약
   if (bumpCardsViewed() >= FEEDBACK_NUDGE_THRESHOLD && !feedbackNudgeSeen()) {
     state._feedbackNudgePending = true;
@@ -6609,19 +6610,8 @@ function openHighlightDetail(highlight) {
       <div style="height:24px;"></div>
       <button id="fp-open-card" class="sharp-btn" style="width:100%;">카드 보기</button>
     `;
-    // fp-open-card 새로 만든 요소 — 핸들러 재등록.
-    //   하이라이트(feedpost) 화면이 열린 채로 openDetail 호출하면 두 화면이 겹쳐
-    //   클릭이 무반응처럼 보임 → openCardFromFeedPost 와 동일하게 close → setTimeout → openDetail.
-    quoteBox.querySelector('#fp-open-card')?.addEventListener('click', () => {
-      const h = state.currentHighlight;
-      if (!h) return;
-      const cardObj = (state.allCards || []).find((c) => c && c.card_id === h.card_id);
-      const target = cardObj || { card_id: h.card_id, ...(h.cards || {}) };
-      track('highlight_card_view', { highlight_id: h.highlight_id, card_id: h.card_id });
-      closeFeedPostDetailInternal();
-      if (history.state?.overlay === 'feedPost') history.replaceState(null, '');
-      setTimeout(() => openDetail(target), 200);
-    });
+    // 클릭 핸들러는 #feedpost-screen 의 위임 리스너가 일괄 처리 → 여기선 등록 X
+    //  (quoteBox.innerHTML 재설정으로 element 가 자주 교체돼도 안정적으로 동작)
   }
   if (fpAuthor) fpAuthor.textContent = highlight.author_nickname || '익명';
   if (fpDate) fpDate.textContent = formatBookmarkDate(highlight.created_at) || formatRelativeTime(highlight.created_at);
@@ -6983,7 +6973,23 @@ if (fcSubmit) fcSubmit.addEventListener('click', submitFeedPost);
 
 // 피드 글 상세 + 댓글 wiring
 if (feedpostBack) feedpostBack.addEventListener('click', closeFeedPostDetail);
-if (fpOpenCard) fpOpenCard.addEventListener('click', openCardFromFeedPost);
+// #fp-open-card 클릭 — 이벤트 위임(#feedpost-screen 에 한 번만 등록).
+//   quoteBox.innerHTML 으로 element 가 새로 만들어져도 항상 잡힘.
+//   currentHighlight 가 있으면 하이라이트 모드, currentFeedPost 면 피드 글 모드로 분기.
+document.getElementById('feedpost-screen')?.addEventListener('click', (e) => {
+  if (!e.target.closest('#fp-open-card')) return;
+  if (state.currentHighlight) {
+    const h = state.currentHighlight;
+    const cardObj = (state.allCards || []).find((c) => c && c.card_id === h.card_id);
+    const target = cardObj || { card_id: h.card_id, ...(h.cards || {}) };
+    try { track('highlight_card_view', { highlight_id: h.highlight_id, card_id: h.card_id }); } catch {}
+    closeFeedPostDetailInternal();
+    if (history.state?.overlay === 'feedPost') history.replaceState(null, '');
+    setTimeout(() => openDetail(target), 200);
+    return;
+  }
+  if (state.currentFeedPost) { openCardFromFeedPost(); return; }
+});
 $('#fp-highlight-card-view')?.addEventListener('click', () => {
   const h = state.currentHighlight;
   if (!h) return;
