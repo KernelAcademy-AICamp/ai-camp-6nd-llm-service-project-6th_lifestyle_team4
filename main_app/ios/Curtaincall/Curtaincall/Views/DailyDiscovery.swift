@@ -727,4 +727,3 @@ struct DailyNoticeCarousel: View {
         }
     }
 }
-
