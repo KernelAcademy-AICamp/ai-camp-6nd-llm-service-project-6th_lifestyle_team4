@@ -1241,20 +1241,26 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
 
 // 회원가입 시 보존해둔 프로필(로그인 ID·성별·나이대)을 users 행에 기록.
 // 핵심 행 생성과 분리해 별도 update — 실패해도 앱 동작에는 지장 없게 처리.
-// Referral / Shared card — URL 의 ?ref=<user_id>&card=<card_id> 를 localStorage 에 보관.
-//   ref: 가입까지 살아남아 redeem 에 사용 (이미 있으면 덮어쓰지 않음)
-//   card: 페이지 로드 후 1회만 자동 openDetail — 사용 후 즉시 제거
+// Referral / Shared card — URL 의 ?ref=<user_id>&card=<id>&bg=<bgId>&q=<encoded> 캡처.
+//   ref:  가입까지 살아남아 redeem (이미 있으면 덮어쓰지 않음)
+//   card: 페이지 로드 후 1회만 미리보기/자동 open — 사용 후 즉시 제거
+//   bg:   공유자가 선택한 카드지 id (SHARE_BACKGROUNDS) — 미리보기 캔버스 렌더용
+//   q:    공유자가 하이라이트한 텍스트 (encodeURIComponent) — 미리보기 본문
 (function _captureReferralFromUrl() {
   try {
     const sp = new URLSearchParams(window.location.search);
     const ref = sp.get('ref');
     const card = sp.get('card');
+    const bg = sp.get('bg');
+    const q = sp.get('q');
     if (ref && /^\d+$/.test(ref) && !safeStorageGet('ds.pendingReferrerId')) {
       safeStorageSet('ds.pendingReferrerId', ref);
     }
     if (card && /^\d+$/.test(card)) {
       safeStorageSet('ds.pendingShareCardId', card);
     }
+    if (bg) safeStorageSet('ds.pendingShareBgId', bg);
+    if (q)  safeStorageSet('ds.pendingShareQuote', q);
   } catch {}
 })();
 
@@ -1333,8 +1339,66 @@ function maybeOpenSharedCard() {
   const card = (state.allCards || []).find((c) => c && String(c.card_id) === String(cid));
   if (!card) return;   /* allCards 에 없으면 retry 위해 키 유지 */
   safeStorageRemove('ds.pendingShareCardId');
-  state._sharedCardOpenedId = card.card_id;   /* 90% 스크롤 시 익명 사용자 회원가입 유도 트리거 */
+  state._sharedCardOpenedId = card.card_id;
+  /* 익명 사용자 + 카드지(bg)+하이라이트(q) 둘 다 있으면 → 풀스크린 공유 미리보기 모달.
+     로그인 사용자 또는 정보 부족 시 기존 흐름(자동 openDetail). */
+  const bgId = safeStorageGet('ds.pendingShareBgId');
+  const qRaw = safeStorageGet('ds.pendingShareQuote');
+  const q = qRaw ? (() => { try { return decodeURIComponent(qRaw); } catch { return qRaw; } })() : '';
+  if (state.isAnonymous && bgId && q) {
+    safeStorageRemove('ds.pendingShareBgId');
+    safeStorageRemove('ds.pendingShareQuote');
+    setTimeout(() => { try { openSharedPreview(card, bgId, q); } catch (e) { console.warn('[m] openSharedPreview failed:', e); openDetail(card); } }, 300);
+    return;
+  }
   setTimeout(() => { try { openDetail(card); } catch {} }, 300);
+}
+
+/* 공유자가 만든 카드 미리보기 풀스크린 모달 — 캔버스 + CTA. 익명 사용자 전용. */
+function openSharedPreview(card, bgId, quote) {
+  const w = card.works || {};
+  const bg = SHARE_BACKGROUNDS.find((b) => b.id === bgId) || SHARE_BACKGROUNDS[0];
+  /* 1회용 모달 DOM 생성 */
+  let modal = document.getElementById('shared-preview-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'shared-preview-modal';
+    modal.style.cssText = `position:fixed;inset:0;background:#0E0C0A;z-index:135;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px 16px;overflow-y:auto;`;
+    modal.innerHTML = `
+      <div style="text-align:center;color:#FAF8F2;margin:6px 0 14px;letter-spacing:.18em;font-size:11px;opacity:.7;">A FRIEND SENT YOU</div>
+      <canvas id="shared-preview-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:64vh;aspect-ratio:9/16;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.5);"></canvas>
+      <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:380px;margin-top:24px;">
+        <button id="shared-preview-signup" class="sharp-btn" style="width:100%;background:var(--cta);color:#fff;">회원가입하고 600 실타래 받기</button>
+        <button id="shared-preview-open"   class="sharp-btn outline" style="width:100%;color:#FAF8F2;border-color:rgba(255,255,255,.35);">카드 자세히 보기</button>
+        <button id="shared-preview-close"  style="background:transparent;border:none;color:#FAF8F2;opacity:.6;font-size:12px;letter-spacing:.12em;padding:8px;cursor:pointer;">닫기</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  } else {
+    modal.style.display = 'flex';
+  }
+  /* 캔버스에 공유자가 만든 카드 그리기 */
+  const canvas = modal.querySelector('#shared-preview-canvas');
+  try {
+    renderShareCard(canvas, bg, {
+      quote, speaker: card.speaker || '',
+      work: w.title || '', author: w.author || '',
+    });
+  } catch (e) { console.warn('[m] renderShareCard for preview failed:', e); }
+  /* 액션 */
+  modal.querySelector('#shared-preview-signup')?.addEventListener('click', () => {
+    closeSharedPreview();
+    try { openSigninModal(); } catch {}
+  }, { once: true });
+  modal.querySelector('#shared-preview-open')?.addEventListener('click', () => {
+    closeSharedPreview();
+    setTimeout(() => { try { openDetail(card); } catch {} }, 200);
+  }, { once: true });
+  modal.querySelector('#shared-preview-close')?.addEventListener('click', closeSharedPreview, { once: true });
+}
+function closeSharedPreview() {
+  const m = document.getElementById('shared-preview-modal');
+  if (m) m.style.display = 'none';
 }
 
 let loadBookmarksInFlight = null;
@@ -7513,12 +7577,12 @@ document.getElementById('hl-compose-share')?.addEventListener('click', () => {
   const card = draft.card || {};
   const w = card.works || {};
   openShareModal({
+    cardId: card.card_id,
     quote: draft.selectedText,
     speaker: card.speaker || '',
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
-    referralUrl: buildReferralUrl(card.card_id),
   });
 });
 
@@ -8508,13 +8572,16 @@ async function downloadShareCard() {
   }
   setTimeout(() => URL.revokeObjectURL(url), 6000);
 }
-// 친구 초대 referral 링크 — 본인 user_id + 공유한 카드 id. 공유 받는 사람 진입 시 그 카드 자동 표시 + 가입 시 양쪽 +600.
-function buildReferralUrl(cardId) {
+// 친구 초대 referral 링크 — 본인 user_id + 공유한 카드 id + (선택) 카드지/하이라이트.
+//   받는 사람 진입 시 그 카드 자동 표시 + 공유자가 만든 미리보기(카드지+텍스트) + 가입 시 양쪽 +600.
+function buildReferralUrl(cardId, opts) {
   try {
     const base = `${window.location.origin}/m/`;
     const params = [];
-    if (state.userId) params.push(`ref=${state.userId}`);
-    if (cardId)       params.push(`card=${cardId}`);
+    if (state.userId)    params.push(`ref=${state.userId}`);
+    if (cardId)          params.push(`card=${cardId}`);
+    if (opts?.bgId)      params.push(`bg=${encodeURIComponent(opts.bgId)}`);
+    if (opts?.quote)     params.push(`q=${encodeURIComponent(opts.quote.slice(0, 300))}`);
     return params.length ? `${base}?${params.join('&')}` : base;
   } catch { return ''; }
 }
@@ -8533,10 +8600,14 @@ async function shareImage() {
   await downloadShareCard();
 }
 
-/* 링크 보내기 — 텍스트(명대사 + URL). 카카오톡 등 SNS 가 OG 메타 기반 카드 미리보기 자동 표시. */
+/* 링크 보내기 — 텍스트(명대사 + URL). 카카오톡 등 SNS 가 OG 메타 기반 카드 미리보기 자동 표시.
+   URL 에 공유자가 선택한 카드지(bg) + 하이라이트 텍스트(q) 인코딩 → 받는 사람이 같은 미리보기를 봄. */
 async function shareLink() {
   const payload = shareState.payload || {};
-  const refUrl  = buildReferralUrl();
+  const refUrl  = buildReferralUrl(
+    payload?.cardId,
+    { bgId: shareState.bgId, quote: payload?.quote || '' },
+  );
   const quote   = payload.quote ? `"${payload.quote}"` : '';
   const credit  = payload.work  ? ` — ${payload.work}` : '';
   const text    = [quote + credit, refUrl].filter(Boolean).join('\n');
@@ -8619,24 +8690,24 @@ function payloadForToday() {
   const c = state.todayCard || {};
   const w = c.works || {};
   return {
+    cardId: c.card_id,
     quote: c.quote || '',
     speaker: c.speaker || '',
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
-    referralUrl: buildReferralUrl(c.card_id),
   };
 }
 function payloadForDetail() {
   const c = state.detailCard || {};
   const w = c.works || {};
   return {
+    cardId: c.card_id,
     quote: c.quote || '',
     speaker: c.speaker || '',
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
-    referralUrl: buildReferralUrl(c.card_id),
   };
 }
 
