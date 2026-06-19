@@ -8578,7 +8578,7 @@ document.getElementById('share-send')?.addEventListener('click', async () => { a
    카카오톡은 navigator.share 의 text/url 을 무시하고 이미지만 받음 → SDK 직접 호출로 우회.
    Kakao.Share.uploadImage 로 캔버스 PNG 를 카카오 CDN 에 업로드 후 sendDefault 의 feed objectType 으로
    이미지 + 제목 + 설명 + 'Daily Script' 카드 보기 버튼(앱 링크) 함께 전송. */
-const KAKAO_JS_KEY = ''; // ← 카카오 개발자 콘솔에서 발급한 JavaScript 키 입력
+const KAKAO_JS_KEY = '3b2d258bf0a0c9ea73dd9819c9e81d16'; // 카카오 개발자 콘솔 발급 JavaScript 키 (클라이언트 공개 키)
 (function initKakao() {
   try {
     if (window.Kakao && KAKAO_JS_KEY && !window.Kakao.isInitialized()) {
