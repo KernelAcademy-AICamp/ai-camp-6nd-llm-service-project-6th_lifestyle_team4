@@ -175,6 +175,19 @@ struct RootView: View {
         }
     }
 
+    /// The active tab's nav stack is at its root — drives the decorative cat,
+    /// which hides whenever a detail is pushed (Card Detail, the bookshelf from
+    /// Settings). Unlike `activeTabPathIsEmpty`, this honors `settingsPath`.
+    private var activeStackAtRoot: Bool {
+        switch selectedTab {
+        case .daily: return dailyPath.isEmpty
+        case .home: return homePath.isEmpty
+        case .archive: return archivePath.isEmpty
+        case .feed: return feedPath.isEmpty
+        case .settings: return settingsPath.isEmpty
+        }
+    }
+
     /// "전문 읽기" → open the full read through the NORMAL yarn gate. Routes via the
     /// Home stack (its `navigationDestination(for: Card.self)` builds CardDetailView,
     /// whose `runOpenFlow` runs the gate) — same path as a widget deep-link, so the
@@ -232,8 +245,15 @@ struct RootView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !composerActive {
-                EditorialTabBar(selection: $selectedTab, noticeUnread: hasUnreadNotice, onReselect: popToRoot)
-                    .transition(.move(edge: .bottom))
+                EditorialTabBar(
+                    selection: $selectedTab,
+                    noticeUnread: hasUnreadNotice,
+                    // 고양이는 탭 루트에만 — 카드 상세 등 푸시된 읽기 화면(스택 비어있지
+                    // 않음)에선 본문 위에 얹히므로 숨긴다(Android 상세엔 고양이 없음).
+                    showCat: activeStackAtRoot,
+                    onReselect: popToRoot
+                )
+                .transition(.move(edge: .bottom))
             }
         }
     }
