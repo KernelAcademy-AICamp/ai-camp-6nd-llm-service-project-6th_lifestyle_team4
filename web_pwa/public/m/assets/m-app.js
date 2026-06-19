@@ -274,6 +274,17 @@ const fqSource = $('#fq-source');
 
 // 피드 글 상세 + 댓글 (FeedPostDetailSheet 미러)
 const feedpostScreen = $('#feedpost-screen');
+
+// 글쓰기 펜 fab — 피드 메인에서만. 어떤 오버레이(카드 상세 / 피드 글 / 하이라이트 작성) 라도 열려있으면 hide.
+// 모든 show/hide 시점에서 이 함수만 호출하면 일관 처리.
+function syncFeedFab() {
+  if (!feedFab) return;
+  const onFeedMain = state.currentView === 'feed'
+    && !(detailScreen && detailScreen.classList.contains('open'))
+    && !(feedpostScreen && feedpostScreen.classList.contains('open'))
+    && !(hlComposeScreen && hlComposeScreen.classList.contains('open'));
+  feedFab.style.display = onFeedMain ? 'inline-flex' : 'none';
+}
 const feedpostBody = $('#feedpost-body');
 const feedpostBack = $('#feedpost-back');
 const fpQuote = $('#fp-quote');
@@ -5715,8 +5726,8 @@ function closeDetailInternal() {
   unsubscribeFromDetailComments();
   cancelReply();
   updateBottomNavCatForView(state.currentView);   // 카드 상세 닫힘 → 탭별 기본 자세 복귀
-  // 피드 탭으로 돌아간 경우 연필 fab 다시 표시
-  if (feedFab) feedFab.style.display = (state.currentView === 'feed') ? 'inline-flex' : 'none';
+  // 펜 fab — 항상 syncFeedFab 로 통일 (feedpost/hl-compose 가 열려있으면 hide 유지)
+  syncFeedFab();
   setTimeout(() => {
     detailScreen.style.display = 'none';
     document.body.style.overflow = '';
@@ -6909,8 +6920,8 @@ function closeFeedPostDetailInternal() {
     // type 리셋 — 다음 진입 시 정확히 분기되게
     state.detailType = null;
     state.currentHighlight = null;
-    // 피드 탭으로 돌아가면 글쓰기 말풍선 다시 표시
-    if (feedFab && state.currentView === 'feed') feedFab.style.display = 'inline-flex';
+    // 펜 fab — 항상 syncFeedFab 로 통일 (다른 오버레이가 열려있으면 hide 유지)
+    syncFeedFab();
   }, 250);
   state.currentFeedPost = null;
 }
@@ -7315,6 +7326,7 @@ document.getElementById('hl-compose-share')?.addEventListener('click', () => {
     speaker: card.speaker || '',
     work: w.title || '',
     author: w.author || '',
+    coverUrl: w.cover_url || '',
   });
 });
 
@@ -8094,33 +8106,46 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-/* 메인 렌더 — quote / speaker / work / author 를 9:16 캔버스에 그림.
+/* 메인 렌더 — quote / speaker / work·author / cover 를 9:16 캔버스에 그림.
    영역 분할 (W=540, H=960 기준):
-   · 상단 따옴표:   y =  90 ~ 220   (높이 ~100, 모바일 webapp 환경 폰트 fallback 폭 차이 대비 안전 마진)
-   · 본문:         y = 290 ~ 690   (vertical-center within band, 자동 줄바꿈 + 크기 점진 축소)
-   · meta:        y = 720 ~ 820
-   · 워터마크:     y = 870 */
+   · 상단 cover:    y =  90 ~ 320  (책 표지 144×216, 가운데. payload.coverImg 있으면 그림)
+   · 따옴표:       y = 350 (본문 영역 위, 매우 여린 농도)
+   · 본문:         y = 380 ~ 760  (자동 줄바꿈 + 크기 점진 축소)
+   · meta:        y = 800 ~ 870 (본문 아래·워터마크 위)
+   · 워터마크:     y = 910 */
 function renderShareCard(canvas, bg, payload) {
   const W = canvas.width, H = canvas.height;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
   const ink = bg.paint(ctx, W, H) || '#3B2A1A';
 
-  /* 따옴표 — 본문 영역과 절대 겹치지 않게 윗단 고정 + 사이즈 작게 + 매우 여린 농도(약 22%) */
-  ctx.fillStyle = ink + '38';
-  ctx.font = '400 56px "Times New Roman", serif';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('“', 80, 180);   /* 유니코드 진짜 따옴표 — webapp 폰트 fallback 안전 */
+  /* 상단 — 책 표지 (payload.coverImg 가 로드된 경우만 그림. 없으면 그 자리는 빈 채로 본문 위 여백) */
+  const COVER_W = 144, COVER_H = 216, COVER_TOP = 90;
+  const coverX = (W - COVER_W) / 2;
+  if (payload.coverImg && payload.coverImg.complete && payload.coverImg.naturalWidth > 0) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 6;
+    ctx.fillStyle = '#F4ECDB';
+    ctx.fillRect(coverX, COVER_TOP, COVER_W, COVER_H);
+    ctx.restore();
+    ctx.drawImage(payload.coverImg, coverX, COVER_TOP, COVER_W, COVER_H);
+  }
 
-  /* 본문 — 영역(290~690) 안에서 자동 줄바꿈 + 크기 점진 축소 */
-  const bodyTop = 290, bodyBot = 690;
+  /* 따옴표 — 본문 영역 위, 매우 여린 농도(약 22%) */
+  ctx.fillStyle = ink + '38';
+  ctx.font = '400 48px "Times New Roman", serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('“', 90, 360);
+
+  /* 본문 — 영역(380~760) 안에서 자동 줄바꿈 + 크기 점진 축소 */
+  const bodyTop = 380, bodyBot = 760;
   const bodyMaxH = bodyBot - bodyTop;
   const bodyMaxW = W - 160;
   ctx.fillStyle = ink;
   ctx.textBaseline = 'top';
-  let bodyFont = 44;
+  let bodyFont = 40;
   let lines = [];
-  for (const fs of [50, 44, 38, 32, 28]) {
+  for (const fs of [44, 40, 36, 32, 28, 24]) {
     ctx.font = `600 ${fs}px "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
     lines = wrapText(ctx, payload.quote || '', bodyMaxW);
     bodyFont = fs;
@@ -8133,20 +8158,20 @@ function renderShareCard(canvas, bg, payload) {
   let y = bodyTop + Math.max(0, (bodyMaxH - totalH) / 2);
   for (const ln of lines) { ctx.fillText(ln, W/2, y); y += lineH; }
 
-  /* speaker / work / author — 본문 영역 아래 고정 위치 */
+  /* speaker / work · author — 본문 영역 아래 하단 정렬 (워터마크 바로 위) */
   ctx.fillStyle = ink + 'CC';
   ctx.textBaseline = 'top';
-  ctx.font = `500 26px "Pretendard", "Noto Sans KR", sans-serif`;
-  let metaY = 720;
-  if (payload.speaker) { ctx.fillText(`— ${payload.speaker}`, W/2, metaY); metaY += 38; }
-  ctx.font = `italic 24px "Times New Roman", serif`;
+  ctx.font = `500 24px "Pretendard", "Noto Sans KR", sans-serif`;
+  let metaY = 800;
+  if (payload.speaker) { ctx.fillText(`— ${payload.speaker}`, W/2, metaY); metaY += 36; }
+  ctx.font = `italic 22px "Times New Roman", serif`;
   const workLine = [payload.work, payload.author].filter(Boolean).join(' · ');
   if (workLine) ctx.fillText(workLine, W/2, metaY);
 
   /* 워터마크 */
   ctx.fillStyle = ink + '80';
-  ctx.font = `700 22px "Pretendard", "Noto Sans KR", sans-serif`;
-  ctx.fillText('Daily Script', W/2, 880);
+  ctx.font = `700 20px "Pretendard", "Noto Sans KR", sans-serif`;
+  ctx.fillText('Daily Script', W/2, 910);
 }
 
 const shareState = { tab: 'free', bgId: 'beige', payload: null, lastBlob: null };
@@ -8259,8 +8284,18 @@ function openShareModal(payload) {
   const modal = document.getElementById('share-modal');
   if (!modal) return;
   shareState.payload = payload || {};
+  shareState.payload.coverImg = null;
   shareState.tab = 'free';
   shareState.bgId = 'beige';
+  /* 책 표지 preload — 로드되면 캔버스 재렌더. crossOrigin='anonymous' 로 toBlob 시 tainted 방지. */
+  const coverUrl = payload?.coverUrl;
+  if (coverUrl) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload  = () => { if (shareState.payload) { shareState.payload.coverImg = img; renderShareCardCurrent(); } };
+    img.onerror = () => { /* 무시 — coverImg null 로 그대로 */ };
+    img.src = coverUrl;
+  }
   /* 탭 표시 동기화 */
   document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
     const active = el.dataset.tab === shareState.tab;
@@ -8305,6 +8340,7 @@ function payloadForToday() {
     speaker: c.speaker || '',
     work: w.title || '',
     author: w.author || '',
+    coverUrl: w.cover_url || '',
   };
 }
 function payloadForDetail() {
@@ -8315,6 +8351,7 @@ function payloadForDetail() {
     speaker: c.speaker || '',
     work: w.title || '',
     author: w.author || '',
+    coverUrl: w.cover_url || '',
   };
 }
 
