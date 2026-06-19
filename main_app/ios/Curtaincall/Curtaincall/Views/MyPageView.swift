@@ -302,21 +302,8 @@ struct MyPageView: View {
             }
             .buttonStyle(.plain)
             .disabled(session.authInProgress)
-            // 카카오 — 옐로우(#FEE500) + 말풍선 심볼. 비즈앱 전까진 "준비 중"(흐림).
-            Spacer().frame(height: 8)
-            Button {
-                session.authMessage = "카카오 로그인은 준비 중입니다."
-            } label: {
-                HStack(spacing: 8) {
-                    Image("KakaoSymbol").resizable().renderingMode(.original).frame(width: 18, height: 18)
-                    Text("카카오로 로그인 (준비 중)").font(.bodySans(15)).foregroundStyle(.black)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(Color(red: 0.996, green: 0.898, blue: 0.0), in: RoundedRectangle(cornerRadius: 10))
-                .opacity(0.55)
-            }
-            .buttonStyle(.plain)
+            // 카카오는 백엔드 게이트(준비 중)라 Android처럼 UI 미노출 — 자리표시 버튼
+            // 제거(비기능 스텁 + App Store 2.1 플레이스홀더 리스크). 구글만 노출.
             Spacer().frame(height: 14)
             Text("소셜 로그인은 회원 식별 및 로그인 목적으로만 사용되며, 소셜 계정의 프로필 정보는 사용하지 않습니다.")
                 .font(.bodySans(12))

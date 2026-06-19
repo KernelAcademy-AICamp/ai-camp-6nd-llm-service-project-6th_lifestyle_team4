@@ -18,6 +18,10 @@ struct EditorialTabBar: View {
     @Binding var selection: Tab
     /// Unread-notice dot on the MY tab (Notice is no longer its own tab).
     var noticeUnread: Bool = false
+    /// Draw the decorative cat. The cat belongs on the tab ROOTS (Feed=open book,
+    /// Library=on book stack, My Page=lying in margin, Daily/Today) — matching
+    /// Android — but is hidden on pushed reading views (Card Detail has no cat).
+    var showCat: Bool = true
     /// Called when an already-selected tab is tapped again (e.g. to pop its
     /// navigation stack back to root).
     var onReselect: ((Tab) -> Void)? = nil
@@ -79,10 +83,10 @@ struct EditorialTabBar: View {
         }
         // 장식 고양이 — 위 투명 여백 안에 앉아 바 윗면에 걸친다. 여백 높이만큼만 솟으므로
         // 콘텐츠 영역을 침범하지 않는다. click-through(allowsHitTesting=false)라 탭을 가리지 않음.
-        .overlay { navCat }
+        .overlay { if showCat { navCat } }
         // 고양이 long-press 이스터에그 캐처 — '투명 여백'(바 위쪽)에만 둔다. 그 영역엔
         // 탭 버튼이 없으므로 탭 히트테스트를 가리지 않는다(탭은 그 아래 64pt 바에 있음).
-        .overlay(alignment: .top) { catLongPressCatcher }
+        .overlay(alignment: .top) { if showCat { catLongPressCatcher } }
         // 탭 전환 시 잔잔한 셀렉션 햅틱 (시스템 설정 자동 반영).
         .sensoryFeedback(.selection, trigger: selection)
         // 실타래 톡 — jiggle 에 '보잉' 감을 더하는 soft impact (yarnTapCount 와 동기).
