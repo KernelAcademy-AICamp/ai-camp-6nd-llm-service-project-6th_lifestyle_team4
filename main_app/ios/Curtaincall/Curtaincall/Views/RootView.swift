@@ -250,9 +250,7 @@ struct RootView: View {
                     noticeUnread: hasUnreadNotice,
                     // 고양이는 탭 루트에만 — 카드 상세 등 푸시된 읽기 화면(스택 비어있지
                     // 않음)에선 본문 위에 얹히므로 숨긴다(Android 상세엔 고양이 없음).
-                    // 피드는 글쓰기 pill 과 z-order/탭 충돌 → 탭바 고양이 대신
-                    // FeedView 안에서 pill '뒤'에 직접 그린다.
-                    showCat: activeStackAtRoot && selectedTab != .feed,
+                    showCat: activeStackAtRoot,
                     onReselect: popToRoot
                 )
                 .transition(.move(edge: .bottom))
