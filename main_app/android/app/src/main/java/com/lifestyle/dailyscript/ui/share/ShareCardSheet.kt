@@ -20,13 +20,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,6 +60,7 @@ import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.yarn.SpendResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,6 +73,14 @@ private val SHARE_TABS = listOf(
     ShareTab(ShareTier.Premium, "Premium · 999🧶"),
     ShareTab(ShareTier.Royal, "Royal · 2999🧶"),
 )
+
+/** PWA normalizeWorkTitle 흉내 — 영문 관사 제거 + 공백·구두점 무시(한/영/숫자만). 카드지↔책 제목 매칭용. */
+private fun normalizeWorkTitle(s: String?): String {
+    if (s.isNullOrBlank()) return ""
+    var t = s.trim().lowercase()
+    t = t.removePrefix("the ").removePrefix("a ").removePrefix("an ")
+    return t.filter { it.isLetterOrDigit() }
+}
 
 /**
  * 명대사 공유 카드 시트 (PWA #share-modal 이식) — 카드 펼치기(미리보기 토글) + Free/Premium/Royal 탭 +
@@ -81,6 +96,9 @@ fun ShareCardSheet(
     payload: ShareCardPayload,
     onDismiss: () -> Unit,
     onShared: () -> Unit,
+    yarnBalance: Int = 0,
+    purchasedIds: Set<String> = emptySet(),
+    onBuy: suspend (ShareBackground) -> SpendResult = { SpendResult.ERROR },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -92,6 +110,7 @@ fun ShareCardSheet(
     var previewExpanded by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var pendingBuy by remember { mutableStateOf<ShareBackground?>(null) }  // 구매 확인 다이얼로그 대상
     val thumbCache = remember { mutableStateMapOf<String, Bitmap>() }
 
     // 미리보기 — 펼쳤을 때만, 배경 바뀔 때마다 백그라운드 스레드에서 540×960 렌더.
@@ -208,8 +227,14 @@ fun ShareCardSheet(
             Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Latte))
             Box(modifier = Modifier.height(14.dp))
 
-            // 배경 그리드(4열) 또는 빈 상태.
-            val items = SHARE_BACKGROUNDS.filter { it.tier == selectedTier }
+            // 배경 그리드(4열) 또는 빈 상태. Premium/Royal 은 PWA 처럼 카드지 name(=책 제목)이
+            // 공유 카드의 책 제목과 같은 것을 맨 앞으로 정렬(normalizeWorkTitle 비교).
+            val items = remember(selectedTier, payload.work) {
+                val base = SHARE_BACKGROUNDS.filter { it.tier == selectedTier }
+                val target = normalizeWorkTitle(payload.work)
+                if (selectedTier == ShareTier.Free || target.isEmpty()) base
+                else base.sortedByDescending { if (normalizeWorkTitle(it.name) == target) 1 else 0 }
+            }
             if (items.isEmpty()) {
                 Text(
                     text = "곧 만나요 ✨\n새 배경을 준비하고 있어요.",
@@ -225,9 +250,11 @@ fun ShareCardSheet(
                     items.chunked(4).forEach { rowItems ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             rowItems.forEach { bg ->
+                                val locked = bg.tier != ShareTier.Free && bg.id !in purchasedIds
                                 ShareBgCell(
                                     bg = bg,
                                     selected = bg.id == selectedBg.id,
+                                    locked = locked,
                                     thumb = thumbCache[bg.id],
                                     modifier = Modifier.weight(1f),
                                     requestThumb = {
@@ -237,7 +264,8 @@ fun ShareCardSheet(
                                             }
                                         }
                                     },
-                                    onClick = { selectedBg = bg },
+                                    // 잠긴 카드지 탭 → 구매 확인 다이얼로그. 보유/무료면 바로 선택.
+                                    onClick = { if (locked) pendingBuy = bg else selectedBg = bg },
                                 )
                             }
                             repeat(4 - rowItems.size) { Box(modifier = Modifier.weight(1f)) }
@@ -301,13 +329,53 @@ fun ShareCardSheet(
             }
         }
     }
+
+    // 카드지 구매 확인 — 잠긴 카드지 탭 시. 실타래 차감(onBuy)→성공이면 선택+잠금 해제.
+    pendingBuy?.let { bg ->
+        val tierName = if (bg.tier == ShareTier.Royal) "Royal" else "Premium"
+        AlertDialog(
+            onDismissRequest = { pendingBuy = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingBuy = null
+                    scope.launch {
+                        when (onBuy(bg)) {
+                            SpendResult.SUCCESS -> {
+                                selectedBg = bg
+                                Toast.makeText(context, "${bg.name} 잠금 해제!", Toast.LENGTH_SHORT).show()
+                            }
+                            SpendResult.INSUFFICIENT ->
+                                Toast.makeText(context, "실타래가 부족해요 (보유 ${yarnBalance}개)", Toast.LENGTH_SHORT).show()
+                            SpendResult.ERROR ->
+                                Toast.makeText(context, "구매에 실패했어요. 잠시 후 다시 시도해 주세요.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }) { Text("구매", color = Cta) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBuy = null }) { Text("취소", color = Walnut) }
+            },
+            title = { Text("$tierName 카드지 구매", color = Espresso) },
+            text = {
+                Text(
+                    text = "이 배경을 실타래 ${bg.price}개로 잠금 해제할까요?\n보유 실타래 ${yarnBalance}개",
+                    color = Walnut,
+                )
+            },
+            containerColor = Paper,
+        )
+    }
 }
 
-/** 배경 썸네일 셀 — 9:16, 선택 시 코랄 테두리. requestThumb 로 작은 비트맵을 캐시에 채운다. */
+/**
+ * 배경 썸네일 셀 — 9:16. 선택 시 코랄 테두리. [locked](미보유 유료 티어)면 자물쇠+가격 오버레이를 덮고
+ * 선택 테두리를 숨긴다(탭하면 호출측이 구매 확인 다이얼로그를 띄움).
+ */
 @Composable
 private fun ShareBgCell(
     bg: ShareBackground,
     selected: Boolean,
+    locked: Boolean,
     thumb: Bitmap?,
     modifier: Modifier = Modifier,
     requestThumb: suspend () -> Unit,
@@ -320,7 +388,7 @@ private fun ShareBgCell(
                 .fillMaxWidth()
                 .aspectRatio(9f / 16f)
                 .clip(RoundedCornerShape(6.dp))
-                .border(2.dp, if (selected) Cta else Color.Transparent, RoundedCornerShape(6.dp)),
+                .border(2.dp, if (selected && !locked) Cta else Color.Transparent, RoundedCornerShape(6.dp)),
         ) {
             thumb?.let {
                 Image(
@@ -329,6 +397,28 @@ private fun ShareBgCell(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
+            if (locked) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.42f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Outlined.Lock,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "${bg.price}🧶",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                        )
+                    }
+                }
             }
         }
         Box(modifier = Modifier.height(4.dp))

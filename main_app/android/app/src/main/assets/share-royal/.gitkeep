@@ -1,0 +1,19 @@
+# 공유 카드 — Royal tier 카드지 이미지 폴더 (가격: 실타래 2999)
+# (PWA web_pwa/public/m/assets/share-royal/ 와 동일 구조)
+#
+# 비율: 9:16 (권장 해상도 1080 x 1920)
+# 포맷: PNG 권장
+#
+# 우선 2장 슬롯 (ShareBackgrounds.kt 의 SHARE_BACKGROUNDS 기본 항목):
+#   royal_1.png  → 'royal_1' / "로얄 1"
+#   royal_2.png  → 'royal_2' / "로얄 2"
+#
+# 책별 카드지로 갈 때 (PWA 규칙과 동일):
+#   1) 이 폴더에 <책제목>.png 업로드 (파일명 = 책 제목, 예: '프랑켄슈타인.png')
+#   2) ShareBackgrounds.kt SHARE_BACKGROUNDS 에 항목 추가 — name 도 책 제목 그대로:
+#        ShareBackground("frankenstein", "프랑켄슈타인", ShareTier.Royal, price = 2999,
+#            assetPath = "share-royal/프랑켄슈타인.png")
+#
+# 매칭: name(=책 제목)이 공유하는 카드의 책 제목과 같으면 그 카드지가 그리드 맨 앞
+#       (ShareCardSheet.normalizeWorkTitle 로 공백·구두점 무시 비교).
+# 이미지가 어두우면 항목에 ink = 0xFFFAF8F2.toInt() (밝게) 추가.

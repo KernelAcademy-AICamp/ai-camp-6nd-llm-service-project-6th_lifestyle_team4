@@ -23,7 +23,15 @@ data class ShareBackground(
     val name: String,
     val tier: ShareTier,
     val price: Int = 0,
-    val paint: (canvas: Canvas, w: Int, h: Int, seed: Long) -> Int,
+    /** 로컬 이미지 배경(프리미엄/로얄) — assets/ 경로. 절차적 배경이면 null. */
+    val assetPath: String? = null,
+    /**
+     * 이미지 배경 위에 그릴 글자색(ARGB, 명대사·화자·작품). 기본은 어두운 에스프레소.
+     * 배경 이미지가 어두우면 밝게(예: 0xFFFAF8F2.toInt())로 바꿔야 글자가 보인다.
+     */
+    val ink: Int = 0xFF3B2A1A.toInt(),
+    /** 절차적 배경(무료 8종) — 캔버스에 직접 그리고 잉크색 반환. 이미지 배경이면 null. */
+    val paint: ((canvas: Canvas, w: Int, h: Int, seed: Long) -> Int)? = null,
 )
 
 /** ink 색에 알파 바이트만 입힌 ARGB (PWA 의 ink+'40' 같은 8자리 hex 대응). */
@@ -97,4 +105,14 @@ val SHARE_BACKGROUNDS: List<ShareBackground> = listOf(
     ShareBackground("kraft", "크라프트", ShareTier.Free) { c, w, h, _ -> paintLetter(c, w, h, "#C8A876", "#A88858", "#1F140A") },
     ShareBackground("midnight", "미드나잇", ShareTier.Free) { c, w, h, _ -> paintLetter(c, w, h, "#1B2436", "#0E1626", "#F4ECDB") },
     ShareBackground("rosegold", "로즈골드", ShareTier.Free) { c, w, h, _ -> paintLetter(c, w, h, "#E8C9B7", "#C9A88E", "#3A1F18") },
+    // Premium 999🧶 / Royal 2999🧶 — 로컬 이미지 배경. 폴더 구조는 PWA 와 동일:
+    //   assets/share-premium/ (999) · assets/share-royal/ (2999).
+    // PWA 규칙: 파일명 = 책 제목, name 도 책 제목 → 공유 카드의 책 제목과 같으면 그 카드지가 그리드 맨 앞
+    //   (ShareCardSheet 의 normalizeWorkTitle 매칭). 아래는 우선 2장씩 슬롯(파일 넣은 뒤 name/ink 조정).
+    //   책별 카드지로 갈 땐 id=슬러그, name=책제목, assetPath="share-premium/<책제목>.png" 로 추가.
+    // 이미지가 어두우면 해당 엔트리에 ink = 0xFFFAF8F2.toInt() (밝게) 추가.
+    ShareBackground("premium_1", "프리미엄 1", ShareTier.Premium, price = 999, assetPath = "share-premium/premium_1.png"),
+    ShareBackground("premium_2", "프리미엄 2", ShareTier.Premium, price = 999, assetPath = "share-premium/premium_2.png"),
+    ShareBackground("royal_1", "로얄 1", ShareTier.Royal, price = 2999, assetPath = "share-royal/royal_1.png"),
+    ShareBackground("royal_2", "로얄 2", ShareTier.Royal, price = 2999, assetPath = "share-royal/royal_2.png"),
 )

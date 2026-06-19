@@ -25,6 +25,27 @@ class YarnViewModel : ViewModel() {
     /** 사용 가능한 실타래 = 서버 충전분 전부. */
     val available: StateFlow<Int> = purchased.asStateFlow()
 
+    // 구매한 공유 카드지 id 집합(기기 로컬). 공유 시트가 잠금 해제 표시에 구독.
+    private val _purchasedThemes = MutableStateFlow<Set<String>>(emptySet())
+    val purchasedThemes: StateFlow<Set<String>> = _purchasedThemes.asStateFlow()
+
+    /** 앱/세션 진입 시 보유 카드지 로드. */
+    suspend fun loadPurchasedThemes() { _purchasedThemes.value = AppPreferences.sharePurchasedThemes() }
+
+    /**
+     * 공유 카드지 구매 — 이미 보유면 SUCCESS, 아니면 실타래 [price] 차감(서버 spend_yarn) 후 보유 기록.
+     * 잔액 부족이면 INSUFFICIENT, RPC 실패면 ERROR(차감/기록 없음).
+     */
+    suspend fun buyShareTheme(id: String, price: Int): SpendResult {
+        if (_purchasedThemes.value.contains(id)) return SpendResult.SUCCESS
+        val result = spend(price)
+        if (result == SpendResult.SUCCESS) {
+            AppPreferences.addSharePurchasedTheme(id)
+            _purchasedThemes.value = _purchasedThemes.value + id
+        }
+        return result
+    }
+
     private fun today() = LocalDate.now().toString()
 
     /** 세션의 서버 잔액으로 시드(재bootstrap 동기화). */

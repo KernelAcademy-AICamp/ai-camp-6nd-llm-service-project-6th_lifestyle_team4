@@ -143,9 +143,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     // 스코프라 세션이 바뀌면(로그인/로그아웃/탈퇴) 서버 잔액으로 다시 시드한다.
     val yarnVm: YarnViewModel = viewModel()
     val yarnAvailable by yarnVm.available.collectAsState()
+    val purchasedShareThemes by yarnVm.purchasedThemes.collectAsState()
     LaunchedEffect(session.userId, session.yarnBalance) {
         yarnVm.setPurchased(session.yarnBalance)
     }
+    LaunchedEffect(session.userId) { yarnVm.loadPurchasedThemes() }
 
     // OZ Pick "취향 알려주기" CTA → 선호도 온보딩 강제 재노출 (이미 완료한 사용자도 다시 설정 가능).
     var forcePrefOverlay by remember { mutableStateOf(false) }
@@ -307,6 +309,9 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         userId = session.userId,
                         vm = homeVm,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                        yarnBalance = yarnAvailable,
+                        purchasedThemeIds = purchasedShareThemes,
+                        onBuyTheme = { bg -> yarnVm.buyShareTheme(bg.id, bg.price) },
                     )
                 }
                 composable(Routes.ARCHIVE) {

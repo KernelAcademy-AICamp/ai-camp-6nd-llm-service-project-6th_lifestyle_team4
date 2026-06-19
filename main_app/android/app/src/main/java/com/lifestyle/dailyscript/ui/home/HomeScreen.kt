@@ -60,9 +60,11 @@ import com.lifestyle.dailyscript.ui.components.LangSegmented
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
+import com.lifestyle.dailyscript.ui.share.ShareBackground
 import com.lifestyle.dailyscript.ui.share.ShareCardPayload
 import com.lifestyle.dailyscript.ui.share.ShareCardSheet
 import com.lifestyle.dailyscript.ui.share.toSharePayload
+import com.lifestyle.dailyscript.ui.yarn.SpendResult
 import kotlinx.coroutines.launch
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -88,6 +90,9 @@ fun HomeScreen(
     userId: Long,
     vm: HomeViewModel,
     onOpenCard: (Long) -> Unit,
+    yarnBalance: Int,
+    purchasedThemeIds: Set<String>,
+    onBuyTheme: suspend (ShareBackground) -> SpendResult,
 ) {
     val state by vm.state.collectAsState()
 
@@ -209,6 +214,9 @@ fun HomeScreen(
       sharePayload?.let { p ->
           ShareCardSheet(
               payload = p,
+              yarnBalance = yarnBalance,
+              purchasedIds = purchasedThemeIds,
+              onBuy = onBuyTheme,
               onDismiss = { sharePayload = null },
               onShared = { vm.onCardShared(p.cardId) },
           )

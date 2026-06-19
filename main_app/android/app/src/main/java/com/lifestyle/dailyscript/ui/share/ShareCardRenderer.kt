@@ -2,8 +2,10 @@ package com.lifestyle.dailyscript.ui.share
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Build
 import androidx.core.content.res.ResourcesCompat
@@ -22,10 +24,13 @@ class ShareCardRenderer(context: Context) {
     private val sans: Typeface by lazy { ResourcesCompat.getFont(appCtx, R.font.noto_sans_kr) ?: Typeface.SANS_SERIF }
     private val serif: Typeface by lazy { ResourcesCompat.getFont(appCtx, R.font.nanum_myeongjo) ?: Typeface.SERIF }
 
+    /** 이미지 배경 디코드 캐시 — assets/ 경로별 1회만 디코드(썸네일/미리보기/최종이 공유). */
+    private val assetCache = HashMap<String, Bitmap?>()
+
     /** 배경만 그린 비트맵 — 선택 그리드 썸네일용(텍스트 없음). */
     fun renderBackground(bg: ShareBackground, width: Int, height: Int, seed: Long): Bitmap {
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        bg.paint(Canvas(bmp), width, height, seed)
+        paintBackground(Canvas(bmp), bg, width, height, seed)
         return bmp
     }
 
@@ -33,9 +38,36 @@ class ShareCardRenderer(context: Context) {
     fun render(bg: ShareBackground, payload: ShareCardPayload, width: Int = W, height: Int = H): Bitmap {
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        val ink = bg.paint(canvas, width, height, payload.cardId)
+        val ink = paintBackground(canvas, bg, width, height, payload.cardId)
         drawText(canvas, payload, ink, width)
         return bmp
+    }
+
+    /** 배경 그리기 — 절차적이면 paint(), 이미지면 에셋을 cover 로 채운다. 글자 잉크색 반환. */
+    private fun paintBackground(canvas: Canvas, bg: ShareBackground, w: Int, h: Int, seed: Long): Int {
+        bg.paint?.let { return it(canvas, w, h, seed) }
+        val src = bg.assetPath?.let { loadAsset(it) }
+        if (src != null) {
+            drawCover(canvas, src, w, h)
+        } else {
+            // 이미지 미배치/디코드 실패 — 투명 대신 종이톤으로 채워 빈 칸 방지.
+            canvas.drawColor(0xFFEDE7DA.toInt())
+        }
+        return bg.ink
+    }
+
+    private fun loadAsset(path: String): Bitmap? = assetCache.getOrPut(path) {
+        runCatching { appCtx.assets.open(path).use { BitmapFactory.decodeStream(it) } }.getOrNull()
+    }
+
+    /** 원본을 9:16 캔버스에 cover(중앙 크롭)로 그린다. */
+    private fun drawCover(canvas: Canvas, src: Bitmap, w: Int, h: Int) {
+        val scale = max(w.toFloat() / src.width, h.toFloat() / src.height)
+        val dw = src.width * scale
+        val dh = src.height * scale
+        val left = (w - dw) / 2f
+        val top = (h - dh) / 2f
+        canvas.drawBitmap(src, null, RectF(left, top, left + dw, top + dh), Paint(Paint.FILTER_BITMAP_FLAG))
     }
 
     private fun drawText(c: Canvas, p: ShareCardPayload, ink: Int, w: Int) {

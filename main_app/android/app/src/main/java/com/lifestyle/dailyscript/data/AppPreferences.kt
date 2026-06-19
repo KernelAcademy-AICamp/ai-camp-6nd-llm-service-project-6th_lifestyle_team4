@@ -57,6 +57,7 @@ object AppPreferences {
     private val CARDS_VIEWED = intPreferencesKey("cards_viewed")          // PWA ds.cardsViewed (누적 카드 열람 수)
     private val FEEDBACK_NUDGE_SEEN = booleanPreferencesKey("feedback_nudge_seen") // PWA ds.feedbackNudgeSeen (1회 가드)
     private val TODAY_YARN_HINTED = booleanPreferencesKey("today_yarn_hinted") // TODAY 실뭉치 힌트 1회 학습 (PWA)
+    private val SHARE_THEMES_PURCHASED = stringPreferencesKey("share_themes_purchased") // CSV of 구매한 공유 카드지 id (기기 로컬)
 
     @Volatile
     private lateinit var store: DataStore<Preferences>
@@ -224,6 +225,21 @@ object AppPreferences {
 
     suspend fun feedbackNudgeSeen(): Boolean = store.data.first()[FEEDBACK_NUDGE_SEEN] ?: false
     suspend fun markFeedbackNudgeSeen() { store.edit { it[FEEDBACK_NUDGE_SEEN] = true } }
+
+    // --- 공유 카드지(프리미엄/로얄) 구매 기록 — 실타래 차감은 서버(spend_yarn), 보유 id 는 기기 로컬 ---
+    suspend fun sharePurchasedThemes(): Set<String> =
+        store.data.first()[SHARE_THEMES_PURCHASED]
+            ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet()
+            ?: emptySet()
+
+    suspend fun addSharePurchasedTheme(id: String) {
+        store.edit { p ->
+            val cur = p[SHARE_THEMES_PURCHASED]?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+                ?.toMutableSet() ?: mutableSetOf()
+            cur.add(id)
+            p[SHARE_THEMES_PURCHASED] = cur.joinToString(",")
+        }
+    }
 
     // --- TODAY 실뭉치 힌트 (PWA today_yarn_hinted) ---
     val todayYarnHinted: Flow<Boolean> get() = store.data.map { it[TODAY_YARN_HINTED] ?: false }
