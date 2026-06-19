@@ -8500,7 +8500,7 @@ function renderShareBgList() {
     cell.innerHTML = `
       <div style="position:relative;width:100%;aspect-ratio:9/16;border-radius:6px;overflow:hidden;border:2px solid ${active ? 'var(--cta)' : 'transparent'};box-shadow:0 2px 5px rgba(0,0,0,.12);">
         <canvas data-thumb="${b.id}" width="144" height="256" style="width:100%;height:100%;display:block;"></canvas>
-        ${locked ? `<div style="position:absolute;inset:0;background:rgba(14,12,10,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FAF8F2;font-size:11px;font-weight:700;letter-spacing:.02em;"><span class="material-symbols-outlined" style="font-size:18px;">lock</span><span style="margin-top:2px;">${b.price || 0}🧶</span></div>` : ''}
+        ${locked ? `<div style="position:absolute;inset:0;background:rgba(14,12,10,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FAF8F2;font-size:11px;font-weight:700;letter-spacing:.02em;"><span class="material-symbols-outlined" style="font-size:18px;">lock</span><span style="margin-top:2px;display:inline-flex;align-items:center;gap:3px;">${b.price || 0}<img src="assets/daily-script-bar.png" alt="" style="width:11px;height:11px;object-fit:cover;border-radius:50%;display:inline-block;" /></span></div>` : ''}
       </div>
       <span style="font-size:10px;color:var(--espresso);text-align:center;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${b.name}</span>
     `;
