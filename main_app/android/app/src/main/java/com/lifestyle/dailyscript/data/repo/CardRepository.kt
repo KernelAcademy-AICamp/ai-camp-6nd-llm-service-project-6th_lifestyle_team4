@@ -26,6 +26,7 @@ class CardRepository {
         intensity,
         view_count,
         comment_count,
+        share_count,
         quote_original,
         script_excerpt_original,
         excerpt_description_original,
@@ -63,4 +64,14 @@ class CardRepository {
             parameters = buildJsonObject { put("p_card_id", cardId) },
         )
     }
+
+    /**
+     * 카드 공유(다운로드/SNS) 횟수 +1, 새 값 반환 (PWA bumpShareCount → increment_share_count RPC,
+     * migration 037). 백엔드 함수는 web/native 공유.
+     */
+    suspend fun incrementShareCount(cardId: Long): Int =
+        client.postgrest.rpc(
+            function = "increment_share_count",
+            parameters = buildJsonObject { put("p_card_id", cardId) },
+        ).decodeAs<Int>()
 }

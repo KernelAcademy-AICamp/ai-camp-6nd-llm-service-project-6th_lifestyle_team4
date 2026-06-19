@@ -21,6 +21,8 @@ data class CardDto(
     val intensity: Int,
     @SerialName("view_count") val viewCount: Int? = null,
     @SerialName("comment_count") val commentCount: Int? = null,
+    // 공유(다운로드/SNS) 누적 횟수 — increment_share_count RPC 로만 증가(migration 037).
+    @SerialName("share_count") val shareCount: Int? = null,
     // --- Bilingual originals (English). Present only on bilingual cards; null otherwise. ---
     @SerialName("quote_original") val quoteOriginal: String? = null,
     @SerialName("script_excerpt_original") val scriptExcerptOriginal: String? = null,

@@ -10,10 +10,6 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lifestyle.dailyscript.data.model.UserPrefs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -60,19 +56,6 @@ object AppPreferences {
     private val OZ_DAILY_CARD_ID = longPreferencesKey("oz_daily_card_id") // cached card_id for that date
     private val CARDS_VIEWED = intPreferencesKey("cards_viewed")          // PWA ds.cardsViewed (누적 카드 열람 수)
     private val FEEDBACK_NUDGE_SEEN = booleanPreferencesKey("feedback_nudge_seen") // PWA ds.feedbackNudgeSeen (1회 가드)
-    // OZ's house 꾸미기 (PWA oz-house ds.ozhouse.*) — 로컬 보존.
-    private val OZ_NIGHT = stringPreferencesKey("oz_night")   // "auto" | "day" | "night"
-    private val OZ_THEME = stringPreferencesKey("oz_theme")   // 방 팔레트 id
-    private val OZ_SOFA = stringPreferencesKey("oz_sofa")
-    private val OZ_RUG = stringPreferencesKey("oz_rug")
-    private val OZ_TOWER = stringPreferencesKey("oz_tower")
-    private val OZ_CAT_POS = stringPreferencesKey("oz_cat_pos") // (구) 단일 "x,y" 비율 — 마이그레이션 읽기용
-    private val OZ_CAT_POSE = intPreferencesKey("oz_cat_pose")  // (구) 단일 저장 포즈 index — 마이그레이션 읽기용
-    private val OZ_CAT_POSITIONS = stringPreferencesKey("oz_cat_positions") // 포즈별 위치 "idx:x:y;idx:x:y;..."
-    private val OZ_SOFA_POS = stringPreferencesKey("oz_sofa_pos")   // "x,y" 중심 비율(드래그); 없으면 프리셋
-    private val OZ_RUG_POS = stringPreferencesKey("oz_rug_pos")
-    private val OZ_TOWER_POS = stringPreferencesKey("oz_tower_pos")
-    private val OZ_THEMES_PURCHASED = stringPreferencesKey("oz_themes_purchased") // CSV (PWA ds.ozhouse.theme.purchased)
     private val TODAY_YARN_HINTED = booleanPreferencesKey("today_yarn_hinted") // TODAY 실뭉치 힌트 1회 학습 (PWA)
 
     @Volatile
@@ -241,136 +224,6 @@ object AppPreferences {
 
     suspend fun feedbackNudgeSeen(): Boolean = store.data.first()[FEEDBACK_NUDGE_SEEN] ?: false
     suspend fun markFeedbackNudgeSeen() { store.edit { it[FEEDBACK_NUDGE_SEEN] = true } }
-
-    // --- OZ's house 꾸미기 (테마·가구·낮밤·고양이 위치) ---
-    data class OzDecorPrefs(
-        val night: String,
-        val theme: String,
-        val sofa: String,
-        val rug: String,
-        val tower: String,
-        val catPositions: Map<Int, Pair<Float, Float>>, // 포즈 index → (중심x, 중심y) 비율; 없으면 프리셋
-        val sofaX: Float,
-        val sofaY: Float,
-        val rugX: Float,
-        val rugY: Float,
-        val towerX: Float,
-        val towerY: Float,
-    )
-
-    /** "x,y" → (x,y) 비율; 없으면 (-1,-1) = 프리셋 위치 사용. */
-    private fun parsePos(s: String?): Pair<Float, Float> {
-        val p = s?.split(",")
-        return (p?.getOrNull(0)?.toFloatOrNull() ?: -1f) to (p?.getOrNull(1)?.toFloatOrNull() ?: -1f)
-    }
-
-    /** "idx:x:y;idx:x:y;..." → {idx: (x,y)}; x·y가 0~1 범위인 항목만 채택. */
-    private fun parseCatPositions(s: String?): Map<Int, Pair<Float, Float>> {
-        if (s.isNullOrBlank()) return emptyMap()
-        return s.split(";").mapNotNull { e ->
-            val f = e.split(":")
-            val idx = f.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
-            val x = f.getOrNull(1)?.toFloatOrNull() ?: return@mapNotNull null
-            val y = f.getOrNull(2)?.toFloatOrNull() ?: return@mapNotNull null
-            if (x in 0f..1f && y in 0f..1f) idx to (x to y) else null
-        }.toMap()
-    }
-
-    /** {idx: (x,y)} → "idx:x:y;idx:x:y;..." (idx 오름차순). */
-    private fun encodeCatPositions(m: Map<Int, Pair<Float, Float>>): String =
-        m.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value.first}:${it.value.second}" }
-
-    /**
-     * 꾸미기 상태의 프로세스 전역 동기 캐시. [ozDecor] 첫 읽기와 모든 setter에서 갱신되어
-     * 항상 최신값을 유지한다. OzHouseViewModel 초기 상태를 이 캐시로 시드해 진입 시 깜빡임(기본 방→저장 방)을 없앤다.
-     */
-    @Volatile private var decorCache: OzDecorPrefs? = null
-
-    /** ViewModel init 등에서 동기로 읽는 캐시(없으면 null → 호출측이 기본값/비동기 로드로 폴백). */
-    fun cachedOzDecor(): OzDecorPrefs? = decorCache
-
-    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    /** 앱 시작 시 1회 호출 — 첫 오즈의 집 진입 전에 캐시를 채워 첫 진입도 깜빡임 없게 한다. */
-    fun warmDecorCache() { cacheScope.launch { runCatching { ozDecor() } } }
-
-    suspend fun ozDecor(): OzDecorPrefs {
-        val p = store.data.first()
-        // 포즈별 위치 — 신규 키 우선. 없으면 구 단일 키(OZ_CAT_POSE/POS)를 한 항목으로 마이그레이션.
-        val catPositions = parseCatPositions(p[OZ_CAT_POSITIONS]).ifEmpty {
-            val oldPose = p[OZ_CAT_POSE] ?: -1
-            val (ox, oy) = parsePos(p[OZ_CAT_POS])
-            if (oldPose >= 0 && ox in 0f..1f && oy in 0f..1f) mapOf(oldPose to (ox to oy)) else emptyMap()
-        }
-        val sofaP = parsePos(p[OZ_SOFA_POS])
-        val rugP = parsePos(p[OZ_RUG_POS])
-        val towerP = parsePos(p[OZ_TOWER_POS])
-        return OzDecorPrefs(
-            night = p[OZ_NIGHT] ?: "auto",
-            theme = p[OZ_THEME] ?: "default",
-            sofa = p[OZ_SOFA] ?: "cream",
-            rug = p[OZ_RUG] ?: "coral",
-            tower = p[OZ_TOWER] ?: "tall",
-            catPositions = catPositions,
-            sofaX = sofaP.first, sofaY = sofaP.second,
-            rugX = rugP.first, rugY = rugP.second,
-            towerX = towerP.first, towerY = towerP.second,
-        ).also { decorCache = it }
-    }
-
-    // setter는 디스크 보존 + 동기 캐시(decorCache) 갱신을 함께 한다.
-    // 캐시 갱신을 빠뜨리면 다음 진입 시 시드가 과거값이라 다시 깜빡이므로 모든 setter에서 반영할 것.
-    suspend fun setOzNight(value: String) {
-        store.edit { it[OZ_NIGHT] = value }; decorCache = decorCache?.copy(night = value)
-    }
-    suspend fun setOzTheme(value: String) {
-        store.edit { it[OZ_THEME] = value }; decorCache = decorCache?.copy(theme = value)
-    }
-    suspend fun setOzSofa(value: String) {
-        store.edit { it[OZ_SOFA] = value }; decorCache = decorCache?.copy(sofa = value)
-    }
-    suspend fun setOzRug(value: String) {
-        store.edit { it[OZ_RUG] = value }; decorCache = decorCache?.copy(rug = value)
-    }
-    suspend fun setOzTower(value: String) {
-        store.edit { it[OZ_TOWER] = value }; decorCache = decorCache?.copy(tower = value)
-    }
-    /** 드래그 종료 시 — 해당 포즈(pose) 슬롯의 위치(비율)만 갱신해 보존(다른 포즈 위치는 유지). */
-    suspend fun setOzCatPos(pose: Int, x: Float, y: Float) {
-        var next: Map<Int, Pair<Float, Float>> = emptyMap()
-        store.edit { p ->
-            next = parseCatPositions(p[OZ_CAT_POSITIONS]) + (pose to (x to y))
-            p[OZ_CAT_POSITIONS] = encodeCatPositions(next)
-        }
-        decorCache = decorCache?.copy(catPositions = next)
-    }
-
-    // 가구 드래그 위치 (중심 비율). PWA layout[selector] = {left,top}.
-    suspend fun setOzSofaPos(x: Float, y: Float) {
-        store.edit { it[OZ_SOFA_POS] = "$x,$y" }; decorCache = decorCache?.copy(sofaX = x, sofaY = y)
-    }
-    suspend fun setOzRugPos(x: Float, y: Float) {
-        store.edit { it[OZ_RUG_POS] = "$x,$y" }; decorCache = decorCache?.copy(rugX = x, rugY = y)
-    }
-    suspend fun setOzTowerPos(x: Float, y: Float) {
-        store.edit { it[OZ_TOWER_POS] = "$x,$y" }; decorCache = decorCache?.copy(towerX = x, towerY = y)
-    }
-
-    // --- OZ 테마 구매 기록 (PWA THEME_PURCHASED_KEY; 'default' 는 기본 보유) ---
-    suspend fun ozPurchasedThemes(): Set<String> {
-        val raw = store.data.first()[OZ_THEMES_PURCHASED]
-        val set = raw?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toMutableSet() ?: mutableSetOf()
-        set.add("default")
-        return set
-    }
-    suspend fun addOzPurchasedTheme(id: String) {
-        store.edit { p ->
-            val cur = p[OZ_THEMES_PURCHASED]?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toMutableSet()
-                ?: mutableSetOf()
-            cur.add(id)
-            p[OZ_THEMES_PURCHASED] = cur.joinToString(",")
-        }
-    }
 
     // --- TODAY 실뭉치 힌트 (PWA today_yarn_hinted) ---
     val todayYarnHinted: Flow<Boolean> get() = store.data.map { it[TODAY_YARN_HINTED] ?: false }

@@ -203,14 +203,14 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     }
 
     val isDetail = destinationRoute?.startsWith("detail/") == true || destinationRoute == Routes.DETAIL
-    val fullScreenRoutes = setOf(Routes.NOTICE, Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.BOOKMARKS, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE, Routes.OZ_HOUSE)
+    val fullScreenRoutes = setOf(Routes.NOTICE, Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.BOOKMARKS, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE)
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
     // 하단 바는 모든 화면에서 노출 — 메인 탭·상세는 물론 마이 하위 페이지(내 댓글/내 피드/보관함/
     // 약관/개인정보/실타래 충전/의견)까지. 풀스크린 화면은 각자 자체 상단 바(뒤로가기)를 둔다.
     // 단, 키보드(IME)가 떠 있으면 숨김 — 입력 컴포저가 키보드 바로 위에 붙도록.
     val imeVisible = WindowInsets.isImeVisible
-    val showBottomBar = currentRoute != null && currentRoute != Routes.OZ_HOUSE && !imeVisible
+    val showBottomBar = currentRoute != null && !imeVisible
 
     // 뒤로가기 종료는 시작 탭(오늘)에서만 — 다른 탭/상세에선 NavController가 오늘로 되돌리거나 pop한다.
     // 오늘에서 한 번 누르면 토스트만, 2초 내 한 번 더 누르면 실제 종료(실수 종료 방지).
@@ -235,10 +235,6 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                     onYarnClick = {
                         AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
                         navController.navigate(Routes.YARN_PURCHASE) { launchSingleTop = true }
-                    },
-                    onOzHouseClick = {
-                        AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.OZ_HOUSE))
-                        navController.navigate(Routes.OZ_HOUSE) { launchSingleTop = true }
                     },
                 )
                 Routes.SETTINGS -> SettingsTopBar(onFeedback = {
@@ -397,14 +393,6 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                     YarnPurchaseScreen(
                         yarnVm = yarnVm,
                         onBack = { navController.popBackStack() },
-                    )
-                }
-                composable(Routes.OZ_HOUSE) {
-                    com.lifestyle.dailyscript.ui.ozhouse.OzHouseScreen(
-                        userId = session.userId,
-                        yarnVm = yarnVm,
-                        onBack = { navController.popBackStack() },
-                        onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                     )
                 }
                 composable(

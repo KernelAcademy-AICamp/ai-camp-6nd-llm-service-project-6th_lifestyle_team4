@@ -2,6 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 공유 카드 갤러리 저장 — API 26–28 의 public Pictures 직접 기록용. API29+ 는 MediaStore 라 불필요. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <!-- 공유 카드 '카카오톡' 버튼 — Android 11+ 패키지 가시성 때문에 카카오톡 패키지를 명시해야
+         setPackage("com.kakao.talk") 인텐트가 해석/실행된다. -->
+    <queries>
+        <package android:name="com.kakao.talk" />
+    </queries>
 
     <application
         android:name=".DailyScriptApp"
@@ -47,6 +57,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/daily_script_widget_info" />
         </receiver>
+
+        <!-- 공유 카드 PNG 를 시스템 공유 시트로 넘기기 위한 FileProvider (authority = ShareActions.SHARE_AUTHORITY). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.lifestyle.dailyscript.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

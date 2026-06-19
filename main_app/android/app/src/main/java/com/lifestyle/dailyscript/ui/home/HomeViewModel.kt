@@ -87,6 +87,7 @@ class HomeViewModel : ViewModel() {
                 loaded = true,
                 todayCard = today,
                 todayBookmarked = today != null && bookmarkCards.any { it.cardId == today.cardId },
+                todayShareCount = today?.shareCount ?: 0,
                 recent = recent,
                 bookmarkCounts = loadCounts(listOfNotNull(today) + recent),
                 commentCounts = commentCounts,
@@ -147,6 +148,7 @@ class HomeViewModel : ViewModel() {
                 loading = false,
                 todayCard = card,
                 todayBookmarked = card != null && bookmarkCards.any { it.cardId == card.cardId },
+                todayShareCount = card?.shareCount ?: 0,
                 recent = recent,
                 bookmarkCounts = _state.value.bookmarkCounts + loadCounts(listOfNotNull(card) + recent),
             )
@@ -187,6 +189,29 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
+     * 공유/다운로드 후 누적 공유수 +1. PWA bumpShareCount 와 동일하게 액션당 1회 호출.
+     * 037 마이그레이션(increment_share_count)이 아직 안 깔렸거나 네트워크 오류여도
+     * 크래시·UI 깨짐 없이 로컬값을 유지하도록 RPC 는 runCatching 으로 감싼다.
+     */
+    fun onCardShared(cardId: Long) {
+        val card = _state.value.todayCard ?: return
+        if (card.cardId != cardId) return
+        // 즉시 +1 (낙관적)
+        _state.value = _state.value.copy(todayShareCount = _state.value.todayShareCount + 1)
+        viewModelScope.launch {
+            AppAnalytics.trackCard("card_shared", card)
+            runCatching { cardRepo.incrementShareCount(cardId) }
+                .onSuccess { server ->
+                    // 서버 권위값으로 동기화(동시 공유로 +1 이상 올랐을 수 있음)
+                    if (_state.value.todayCard?.cardId == cardId) {
+                        _state.value = _state.value.copy(todayShareCount = server)
+                    }
+                }
+            // onFailure: 로컬 +1 유지
+        }
+    }
+
+    /**
      * 오늘 카드 열람 즉시 홈의 조회수를 +1 선반영 — 상세 진입/복귀 시 숫자 깜빡임 없이 매끄럽게.
      * 실제 DB 증가는 상세의 incrementView 가 처리하고, 복귀 시 load() 재조회가 최종값으로 맞춘다.
      */
@@ -215,6 +240,8 @@ data class HomeState(
     val loaded: Boolean = false,
     val todayCard: CardDto? = null,
     val todayBookmarked: Boolean = false,
+    // 오늘 카드 누적 공유수 — share_count 로 시드, 공유/저장 시 낙관적 +1 (onCardShared).
+    val todayShareCount: Int = 0,
     val recent: List<CardDto> = emptyList(),
     val bookmarkCounts: Map<Long, Int> = emptyMap(),
     val commentCounts: Map<Long, Int> = emptyMap(),

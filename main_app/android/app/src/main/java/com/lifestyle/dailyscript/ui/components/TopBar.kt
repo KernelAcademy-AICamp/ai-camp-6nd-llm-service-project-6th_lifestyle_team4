@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.outlined.Cottage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
@@ -92,41 +90,10 @@ fun BrandWordmark() {
 }
 
 @Composable
-fun HomeTopBar(yarn: Int, onYarnClick: () -> Unit, onOzHouseClick: () -> Unit) {
+fun HomeTopBar(yarn: Int, onYarnClick: () -> Unit) {
     TopBarContainer {
         BrandWordmark()
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            YarnChip(yarn = yarn, onClick = onYarnClick)
-            Spacer(Modifier.width(8.dp))
-            OzHouseChip(onClick = onOzHouseClick)
-        }
-    }
-}
-
-/** 실타래 칩 옆 OZ's house — 아이콘 위 + 작은 라벨 아래 (수직 배치). */
-@Composable
-fun OzHouseChip(onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Cottage,
-            contentDescription = "OZ's house",
-            tint = Espresso,
-            modifier = Modifier.size(20.dp),
-        )
-        Text(
-            text = "OZ’s house",
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 8.5.sp,
-                fontWeight = FontWeight.Bold,
-                platformStyle = PlatformTextStyle(includeFontPadding = false),
-            ),
-            color = Espresso,
-        )
+        YarnChip(yarn = yarn, onClick = onYarnClick)
     }
 }
 

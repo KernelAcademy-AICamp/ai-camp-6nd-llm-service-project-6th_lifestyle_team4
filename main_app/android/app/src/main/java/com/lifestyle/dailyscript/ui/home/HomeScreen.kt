@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
@@ -58,6 +60,9 @@ import com.lifestyle.dailyscript.ui.components.LangSegmented
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
+import com.lifestyle.dailyscript.ui.share.ShareCardPayload
+import com.lifestyle.dailyscript.ui.share.ShareCardSheet
+import com.lifestyle.dailyscript.ui.share.toSharePayload
 import kotlinx.coroutines.launch
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -106,6 +111,9 @@ fun HomeScreen(
         }
     }
 
+    // 공유 시트 — 공유 칩 탭 시 해당 카드 페이로드를 담아 연다.
+    var sharePayload by remember { mutableStateOf<ShareCardPayload?>(null) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -143,7 +151,9 @@ fun HomeScreen(
             bookmarkCount = state.todayCard?.let { state.bookmarkCounts[it.cardId] } ?: 0,
             // 댓글 수: card_comments 집계 Map 우선(PWA 동일), 없으면 denormalized 컬럼 폴백.
             commentCount = state.todayCard?.let { state.commentCounts[it.cardId] ?: it.commentCount } ?: 0,
+            shareCount = state.todayShareCount,
             onBookmarkToggle = { vm.toggleTodayBookmark(userId) },
+            onShare = { sharePayload = it },
             onOpen = {
                 state.todayCard?.let {
                     vm.markTodayViewed()
@@ -195,6 +205,14 @@ fun HomeScreen(
         // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
         Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
       }
+
+      sharePayload?.let { p ->
+          ShareCardSheet(
+              payload = p,
+              onDismiss = { sharePayload = null },
+              onShared = { vm.onCardShared(p.cardId) },
+          )
+      }
     }
 }
 
@@ -207,13 +225,35 @@ private fun TodayCard(
     loading: Boolean,
     bookmarkCount: Int,
     commentCount: Int,
+    shareCount: Int,
     onBookmarkToggle: () -> Unit,
+    onShare: (ShareCardPayload) -> Unit,
     onOpen: () -> Unit,
 ) {
     val shape = RoundedCornerShape(8.dp)
     val coach = LocalCoachController.current
     // EN/KO toggle is ephemeral per-card UI state — resets when the card changes.
     var english by remember(card?.cardId) { mutableStateOf(false) }
+
+    // 화자(speaker) — quote 위에 굵게 + 공유 페이로드에 사용. 상단 공유 칩이 본문보다 먼저
+    // 그려지므로 계산을 여기로 끌어올려 두 곳이 같은 값을 쓴다.
+    // 산문(novel/essay/prose)은 화자 개념이 없어 skip(지문/묘사가 화자로 오인되는 버그 방지).
+    // EN 모드: 영문 script 직접 추출 → 실패 시 한글 quote 의 블록 인덱스로 영문 라벨 매칭(cross-lang).
+    val speaker = card?.let {
+        if (ScriptFormat.isProse(it.works?.format)) return@let ""
+        val characters = it.works?.characterList().orEmpty()
+        if (english) {
+            ScriptFormat.extractSpeakerEn(
+                scriptEn = it.scriptFor(true),
+                scriptKo = it.scriptFor(false),
+                characters = characters,
+                quoteEn = it.quoteFor(true),
+                quoteKo = it.quoteFor(false),
+            )
+        } else {
+            ScriptFormat.extractSpeaker(it.scriptFor(false), characters, it.quoteFor(false))
+        }
+    }.orEmpty()
 
     Column(
         modifier = Modifier
@@ -240,62 +280,15 @@ private fun TodayCard(
                     CardCounts(viewCount = card.viewCount, commentCount = commentCount)
                 }
             }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (card?.hasEnglish() == true) {
-                    LangSegmented(english = english, onToggle = { english = !english })
-                }
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .coachAnchor(coach, "today_bookmark")
-                        .clickable(
-                            enabled = card != null && !bookmarkActionInFlight,
-                            onClick = onBookmarkToggle,
-                        ),
-                ) {
-                    Icon(
-                        imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                        contentDescription = stringResource(R.string.bookmark),
-                        tint = if (bookmarked) Cta else Walnut,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    if (card != null) {
-                        Text(
-                            text = formatCount(bookmarkCount),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                platformStyle = PlatformTextStyle(includeFontPadding = false),
-                            ),
-                            color = Walnut,
-                        )
-                    }
-                }
+            // 우상단엔 언어 토글만 — 북마크·공유 칩은 해시태그(키워드) 줄 우측으로 이동.
+            if (card?.hasEnglish() == true) {
+                LangSegmented(english = english, onToggle = { english = !english })
+            } else {
+                Box(modifier = Modifier)
             }
         }
         Box(modifier = Modifier.height(28.dp))
-        // Speaker (bold) above the quote, when extractable — mirrors the PWA.
-        // 산문(novel/essay/prose) 은 화자 개념이 없어 추출 skip — 지문/묘사가 화자로
-        // 오인되어 굵게 표시되는 버그(예: "끔찍한 흉터로 일그러진 창백한 얼굴") 방지.
-        // EN 모드: 영문 script 직접 추출 → 실패 시 한글 quote 의 블록 인덱스로 영문 같은
-        // 인덱스 라벨 매칭 (cross-lang). 한글 라벨은 내부 가드로 영문 모드에 노출 차단.
-        val speaker = card?.let {
-            if (ScriptFormat.isProse(it.works?.format)) return@let ""
-            val characters = it.works?.characterList().orEmpty()
-            if (english) {
-                ScriptFormat.extractSpeakerEn(
-                    scriptEn = it.scriptFor(true),
-                    scriptKo = it.scriptFor(false),
-                    characters = characters,
-                    quoteEn = it.quoteFor(true),
-                    quoteKo = it.quoteFor(false),
-                )
-            } else {
-                ScriptFormat.extractSpeaker(it.scriptFor(false), characters, it.quoteFor(false))
-            }
-        }.orEmpty()
+        // Speaker (bold) above the quote — 위에서 계산한 speaker 를 사용(상단 공유 칩과 공유).
         if (speaker.isNotBlank()) {
             Text(
                 text = speaker,
@@ -335,18 +328,47 @@ private fun TodayCard(
         Box(modifier = Modifier.height(24.dp))
         SectionDivider()
         Box(modifier = Modifier.height(12.dp))
-        // 키워드 칩 — 가로 영역 초과 시 자동 줄바꿈 (영문 긴 키워드가 한 글자씩 깨지던 버그 수정)
-        FlowRow(
+        // 키워드(해시태그) 줄 + 우측 북마크·공유 칩. 키워드는 weight 로 남는 폭을 채우고,
+        // 칩 2개는 그 줄 오른쪽 끝에 붙는다(상단 정렬 — 키워드 첫 줄에 맞춤).
+        Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            card?.keywordsFor(english)?.forEach { kw ->
-                Text(
-                    text = "#$kw",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Walnut,
-                    maxLines = 1,
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                card?.keywordsFor(english)?.forEach { kw ->
+                    Text(
+                        text = "#$kw",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Walnut,
+                        maxLines = 1,
+                    )
+                }
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TodayActionChip(
+                    icon = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                    contentDescription = stringResource(R.string.bookmark),
+                    tint = if (bookmarked) Cta else Walnut,
+                    count = if (card != null) bookmarkCount else null,
+                    enabled = card != null && !bookmarkActionInFlight,
+                    modifier = Modifier.coachAnchor(coach, "today_bookmark"),
+                    onClick = onBookmarkToggle,
+                )
+                TodayActionChip(
+                    icon = Icons.Outlined.IosShare,
+                    contentDescription = "공유",
+                    tint = Walnut,
+                    count = if (card != null) shareCount else null,
+                    enabled = card != null,
+                    onClick = { card?.let { onShare(it.toSharePayload(english, speaker)) } },
                 )
             }
         }
@@ -402,6 +424,40 @@ private fun RecentRowItem(card: CardDto, onClick: () -> Unit) {
         )
     }
     SectionDivider()
+}
+
+/** 투데이 카드 액션 칩 — 아이콘 위 + 작은 카운트 아래(세로). 북마크·공유 공용. count=null 이면 숫자 숨김. */
+@Composable
+private fun TodayActionChip(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    count: Int?,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.clickable(enabled = enabled, onClick = onClick),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(20.dp),
+        )
+        if (count != null) {
+            Text(
+                text = formatCount(count),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                ),
+                color = Walnut,
+            )
+        }
+    }
 }
 
 @Composable

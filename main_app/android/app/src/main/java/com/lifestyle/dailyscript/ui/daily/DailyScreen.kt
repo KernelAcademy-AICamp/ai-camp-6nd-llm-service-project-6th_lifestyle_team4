@@ -170,23 +170,8 @@ fun DailyScreen(
                     openWorkId = workId
                 },
             )
-            DailyContextual(
-                cards = state.allCards,
-                onOpenCard = { card ->
-                    AppAnalytics.track("daily_contextual_clicked", mapOf("card_id" to card.cardId))
-                    onOpenCard(card.cardId)
-                },
-            )
-            DailyTrending(
-                cards = state.allCards,
-                bookmarkCounts = state.bookmarkCounts,
-                commentCounts = state.commentCounts,
-                onOpenCard = { card ->
-                    AppAnalytics.track("daily_trending_clicked", mapOf("card_id" to card.cardId))
-                    onOpenCard(card.cardId)
-                },
-                onOpenAll = { onOpenLibraryWork(-1L) },
-            )
+            // PWA 09d61cf 패리티: '이럴 땐, 이런 문장'(DailyContextual)·'다시 만나기'(DailyRecent) 숨김.
+            // 순서: notice → 신작(new-books) → 당신을 위한(OzPick) → 이번 주 인기 대사(Trending).
             DailyOzPick(
                 card = state.ozPick,
                 bookmarks = state.bookmarks,
@@ -203,12 +188,15 @@ fun DailyScreen(
                     onRequestPreferences()
                 },
             )
-            DailyRecent(
-                bookmarks = state.bookmarks,
+            DailyTrending(
+                cards = state.allCards,
+                bookmarkCounts = state.bookmarkCounts,
+                commentCounts = state.commentCounts,
                 onOpenCard = { card ->
-                    AppAnalytics.track("daily_recent_clicked", mapOf("card_id" to card.cardId))
+                    AppAnalytics.track("daily_trending_clicked", mapOf("card_id" to card.cardId))
                     onOpenCard(card.cardId)
                 },
+                onOpenAll = { onOpenLibraryWork(-1L) },
             )
 
             Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
@@ -497,21 +485,24 @@ private fun DailyNewBookHero(
     val work = hero.work
     val intro = work.intro?.trim().orEmpty()
     val sampleQuote = Markdown.cleanQuote(hero.cards.firstOrNull()?.quote).take(60)
+    // 텍스트 컬럼 간격은 PWA renderDailyNewBooks 의 마진을 그대로 옮긴 값.
+    // 카드 padding 24/22 · inner gap 20 · 날짜 mb13 · NEW→제목 10 · 제목 28/lh1.25 · 제목→메타 5 · 메타→본문 15.
     Row(
         modifier = modifier
             .shadow(2.dp, shape)
             .clip(shape)
             .background(Espresso)
             .border(0.5.dp, Latte.copy(alpha = 0.25f), shape)
-            .padding(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 22.dp, vertical = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
         // PWA .daily-newbook-main-inner: align-items:center → 표지를 텍스트 기준 세로 중앙 정렬.
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = dateLabel,
-                style = TextStyle(fontSize = 11.sp, letterSpacing = 0.04.em),
+                // PWA 날짜 <p> font-weight:500 (년월일 span 만 700 으로 덮어씀).
+                style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.04.em),
                 color = Sand,
             )
             Box(modifier = Modifier.height(13.dp))
@@ -523,31 +514,35 @@ private fun DailyNewBookHero(
                     .background(Cta, RoundedCornerShape(12.dp))
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             )
-            Box(modifier = Modifier.height(14.dp))
+            Box(modifier = Modifier.height(10.dp))
             Text(
                 text = work.displayTitle().ifBlank { "—" },
                 style = TextStyle(
                     fontFamily = EditorialSerif,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 30.sp,
-                    lineHeight = 36.sp,
+                    fontSize = 28.sp,
+                    lineHeight = 35.sp,
+                    letterSpacing = (-0.02).em,
                 ),
                 color = Paper,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
-            Box(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.height(5.dp))
             Text(
-                text = listOfNotNull(work.author, work.releaseYear?.toString(), genreLabel(work.format)).joinToString(" · "),
-                style = MaterialTheme.typography.labelSmall,
+                // PWA: 작가 · 출간년도+'년' · 장르. 메타 라인 fontSize 11 / letter-spacing 0.05em / 3px 들여쓰기.
+                text = listOfNotNull(work.author, work.releaseYear?.let { "${it}년" }, genreLabel(work.format))
+                    .joinToString(" · "),
+                style = TextStyle(fontSize = 11.sp, letterSpacing = 0.05.em),
                 color = Sand,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 3.dp),
             )
             // PWA renderDailyNewBooks: 책 소개(intro) 우선 노출(정자체), 없으면 명대사 폴백(italic + 따옴표).
             // 둘 다 14sp / line-height 1.75(≈24.5sp) / 3줄 클램프.
             if (intro.isNotBlank()) {
-                Box(modifier = Modifier.height(12.dp))
+                Box(modifier = Modifier.height(15.dp))
                 Text(
                     text = intro,
                     style = TextStyle(
@@ -560,7 +555,7 @@ private fun DailyNewBookHero(
                     overflow = TextOverflow.Ellipsis,
                 )
             } else if (sampleQuote.isNotBlank()) {
-                Box(modifier = Modifier.height(12.dp))
+                Box(modifier = Modifier.height(15.dp))
                 Text(
                     text = "\"$sampleQuote${if (sampleQuote.length >= 60) "⋯" else ""}\"",
                     style = TextStyle(
@@ -575,7 +570,7 @@ private fun DailyNewBookHero(
                 )
             }
         }
-        DailyBookCover(work = work, width = 90.dp)
+        DailyBookCover(work = work, width = 82.dp)
     }
 }
 
