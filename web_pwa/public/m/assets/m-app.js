@@ -209,26 +209,36 @@ const feedbackEntry = $('#feedback-entry');
 
 const detailScreen = $('#detail-screen');
 const detailBody = detailScreen?.querySelector('.detail-body');
-/* 카드 상세 — 스크롤 80% 이상이면 왼쪽 하단 '맨 위로' fab 노출. 클릭 시 최상단. */
+/* 카드 상세 — 스크롤 80% 이상이면 왼쪽 하단 '맨 위로' fab 노출. 클릭 시 최상단.
+   추가로 90% 이상 스크롤 시 카드 첫 열람 실타래 보상 트리거 (카드당 1회, 세션 dedup). */
 (function () {
   const fab = document.getElementById('detail-scroll-top-fab');
-  if (!fab || !detailBody) return;
+  if (!detailBody) return;
   function onScroll() {
     const max = detailBody.scrollHeight - detailBody.clientHeight;
     if (max <= 0) { hide(); return; }
     const ratio = detailBody.scrollTop / max;
-    if (ratio >= 0.8) show(); else hide();
+    if (fab) (ratio >= 0.8 ? show : hide)();
+    /* 90% 스크롤 → 실타래 보상. 같은 카드 세션 안에서 1회만. 서버 RPC 가 영구 dedup. */
+    if (ratio >= 0.9) {
+      const cid = state.detailCardId;
+      if (cid && state._rewardTriggeredCardId !== cid) {
+        state._rewardTriggeredCardId = cid;
+        try { rewardYarnForFirstView(cid); } catch (e) { console.warn('[m] 90% reward trigger failed:', e); }
+      }
+    }
   }
   function show() {
     fab.style.display = 'flex';
     requestAnimationFrame(() => { fab.style.opacity = '1'; fab.style.transform = 'translateY(0)'; });
   }
   function hide() {
+    if (!fab) return;
     fab.style.opacity = '0'; fab.style.transform = 'translateY(8px)';
     setTimeout(() => { if (fab.style.opacity === '0') fab.style.display = 'none'; }, 220);
   }
   detailBody.addEventListener('scroll', onScroll, { passive: true });
-  fab.addEventListener('click', () => {
+  fab?.addEventListener('click', () => {
     detailBody.scrollTo({ top: 0, behavior: 'smooth' });
   });
 })();
@@ -5485,7 +5495,8 @@ function openDetail(card) {
   setBottomNavCat('cat_library.png', 'right-far', 'large');
   // 피드의 글쓰기 연필 fab 은 카드 상세 화면에서 보이면 안 됨 (피드 탭 진입 시에만)
   if (feedFab) feedFab.style.display = 'none';
-  rewardYarnForFirstView(card.card_id);
+  // 실타래 보상은 90% 스크롤 시점에 트리거 — 여기서 호출 X. 다음 카드용 flag reset.
+  state._rewardTriggeredCardId = null;
   openDetailApproved(card);
 }
 
