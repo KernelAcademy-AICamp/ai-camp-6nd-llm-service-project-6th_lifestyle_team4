@@ -226,6 +226,19 @@ const detailBody = detailScreen?.querySelector('.detail-body');
         state._rewardTriggeredCardId = cid;
         try { rewardYarnForFirstView(cid); } catch (e) { console.warn('[m] 90% reward trigger failed:', e); }
       }
+      /* 공유 링크로 진입한 익명 사용자가 그 카드를 끝까지 읽었으면 회원가입 유도 (세션당 1회) */
+      if (state.isAnonymous && cid && cid === state._sharedCardOpenedId && !state._sharedSignupShown) {
+        state._sharedSignupShown = true;
+        try {
+          openPromptModal({
+            title: '더 많은 명작을 만나보세요',
+            message: '회원가입하고 매일 새로운 명대사를 받아보세요.\n친구가 보낸 카드 덕분에 가입하면 실타래 600개 보너스!',
+            confirmLabel: '회원가입',
+            dismissLabel: '닫기',
+            openSigninOnConfirm: true,
+          });
+        } catch (e) { console.warn('[m] shared signup prompt failed:', e); }
+      }
     }
   }
   function show() {
@@ -1320,6 +1333,7 @@ function maybeOpenSharedCard() {
   const card = (state.allCards || []).find((c) => c && String(c.card_id) === String(cid));
   if (!card) return;   /* allCards 에 없으면 retry 위해 키 유지 */
   safeStorageRemove('ds.pendingShareCardId');
+  state._sharedCardOpenedId = card.card_id;   /* 90% 스크롤 시 익명 사용자 회원가입 유도 트리거 */
   setTimeout(() => { try { openDetail(card); } catch {} }, 300);
 }
 
