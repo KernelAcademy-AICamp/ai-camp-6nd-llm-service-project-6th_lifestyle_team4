@@ -265,8 +265,8 @@ struct RootView: View {
         .overlay(alignment: .bottomTrailing) {
             if selectedTab == .feed && feedPath.isEmpty && !composerActive {
                 FeedWriteCat { feedWriteTrigger += 1 }
-                    .padding(.trailing, -20)   // LIBRARY~MY 사이로 (가로)
-                    .padding(.bottom, 48)      // 책 아랫면이 탭바 윗면에 앉도록 (세로) — 조정 가능
+                    .padding(.trailing, -4)    // LIBRARY~MY 사이로 (가로)
+                    .padding(.bottom, 54)      // 책 아랫면이 탭바 윗면에 앉도록 (세로) — 조정 가능
             }
         }
     }
