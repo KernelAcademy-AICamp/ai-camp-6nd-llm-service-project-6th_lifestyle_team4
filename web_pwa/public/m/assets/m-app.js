@@ -8518,23 +8518,36 @@ function buildReferralUrl(cardId) {
     return params.length ? `${base}?${params.join('&')}` : base;
   } catch { return ''; }
 }
-async function sendShareCard() {
+/* 이미지 보내기 — 캔버스 PNG 를 Web Share files 로. 카카오톡 포함 모든 메신저가 이미지로 받음. */
+async function shareImage() {
+  const canvas = document.getElementById('share-canvas'); if (!canvas) return;
+  const blob = await canvasToBlob(canvas); if (!blob) { toast('이미지 생성 실패'); return; }
+  const file = new File([blob], 'daily-script.png', { type: 'image/png' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Daily Script' });
+      return;
+    }
+  } catch (e) { /* AbortError 무시 */ }
+  /* Web Share files 미지원 → 다운로드 폴백 */
+  await downloadShareCard();
+}
+
+/* 링크 보내기 — 텍스트(명대사 + URL). 카카오톡 등 SNS 가 OG 메타 기반 카드 미리보기 자동 표시. */
+async function shareLink() {
   const payload = shareState.payload || {};
   const refUrl  = buildReferralUrl();
   const quote   = payload.quote ? `"${payload.quote}"` : '';
   const credit  = payload.work  ? ` — ${payload.work}` : '';
-  /* 유튜브식 URL 카드 미리보기 — 이미지 파일 첨부 X. URL 만 보내면 카카오톡이 자동으로
-     index.html 의 og:image / og:title / og:description 가져와서 클릭 가능한 카드 미리보기 띄움.
-     이미지 첨부하면 카카오톡이 URL 인식을 안 하므로 일부러 빼는 것. 이미지는 다운로드 버튼으로 별도. */
-  const text = [quote + credit, refUrl].filter(Boolean).join('\n');
+  const text    = [quote + credit, refUrl].filter(Boolean).join('\n');
   try {
     if (navigator.share) {
       await navigator.share({ text, title: 'Daily Script', url: refUrl || undefined });
       return;
     }
-  } catch (e) { /* AbortError 등 무시 */ }
-  /* Web Share 미지원 — 다운로드 (이미지) */
-  await downloadShareCard();
+  } catch (e) { /* AbortError 무시 */ }
+  /* Web Share 미지원 — 클립보드 복사로 폴백 */
+  try { if (navigator.clipboard?.writeText && refUrl) { await navigator.clipboard.writeText(refUrl); toast('앱 링크가 클립보드에 복사됨'); } } catch {}
 }
 
 function openShareModal(payload) {
@@ -8596,8 +8609,10 @@ document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
   });
 });
 document.getElementById('share-download')?.addEventListener('click', async () => { await downloadShareCard(); bumpShareCount(); });
-/* '공유하기' — Web Share API + OG 메타 기반 URL 카드 미리보기 (모든 메신저 대응) */
-document.getElementById('share-send')?.addEventListener('click', async () => { await sendShareCard(); bumpShareCount(); });
+/* 이미지 보내기 — Web Share files (캔버스 PNG) */
+document.getElementById('share-send-image')?.addEventListener('click', async () => { await shareImage(); bumpShareCount(); });
+/* 링크 보내기 — Web Share text+url, OG 메타 기반 카드 미리보기 */
+document.getElementById('share-send-link')?.addEventListener('click', async () => { await shareLink(); bumpShareCount(); });
 
 /* payload 추출 — 오늘의 카드 / 카드 상세에서 공통 */
 function payloadForToday() {
