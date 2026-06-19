@@ -8487,26 +8487,26 @@ async function sendShareCard() {
   const blob = await canvasToBlob(canvas); if (!blob) return;
   const file = new File([blob], 'daily-script.png', { type: 'image/png' });
   const payload = shareState.payload || {};
-  /* 항상 referral URL + 명대사 한 줄을 텍스트로 같이 보냄.
-     이미지에는 URL 박지 않고, 메시지/SNS 가 text/url 을 함께 첨부하도록 navigator.share 에 그대로 전달. */
+  /* 항상 이미지 파일 + 명대사 텍스트 + 앱 링크를 함께 전송.
+     받는 메신저/SNS 가 text 또는 url 중 어느 쪽을 쓰더라도 링크가 같이 도착하게 양쪽에 모두 포함. */
   const refUrl = buildReferralUrl();
-  const quote = payload.quote ? `"${payload.quote}"` : '';
-  const credit = payload.work ? ` — ${payload.work}` : '';
-  const text = [quote + credit, refUrl].filter(Boolean).join('\n\n');
+  const quote  = payload.quote ? `"${payload.quote}"` : '';
+  const credit = payload.work  ? ` — ${payload.work}` : '';
+  const text   = [quote + credit, refUrl].filter(Boolean).join('\n');
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      /* 이미지 + 텍스트(명대사 + 링크) + url 모두 함께 */
       await navigator.share({ files: [file], text, title: 'Daily Script', url: refUrl || undefined });
       return;
     }
-    /* 파일 공유 미지원 환경 — 텍스트+URL 만이라도 공유 */
-    if (navigator.share && refUrl) {
-      await navigator.share({ text, title: 'Daily Script', url: refUrl });
+    /* 파일 공유 미지원 환경 — 텍스트 + url 이라도 함께 */
+    if (navigator.share) {
+      await navigator.share({ text, title: 'Daily Script', url: refUrl || undefined });
       return;
     }
   } catch (e) { /* AbortError 등 무시 */ }
-  /* 폴백 — 다운로드(이미지) + URL 은 클립보드 복사 */
+  /* Web Share 자체 미지원 (데스크탑 등) — 이미지 다운로드만. */
   await downloadShareCard();
-  try { if (refUrl && navigator.clipboard?.writeText) { await navigator.clipboard.writeText(refUrl); toast('앱 링크가 클립보드에 복사됨'); } } catch {}
 }
 
 function openShareModal(payload) {
