@@ -7999,3 +7999,255 @@ function toast(msg) {
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
 }
+
+// ============================================================
+// 공유 카드 — 9:16 비율, 편지지 배경, 다운로드 + Web Share API
+// 1차 MVP: 무료 4종 + 유료 4종(잠금 표시만, 구매 RPC 는 후속)
+// 후속: 카드 상세 텍스트 블록 선택 → 블록 부분 공유, 유료 배경 구매 RPC
+// ============================================================
+const SHARE_BACKGROUNDS = [
+  { id: 'beige',    name: '크림 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#F4ECDB', '#E0D5BC', '#3B2A1A') },
+  { id: 'rose',     name: '로즈 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#FAEAE2', '#E6C9BD', '#4A2A24') },
+  { id: 'mint',     name: '민트 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8F1E4', '#C6D6BF', '#2B3B2A') },
+  { id: 'sky',      name: '스카이 편지지', tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E4ECF5', '#C0CDDC', '#2A344A') },
+  { id: 'parchment', name: '양피지',     tier: 'paid', price: 30, paint: (ctx, W, H) => paintParchment(ctx, W, H) },
+  { id: 'kraft',     name: '크라프트',   tier: 'paid', price: 30, paint: (ctx, W, H) => paintLetter(ctx, W, H, '#C8A876', '#A88858', '#1F140A') },
+  { id: 'midnight',  name: '미드나잇',   tier: 'paid', price: 30, paint: (ctx, W, H) => paintLetter(ctx, W, H, '#1B2436', '#0E1626', '#F4ECDB') },
+  { id: 'rosegold',  name: '로즈골드',   tier: 'paid', price: 30, paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8C9B7', '#C9A88E', '#3A1F18') },
+];
+
+function paintLetter(ctx, W, H, bgTop, bgBot, ink) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, bgTop); g.addColorStop(1, bgBot);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  /* 미세 가로줄 (편지지 라인 느낌) */
+  ctx.strokeStyle = ink + '14'; ctx.lineWidth = 1;
+  for (let y = 240; y < H - 240; y += 80) {
+    ctx.beginPath(); ctx.moveTo(80, y); ctx.lineTo(W - 80, y); ctx.stroke();
+  }
+  /* 좌상단 모서리 점선 */
+  ctx.strokeStyle = ink + '40'; ctx.lineWidth = 2; ctx.setLineDash([6, 8]);
+  ctx.strokeRect(36, 36, W - 72, H - 72);
+  ctx.setLineDash([]);
+  return ink;
+}
+function paintParchment(ctx, W, H) {
+  const ink = '#3A2614';
+  const g = ctx.createRadialGradient(W/2, H/2, W*0.2, W/2, H/2, W*0.85);
+  g.addColorStop(0, '#F0E0BB'); g.addColorStop(1, '#C9A872');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  /* 종이 결 — 노이즈 점 */
+  for (let i = 0; i < 1400; i++) {
+    const x = Math.random() * W, y = Math.random() * H;
+    ctx.fillStyle = `rgba(58,38,20,${Math.random() * 0.06})`;
+    ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.strokeStyle = ink + '50'; ctx.lineWidth = 3;
+  ctx.strokeRect(40, 40, W - 80, H - 80);
+  return ink;
+}
+
+function wrapText(ctx, text, maxWidth) {
+  const lines = [];
+  for (const para of String(text || '').split('\n')) {
+    if (!para.trim()) { lines.push(''); continue; }
+    let cur = '';
+    for (const ch of para) {
+      const test = cur + ch;
+      if (ctx.measureText(test).width > maxWidth && cur) {
+        lines.push(cur); cur = ch;
+      } else { cur = test; }
+    }
+    if (cur) lines.push(cur);
+  }
+  return lines;
+}
+
+/* 메인 렌더 — quote / speaker / work / author 를 9:16 캔버스에 그림 */
+function renderShareCard(canvas, bg, payload) {
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  const ink = bg.paint(ctx, W, H) || '#3B2A1A';
+
+  /* 따옴표 큰 글씨 */
+  ctx.fillStyle = ink + 'AA';
+  ctx.font = 'bold 140px "Times New Roman", serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('"', 70, 150);
+
+  /* 본문 */
+  ctx.fillStyle = ink;
+  let bodyFont = 44;
+  const tryFonts = [50, 44, 38, 32];
+  let lines = [];
+  for (const fs of tryFonts) {
+    ctx.font = `600 ${fs}px "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif`;
+    lines = wrapText(ctx, payload.quote || '', W - 200);
+    bodyFont = fs;
+    if (lines.length * fs * 1.5 < H - 700) break;
+  }
+  ctx.font = `600 ${bodyFont}px "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif`;
+  ctx.textAlign = 'center';
+  const lineH = Math.round(bodyFont * 1.55);
+  const totalH = lines.length * lineH;
+  let y = (H - totalH) / 2 - 20;
+  for (const ln of lines) { ctx.fillText(ln, W/2, y); y += lineH; }
+
+  /* speaker / work / author — 하단 */
+  ctx.fillStyle = ink + 'CC';
+  ctx.font = `500 28px "Pretendard", sans-serif`;
+  let metaY = H - 230;
+  if (payload.speaker) { ctx.fillText(`— ${payload.speaker}`, W/2, metaY); metaY += 44; }
+  ctx.font = `italic 26px "Times New Roman", serif`;
+  const workLine = [payload.work, payload.author].filter(Boolean).join(' · ');
+  if (workLine) ctx.fillText(workLine, W/2, metaY);
+
+  /* 워터마크 */
+  ctx.fillStyle = ink + '80';
+  ctx.font = `700 22px "Pretendard", sans-serif`;
+  ctx.fillText('Daily Script', W/2, H - 90);
+}
+
+const shareState = { tab: 'free', bgId: 'beige', payload: null, lastBlob: null };
+
+function renderShareBgList() {
+  const list = document.getElementById('share-bg-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const items = SHARE_BACKGROUNDS.filter((b) => b.tier === shareState.tab);
+  for (const b of items) {
+    const cell = document.createElement('button');
+    const locked = b.tier === 'paid';   /* 1차 MVP — 유료는 클릭 시 안내. 후속 turn 에서 구매 RPC 연결 */
+    cell.type = 'button';
+    cell.dataset.bg = b.id;
+    const active = shareState.bgId === b.id && !locked;
+    cell.style.cssText = `flex:0 0 88px;display:flex;flex-direction:column;align-items:center;gap:6px;background:transparent;border:none;cursor:pointer;padding:0;`;
+    cell.innerHTML = `
+      <div style="position:relative;width:72px;height:128px;border-radius:8px;overflow:hidden;border:2px solid ${active ? 'var(--cta)' : 'transparent'};box-shadow:0 2px 6px rgba(0,0,0,.12);">
+        <canvas data-thumb="${b.id}" width="144" height="256" style="width:100%;height:100%;display:block;"></canvas>
+        ${locked ? '<div style="position:absolute;inset:0;background:rgba(14,12,10,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FAF8F2;font-size:11px;font-weight:700;letter-spacing:.02em;"><span class="material-symbols-outlined" style="font-size:18px;">lock</span><span style="margin-top:2px;">30🧶</span></div>' : ''}
+      </div>
+      <span style="font-size:11px;color:var(--espresso);text-align:center;line-height:1.2;">${b.name}</span>
+    `;
+    list.appendChild(cell);
+    /* 썸네일 렌더 — 같은 paint 함수, 작은 캔버스 */
+    const tc = cell.querySelector(`canvas[data-thumb="${b.id}"]`);
+    if (tc) {
+      const tctx = tc.getContext('2d');
+      tctx.clearRect(0, 0, tc.width, tc.height);
+      try { b.paint(tctx, tc.width, tc.height); } catch {}
+    }
+    cell.addEventListener('click', () => {
+      if (locked) {
+        toast('유료 배경 — 다음 업데이트에서 실타래로 잠금 해제됩니다.');
+        return;
+      }
+      shareState.bgId = b.id;
+      renderShareBgList();
+      renderShareCardCurrent();
+    });
+  }
+}
+
+function renderShareCardCurrent() {
+  const canvas = document.getElementById('share-canvas');
+  const bg = SHARE_BACKGROUNDS.find((b) => b.id === shareState.bgId) || SHARE_BACKGROUNDS[0];
+  if (canvas && shareState.payload) renderShareCard(canvas, bg, shareState.payload);
+  shareState.lastBlob = null;
+}
+
+function canvasToBlob(canvas) {
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png', 0.95));
+}
+async function downloadShareCard() {
+  const canvas = document.getElementById('share-canvas'); if (!canvas) return;
+  const blob = await canvasToBlob(canvas); if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `daily-script-${Date.now()}.png`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('이미지 저장됨');
+}
+async function sendShareCard() {
+  const canvas = document.getElementById('share-canvas'); if (!canvas) return;
+  const blob = await canvasToBlob(canvas); if (!blob) return;
+  const file = new File([blob], 'daily-script.png', { type: 'image/png' });
+  const payload = shareState.payload || {};
+  const text = `"${payload.quote || ''}" — ${payload.work || 'Daily Script'}`;
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], text, title: 'Daily Script' });
+      return;
+    }
+  } catch (e) { /* AbortError 등 무시 */ }
+  /* 폴백 — 다운로드 */
+  await downloadShareCard();
+}
+
+function openShareModal(payload) {
+  const modal = document.getElementById('share-modal');
+  if (!modal) return;
+  shareState.payload = payload || {};
+  shareState.tab = 'free';
+  shareState.bgId = 'beige';
+  /* 탭 표시 동기화 */
+  document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
+    const active = el.dataset.tab === shareState.tab;
+    el.style.fontWeight = active ? '700' : '600';
+    el.style.color = active ? 'var(--espresso)' : 'var(--walnut)';
+    el.style.borderBottom = `2px solid ${active ? 'var(--espresso)' : 'transparent'}`;
+  });
+  renderShareBgList();
+  renderShareCardCurrent();
+  modal.style.display = 'flex';
+}
+function closeShareModal() {
+  const modal = document.getElementById('share-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+document.getElementById('share-close')?.addEventListener('click', closeShareModal);
+document.getElementById('share-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'share-modal') closeShareModal();
+});
+document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
+  el.addEventListener('click', () => {
+    shareState.tab = el.dataset.tab;
+    document.querySelectorAll('#share-modal .share-tab').forEach((x) => {
+      const active = x.dataset.tab === shareState.tab;
+      x.style.fontWeight = active ? '700' : '600';
+      x.style.color = active ? 'var(--espresso)' : 'var(--walnut)';
+      x.style.borderBottom = `2px solid ${active ? 'var(--espresso)' : 'transparent'}`;
+    });
+    renderShareBgList();
+  });
+});
+document.getElementById('share-download')?.addEventListener('click', downloadShareCard);
+document.getElementById('share-send')?.addEventListener('click', sendShareCard);
+
+/* payload 추출 — 오늘의 카드 / 카드 상세에서 공통 */
+function payloadForToday() {
+  const c = state.todayCard || {};
+  const w = c.works || {};
+  return {
+    quote: c.quote || '',
+    speaker: c.speaker || '',
+    work: w.title || '',
+    author: w.author || '',
+  };
+}
+function payloadForDetail() {
+  const c = state.detailCard || {};
+  const w = c.works || {};
+  return {
+    quote: c.quote || '',
+    speaker: c.speaker || '',
+    work: w.title || '',
+    author: w.author || '',
+  };
+}
+
+document.getElementById('today-share')?.addEventListener('click', () => openShareModal(payloadForToday()));
+document.getElementById('detail-share')?.addEventListener('click', () => openShareModal(payloadForDetail()));
