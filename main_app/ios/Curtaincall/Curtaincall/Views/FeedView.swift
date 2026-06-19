@@ -92,7 +92,7 @@ struct FeedView: View {
                     .allowsHitTesting(false)
             }
             .padding(.trailing, 18)
-            .padding(.bottom, -22)            // 책 아랫부분을 탭바 뒤로 tuck
+            .padding(.bottom, 4)              // 펼친 책까지 탭바 위로 온전히 보이게(Android)
         }
         .overlay(alignment: .bottom) {
             if let toastMessage {
@@ -178,15 +178,17 @@ struct FeedView: View {
                 .padding(.vertical, 10)
                 .background(RoundedRectangle(cornerRadius: 18).fill(Color.paper))
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.espresso, lineWidth: 1.5))
+                // 꼬리는 paper 로 채워 말풍선 하단 보더를 덮고(이음새 제거), 보더는 두 빗변
+                // 만 그린다 → 말풍선+꼬리가 한 도형처럼 보인다(Android Canvas 꼬리 동일).
                 BubbleTail()
                     .fill(Color.paper)
-                    .overlay(BubbleTail().stroke(Color.espresso, lineWidth: 1.5))
+                    .overlay(BubbleTailSides().stroke(Color.espresso, lineWidth: 1.5))
                     .frame(width: 16, height: 9)
                     .padding(.trailing, 18)
                     .offset(y: -1.5)   // overlap the bubble border so the top edge is hidden
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(WritePillButtonStyle())
     }
 
     private var categoryChips: some View {
@@ -343,7 +345,8 @@ private struct FeedChip: View {
     }
 }
 
-/// Speech-bubble tail triangle pointing down-right (Android Canvas tail).
+/// Speech-bubble tail triangle pointing down-right (Android Canvas tail). Closed
+/// for the paper fill that hides the bubble's bottom border under it.
 private struct BubbleTail: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
@@ -352,6 +355,34 @@ private struct BubbleTail: Shape {
         p.addLine(to: CGPoint(x: rect.width * 0.38, y: rect.height))
         p.closeSubpath()
         return p
+    }
+}
+
+/// Only the two slanted sides of the tail (no top edge) — so the seam where the
+/// tail joins the bubble isn't drawn, making bubble+tail read as one shape.
+private struct BubbleTailSides: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: 0))
+        p.addLine(to: CGPoint(x: rect.width * 0.38, y: rect.height))
+        p.addLine(to: CGPoint(x: rect.width, y: 0))
+        return p
+    }
+}
+
+/// Write-pill press feedback — a resting drop shadow that deepens + a slight
+/// scale-down on press (Android FAB-style tap animation).
+private struct WritePillButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .shadow(
+                color: .black.opacity(configuration.isPressed ? 0.30 : 0.12),
+                radius: configuration.isPressed ? 9 : 4,
+                x: 0,
+                y: configuration.isPressed ? 5 : 2
+            )
+            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
 
@@ -790,9 +821,10 @@ private struct FeedBookmarkPicker: View {
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 12)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
             Hairline()
+            Spacer().frame(height: 10)   // 닫기 버튼/헤더와 본문 사이 여백(Android 팝업 정도)
             if cards.isEmpty {
                 Text("아직 북마크한 명대사가 없어요.\n마음에 드는 명대사를 먼저 보관해보세요.")
                     .font(.bodySans(14))
@@ -885,7 +917,9 @@ private struct FeedComposeSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
             Hairline()
             VStack(alignment: .leading, spacing: 12) {
                 Text("이 명대사에 대한 한줄을 남겨보세요.")
