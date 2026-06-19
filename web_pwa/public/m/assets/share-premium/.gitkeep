@@ -11,11 +11,10 @@
 #   rosegold.png    → 로즈골드
 #
 # 추가 흐름:
-#   1) 이 폴더에 <id>.png 업로드
-#   2) m-app.js 의 SHARE_BACKGROUNDS 배열에 항목 추가
+#   1) 이 폴더에 <책제목>.png 업로드 (파일명 = 책 제목, 예: '프랑켄슈타인.png')
+#   2) m-app.js 의 SHARE_BACKGROUNDS 배열에 항목 추가 — name 도 책 제목 그대로
 #        { id: 'frankenstein', name: '프랑켄슈타인', tier: 'premium', price: 999,
-#          work: '프랑켄슈타인',
-#          paint: (ctx, W, H) => paintImageBg(ctx, W, H, 'assets/share-premium/frankenstein.png') }
+#          paint: (ctx, W, H) => paintImageBg(ctx, W, H, 'assets/share-premium/프랑켄슈타인.png') }
 #
-# work 필드: 그 책의 카드 공유 시 해당 카드지가 그리드 맨 앞에 뜨도록
-#            normalizeWorkTitle 로 정규화 후 payload.work 와 매칭.
+# 매칭: name(=책 제목)이 공유하는 카드의 책 제목과 같으면 그 카드지가 그리드 맨 앞.
+#       normalizeWorkTitle 로 공백·관사·구두점 무시하고 비교.

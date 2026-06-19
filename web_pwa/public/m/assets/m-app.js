@@ -8346,15 +8346,15 @@ function renderShareBgList() {
   if (!list) return;
   list.innerHTML = '';
   let items = SHARE_BACKGROUNDS.filter((b) => b.tier === shareState.tab);
-  /* Premium / Royal — 현재 공유 카드의 책과 매칭되는 카드지를 맨 앞으로 정렬.
-     예: 프랑켄슈타인 카드 공유 → '프랑켄슈타인' work 매칭 카드지가 그리드 첫번째. */
+  /* Premium / Royal — 카드지 name(=책 제목)이 현재 공유 카드의 책 제목과 같은 것을 맨 앞으로.
+     예: 프랑켄슈타인 카드 공유 → name:'프랑켄슈타인' 카드지가 그리드 첫번째. */
   if (shareState.tab === 'premium' || shareState.tab === 'royal') {
-    const targetWork = normalizeWorkTitle(shareState.payload?.work);
-    if (targetWork) {
+    const target = normalizeWorkTitle(shareState.payload?.work);
+    if (target) {
       items.sort((a, b) => {
-        const am = normalizeWorkTitle(a.work) === targetWork ? 1 : 0;
-        const bm = normalizeWorkTitle(b.work) === targetWork ? 1 : 0;
-        return bm - am;   /* 매칭 항목이 앞으로 */
+        const am = normalizeWorkTitle(a.name) === target ? 1 : 0;
+        const bm = normalizeWorkTitle(b.name) === target ? 1 : 0;
+        return bm - am;
       });
     }
   }
