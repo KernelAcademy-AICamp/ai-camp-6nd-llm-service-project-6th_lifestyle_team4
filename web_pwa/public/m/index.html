@@ -2859,10 +2859,11 @@
     <div style="display:flex;justify-content:center;padding:14px 16px 10px;background:#F4ECDB;">
       <canvas id="share-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:50vh;aspect-ratio:9/16;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.18);"></canvas>
     </div>
-    <!-- 배경 탭 -->
+    <!-- 배경 탭 — Free / Premium / Royal -->
     <div style="display:flex;gap:6px;padding:8px 18px 0;border-bottom:1px solid var(--latte);">
-      <button class="share-tab" data-tab="free"  style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:700;color:var(--espresso);border-bottom:2px solid var(--espresso);cursor:pointer;">무료</button>
-      <button class="share-tab" data-tab="paid"  style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;">유료 (30실타래)</button>
+      <button class="share-tab" data-tab="free"    style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:700;color:var(--espresso);border-bottom:2px solid var(--espresso);cursor:pointer;letter-spacing:.04em;">Free</button>
+      <button class="share-tab" data-tab="premium" style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.04em;">Premium</button>
+      <button class="share-tab" data-tab="royal"   style="flex:1;background:transparent;border:none;padding:8px 0 10px;font-size:13px;font-weight:600;color:var(--walnut);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:.04em;">Royal</button>
     </div>
     <!-- 배경 선택 그리드 (가로 스크롤) -->
     <div id="share-bg-list" style="display:flex;gap:10px;padding:12px 18px;overflow-x:auto;background:var(--paper);"></div>
