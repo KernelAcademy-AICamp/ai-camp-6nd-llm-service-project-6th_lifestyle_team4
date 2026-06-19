@@ -2462,16 +2462,17 @@
 
 <!-- ===== Detail Screen (full screen, slides up) ===== -->
 <div id="detail-screen" class="detail-screen">
-  <header class="top-bar">
-    <button id="detail-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+  <header class="top-bar" style="position:sticky;top:0;justify-content:space-between;">
+    <button id="detail-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;z-index:2;">
       <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
     </button>
-    <div style="display:flex;flex-direction:column;align-items:center;min-width:0;max-width:calc(100% - 100px);">
+    <!-- 타이틀은 절대 위치로 가운데 강제 — 좌/우 액션 버튼 폭에 무관하게 항상 중앙 정렬 -->
+    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;min-width:0;max-width:calc(100% - 180px);pointer-events:none;">
       <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">DAILY SCRIPT</span>
-      <span id="detail-work-title" class="t-headline-lg c-espresso" style="text-align:center;margin-top:6px;"></span>
-      <span id="detail-work-subtitle" class="t-label-sm c-walnut" style="display:none;text-align:center;margin-top:2px;"></span>
+      <span id="detail-work-title" class="t-headline-lg c-espresso" style="text-align:center;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;"></span>
+      <span id="detail-work-subtitle" class="t-label-sm c-walnut" style="display:none;text-align:center;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;"></span>
     </div>
-    <div style="display:flex;align-items:center;gap:2px;">
+    <div style="display:flex;align-items:center;gap:2px;z-index:2;">
       <button id="detail-share" aria-label="공유" title="공유" style="background:transparent;border:none;cursor:pointer;padding:8px;">
         <span class="material-symbols-outlined c-walnut" style="font-size:24px;">ios_share</span>
       </button>

@@ -8063,50 +8063,59 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-/* 메인 렌더 — quote / speaker / work / author 를 9:16 캔버스에 그림 */
+/* 메인 렌더 — quote / speaker / work / author 를 9:16 캔버스에 그림.
+   영역 분할 (W=540, H=960 기준):
+   · 상단 따옴표:   y =  90 ~ 220   (높이 ~100, 모바일 webapp 환경 폰트 fallback 폭 차이 대비 안전 마진)
+   · 본문:         y = 290 ~ 690   (vertical-center within band, 자동 줄바꿈 + 크기 점진 축소)
+   · meta:        y = 720 ~ 820
+   · 워터마크:     y = 870 */
 function renderShareCard(canvas, bg, payload) {
   const W = canvas.width, H = canvas.height;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
   const ink = bg.paint(ctx, W, H) || '#3B2A1A';
 
-  /* 따옴표 큰 글씨 */
+  /* 따옴표 — 본문 영역과 절대 겹치지 않게 윗단 고정 + 사이즈 축소 */
   ctx.fillStyle = ink + 'AA';
-  ctx.font = 'bold 140px "Times New Roman", serif';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('"', 70, 150);
+  ctx.font = 'bold 96px "Times New Roman", serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('“', 70, 200);   /* 유니코드 진짜 따옴표 — webapp 폰트 fallback 안전 */
 
-  /* 본문 */
+  /* 본문 — 영역(290~690) 안에서 자동 줄바꿈 + 크기 점진 축소 */
+  const bodyTop = 290, bodyBot = 690;
+  const bodyMaxH = bodyBot - bodyTop;
+  const bodyMaxW = W - 160;
   ctx.fillStyle = ink;
+  ctx.textBaseline = 'top';
   let bodyFont = 44;
-  const tryFonts = [50, 44, 38, 32];
   let lines = [];
-  for (const fs of tryFonts) {
-    ctx.font = `600 ${fs}px "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif`;
-    lines = wrapText(ctx, payload.quote || '', W - 200);
+  for (const fs of [50, 44, 38, 32, 28]) {
+    ctx.font = `600 ${fs}px "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+    lines = wrapText(ctx, payload.quote || '', bodyMaxW);
     bodyFont = fs;
-    if (lines.length * fs * 1.5 < H - 700) break;
+    if (lines.length * Math.round(fs * 1.55) <= bodyMaxH) break;
   }
-  ctx.font = `600 ${bodyFont}px "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif`;
+  ctx.font = `600 ${bodyFont}px "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
   ctx.textAlign = 'center';
   const lineH = Math.round(bodyFont * 1.55);
   const totalH = lines.length * lineH;
-  let y = (H - totalH) / 2 - 20;
+  let y = bodyTop + Math.max(0, (bodyMaxH - totalH) / 2);
   for (const ln of lines) { ctx.fillText(ln, W/2, y); y += lineH; }
 
-  /* speaker / work / author — 하단 */
+  /* speaker / work / author — 본문 영역 아래 고정 위치 */
   ctx.fillStyle = ink + 'CC';
-  ctx.font = `500 28px "Pretendard", sans-serif`;
-  let metaY = H - 230;
-  if (payload.speaker) { ctx.fillText(`— ${payload.speaker}`, W/2, metaY); metaY += 44; }
-  ctx.font = `italic 26px "Times New Roman", serif`;
+  ctx.textBaseline = 'top';
+  ctx.font = `500 26px "Pretendard", "Noto Sans KR", sans-serif`;
+  let metaY = 720;
+  if (payload.speaker) { ctx.fillText(`— ${payload.speaker}`, W/2, metaY); metaY += 38; }
+  ctx.font = `italic 24px "Times New Roman", serif`;
   const workLine = [payload.work, payload.author].filter(Boolean).join(' · ');
   if (workLine) ctx.fillText(workLine, W/2, metaY);
 
   /* 워터마크 */
   ctx.fillStyle = ink + '80';
-  ctx.font = `700 22px "Pretendard", sans-serif`;
-  ctx.fillText('Daily Script', W/2, H - 90);
+  ctx.font = `700 22px "Pretendard", "Noto Sans KR", sans-serif`;
+  ctx.fillText('Daily Script', W/2, 880);
 }
 
 const shareState = { tab: 'free', bgId: 'beige', payload: null, lastBlob: null };
