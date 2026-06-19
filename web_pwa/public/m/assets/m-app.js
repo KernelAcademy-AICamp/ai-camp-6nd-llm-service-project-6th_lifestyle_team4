@@ -8285,26 +8285,33 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-/* 메인 렌더 — quote / speaker / work·author 를 9:16 캔버스에 그림 (책 표지 없음).
+/* 메인 렌더 — quote / speaker / work·author 를 9:16 캔버스에 그림.
    영역 분할 (W=540, H=960 기준):
-   · 따옴표:       y = 180 (상단, 매우 여린 농도)
-   · 본문:         y = 220 ~ 760  (자동 줄바꿈 + 크기 점진 축소, 위로 확장)
-   · meta:        y = 800 ~ 870 (본문 아래·워터마크 위)
-   · 워터마크:     y = 910 */
+   · 'Daily Script' 워터마크 (상단):  y = 100
+   · 따옴표:                          y = 260 (본문 위, 매우 여린 농도)
+   · 본문:                            y = 290 ~ 760  (자동 줄바꿈 + 크기 점진 축소)
+   · speaker:                         y = 800
+   · 작품 · 작가 (하단):              y = 870 */
 function renderShareCard(canvas, bg, payload) {
   const W = canvas.width, H = canvas.height;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
   const ink = bg.paint(ctx, W, H) || '#3B2A1A';
 
-  /* 따옴표 — 상단, 매우 여린 농도(약 22%) */
+  /* 'Daily Script' — 카드 상단 워터마크 */
+  ctx.fillStyle = ink + '80';
+  ctx.font = `700 22px "Pretendard", "Noto Sans KR", sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('Daily Script', W/2, 110);
+
+  /* 따옴표 — 본문 위, 매우 여린 농도(약 22%) */
   ctx.fillStyle = ink + '38';
   ctx.font = '400 48px "Times New Roman", serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('“', 90, 200);
+  ctx.fillText('“', 90, 270);
 
-  /* 본문 — 영역(220~760) 안에서 자동 줄바꿈 + 크기 점진 축소 */
-  const bodyTop = 220, bodyBot = 760;
+  /* 본문 — 영역(290~760) 안에서 자동 줄바꿈 + 크기 점진 축소 */
+  const bodyTop = 290, bodyBot = 760;
   const bodyMaxH = bodyBot - bodyTop;
   const bodyMaxW = W - 160;
   ctx.fillStyle = ink;
@@ -8324,20 +8331,17 @@ function renderShareCard(canvas, bg, payload) {
   let y = bodyTop + Math.max(0, (bodyMaxH - totalH) / 2);
   for (const ln of lines) { ctx.fillText(ln, W/2, y); y += lineH; }
 
-  /* speaker / work · author — 본문 영역 아래 하단 정렬 (워터마크 바로 위) */
+  /* speaker — 본문 아래 */
   ctx.fillStyle = ink + 'CC';
   ctx.textBaseline = 'top';
+  ctx.textAlign = 'center';
   ctx.font = `500 24px "Pretendard", "Noto Sans KR", sans-serif`;
-  let metaY = 800;
-  if (payload.speaker) { ctx.fillText(`— ${payload.speaker}`, W/2, metaY); metaY += 36; }
-  ctx.font = `italic 22px "Times New Roman", serif`;
-  const workLine = [payload.work, payload.author].filter(Boolean).join(' · ');
-  if (workLine) ctx.fillText(workLine, W/2, metaY);
+  if (payload.speaker) ctx.fillText(`— ${payload.speaker}`, W/2, 800);
 
-  /* 워터마크 */
-  ctx.fillStyle = ink + '80';
-  ctx.font = `700 20px "Pretendard", "Noto Sans KR", sans-serif`;
-  ctx.fillText('Daily Script', W/2, 910);
+  /* 작품 · 작가 — 카드 최하단 */
+  ctx.font = `italic 24px "Times New Roman", serif`;
+  const workLine = [payload.work, payload.author].filter(Boolean).join(' · ');
+  if (workLine) ctx.fillText(workLine, W/2, 880);
 }
 
 const shareState = { tab: 'free', bgId: 'beige', payload: null, lastBlob: null };
