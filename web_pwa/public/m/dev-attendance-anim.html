@@ -17,13 +17,15 @@
     }
 
     /* 가짜 헤더 — 우측 상단 chip (실제 PWA 의 #yarn-chip 위치 모사)
-       backdrop 보다 위 z-index → 보상 시퀀스 중에도 chip 이 또렷하게 보임 */
+       backdrop 보다 위 z-index. 단, burst 는 header 보다 더 위로 (header 와 겹쳐 그려짐). */
     header{
       position:fixed; top:0; left:0; right:0; height:64px; padding:0 18px;
       display:flex; align-items:center; justify-content:space-between;
       background:var(--paper); border-bottom:1px solid var(--latte);
       z-index:55;
     }
+    /* chip 자체는 시퀀스 동안 burst 보다 위로 — 도착 강조가 또렷하게 */
+    body.ar-active .yarn-chip{ position:relative; z-index:80; }
     .brand{
       font-family:'Bodoni 72','Bodoni 72 Oldstyle',Didot,'Nanum Myeongjo',Georgia,serif;
       font-size:22px; letter-spacing:.02em;
@@ -36,15 +38,19 @@
     }
     .yarn-chip img{ width:22px; height:22px; object-fit:cover; border-radius:50%; display:block; }
     .yarn-chip .num{ font-weight:700; font-size:14px; color:var(--espresso); font-variant-numeric:tabular-nums; }
-    /* 도착 강조 효과 — 보상 도착 시점에 chip 잠깐 글로우 */
-    .yarn-chip.pulse{
-      animation: chip-pulse .6s ease-out;
-      box-shadow: 0 0 0 8px rgba(216,90,48,.0);
+    /* 도착 강조 효과 — 보유 실타래 '이미지'만 공 튀기듯 bounce (chip 박스/숫자는 정지) */
+    .yarn-chip.bounce img{
+      animation: yarn-img-bounce .9s cubic-bezier(.34,1.56,.64,1);
+      transform-origin: center center;
     }
-    @keyframes chip-pulse{
-      0%   { transform:scale(1);    box-shadow:0 0 0 0 rgba(216,90,48,.35); }
-      40%  { transform:scale(1.10); box-shadow:0 0 0 14px rgba(216,90,48,.0); }
-      100% { transform:scale(1);    box-shadow:0 0 0 0 rgba(216,90,48,0); }
+    @keyframes yarn-img-bounce{
+      0%   { transform:scale(1)    translateY(0); }
+      12%  { transform:scale(1.55) translateY(-10px); }
+      26%  { transform:scale(.78)  translateY(4px); }
+      42%  { transform:scale(1.22) translateY(-5px); }
+      58%  { transform:scale(.92)  translateY(2px); }
+      74%  { transform:scale(1.08) translateY(-2px); }
+      100% { transform:scale(1)    translateY(0); }
     }
 
     main{
@@ -72,9 +78,10 @@
     .reward-backdrop.show{ opacity:1; pointer-events:auto; }
 
     /* 2) 보상 그래픽 — 화면 중앙 시작 → 우측 상단 chip 위치로 이동.
-          이동 중에도 또렷하게 보이도록 opacity 유지, 도착 직전에만 살짝 fade. */
+          이동 중에도 또렷하게 보이도록 opacity 유지, 도착 직전에만 살짝 fade.
+          z-index 60 → header(55) 위로 떠올라 상단바와 겹쳐서 보임. chip(80)이 burst 보다 위. */
     .reward-burst{
-      position:fixed; z-index:51;
+      position:fixed; z-index:60;
       left:50%; top:50%; transform:translate(-50%,-50%) scale(1);
       transform-origin:center center;
       display:flex; flex-direction:column; align-items:center; gap:14px;
@@ -256,20 +263,24 @@
       /* 2) burst → chip 으로 1.4초 동안 천천히 축소·이동 (이동 과정이 보임) */
       burst.classList.add('fly');
 
-      /* 3) 도착 직전부터 chip 강조 + 숫자 카운팅 */
+      /* 3) chip 영역 진입 — body 에 ar-active 추가 (chip 을 burst 위로 z-up) */
+      document.body.classList.add('ar-active');
+
+      /* 4) 도착 시점에 chip 튕김 + 숫자 카운팅 */
       await wait(1100);   // 이동 중 90% 지점
-      yarnChip.classList.add('pulse');
+      yarnChip.classList.add('bounce');
       const cur = parseNum(yarnNum.textContent);
       countTo(cur, cur + REWARD, 700);
 
-      /* 4) chip 안으로 흡수되는 fade — 이동 끝나는 시점에 짧게 */
+      /* 5) chip 안으로 흡수되는 fade — 이동 끝나는 시점에 짧게 */
       await wait(300);
       burst.classList.add('fade');
 
-      /* 5) 정리 */
-      await wait(280);
+      /* 6) 정리 */
+      await wait(620);
       bd.classList.remove('show');
-      yarnChip.classList.remove('pulse');
+      yarnChip.classList.remove('bounce');
+      document.body.classList.remove('ar-active');
       burst.classList.remove('show');
       burst.classList.remove('fly');
       burst.classList.remove('fade');

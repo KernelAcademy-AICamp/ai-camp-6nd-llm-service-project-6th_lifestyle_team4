@@ -4888,20 +4888,29 @@ async function playAttendanceRewardAnim(amount, finalBalance) {
     css.textContent = `
       .ar-backdrop{ position:fixed; inset:0; background:rgba(14,12,10,.42); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); opacity:0; transition:opacity .35s ease; z-index:140; pointer-events:none; }
       .ar-backdrop.show{ opacity:1; pointer-events:auto; }
-      .ar-burst{ position:fixed; left:50%; top:50%; transform:translate(-50%,-50%) scale(1); transform-origin:center center; display:flex; flex-direction:column; align-items:center; gap:14px; opacity:0; z-index:141; pointer-events:none;
+      /* burst z-index 145 — header(z-index ~30) 위로 떠올라 상단바와 겹쳐서 보임. chip(150)이 burst 보다 위. */
+      .ar-burst{ position:fixed; left:50%; top:50%; transform:translate(-50%,-50%) scale(1); transform-origin:center center; display:flex; flex-direction:column; align-items:center; gap:14px; opacity:0; z-index:145; pointer-events:none;
         transition: opacity .35s ease, transform 1.4s cubic-bezier(.45,.05,.25,1), left 1.4s cubic-bezier(.45,.05,.25,1), top 1.4s cubic-bezier(.45,.05,.25,1); }
       .ar-burst.show{ opacity:1; }
       .ar-burst.fly{ transform:translate(-50%,-50%) scale(.16); opacity:1; }
       .ar-burst.fade{ opacity:0; transition:opacity .25s ease; }
-      .ar-yarn{ width:180px; height:180px; border-radius:50%; background:url('assets/daily-script-bar.png') center/cover; box-shadow:0 18px 40px rgba(60,38,18,.35), 0 0 0 8px rgba(255,255,255,.18); animation:ar-bounce 1.2s ease-in-out infinite; }
+      .ar-yarn{ width:180px; height:180px; border-radius:50%; background:url('assets/daily-script-bar.png') center/cover; box-shadow:0 18px 40px rgba(60,38,18,.35), 0 0 0 8px rgba(255,255,255,.18); animation:ar-burst-bounce 1.2s ease-in-out infinite; }
       .ar-times{ font-family:'Bodoni 72',Georgia,serif; font-size:64px; font-weight:700; color:#fff; letter-spacing:.02em; text-shadow:0 4px 18px rgba(0,0,0,.35); font-variant-numeric:tabular-nums; }
       .ar-times .x{ opacity:.78; margin-right:4px; }
       .ar-label{ color:#fff; font-size:13px; letter-spacing:.2em; opacity:.78; text-transform:uppercase; }
-      @keyframes ar-bounce{ 0%,100%{ transform:translateY(0) rotate(-4deg); } 50%{ transform:translateY(-10px) rotate(4deg); } }
-      /* 시퀀스 중 yarn-chip 만 또렷하게 (backdrop 위로) */
-      body.ar-active #yarn-chip{ position:relative; z-index:142 !important; }
-      body.ar-active #yarn-chip.ar-pulse{ animation: ar-chip-pulse .6s ease-out; }
-      @keyframes ar-chip-pulse{ 0%{ transform:scale(1); box-shadow:0 0 0 0 rgba(216,90,48,.35);} 40%{ transform:scale(1.10); box-shadow:0 0 0 14px rgba(216,90,48,0);} 100%{ transform:scale(1); } }
+      @keyframes ar-burst-bounce{ 0%,100%{ transform:translateY(0) rotate(-4deg); } 50%{ transform:translateY(-10px) rotate(4deg); } }
+      /* 시퀀스 중 yarn-chip — burst 보다 위로 끌어올림. chip 박스는 정지, 안의 실타래 이미지만 공 튀기듯 bounce. */
+      body.ar-active #yarn-chip{ position:relative; z-index:150 !important; }
+      body.ar-active #yarn-chip.ar-bounce img{ animation: ar-img-bounce .9s cubic-bezier(.34,1.56,.64,1); transform-origin:center center; }
+      @keyframes ar-img-bounce{
+        0%   { transform:scale(1)    translateY(0); }
+        12%  { transform:scale(1.55) translateY(-10px); }
+        26%  { transform:scale(.78)  translateY(4px); }
+        42%  { transform:scale(1.22) translateY(-5px); }
+        58%  { transform:scale(.92)  translateY(2px); }
+        74%  { transform:scale(1.08) translateY(-2px); }
+        100% { transform:scale(1)    translateY(0); }
+      }
     `;
     document.head.appendChild(css);
   }
@@ -4930,7 +4939,7 @@ async function playAttendanceRewardAnim(amount, finalBalance) {
   burst.style.top  = chipCy + 'px';
   burst.classList.add('fly');
   await sleep(1100);
-  yarnChip.classList.add('ar-pulse');
+  yarnChip.classList.add('ar-bounce');   /* 이미지만 튀김 */
   /* 잔액 카운팅 (현재 표시값 → finalBalance) */
   const label = yarnChip.querySelector('.yarn-chip-count');
   const startN = label ? (parseInt(String(label.textContent).replace(/[^0-9]/g, ''), 10) || 0) : (state.yarnPurchased || 0);
@@ -4938,13 +4947,13 @@ async function playAttendanceRewardAnim(amount, finalBalance) {
   /* state 는 카운팅 완료 시점에 set (renderYarnChip 이 덮어쓰지 않도록 잠시 보류) */
   await sleep(300);
   burst.classList.add('fade');
-  await sleep(420);
+  await sleep(620);   /* bounce 0.9s 완료 대기 */
   state.yarnPurchased = finalBalance;
   renderYarnChip();
   /* 정리 */
   bd.classList.remove('show');
-  yarnChip.classList.remove('ar-pulse');
-  await sleep(280);
+  yarnChip.classList.remove('ar-bounce');
+  await sleep(180);
   bd.remove(); burst.remove();
   document.body.classList.remove('ar-active');
 }
@@ -8263,11 +8272,10 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-/* 메인 렌더 — quote / speaker / work·author / cover 를 9:16 캔버스에 그림.
+/* 메인 렌더 — quote / speaker / work·author 를 9:16 캔버스에 그림 (책 표지 없음).
    영역 분할 (W=540, H=960 기준):
-   · 상단 cover:    y =  90 ~ 320  (책 표지 144×216, 가운데. payload.coverImg 있으면 그림)
-   · 따옴표:       y = 350 (본문 영역 위, 매우 여린 농도)
-   · 본문:         y = 380 ~ 760  (자동 줄바꿈 + 크기 점진 축소)
+   · 따옴표:       y = 180 (상단, 매우 여린 농도)
+   · 본문:         y = 220 ~ 760  (자동 줄바꿈 + 크기 점진 축소, 위로 확장)
    · meta:        y = 800 ~ 870 (본문 아래·워터마크 위)
    · 워터마크:     y = 910 */
 function renderShareCard(canvas, bg, payload) {
@@ -8276,26 +8284,14 @@ function renderShareCard(canvas, bg, payload) {
   ctx.clearRect(0, 0, W, H);
   const ink = bg.paint(ctx, W, H) || '#3B2A1A';
 
-  /* 상단 — 책 표지 (payload.coverImg 가 로드된 경우만 그림. 없으면 그 자리는 빈 채로 본문 위 여백) */
-  const COVER_W = 144, COVER_H = 216, COVER_TOP = 90;
-  const coverX = (W - COVER_W) / 2;
-  if (payload.coverImg && payload.coverImg.complete && payload.coverImg.naturalWidth > 0) {
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 6;
-    ctx.fillStyle = '#F4ECDB';
-    ctx.fillRect(coverX, COVER_TOP, COVER_W, COVER_H);
-    ctx.restore();
-    ctx.drawImage(payload.coverImg, coverX, COVER_TOP, COVER_W, COVER_H);
-  }
-
-  /* 따옴표 — 본문 영역 위, 매우 여린 농도(약 22%) */
+  /* 따옴표 — 상단, 매우 여린 농도(약 22%) */
   ctx.fillStyle = ink + '38';
   ctx.font = '400 48px "Times New Roman", serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('“', 90, 360);
+  ctx.fillText('“', 90, 200);
 
-  /* 본문 — 영역(380~760) 안에서 자동 줄바꿈 + 크기 점진 축소 */
-  const bodyTop = 380, bodyBot = 760;
+  /* 본문 — 영역(220~760) 안에서 자동 줄바꿈 + 크기 점진 축소 */
+  const bodyTop = 220, bodyBot = 760;
   const bodyMaxH = bodyBot - bodyTop;
   const bodyMaxW = W - 160;
   ctx.fillStyle = ink;
@@ -8478,18 +8474,8 @@ function openShareModal(payload) {
   const modal = document.getElementById('share-modal');
   if (!modal) return;
   shareState.payload = payload || {};
-  shareState.payload.coverImg = null;
   shareState.tab = 'free';
   shareState.bgId = 'beige';
-  /* 책 표지 preload — 로드되면 캔버스 재렌더. crossOrigin='anonymous' 로 toBlob 시 tainted 방지. */
-  const coverUrl = payload?.coverUrl;
-  if (coverUrl) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload  = () => { if (shareState.payload) { shareState.payload.coverImg = img; renderShareCardCurrent(); } };
-    img.onerror = () => { /* 무시 — coverImg null 로 그대로 */ };
-    img.src = coverUrl;
-  }
   /* 탭 표시 동기화 */
   document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
     const active = el.dataset.tab === shareState.tab;
