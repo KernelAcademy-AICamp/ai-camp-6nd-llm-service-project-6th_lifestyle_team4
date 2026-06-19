@@ -8220,17 +8220,17 @@ function toast(msg) {
 // 후속: 카드 상세 텍스트 블록 선택 → 블록 부분 공유, 유료 배경 구매 RPC
 // ============================================================
 const SHARE_BACKGROUNDS = [
-  /* Free — 기본 편지지 4종 */
-  { id: 'beige',     name: '크림 편지지',  tier: 'free',                 paint: (ctx, W, H) => paintLetter(ctx, W, H, '#F4ECDB', '#E0D5BC', '#3B2A1A') },
-  { id: 'rose',      name: '로즈 편지지',  tier: 'free',                 paint: (ctx, W, H) => paintLetter(ctx, W, H, '#FAEAE2', '#E6C9BD', '#4A2A24') },
-  { id: 'mint',      name: '민트 편지지',  tier: 'free',                 paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8F1E4', '#C6D6BF', '#2B3B2A') },
-  { id: 'sky',       name: '스카이 편지지', tier: 'free',                 paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E4ECF5', '#C0CDDC', '#2A344A') },
-  /* Premium — 999 실타래 */
-  { id: 'parchment', name: '양피지',       tier: 'premium', price: 999,  paint: (ctx, W, H) => paintParchment(ctx, W, H) },
-  { id: 'kraft',     name: '크라프트',     tier: 'premium', price: 999,  paint: (ctx, W, H) => paintLetter(ctx, W, H, '#C8A876', '#A88858', '#1F140A') },
-  { id: 'midnight',  name: '미드나잇',     tier: 'premium', price: 999,  paint: (ctx, W, H) => paintLetter(ctx, W, H, '#1B2436', '#0E1626', '#F4ECDB') },
-  { id: 'rosegold',  name: '로즈골드',     tier: 'premium', price: 999,  paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8C9B7', '#C9A88E', '#3A1F18') },
-  /* Royal — 2999 실타래, 후속 turn 에서 이미지 추가 예정 */
+  /* Free — 기본 편지지 + 톤·질감 강화본까지 모두 무료 */
+  { id: 'beige',     name: '크림 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#F4ECDB', '#E0D5BC', '#3B2A1A') },
+  { id: 'rose',      name: '로즈 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#FAEAE2', '#E6C9BD', '#4A2A24') },
+  { id: 'mint',      name: '민트 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8F1E4', '#C6D6BF', '#2B3B2A') },
+  { id: 'sky',       name: '스카이 편지지', tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E4ECF5', '#C0CDDC', '#2A344A') },
+  { id: 'parchment', name: '양피지',       tier: 'free', paint: (ctx, W, H) => paintParchment(ctx, W, H) },
+  { id: 'kraft',     name: '크라프트',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#C8A876', '#A88858', '#1F140A') },
+  { id: 'midnight',  name: '미드나잇',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#1B2436', '#0E1626', '#F4ECDB') },
+  { id: 'rosegold',  name: '로즈골드',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8C9B7', '#C9A88E', '#3A1F18') },
+  /* Premium — 999 실타래, 후속 turn 에 이미지 추가 예정 */
+  /* Royal   — 2999 실타래, 후속 turn 에 이미지 추가 예정 */
 ];
 
 function paintLetter(ctx, W, H, bgTop, bgBot, ink) {
