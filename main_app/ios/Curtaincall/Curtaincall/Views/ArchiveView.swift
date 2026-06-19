@@ -34,7 +34,7 @@ struct ArchiveView: View {
             if asSubPage {
                 subPageBar
             } else {
-                AppMasthead(onMyPage: { selectedTab = .settings })
+                AppMasthead()
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

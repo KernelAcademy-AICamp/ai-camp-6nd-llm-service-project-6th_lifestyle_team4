@@ -31,7 +31,7 @@ struct LibraryCatalogView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AppMasthead(onMyPage: { selectedTab = .settings })
+            AppMasthead()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 24)

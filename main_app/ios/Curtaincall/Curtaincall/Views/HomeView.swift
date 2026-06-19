@@ -20,7 +20,7 @@ struct HomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AppMasthead(onMyPage: { selectedTab = .settings })
+            AppMasthead()
             if fetchFailed {
                 FetchErrorBanner { Task { await reload(deterministic: true) } }
             }
