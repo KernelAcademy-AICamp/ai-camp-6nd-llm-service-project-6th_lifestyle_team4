@@ -60,8 +60,9 @@ struct EditorialTabBar: View {
     var body: some View {
         VStack(spacing: 0) {
             // 고양이 돌출용 투명 여백 — 배경(paper)을 깔지 않아 솔리드 바처럼 보이지 않고,
-            // 콘텐츠는 이 위에서 끝나므로 그 아래로 스크롤되지 않는다.
-            Color.clear.frame(height: Self.catClearance)
+            // 콘텐츠는 이 위에서 끝나므로 그 아래로 스크롤되지 않는다. click-through 라
+            // 이 여백 아래의 콘텐츠(예: 피드 글쓰기 pill) 탭을 가로채지 않는다.
+            Color.clear.frame(height: Self.catClearance).allowsHitTesting(false)
             VStack(spacing: 0) {
                 Hairline()
                 HStack(spacing: 0) {
