@@ -4846,6 +4846,8 @@ function openAttendanceModal() {
 }
 
 async function maybeShowAttendance() {
+  /* 로그인 사용자만 출석 보상·달력 동작 — 익명 사용자는 출석 자체 추적 안 함 */
+  if (state.isAnonymous || !state.userId) return;
   const today = todayStr();
   if (safeStorageGet(ATTENDANCE_LAST_SHOWN_KEY) === today) return;
   safeStorageSet(ATTENDANCE_LAST_SHOWN_KEY, today);
