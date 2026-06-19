@@ -8479,6 +8479,13 @@ function openShareModal(payload) {
   shareState.payload = payload || {};
   shareState.tab = 'free';
   shareState.bgId = 'beige';
+  /* 미리보기 — 기본 접힘 상태로 reset (배경 그리드가 한눈에 보이게) */
+  const wrap = document.getElementById('share-preview-wrap');
+  const icon = document.getElementById('share-preview-icon');
+  const label = document.getElementById('share-preview-label');
+  if (wrap)  wrap.style.display = 'none';
+  if (icon)  icon.textContent  = 'unfold_more';
+  if (label) label.textContent = '카드 펼치기';
   /* 탭 표시 동기화 */
   document.querySelectorAll('#share-modal .share-tab').forEach((el) => {
     const active = el.dataset.tab === shareState.tab;
@@ -8494,6 +8501,19 @@ function closeShareModal() {
   const modal = document.getElementById('share-modal');
   if (modal) modal.style.display = 'none';
 }
+
+/* 미리보기 펼치기/접기 토글 — 기본 접힘, 펼칠 때 캔버스 렌더 */
+document.getElementById('share-preview-toggle')?.addEventListener('click', () => {
+  const wrap = document.getElementById('share-preview-wrap');
+  const icon = document.getElementById('share-preview-icon');
+  const label = document.getElementById('share-preview-label');
+  if (!wrap) return;
+  const opening = wrap.style.display === 'none' || !wrap.style.display;
+  wrap.style.display = opening ? 'flex' : 'none';
+  if (icon)  icon.textContent  = opening ? 'unfold_less' : 'unfold_more';
+  if (label) label.textContent = opening ? '카드 접기'   : '카드 펼치기';
+  if (opening) { try { renderShareCardCurrent(); } catch {} }
+});
 
 document.getElementById('share-close')?.addEventListener('click', closeShareModal);
 document.getElementById('share-modal')?.addEventListener('click', (e) => {

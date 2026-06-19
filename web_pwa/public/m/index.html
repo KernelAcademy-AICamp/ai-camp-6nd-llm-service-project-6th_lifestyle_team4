@@ -2855,9 +2855,17 @@
         <span class="material-symbols-outlined c-walnut" style="font-size:22px;">close</span>
       </button>
     </div>
-    <!-- 미리보기 — 9:16 비율 캔버스 -->
-    <div style="display:flex;justify-content:center;padding:12px 16px 8px;background:#F4ECDB;flex-shrink:0;">
-      <canvas id="share-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:30vh;aspect-ratio:9/16;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.18);"></canvas>
+    <!-- 미리보기 토글 — 기본 접힘. 펼치기 누르면 캔버스 노출 -->
+    <div style="display:flex;justify-content:center;padding:10px 16px 8px;background:var(--paper);flex-shrink:0;border-bottom:1px solid var(--latte);">
+      <button id="share-preview-toggle" type="button"
+              style="background:transparent;border:1px solid var(--latte);border-radius:18px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--espresso);cursor:pointer;display:inline-flex;align-items:center;gap:6px;letter-spacing:.04em;">
+        <span class="material-symbols-outlined" id="share-preview-icon" style="font-size:16px;line-height:1;">unfold_more</span>
+        <span id="share-preview-label">카드 펼치기</span>
+      </button>
+    </div>
+    <!-- 미리보기 — 9:16 비율 캔버스 (기본 hidden, 토글로 노출) -->
+    <div id="share-preview-wrap" style="display:none;justify-content:center;padding:12px 16px 8px;background:#F4ECDB;flex-shrink:0;">
+      <canvas id="share-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:42vh;aspect-ratio:9/16;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.18);"></canvas>
     </div>
     <!-- 배경 탭 — Free / Premium / Royal -->
     <div style="display:flex;gap:6px;padding:8px 18px 0;border-bottom:1px solid var(--latte);">
