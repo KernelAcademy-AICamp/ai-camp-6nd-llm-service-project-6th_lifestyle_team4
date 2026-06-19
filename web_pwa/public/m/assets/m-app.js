@@ -8483,33 +8483,21 @@ function buildReferralUrl() {
   } catch { return ''; }
 }
 async function sendShareCard() {
-  const canvas = document.getElementById('share-canvas'); if (!canvas) return;
-  const blob = await canvasToBlob(canvas); if (!blob) return;
-  const file = new File([blob], 'daily-script.png', { type: 'image/png' });
   const payload = shareState.payload || {};
-  /* 항상 이미지 파일 + 명대사 텍스트 + 앱 링크를 함께 전송.
-     일부 메신저(카카오톡 등)는 navigator.share 의 url 만 보고 text 를 버리거나 반대.
-     양쪽 케이스 모두 안전하게 동작하도록 text 끝에 URL 을 명시적으로 한 번 더 박음. */
-  const refUrl = buildReferralUrl();
-  const quote  = payload.quote ? `"${payload.quote}"` : '';
-  const credit = payload.work  ? ` — ${payload.work}` : '';
-  const text   = [
-    quote + credit,
-    refUrl ? `📖 Daily Script\n${refUrl}` : '',
-  ].filter(Boolean).join('\n\n');
+  const refUrl  = buildReferralUrl();
+  const quote   = payload.quote ? `"${payload.quote}"` : '';
+  const credit  = payload.work  ? ` — ${payload.work}` : '';
+  /* 유튜브식 URL 카드 미리보기 — 이미지 파일 첨부 X. URL 만 보내면 카카오톡이 자동으로
+     index.html 의 og:image / og:title / og:description 가져와서 클릭 가능한 카드 미리보기 띄움.
+     이미지 첨부하면 카카오톡이 URL 인식을 안 하므로 일부러 빼는 것. 이미지는 다운로드 버튼으로 별도. */
+  const text = [quote + credit, refUrl].filter(Boolean).join('\n');
   try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      /* 이미지 + 텍스트(명대사 + 링크) + url 모두 함께 */
-      await navigator.share({ files: [file], text, title: 'Daily Script', url: refUrl || undefined });
-      return;
-    }
-    /* 파일 공유 미지원 환경 — 텍스트 + url 이라도 함께 */
     if (navigator.share) {
       await navigator.share({ text, title: 'Daily Script', url: refUrl || undefined });
       return;
     }
   } catch (e) { /* AbortError 등 무시 */ }
-  /* Web Share 자체 미지원 (데스크탑 등) — 이미지 다운로드만. */
+  /* Web Share 미지원 — 다운로드 (이미지) */
   await downloadShareCard();
 }
 
