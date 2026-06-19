@@ -93,7 +93,7 @@ struct FeedView: View {
                     .allowsHitTesting(false)
             }
             .padding(.trailing, -26)          // LIBRARY~MY 사이로 더 우측(Android xShift)
-            .padding(.bottom, 36)             // 펼친 책까지 탭바 위로 온전히 보이게
+            .padding(.bottom, 12)             // 책 아랫면이 탭바 윗면에 얹히게(뜨지도, 가리지도 않게)
         }
         .overlay(alignment: .bottom) {
             if let toastMessage {
