@@ -8259,6 +8259,15 @@ function paintParchment(ctx, W, H) {
   return ink;
 }
 
+/* 작품명 정규화 — 공백/대소문자/관사/구두점 제거. 한국어 표기 우선. */
+function normalizeWorkTitle(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^(the|a|an)\s+/i, '')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}
+
 function wrapText(ctx, text, maxWidth) {
   const lines = [];
   for (const para of String(text || '').split('\n')) {
@@ -8336,7 +8345,19 @@ function renderShareBgList() {
   const list = document.getElementById('share-bg-list');
   if (!list) return;
   list.innerHTML = '';
-  const items = SHARE_BACKGROUNDS.filter((b) => b.tier === shareState.tab);
+  let items = SHARE_BACKGROUNDS.filter((b) => b.tier === shareState.tab);
+  /* Premium / Royal — 현재 공유 카드의 책과 매칭되는 카드지를 맨 앞으로 정렬.
+     예: 프랑켄슈타인 카드 공유 → '프랑켄슈타인' work 매칭 카드지가 그리드 첫번째. */
+  if (shareState.tab === 'premium' || shareState.tab === 'royal') {
+    const targetWork = normalizeWorkTitle(shareState.payload?.work);
+    if (targetWork) {
+      items.sort((a, b) => {
+        const am = normalizeWorkTitle(a.work) === targetWork ? 1 : 0;
+        const bm = normalizeWorkTitle(b.work) === targetWork ? 1 : 0;
+        return bm - am;   /* 매칭 항목이 앞으로 */
+      });
+    }
+  }
   if (items.length === 0) {
     list.innerHTML = '<div style="padding:24px 8px;width:100%;text-align:center;font-size:12px;color:var(--walnut);line-height:1.6;">곧 만나요 ✨<br/>새 배경을 준비하고 있어요.</div>';
     return;

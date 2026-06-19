@@ -10,5 +10,9 @@
 # 추가 흐름:
 #   1) 이 폴더에 <id>.png 업로드
 #   2) m-app.js 의 SHARE_BACKGROUNDS 배열에 항목 추가
-#        { id: 'foo', name: '…', tier: 'royal', price: 2999,
-#          paint: (ctx, W, H) => paintImageBg(ctx, W, H, 'assets/share-royal/foo.png') }
+#        { id: 'frankenstein', name: '프랑켄슈타인', tier: 'royal', price: 2999,
+#          work: '프랑켄슈타인',
+#          paint: (ctx, W, H) => paintImageBg(ctx, W, H, 'assets/share-royal/frankenstein.png') }
+#
+# work 필드: 그 책의 카드 공유 시 해당 카드지가 그리드 맨 앞에 뜨도록
+#            normalizeWorkTitle 로 정규화 후 payload.work 와 매칭.
