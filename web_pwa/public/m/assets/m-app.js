@@ -7241,28 +7241,26 @@ if (fpCommentSubmit) fpCommentSubmit.addEventListener('click', submitFeedComment
 
 // 데스크톱(native selection) fallback: 텍스트 선택되면 + HL 버튼 노출
 // (터치 단말은 setupTouchHighlight 내부에서 직접 show/hide)
+//  같이 #hl-share-btn(선택 텍스트 공유) 도 동반 show/hide
 function updateHlButtonForSelection() {
   if (!hlAddBtn) return;
-  if (!detailScreen || !detailScreen.classList.contains('open')) {
-    hlAddBtn.style.display = 'none';
-    return;
-  }
-  // 커스텀 selection 이 활성화돼 있으면 그대로 둠
+  const shareBtn = document.getElementById('hl-share-btn');
+  const showBoth = (on) => {
+    hlAddBtn.style.display = on ? 'block' : 'none';
+    if (shareBtn) shareBtn.style.display = on ? 'inline-flex' : 'none';
+  };
+  if (!detailScreen || !detailScreen.classList.contains('open')) { showBoth(false); return; }
   const customText = (typeof window.__getScriptHlText === 'function') ? window.__getScriptHlText() : '';
-  if (customText) { hlAddBtn.style.display = 'block'; return; }
-  // native selection (데스크톱)
+  if (customText) { showBoth(true); return; }
   const sel = window.getSelection();
-  if (!sel || sel.isCollapsed) { hlAddBtn.style.display = 'none'; return; }
+  if (!sel || sel.isCollapsed) { showBoth(false); return; }
   const text = String(sel.toString() || '').trim();
-  if (!text) { hlAddBtn.style.display = 'none'; return; }
+  if (!text) { showBoth(false); return; }
   const scriptEl = document.getElementById('detail-script');
-  if (!scriptEl) { hlAddBtn.style.display = 'none'; return; }
+  if (!scriptEl) { showBoth(false); return; }
   const range = sel.getRangeAt(0);
-  if (!scriptEl.contains(range.commonAncestorContainer)) {
-    hlAddBtn.style.display = 'none';
-    return;
-  }
-  hlAddBtn.style.display = 'block';
+  if (!scriptEl.contains(range.commonAncestorContainer)) { showBoth(false); return; }
+  showBoth(true);
 }
 
 document.addEventListener('selectionchange', updateHlButtonForSelection);
@@ -7287,7 +7285,32 @@ hlAddBtn?.addEventListener('click', () => {
   if (usedCustom && typeof window.__clearScriptHl === 'function') window.__clearScriptHl();
   else { const s = window.getSelection(); if (s) s.removeAllRanges(); }
   hlAddBtn.style.display = 'none';
+  const sb = document.getElementById('hl-share-btn'); if (sb) sb.style.display = 'none';
   openHlCompose();
+});
+
+// 카드 상세 — 선택 텍스트 공유. quote 자리에 선택 부분만 넣어 공유 카드 생성.
+document.getElementById('hl-share-btn')?.addEventListener('click', () => {
+  let text = (typeof window.__getScriptHlText === 'function') ? window.__getScriptHlText() : '';
+  const usedCustom = !!text;
+  if (!text) {
+    const sel = window.getSelection();
+    text = sel ? String(sel.toString() || '').trim() : '';
+  }
+  if (!text) { toast('본문에서 텍스트를 선택해주세요'); return; }
+  const cardId = state.detailCardId;
+  const card = (state.allCards || []).find((c) => c.card_id === cardId) || state.detailCard || {};
+  const w = card.works || {};
+  if (usedCustom && typeof window.__clearScriptHl === 'function') window.__clearScriptHl();
+  else { const s = window.getSelection(); if (s) s.removeAllRanges(); }
+  hlAddBtn.style.display = 'none';
+  const shareBtn = document.getElementById('hl-share-btn'); if (shareBtn) shareBtn.style.display = 'none';
+  openShareModal({
+    quote: text,
+    speaker: card.speaker || '',
+    work: w.title || '',
+    author: w.author || '',
+  });
 });
 
 function openHlCompose() {
