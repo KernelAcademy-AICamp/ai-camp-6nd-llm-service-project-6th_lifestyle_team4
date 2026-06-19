@@ -8488,11 +8488,15 @@ async function sendShareCard() {
   const file = new File([blob], 'daily-script.png', { type: 'image/png' });
   const payload = shareState.payload || {};
   /* 항상 이미지 파일 + 명대사 텍스트 + 앱 링크를 함께 전송.
-     받는 메신저/SNS 가 text 또는 url 중 어느 쪽을 쓰더라도 링크가 같이 도착하게 양쪽에 모두 포함. */
+     일부 메신저(카카오톡 등)는 navigator.share 의 url 만 보고 text 를 버리거나 반대.
+     양쪽 케이스 모두 안전하게 동작하도록 text 끝에 URL 을 명시적으로 한 번 더 박음. */
   const refUrl = buildReferralUrl();
   const quote  = payload.quote ? `"${payload.quote}"` : '';
   const credit = payload.work  ? ` — ${payload.work}` : '';
-  const text   = [quote + credit, refUrl].filter(Boolean).join('\n');
+  const text   = [
+    quote + credit,
+    refUrl ? `📖 Daily Script\n${refUrl}` : '',
+  ].filter(Boolean).join('\n\n');
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       /* 이미지 + 텍스트(명대사 + 링크) + url 모두 함께 */
