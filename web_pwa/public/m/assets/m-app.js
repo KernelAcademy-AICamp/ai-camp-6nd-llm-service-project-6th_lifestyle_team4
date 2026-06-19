@@ -1261,6 +1261,19 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
     }
     if (bg) safeStorageSet('ds.pendingShareBgId', bg);
     if (q)  safeStorageSet('ds.pendingShareQuote', q);
+    /* 공유 진입(card+bg+q 모두) — 메인 홈화면이 잠깐 보이는 것조차 차단.
+       body 에 클래스 부여 → CSS 로 main/탭 등 즉시 숨김. 미리보기 모달이 뜨면 해제. */
+    if (card && bg && q) {
+      document.documentElement.classList.add('share-entry');
+      /* 메인 콘텐츠/하단바를 즉시 가리는 인라인 CSS 1회 주입 */
+      if (!document.getElementById('share-entry-css')) {
+        const s = document.createElement('style');
+        s.id = 'share-entry-css';
+        s.textContent = `html.share-entry body > main, html.share-entry .bottom-nav, html.share-entry .bottom-nav-cat { visibility:hidden !important; }
+                         html.share-entry body { background:#0E0C0A !important; }`;
+        document.head.appendChild(s);
+      }
+    }
   } catch {}
 })();
 
@@ -1340,35 +1353,45 @@ function maybeOpenSharedCard() {
   if (!card) return;   /* allCards 에 없으면 retry 위해 키 유지 */
   safeStorageRemove('ds.pendingShareCardId');
   state._sharedCardOpenedId = card.card_id;
-  /* 익명 사용자 + 카드지(bg)+하이라이트(q) 둘 다 있으면 → 풀스크린 공유 미리보기 모달.
-     로그인 사용자 또는 정보 부족 시 기존 흐름(자동 openDetail). */
+  /* 카드지(bg) + 하이라이트(q) 가 함께 왔으면 → 진입 시 메인 안 보이고 풀스크린 공유 미리보기 모달.
+     익명/로그인 모두 동일 미리보기 (CTA 만 차등 — 로그인은 회원가입 CTA 숨김). 정보 부족 시 기본 흐름. */
   const bgId = safeStorageGet('ds.pendingShareBgId');
   const qRaw = safeStorageGet('ds.pendingShareQuote');
   const q = qRaw ? (() => { try { return decodeURIComponent(qRaw); } catch { return qRaw; } })() : '';
-  if (state.isAnonymous && bgId && q) {
+  if (bgId && q) {
     safeStorageRemove('ds.pendingShareBgId');
     safeStorageRemove('ds.pendingShareQuote');
-    setTimeout(() => { try { openSharedPreview(card, bgId, q); } catch (e) { console.warn('[m] openSharedPreview failed:', e); openDetail(card); } }, 300);
+    setTimeout(() => {
+      try { openSharedPreview(card, bgId, q); }
+      catch (e) {
+        console.warn('[m] openSharedPreview failed:', e);
+        document.documentElement.classList.remove('share-entry');
+        openDetail(card);
+      }
+    }, 80);
     return;
   }
+  document.documentElement.classList.remove('share-entry');
   setTimeout(() => { try { openDetail(card); } catch {} }, 300);
 }
 
-/* 공유자가 만든 카드 미리보기 풀스크린 모달 — 캔버스 + CTA. 익명 사용자 전용. */
+/* 공유자가 만든 카드 미리보기 풀스크린 모달 — 캔버스 + CTA.
+   페이지 진입 시 메인 홈화면 대신 이 모달이 먼저 등장. */
 function openSharedPreview(card, bgId, quote) {
   const w = card.works || {};
   const bg = SHARE_BACKGROUNDS.find((b) => b.id === bgId) || SHARE_BACKGROUNDS[0];
+  const isAnon = state.isAnonymous;
   /* 1회용 모달 DOM 생성 */
   let modal = document.getElementById('shared-preview-modal');
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'shared-preview-modal';
-    modal.style.cssText = `position:fixed;inset:0;background:#0E0C0A;z-index:135;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px 16px;overflow-y:auto;`;
+    modal.style.cssText = `position:fixed;inset:0;background:#0E0C0A;z-index:160;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px 16px;overflow-y:auto;`;
     modal.innerHTML = `
       <div style="text-align:center;color:#FAF8F2;margin:6px 0 14px;letter-spacing:.18em;font-size:11px;opacity:.7;">A FRIEND SENT YOU</div>
       <canvas id="shared-preview-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:64vh;aspect-ratio:9/16;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.5);"></canvas>
       <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:380px;margin-top:24px;">
-        <button id="shared-preview-signup" class="sharp-btn" style="width:100%;background:var(--cta);color:#fff;">회원가입하고 600 실타래 받기</button>
+        <button id="shared-preview-signup" class="sharp-btn" style="width:100%;background:var(--cta);color:#fff;display:${isAnon ? 'inline-flex' : 'none'};">회원가입하고 600 실타래 받기</button>
         <button id="shared-preview-open"   class="sharp-btn outline" style="width:100%;color:#FAF8F2;border-color:rgba(255,255,255,.35);">카드 자세히 보기</button>
         <button id="shared-preview-close"  style="background:transparent;border:none;color:#FAF8F2;opacity:.6;font-size:12px;letter-spacing:.12em;padding:8px;cursor:pointer;">닫기</button>
       </div>
@@ -1399,6 +1422,8 @@ function openSharedPreview(card, bgId, quote) {
 function closeSharedPreview() {
   const m = document.getElementById('shared-preview-modal');
   if (m) m.style.display = 'none';
+  /* 메인 컨텐츠 다시 노출 */
+  document.documentElement.classList.remove('share-entry');
 }
 
 let loadBookmarksInFlight = null;
