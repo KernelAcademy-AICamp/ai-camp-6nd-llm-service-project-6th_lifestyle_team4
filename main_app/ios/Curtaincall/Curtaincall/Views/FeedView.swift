@@ -84,15 +84,16 @@ struct FeedView: View {
         .overlay(alignment: .bottomTrailing) {
             VStack(alignment: .trailing, spacing: 0) {
                 writePill
+                    .offset(x: -34)           // 꼬리가 고양이 머리(중앙) 위로 오도록 좌측 이동
                 Image("cat_pen")
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 104)
+                    .frame(height: 92)        // Android CatHeightFeed=92
                     .offset(y: -4)            // 꼬리 끝이 고양이 머리에 살짝 겹치게
                     .allowsHitTesting(false)
             }
-            .padding(.trailing, 18)
-            .padding(.bottom, 4)              // 펼친 책까지 탭바 위로 온전히 보이게(Android)
+            .padding(.trailing, -26)          // LIBRARY~MY 사이로 더 우측(Android xShift)
+            .padding(.bottom, 36)             // 펼친 책까지 탭바 위로 온전히 보이게
         }
         .overlay(alignment: .bottom) {
             if let toastMessage {
@@ -821,10 +822,10 @@ private struct FeedBookmarkPicker: View {
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
-            .padding(.top, 24)
-            .padding(.bottom, 16)
+            .padding(.top, 28)
+            .padding(.bottom, 18)
             Hairline()
-            Spacer().frame(height: 10)   // 닫기 버튼/헤더와 본문 사이 여백(Android 팝업 정도)
+            Spacer().frame(height: 16)   // 닫기 버튼/헤더와 본문 사이 여백(Android 팝업 정도)
             if cards.isEmpty {
                 Text("아직 북마크한 명대사가 없어요.\n마음에 드는 명대사를 먼저 보관해보세요.")
                     .font(.bodySans(14))

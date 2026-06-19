@@ -229,7 +229,7 @@ struct EditorialTabBar: View {
         case .feed:
             return NavCatPose(asset: "cat_pen", height: 64, hBias: 0.92, ledgeFraction: 0.86)    // 돌출 ≈ 55
         case .archive:
-            return NavCatPose(asset: "cat_struck", height: 64, hBias: 0.78, ledgeFraction: 0.86) // 돌출 ≈ 55
+            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.80, ledgeFraction: 0.86) // Android CatHeightLibrary=90
         case .daily, .settings:
             return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)  // 돌출 ≈ 24
         case .home:
