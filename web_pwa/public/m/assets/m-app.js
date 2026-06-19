@@ -8006,14 +8006,14 @@ function toast(msg) {
 // 후속: 카드 상세 텍스트 블록 선택 → 블록 부분 공유, 유료 배경 구매 RPC
 // ============================================================
 const SHARE_BACKGROUNDS = [
-  { id: 'beige',    name: '크림 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#F4ECDB', '#E0D5BC', '#3B2A1A') },
-  { id: 'rose',     name: '로즈 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#FAEAE2', '#E6C9BD', '#4A2A24') },
-  { id: 'mint',     name: '민트 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8F1E4', '#C6D6BF', '#2B3B2A') },
-  { id: 'sky',      name: '스카이 편지지', tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E4ECF5', '#C0CDDC', '#2A344A') },
-  { id: 'parchment', name: '양피지',     tier: 'paid', price: 30, paint: (ctx, W, H) => paintParchment(ctx, W, H) },
-  { id: 'kraft',     name: '크라프트',   tier: 'paid', price: 30, paint: (ctx, W, H) => paintLetter(ctx, W, H, '#C8A876', '#A88858', '#1F140A') },
-  { id: 'midnight',  name: '미드나잇',   tier: 'paid', price: 30, paint: (ctx, W, H) => paintLetter(ctx, W, H, '#1B2436', '#0E1626', '#F4ECDB') },
-  { id: 'rosegold',  name: '로즈골드',   tier: 'paid', price: 30, paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8C9B7', '#C9A88E', '#3A1F18') },
+  { id: 'beige',     name: '크림 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#F4ECDB', '#E0D5BC', '#3B2A1A') },
+  { id: 'rose',      name: '로즈 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#FAEAE2', '#E6C9BD', '#4A2A24') },
+  { id: 'mint',      name: '민트 편지지',  tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8F1E4', '#C6D6BF', '#2B3B2A') },
+  { id: 'sky',       name: '스카이 편지지', tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E4ECF5', '#C0CDDC', '#2A344A') },
+  { id: 'parchment', name: '양피지',       tier: 'free', paint: (ctx, W, H) => paintParchment(ctx, W, H) },
+  { id: 'kraft',     name: '크라프트',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#C8A876', '#A88858', '#1F140A') },
+  { id: 'midnight',  name: '미드나잇',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#1B2436', '#0E1626', '#F4ECDB') },
+  { id: 'rosegold',  name: '로즈골드',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8C9B7', '#C9A88E', '#3A1F18') },
 ];
 
 function paintLetter(ctx, W, H, bgTop, bgBot, ink) {
@@ -8116,6 +8116,10 @@ function renderShareBgList() {
   if (!list) return;
   list.innerHTML = '';
   const items = SHARE_BACKGROUNDS.filter((b) => b.tier === shareState.tab);
+  if (items.length === 0) {
+    list.innerHTML = '<div style="padding:24px 8px;width:100%;text-align:center;font-size:12px;color:var(--walnut);line-height:1.6;">곧 만나요 ✨<br/>새 배경을 준비하고 있어요.</div>';
+    return;
+  }
   for (const b of items) {
     const cell = document.createElement('button');
     const locked = b.tier === 'paid';   /* 1차 MVP — 유료는 클릭 시 안내. 후속 turn 에서 구매 RPC 연결 */
