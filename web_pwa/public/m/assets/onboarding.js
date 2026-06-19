@@ -27,7 +27,7 @@ const STEPS = [
   { sel: '#detail-script',                    scr: '전문', n: 2, tot: 5, title: '명대사가 나온 장면', desc: '그 장면의 대본을 그대로 옮겼어요. 명대사를 맥락 속에서 읽어보세요.' },
   { sel: '#detail-significance-block',        scr: '전문', n: 3, tot: 5, title: '작품의 의의',     desc: '이 작품이 왜 오래 사랑받는 고전인지, 그 의미까지 담았어요.' },
   { sel: '#detail-script',                    scr: '전문', n: 4, tot: 5, title: '구절 하이라이트', desc: '마음에 닿는 문장을 꾹 눌러 드래그해 보세요. 선택하면 바로 다음으로 넘어가요.', advanceOnSelect: true },
-  { sel: '#hl-add-btn',                       scr: '전문', n: 5, tot: 5, title: '하이라이트 저장', desc: '선택한 뒤 이 “+ HL” 버튼을 누르면 나만의 하이라이트로 저장돼요.', reveal: true, action: 'onOpenFeed' },
+  { sel: '#hl-add-btn',                       scr: '전문', n: 5, tot: 5, title: '하이라이트 저장', desc: '“+” 버튼을 누르면 나만의 하이라이트 게시와 공유를 할 수 있어요.', reveal: true, action: 'onOpenFeed' },
   // ── 피드 화면 ──
   { sel: '#cm-demo-hl',                       scr: '피드', n: 1, tot: 1, title: '피드에 담겼어요', desc: '방금 저장한 하이라이트예요. FEED에서 내 것과 다른 독자들의 명장면을 함께 볼 수 있어요.' },
   // ── 마침 ──
