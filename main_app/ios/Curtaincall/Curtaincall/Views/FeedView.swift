@@ -5,6 +5,9 @@ struct FeedView: View {
     /// Bumped by RootView each time the already-active Feed tab is tapped — drives
     /// scroll-to-top + refresh.
     var reselect: Int = 0
+    /// Bumped by RootView when the (RootView-owned) write bubble is tapped — routes
+    /// to `handleWriteTap` so the category-aware toast/picker stays in FeedView.
+    var writeTrigger: Int = 0
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
 
@@ -77,24 +80,10 @@ struct FeedView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        // 글쓰기 말풍선 + cat_pen 고양이 = 한 덩어리(Android FeedScreen 구성 일치).
-        // 하단 고정(safeAreaInset)이 아니라 고양이 '바로 위'에 말풍선을 앵커해, 꼬리가
-        // 고양이 머리를 가리키며 "고양이가 글쓰기라고 말하는" 말풍선이 된다. 고양이는
-        // 펼친 책(+펜) 위에 앉아 있고 책 아랫부분은 탭바 뒤로 내려간다. 말풍선만 탭 가능.
-        .overlay(alignment: .bottomTrailing) {
-            VStack(alignment: .trailing, spacing: 0) {
-                writePill
-                    .offset(x: -34)           // 꼬리가 고양이 머리(중앙) 위로 오도록 좌측 이동
-                Image("cat_pen")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 92)        // Android CatHeightFeed=92
-                    .offset(y: -4)            // 꼬리 끝이 고양이 머리에 살짝 겹치게
-                    .allowsHitTesting(false)
-            }
-            .padding(.trailing, -26)          // LIBRARY~MY 사이로 더 우측(Android xShift)
-            .padding(.bottom, 12)             // 책 아랫면이 탭바 윗면에 얹히게(뜨지도, 가리지도 않게)
-        }
+        // 글쓰기 말풍선+고양이(FeedWriteCat)는 RootView 가 탭바 '위(앞)' 레이어에
+        // 그린다 — 그래야 고양이가 탭바에 앉고(뒤로 가리지 않고) 말풍선이 머리 위에
+        // 뜬다(Android BottomNavBar 구성). 탭은 writeTrigger 로 위임받아 처리.
+        .onChange(of: writeTrigger) { _, _ in handleWriteTap() }
         .overlay(alignment: .bottom) {
             if let toastMessage {
                 Text(toastMessage)
@@ -155,41 +144,16 @@ struct FeedView: View {
         }
     }
 
-    // 글쓰기 말풍선 pill (cat_pen 고양이가 "글쓰기"라 말하는 듯한 모양). 익명은 토스트만.
-    private var writePill: some View {
-        Button {
-            if session.isAnonymous {
-                showToast(category == .highlight
-                          ? "로그인 후 하이라이트를 남길 수 있어요."
-                          : "로그인 후 나의 감상평을 남길 수 있어요.")
-            } else {
-                showPicker = true
-            }
-        } label: {
-            VStack(alignment: .trailing, spacing: 0) {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(.espresso)
-                    Text("글쓰기")
-                        .font(.custom("Pretendard-Medium", size: 14))
-                        .foregroundStyle(.espresso)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color.paper))
-                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.espresso, lineWidth: 1.5))
-                // 꼬리는 paper 로 채워 말풍선 하단 보더를 덮고(이음새 제거), 보더는 두 빗변
-                // 만 그린다 → 말풍선+꼬리가 한 도형처럼 보인다(Android Canvas 꼬리 동일).
-                BubbleTail()
-                    .fill(Color.paper)
-                    .overlay(BubbleTailSides().stroke(Color.espresso, lineWidth: 1.5))
-                    .frame(width: 16, height: 9)
-                    .padding(.trailing, 18)
-                    .offset(y: -1.5)   // overlap the bubble border so the top edge is hidden
-            }
+    // 글쓰기 말풍선 탭 처리 — 익명은 토스트, 회원은 북마크 피커. 말풍선 UI 는 RootView
+    // 의 FeedWriteCat 이 그리고, 탭 시 writeTrigger 를 올려 이 핸들러로 위임한다.
+    private func handleWriteTap() {
+        if session.isAnonymous {
+            showToast(category == .highlight
+                      ? "로그인 후 하이라이트를 남길 수 있어요."
+                      : "로그인 후 나의 감상평을 남길 수 있어요.")
+        } else {
+            showPicker = true
         }
-        .buttonStyle(WritePillButtonStyle())
     }
 
     private var categoryChips: some View {
@@ -384,6 +348,51 @@ private struct WritePillButtonStyle: ButtonStyle {
                 y: configuration.isPressed ? 5 : 2
             )
             .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
+    }
+}
+
+/// 피드 글쓰기 말풍선(+꼬리) 위에 cat_pen 고양이를 한 덩어리로 묶은 장식.
+/// **RootView 가 탭바 '위(앞)' 레이어에 그린다** → 고양이가 탭바에 앉고(뒤로 가리지
+/// 않고) 말풍선이 머리 위에 뜬다(Android BottomNavBar cat_pen + FeedScreen 말풍선
+/// 미러). 말풍선만 탭 가능(고양이는 click-through). 탭은 `onTap` 으로 위임.
+struct FeedWriteCat: View {
+    let onTap: () -> Void
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Button(action: onTap) {
+                VStack(alignment: .trailing, spacing: 0) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(.espresso)
+                        Text("글쓰기")
+                            .font(.custom("Pretendard-Medium", size: 14))
+                            .foregroundStyle(.espresso)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.paper))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.espresso, lineWidth: 1.5))
+                    // 꼬리는 paper 로 채워 말풍선 하단 보더를 덮고(이음새 제거), 보더는 두
+                    // 빗변만 그린다 → 말풍선+꼬리가 한 도형(Android Canvas 꼬리 동일).
+                    BubbleTail()
+                        .fill(Color.paper)
+                        .overlay(BubbleTailSides().stroke(Color.espresso, lineWidth: 1.5))
+                        .frame(width: 16, height: 9)
+                        .padding(.trailing, 18)
+                        .offset(y: -1.5)
+                }
+            }
+            .buttonStyle(WritePillButtonStyle())
+            .offset(x: -34)               // 꼬리가 고양이 머리(중앙) 위로
+            Image("cat_pen")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 92)        // Android CatHeightFeed=92
+                .offset(y: -4)            // 꼬리 끝이 고양이 머리에 살짝 겹치게
+                .allowsHitTesting(false)
+        }
     }
 }
 
