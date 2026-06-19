@@ -77,6 +77,18 @@ struct FeedView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
+        // 장식 고양이(펼친 책) — 우하단. 아래 글쓰기 pill 의 safeAreaInset 이 이 overlay
+        // '뒤에(나중에)' 적용돼 pill 이 고양이 머리 위에 그려진다(Android 동일).
+        // click-through 라 pill/콘텐츠 탭을 막지 않는다.
+        .overlay(alignment: .bottomTrailing) {
+            Image("cat_pen")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 104)
+                .padding(.trailing, 34)
+                .padding(.bottom, -26)   // 책은 탭바 뒤로 내려가고 머리에 pill 이 얹히게
+                .allowsHitTesting(false)
+        }
         // 글쓰기 말풍선 pill — 로그인 여부와 무관하게 항상 표시 (비로그인은 토스트만).
         .safeAreaInset(edge: .bottom, spacing: 0) {
             HStack {
