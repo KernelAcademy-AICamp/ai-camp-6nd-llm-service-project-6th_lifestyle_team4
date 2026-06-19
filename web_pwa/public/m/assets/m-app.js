@@ -7484,6 +7484,7 @@ document.getElementById('hl-compose-share')?.addEventListener('click', () => {
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
+    referralUrl: buildReferralUrl(),
   });
 });
 
@@ -8336,7 +8337,21 @@ function renderShareCard(canvas, bg, payload) {
   /* 워터마크 */
   ctx.fillStyle = ink + '80';
   ctx.font = `700 20px "Pretendard", "Noto Sans KR", sans-serif`;
-  ctx.fillText('Daily Script', W/2, 910);
+  ctx.fillText('Daily Script', W/2, 880);
+
+  /* 친구 초대 referral URL — 이미지 자체에 박혀, 받은 사람이 보고 진입 가능 */
+  if (payload.referralUrl) {
+    ctx.fillStyle = ink + '70';
+    ctx.font = `500 16px "Pretendard", "Noto Sans KR", sans-serif`;
+    /* URL 이 길면 점선 자르기 — 끝 처리 */
+    let urlText = payload.referralUrl.replace(/^https?:\/\//i, '');
+    const maxW = W - 80;
+    while (ctx.measureText(urlText).width > maxW && urlText.length > 8) {
+      urlText = urlText.slice(0, -1);
+    }
+    if (urlText !== payload.referralUrl.replace(/^https?:\/\//i, '')) urlText += '…';
+    ctx.fillText(urlText, W/2, 920);
+  }
 }
 
 const shareState = { tab: 'free', bgId: 'beige', payload: null, lastBlob: null };
@@ -8565,6 +8580,7 @@ function payloadForToday() {
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
+    referralUrl: buildReferralUrl(),
   };
 }
 function payloadForDetail() {
@@ -8576,6 +8592,7 @@ function payloadForDetail() {
     work: w.title || '',
     author: w.author || '',
     coverUrl: w.cover_url || '',
+    referralUrl: buildReferralUrl(),
   };
 }
 
