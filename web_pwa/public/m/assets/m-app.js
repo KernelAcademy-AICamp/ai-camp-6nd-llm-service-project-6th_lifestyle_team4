@@ -219,12 +219,21 @@ const detailBody = detailScreen?.querySelector('.detail-body');
     if (max <= 0) { hide(); return; }
     const ratio = detailBody.scrollTop / max;
     if (fab) (ratio >= 0.8 ? show : hide)();
-    /* 90% 스크롤 → 실타래 보상. 같은 카드 세션 안에서 1회만. 서버 RPC 가 영구 dedup. */
-    if (ratio >= 0.9) {
+    /* '작품의 의의' 블록이 viewport 중앙쯤 도달 → 실타래 보상. 같은 카드 세션 1회. 서버 RPC 영구 dedup.
+       의의 element 없으면 95% 스크롤로 폴백. */
+    const sigEl = document.getElementById('detail-significance-block');
+    const vh = detailBody.clientHeight || window.innerHeight;
+    const sigCenterPassed = sigEl && sigEl.offsetParent !== null && (() => {
+      const r = sigEl.getBoundingClientRect();
+      const bodyR = detailBody.getBoundingClientRect();
+      /* 의의 top 이 detailBody 상단으로부터 viewport 절반 이하 (= 화면 가운데 위쪽 통과) */
+      return (r.top - bodyR.top) <= (vh * 0.5);
+    })();
+    if (sigCenterPassed || ratio >= 0.95) {
       const cid = state.detailCardId;
       if (cid && state._rewardTriggeredCardId !== cid) {
         state._rewardTriggeredCardId = cid;
-        try { rewardYarnForFirstView(cid); } catch (e) { console.warn('[m] 90% reward trigger failed:', e); }
+        try { rewardYarnForFirstView(cid); } catch (e) { console.warn('[m] reward trigger failed:', e); }
       }
       /* 공유 링크로 진입한 익명 사용자가 그 카드를 끝까지 읽었으면 회원가입 유도 (세션당 1회) */
       if (state.isAnonymous && cid && cid === state._sharedCardOpenedId && !state._sharedSignupShown) {
