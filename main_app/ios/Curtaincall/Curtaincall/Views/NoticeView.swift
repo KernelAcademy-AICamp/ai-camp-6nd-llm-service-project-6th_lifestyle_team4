@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 공지사항 — Android-parity (NoticeScreen.kt). Top-bar title, Korean tag labels,
-/// relative-time stamps, collapse/expand with a markdown subset, and the warm-card
-/// styling. Read-only over `public.notices`.
+/// 공지사항 — PWA 일치. 상단 타이틀+서브라인("업데이트와 소식"), 영문 태그
+/// (UPDATE/NOTICE/EVENT), 절대 날짜("YYYY. M. D"), 핀 마커 없음. 본문은 더보기
+/// 접기 유지(iOS finish) + 마크다운 서브셋. Read-only over `public.notices`.
 struct NoticeView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var prefs: PrefsStore
@@ -21,7 +21,7 @@ struct NoticeView: View {
                     } else if let loadError, notices.isEmpty {
                         centeredNote(loadError, error: true)
                     } else if notices.isEmpty {
-                        centeredNote("등록된 공지가 없습니다.")
+                        noticeEmpty
                     } else {
                         ForEach(notices) { notice in
                             NoticeCard(notice: notice)
@@ -50,15 +50,41 @@ struct NoticeView: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            Text("공지사항")
-                .font(.headlineSerif(20))
-                .foregroundStyle(.espresso)
+            VStack(spacing: 2) {
+                Text("공지사항")
+                    .font(.headlineSerif(20))
+                    .foregroundStyle(.espresso)
+                // PWA 헤더 서브라인 "업데이트와 소식" (index.html:1914).
+                Text("업데이트와 소식")
+                    .font(.bodySans(11))
+                    .foregroundStyle(.walnut)
+            }
             Spacer()
             Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal, 8)
         .frame(height: 56)
         .overlay(alignment: .bottom) { Hairline() }
+    }
+
+    // PWA notice-empty: campaign(메가폰) 아이콘 + 헤드라인 + 서브라인 (index.html:1918-1921).
+    private var noticeEmpty: some View {
+        VStack(spacing: 0) {
+            Image(systemName: "megaphone")
+                .font(.system(size: 44, weight: .regular))
+                .foregroundStyle(.sand)
+            Spacer().frame(height: 14)
+            Text("아직 공지가 없어요")
+                .font(.headlineSerif(18))
+                .foregroundStyle(.espresso)
+            Spacer().frame(height: 6)
+            Text("새로운 소식이 올라오면 여기에 표시됩니다.")
+                .font(.bodySans(14))
+                .foregroundStyle(.walnut)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
 
     // Android CenteredNote — 에러일 때 Cta(코랄)로 표시.
@@ -102,11 +128,9 @@ private struct NoticeCard: View {
                     .padding(.horizontal, 9)
                     .padding(.vertical, 3)
                     .background(tagBackground, in: RoundedRectangle(cornerRadius: 4))
-                if notice.pinned {
-                    Text("📌").font(.system(size: 12))
-                }
+                // PWA: pinned 는 정렬에만 반영, 핀 마커(📌)는 렌더하지 않음.
                 Spacer()
-                Text(Self.relativeTime(notice.createdAt))
+                Text(Self.absoluteDate(notice.createdAt))
                     .font(.bodySans(11))
                     .foregroundStyle(.walnut)
             }
@@ -181,11 +205,13 @@ private struct NoticeCard: View {
 
     // MARK: - Tag (Android TagChip mapping)
 
+    // PWA NOTICE_TAG_LABEL — 영문 대문자, 미지정 태그는 그대로 대문자화 (m-app.js:7834,7904).
     private var tagLabel: String {
         switch notice.tag.lowercased() {
-        case "update": return "업데이트"
-        case "event": return "이벤트"
-        default: return "공지"
+        case "update": return "UPDATE"
+        case "notice": return "NOTICE"
+        case "event": return "EVENT"
+        default: return notice.tag.uppercased()
         }
     }
 
@@ -205,22 +231,14 @@ private struct NoticeCard: View {
         }
     }
 
-    // MARK: - Relative time (ports CommentsSection.kt relativeTime)
+    // MARK: - Absolute date (PWA formatNoticeDate)
 
-    static func relativeTime(_ iso: String) -> String {
+    /// PWA `formatNoticeDate` — "YYYY. M. D" (앞자리 0 없음, 끝 마침표 없음).
+    /// 예: "2026. 6. 22" (m-app.js:7875-7881).
+    static func absoluteDate(_ iso: String) -> String {
         guard let date = parseISODate(iso) else { return "" }
-        let diff = max(0, Date().timeIntervalSince(date))
-        let minutes = Int(diff / 60)
-        if minutes < 1 { return "방금" }
-        if minutes < 60 { return "\(minutes)분 전" }
-        let hours = minutes / 60
-        if hours < 24 { return "\(hours)시간 전" }
-        let days = hours / 24
-        if days < 7 { return "\(days)일 전" }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "yyyy.MM.dd"
-        return f.string(from: date)
+        let c = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: date)
+        return "\(c.year ?? 0). \(c.month ?? 0). \(c.day ?? 0)"
     }
 
     // MARK: - Markdown subset (Android NoticeBody / noticePreview)
