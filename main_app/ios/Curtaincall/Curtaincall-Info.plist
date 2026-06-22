@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- 표준 TLS(HTTPS/Supabase)만 사용, 독자 암호화 없음 → 수출규정 면제.
+	     매 업로드마다 뜨는 export-compliance 프롬프트를 건너뛴다. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
