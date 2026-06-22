@@ -11,18 +11,11 @@ struct LibraryCatalogView: View {
     @Binding var path: NavigationPath
 
     @StateObject private var model = LibraryCatalogModel()
-    @State private var sort: CatalogSort = .alpha
     @State private var selectedGenre: WorkFormat?
     @State private var searchText = ""
     @State private var page = 0
     @State private var selectedWork: ShelfWork?
     @State private var contentWidth: CGFloat = 0
-
-    /// Android `LibrarySort`: 가나다순(기본) / 최신등록순.
-    enum CatalogSort {
-        case alpha, latest
-        var label: String { self == .alpha ? "가나다순" : "최신등록순" }
-    }
 
     private static let pageSize = 12          // 4열 × 3행 (Android LibraryPageSize)
     private static let genreOrder: [WorkFormat] = [
@@ -104,24 +97,16 @@ struct LibraryCatalogView: View {
     private var filteredBooks: [ShelfWork] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let base = model.books.filter { b in
-            if let selectedGenre {
-                if selectedGenre == .unknown {
-                    if Self.genreOrder.contains(b.format) { return false }
-                } else if b.format != selectedGenre {
-                    return false
-                }
+            if let selectedGenre, b.format != selectedGenre {
+                return false
             }
             guard !q.isEmpty else { return true }
             return b.series.lowercased().contains(q)
                 || (b.subtitle ?? "").lowercased().contains(q)
                 || (b.author ?? "").lowercased().contains(q)
         }
-        switch sort {
-        case .alpha:
-            return base.sorted { displayTitle($0).localizedStandardCompare(displayTitle($1)) == .orderedAscending }
-        case .latest:
-            return base.sorted { ($0.cards.map(\.cardId).max() ?? 0) > ($1.cards.map(\.cardId).max() ?? 0) }
-        }
+        // PWA: 정렬은 가나다순 고정(정렬 컨트롤 없음).
+        return base.sorted { displayTitle($0).localizedStandardCompare(displayTitle($1)) == .orderedAscending }
     }
 
     private var pageCount: Int {
@@ -146,29 +131,14 @@ struct LibraryCatalogView: View {
     // MARK: - Header / meta
 
     private var metaRow: some View {
-        HStack(alignment: .center) {
-            Text("작품 \(model.books.count)권  ·  명대사 \(totalCards)편").labelCaps()
-            Spacer()
-            Button {
-                sort = (sort == .alpha) ? .latest : .alpha
-                page = 0
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.arrow.down")
-                        .font(.system(size: 11, weight: .regular))
-                    Text(sort.label)
-                        .font(.custom("Pretendard-Medium", size: 11))
-                        .tracking(0.5)
-                }
-                .foregroundStyle(.walnut)
-            }
-            .buttonStyle(.plain)
-        }
+        // PWA: 카운트 라벨 "전체 N권", 정렬 컨트롤 없음(가나다 고정) — m-app.js:2614.
+        Text("전체 \(model.books.count)권  ·  명대사 \(totalCards)편").labelCaps()
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var genreChips: some View {
+        // PWA renderShelfChips: GENRE_ORDER 의 사용 가능한 장르만 — "기타" 칩 없음.
         let available = Set(model.books.map(\.format))
-        let otherCount = model.books.filter { !Self.genreOrder.contains($0.format) }.count
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 Button { selectedGenre = nil; page = 0 } label: {
@@ -179,12 +149,6 @@ struct LibraryCatalogView: View {
                     let count = model.books.filter { $0.format == format }.count
                     Button { selectedGenre = format; page = 0 } label: {
                         Chip(text: "\(format.displayName) · \(count)", filled: selectedGenre == format)
-                    }
-                    .buttonStyle(.plain)
-                }
-                if otherCount > 0 {
-                    Button { selectedGenre = .unknown; page = 0 } label: {
-                        Chip(text: "기타 · \(otherCount)", filled: selectedGenre == .unknown)
                     }
                     .buttonStyle(.plain)
                 }
@@ -299,20 +263,46 @@ struct LibraryCatalogView: View {
             FetchErrorBanner { Task { await model.load(force: true) } }
                 .padding(.horizontal, -20)   // 배너 자체 좌우 패딩과 정렬
         } else {
-            Text("표시할 작품이 없습니다.")
-                .font(.bodySans(14))
-                .foregroundStyle(.walnut)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 24)
+            // PWA archive-empty: menu_book + 헤드라인 + 서브라인 (index.html:1863-1866).
+            EmptyStateView(icon: "book", iconSize: 48,
+                           headline: "표시할 작품이 없습니다.",
+                           subline: "잠시 후 다시 시도해주세요.")
         }
     }
 
     private var noResultState: some View {
-        Text("검색 결과가 없습니다.")
-            .font(.bodySans(14))
-            .foregroundStyle(.walnut)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 24)
+        // PWA archive-no-result: search_off + 헤드라인 + 서브라인 (index.html:1869-1872).
+        EmptyStateView(icon: "magnifyingglass", iconSize: 42,
+                       headline: "검색 결과가 없습니다",
+                       subline: "다른 단어로 시도해보세요")
+    }
+}
+
+/// PWA 빈/검색결과 상태 — 아이콘(sand) + 헤드라인(serif/espresso) + 서브라인(walnut),
+/// 가운데 정렬. 카탈로그·북마크 서가 공용.
+struct EmptyStateView: View {
+    let icon: String
+    let iconSize: CGFloat
+    let headline: String
+    let subline: String
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Image(systemName: icon)
+                .font(.system(size: iconSize, weight: .regular))
+                .foregroundStyle(.sand)
+            Spacer().frame(height: 16)
+            Text(headline)
+                .font(.headlineSerif(18))
+                .foregroundStyle(.espresso)
+            Spacer().frame(height: 8)
+            Text(subline)
+                .font(.bodySans(14))
+                .foregroundStyle(.walnut)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
 }
 
