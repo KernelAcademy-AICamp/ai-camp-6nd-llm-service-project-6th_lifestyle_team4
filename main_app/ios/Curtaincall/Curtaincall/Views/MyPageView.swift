@@ -69,7 +69,15 @@ struct MyPageView: View {
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
 
-                    // 공지 — 익명·로그인 모두 노출 (Android: 내 활동 위 top-level 섹션).
+                    // 익명 — 로그인 CTA를 공지 위에 (PWA signin-block → 공지 순서, index.html:1944-1976).
+                    if session.isAnonymous {
+                        Spacer().frame(height: 20)
+                        signInBlock
+                        Spacer().frame(height: 32)
+                        Hairline()
+                    }
+
+                    // 공지 — 익명·로그인 모두 노출 (내 활동 위 top-level 섹션).
                     Spacer().frame(height: 20)
                     sectionLabel("공지")
                     navRow(title: "공지사항", subtitle: "업데이트와 소식", trailing: {
@@ -78,14 +86,6 @@ struct MyPageView: View {
                         }
                     }) {
                         NoticeView()
-                    }
-
-                    // 익명 — '내 활동' 위 로그인 CTA (Android ACCOUNT 블록).
-                    if session.isAnonymous {
-                        Spacer().frame(height: 20)
-                        signInBlock
-                        Spacer().frame(height: 32)
-                        Hairline()
                     }
 
                     Spacer().frame(height: 40)
@@ -101,15 +101,15 @@ struct MyPageView: View {
                     }
                     // 북마크(서가) — Library 탭이 도서 카탈로그로 바뀌어, 북마크 서가는
                     // 여기 설정에서 연다(Android: 설정 > 북마크 → ArchiveScreen). 익명도 노출.
-                    activityRow(title: "북마크", subtitle: "수집한 명대사를 책으로 모아 봅니다") {
+                    activityRow(title: "북마크", subtitle: "내가 보관한 명대사 보기") {
                         path.append(BookshelfRoute())
                     }
                     // 출석체크 — 보상 지급 없이 출석현황 달력만 여는 보기 전용 진입점.
                     activityRow(title: "출석체크", subtitle: "내 출석현황 보기") {
                         showAttendance = true
                     }
-                    // 실타래 충전 — 잔액 표시 + 충전 화면.
-                    navRow(title: "실타래 충전", subtitle: "실타래로 명장면 전문을 열람하세요", trailing: {
+                    // 실타래 구매 — 잔액 표시 + 충전 화면 (PWA 카피, index.html:2041-2042).
+                    navRow(title: "실타래 구매", subtitle: "보유 실타래 충전", trailing: {
                         HStack(spacing: 5) {
                             Image("daily-script-bar")
                                 .resizable().scaledToFill()
