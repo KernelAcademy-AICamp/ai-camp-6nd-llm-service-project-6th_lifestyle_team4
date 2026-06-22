@@ -17,6 +17,13 @@ struct HomeView: View {
     @State private var fetchFailed = false
     @State private var showAccountPrompt = false
     @State private var bookmarkCounts: [Int: Int] = [:]
+    // 당겨서 새로고침(Android RefreshableBox 미러: 실타래가 위에서 내려와 회전) + 갱신됨 토스트.
+    @State private var pullDistance: CGFloat = 0
+    @State private var pullArmed = false
+    @State private var pullRefreshing = false
+    @State private var spinAngle: Double = 0
+    @State private var refreshToast: String?
+    private let pullThreshold: CGFloat = 90
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,7 +43,7 @@ struct HomeView: View {
                             .font(.displaySerif(28))
                             .foregroundStyle(.espresso)
                             .frame(maxWidth: .infinity)
-                        Button { Task { await reload(deterministic: false) } } label: {
+                        Button { runRefresh(showSpinner: false) } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 18, weight: .regular))
                                 .foregroundStyle(.walnut)
@@ -105,6 +112,11 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 20)
             }
+            // 당겨서 새로고침 — 스크롤이 위로 당겨진 거리를 추적, 임계 넘겨 놓으면 실행.
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, y in
+                handlePull(offsetY: y)
+            }
+            .overlay(alignment: .top) { yarnPullIndicator }
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
@@ -136,6 +148,83 @@ struct HomeView: View {
                 } onClose: {
                     showAccountPrompt = false
                 }
+            }
+        }
+        // 갱신됨 토스트 — 하단(yarn 네비 버튼 위), PWA toast('갱신됨') 미러.
+        .overlay(alignment: .bottom) {
+            if let refreshToast {
+                Text(refreshToast)
+                    .font(.bodySans(13))
+                    .foregroundStyle(Color.paper)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.espresso))
+                    .padding(.bottom, 130)
+                    .transition(.opacity)
+            }
+        }
+        // 새로고침 중에만 실타래를 연속 회전(750ms/회전, Android YarnRefreshIndicator).
+        .onChange(of: pullRefreshing) { _, refreshing in
+            if refreshing {
+                spinAngle = 0
+                withAnimation(.linear(duration: 0.75).repeatForever(autoreverses: false)) {
+                    spinAngle = 360
+                }
+            } else {
+                spinAngle = 0
+            }
+        }
+    }
+
+    /// Android YarnRefreshIndicator 미러 — 당기는 거리만큼 위에서 내려오며 페이드·확대·
+    /// 살짝 감기고(windup), 새로고침 중엔 연속 회전. 실타래 = 하단탭 홈 버튼 아이콘.
+    private var yarnPullIndicator: some View {
+        let size: CGFloat = 44
+        let restY: CGFloat = 16
+        let shown: CGFloat = pullRefreshing ? 1 : min(1, pullDistance / pullThreshold)
+        let translateY = -size + shown * (size + restY)
+        let rotation: Double = pullRefreshing ? spinAngle : Double(shown) * 200
+        return Image("daily-script-bar")
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .opacity(Double(shown))
+            .scaleEffect(0.5 + 0.5 * shown)
+            .rotationEffect(.degrees(rotation))
+            .offset(y: translateY)
+            .allowsHitTesting(false)
+    }
+
+    /// 스크롤 당김 추적 — 임계(pullThreshold) 넘기면 arm, 손 떼고 상단 복귀 시 1회 실행.
+    private func handlePull(offsetY: CGFloat) {
+        guard !pullRefreshing else { return }
+        let pull = max(0, -offsetY)
+        pullDistance = pull
+        if pull >= pullThreshold { pullArmed = true }
+        if pullArmed && pull <= 1 {
+            pullArmed = false
+            runRefresh(showSpinner: true)
+        }
+    }
+
+    /// 새 명대사로 새로고침 + 완료 시 갱신됨/갱신 실패 토스트. showSpinner=true 면
+    /// 당겨서 새로고침의 실타래 스피너를 돌린다(버튼은 false — 자체 disabled 만).
+    private func runRefresh(showSpinner: Bool) {
+        Task {
+            if showSpinner { pullRefreshing = true }
+            await reload(deterministic: false)
+            if showSpinner { pullRefreshing = false }
+            showRefreshToast(fetchFailed ? "갱신 실패" : "갱신됨")
+        }
+    }
+
+    private func showRefreshToast(_ msg: String) {
+        withAnimation(.easeInOut(duration: 0.2)) { refreshToast = msg }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_600_000_000)   // PWA 1600ms
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if refreshToast == msg { refreshToast = nil }
             }
         }
     }
