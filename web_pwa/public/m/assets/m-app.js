@@ -1258,7 +1258,22 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
 (function _captureReferralFromUrl() {
   try {
     const sp = new URLSearchParams(window.location.search);
-    /* 새 단축 파라미터(r/c/b/q) 우선, 옛 전체 이름(ref/card/bg) 도 호환 */
+    /* short URL: ?s=<6자> — share_links 테이블에서 lookup 후 ref/card/bg/q 채움.
+       longer URL: ?r=&c=&b=&q= 또는 옛 ?ref=&card=&bg= 형식 호환. */
+    const shortId = sp.get('s');
+    if (shortId) {
+      /* lookup 은 async — 우선 share-entry 클래스로 메인 가린 후 비동기 채움 */
+      document.documentElement.classList.add('share-entry');
+      if (!document.getElementById('share-entry-css')) {
+        const s = document.createElement('style');
+        s.id = 'share-entry-css';
+        s.textContent = `html.share-entry body > main, html.share-entry .bottom-nav, html.share-entry .bottom-nav-cat { visibility:hidden !important; }
+                         html.share-entry body { background:#0E0C0A !important; }`;
+        document.head.appendChild(s);
+      }
+      window._pendingShortShareLookup = shortId;
+      return;
+    }
     const ref  = sp.get('r')    || sp.get('ref');
     const card = sp.get('c')    || sp.get('card');
     const bg   = sp.get('b')    || sp.get('bg');
@@ -1361,7 +1376,8 @@ function loadAllCards() {
       if (batch.length < PAGE) break;
     }
     state.allCards = all;
-    /* 공유받은 카드(?card=) 자동 열기 — 카드 데이터 들어온 직후 1회만 */
+    /* 공유받은 카드 자동 열기 — short URL lookup 먼저, 그 후 미리보기 모달 */
+    try { await maybeResolveShortShareLink(); } catch (e) { console.warn('[m] short share resolve failed:', e); }
     try { maybeOpenSharedCard(); } catch (e) { console.warn('[m] maybeOpenSharedCard failed:', e); }
   })().finally(() => { loadAllCardsInFlight = null; });
   return loadAllCardsInFlight;
@@ -1369,6 +1385,30 @@ function loadAllCards() {
 
 /* URL ?card=<id> 로 진입한 사용자에게 그 카드 자동 표시.
    localStorage 의 ds.pendingShareCardId 1회 사용 후 즉시 제거. */
+async function maybeResolveShortShareLink() {
+  const shortId = window._pendingShortShareLookup;
+  if (!shortId) return;
+  window._pendingShortShareLookup = null;
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('share_links')
+      .select('referrer_id, card_id, bg_id, quote_b64')
+      .eq('short_id', shortId)
+      .single();
+    if (error || !data) throw error || new Error('share_link not found');
+    if (data.referrer_id && !safeStorageGet('ds.pendingReferrerId')) {
+      safeStorageSet('ds.pendingReferrerId', String(data.referrer_id));
+    }
+    if (data.card_id)   safeStorageSet('ds.pendingShareCardId', String(data.card_id));
+    if (data.bg_id)     safeStorageSet('ds.pendingShareBgId', data.bg_id);
+    if (data.quote_b64) safeStorageSet('ds.pendingShareQuote', data.quote_b64);
+  } catch (e) {
+    console.warn('[m] short share link lookup failed:', e);
+    document.documentElement.classList.remove('share-entry');
+  }
+}
+
 function maybeOpenSharedCard() {
   const cid = safeStorageGet('ds.pendingShareCardId');
   if (!cid) return;
@@ -8864,9 +8904,8 @@ async function shareImage() {
   await downloadShareCard();
 }
 
-/* 링크 보내기 — 텍스트(명대사 + URL). 카카오톡 등 SNS 가 OG 메타 기반 카드 미리보기 자동 표시.
-   URL 단축: payload.quote 가 카드 원본 quote 와 같으면 q 생략 (받은 쪽에서 card.quote 로 채움).
-   하이라이트 일부만 공유한 경우만 q 포함 → URL 짧게 유지. */
+/* 링크 보내기 — server-side short URL (Supabase share_links) 발급 → /m/?s=<6자>.
+   실패 시 옛 long URL(buildReferralUrl) 로 자동 폴백. */
 async function shareLink() {
   const payload = shareState.payload || {};
   const cardId  = payload?.cardId;
@@ -8874,13 +8913,24 @@ async function shareLink() {
   const fullQuote = String(card?.quote || '').trim();
   const myQuote   = String(payload?.quote || '').trim();
   const isFullQuote = myQuote && fullQuote && myQuote === fullQuote;
-  const refUrl = buildReferralUrl(
-    cardId,
-    { bgId: shareState.bgId, quote: isFullQuote ? '' : myQuote },
-  );
+  const quoteForUrl = isFullQuote ? '' : myQuote;
+  let refUrl = '';
+  try {
+    const sb = await getSupabase();
+    const { data: shortId, error } = await sb.rpc('create_share_link', {
+      p_referrer_id: state.userId || null,
+      p_card_id: cardId || null,
+      p_bg_id: shareState.bgId || null,
+      p_quote_b64: quoteForUrl ? urlSafeB64Encode(quoteForUrl.slice(0, 300)) : null,
+    });
+    if (!error && shortId) refUrl = `${window.location.origin}/m/?s=${shortId}`;
+  } catch (e) { console.warn('[m] create_share_link RPC failed, fallback to long URL:', e); }
+  if (!refUrl) refUrl = buildReferralUrl(cardId, { bgId: shareState.bgId, quote: quoteForUrl });
   const quote   = payload.quote ? `"${payload.quote}"` : '';
   const credit  = payload.work  ? ` — ${payload.work}` : '';
-  const text    = [quote + credit, refUrl].filter(Boolean).join('\n');
+  /* 카카오톡은 url 을 OG 카드 미리보기로 자동 렌더 → 본문 text 에 URL 중복 넣지 않음.
+     본문은 명대사 + 작품만, 링크 박스는 카카오톡이 URL 한 번만 카드로 표시. */
+  const text    = (quote + credit).trim();
   try {
     if (navigator.share) {
       await navigator.share({ text, title: 'Daily Script', url: refUrl || undefined });
