@@ -1,4 +1,11 @@
 import SwiftUI
+import UIKit
+
+/// 표지 이미지 메모리 캐시 — 디코드된 UIImage 를 URL 키로 재사용해 스크롤/셀 재사용
+/// 시 재다운로드·취소·깜빡임을 없앤다(AsyncImage 무캐시 문제 해결).
+enum WorkCoverCache {
+    static let shared = NSCache<NSURL, UIImage>()
+}
 
 /// Shared book cover. Loads the first-edition `works.cover_url` when present (http
 /// only), else a deterministic leather fallback (spine + inset border + centered
@@ -15,7 +22,7 @@ struct WorkCover: View {
     var height: CGFloat = 188
     var compact: Bool = false
 
-    @State private var imageFailed = false
+    @State private var loadedImage: UIImage?
 
     private let bookCream = Color(hex: 0xFAF8F2)
 
@@ -27,26 +34,36 @@ struct WorkCover: View {
     var body: some View {
         let radius: CGFloat = compact ? 3 : 4
         Group {
-            if let coverURL, !imageFailed {
-                AsyncImage(url: coverURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .failure:
-                        leather.onAppear { imageFailed = true }
-                    case .empty:
-                        leather   // leather while loading — no blank flash
-                    @unknown default:
-                        leather
-                    }
-                }
+            if let loadedImage {
+                Image(uiImage: loadedImage).resizable().scaledToFill()
             } else {
-                leather
+                leather   // 로딩 중·표지 없음 — 빈 깜빡임 없이 가죽 표시
             }
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: radius))
         .shadow(color: Color.black.opacity(0.24), radius: compact ? 6 : 8, x: 0, y: compact ? 3 : 6)
+        // URL 바뀔 때(셀 재사용)마다 재로드. 캐시 히트면 즉시, 미스면 받아서 캐시.
+        .task(id: coverURL) { await loadCover() }
+    }
+
+    /// 표지 로드 — 메모리 캐시 우선, 미스면 1회 다운로드 후 캐시. 실패/취소는 latch 하지
+    /// 않아(가죽 유지) 다음 표시 때 재시도된다(AsyncImage sticky 실패·무캐시 문제 해결).
+    private func loadCover() async {
+        loadedImage = nil
+        guard let coverURL else { return }
+        if let cached = WorkCoverCache.shared.object(forKey: coverURL as NSURL) {
+            loadedImage = cached
+            return
+        }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: coverURL)
+            guard !Task.isCancelled, let image = UIImage(data: data) else { return }
+            WorkCoverCache.shared.setObject(image, forKey: coverURL as NSURL)
+            loadedImage = image
+        } catch {
+            // 일시 오류/스크롤 취소 — 가죽 유지, 다음 표시 때 재시도(latch 안 함).
+        }
     }
 
     private var leather: some View {

@@ -371,12 +371,10 @@ struct DailyNewBooksSection: View {
         .cardHeroSource(book.representativeCard.cardId, dailyOwner: .newBooks)
     }
 
-    /// Reuse the existing `Work`-based leather cover (shared with Feed /
-    /// HighlightDetail), scaled to the requested width keeping the 132×188 ratio.
+    /// 표지 — Library 와 동일하게 WorkCover 사용(cover_url 아트워크 로드, 없으면 가죽).
+    /// 기존 HighlightBookCover 는 가죽 전용이라 데일리에서 표지가 안 떴음.
     private func discoveryCover(_ work: Work, width: CGFloat) -> some View {
-        HighlightBookCover(work: work)
-            .scaleEffect(width / 132, anchor: .center)
-            .frame(width: width, height: 188 * width / 132)
+        WorkCover(work: work, width: width, height: 188 * width / 132, compact: true)
     }
 }
 
