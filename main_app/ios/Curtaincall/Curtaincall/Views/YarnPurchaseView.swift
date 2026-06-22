@@ -36,6 +36,9 @@ struct YarnPurchaseView: View {
     @State private var purchasing = false
     /// 충전 탭(false) ↔ ABOUT 탭(true) — Android `aboutTab` 미러.
     @State private var aboutTab = false
+    /// 내비 스택에 push 됐는지(MY > 실타래). true 면 시스템 백 숨기고 '<' 백(다른 MY
+    /// 하위 페이지와 동일), false 면 시트로 떠서 'X' 닫기. (중복 백 버튼 방지)
+    var asPush = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,6 +57,9 @@ struct YarnPurchaseView: View {
             }
         }
         .background(Color.paper)
+        // push 됐을 때 시스템 내비 백을 숨겨 자체 백 버튼과 중복되지 않게 한다.
+        // (시트로 뜰 땐 내비바가 없어 no-op)
+        .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .bottom) {
             if let toast {
                 Text(toast)
@@ -73,8 +79,8 @@ struct YarnPurchaseView: View {
     private var topBar: some View {
         HStack(spacing: 4) {
             Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .regular))
+                Image(systemName: asPush ? "chevron.left" : "xmark")
+                    .font(.system(size: asPush ? 18 : 16, weight: .regular))
                     .foregroundStyle(.espresso)
                     .frame(width: 44, height: 44)
             }

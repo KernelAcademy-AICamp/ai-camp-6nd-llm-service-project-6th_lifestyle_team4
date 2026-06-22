@@ -302,7 +302,9 @@ struct RootView: View {
         case .feed:
             feedPath = NavigationPath()
             feedReselect += 1  // scroll Feed to top + refresh
-        case .settings: break
+        case .settings:
+            // MY 하위 페이지는 모두 값 기반(MyRoute)이라 스택을 비우면 루트로 돌아온다.
+            settingsPath = NavigationPath()
         }
     }
 

@@ -1,8 +1,11 @@
 import SwiftUI
 import UIKit
 
-/// 설정 내비게이션 스택에 push 되는 라우트(북마크 서가).
-struct BookshelfRoute: Hashable {}
+/// 설정 내비게이션 스택에 push 되는 라우트(값 기반). 값 기반이라야 settingsPath 가
+/// 추적해 MY 탭 재탭 시 popToRoot(스택 비우기)로 한 번에 닫힌다 — 다른 탭과 동일.
+enum MyRoute: Hashable {
+    case bookshelf, notice, myComments, myFeed, yarn, feedback, terms, privacy
+}
 
 struct MyPageView: View {
     @Binding var selectedTab: Tab
@@ -80,36 +83,30 @@ struct MyPageView: View {
                     // 공지 — 익명·로그인 모두 노출 (내 활동 위 top-level 섹션).
                     Spacer().frame(height: 20)
                     sectionLabel("공지")
-                    navRow(title: "공지사항", subtitle: "업데이트와 소식", trailing: {
+                    navRow(title: "공지사항", subtitle: "업데이트와 소식", route: .notice, trailing: {
                         if hasUnreadNotice {
                             Circle().fill(Color.cta).frame(width: 7, height: 7)
                         }
-                    }) {
-                        NoticeView()
-                    }
+                    })
 
                     Spacer().frame(height: 40)
                     sectionLabel("내 활동")
                     // 내 댓글·내 피드는 회원만.
                     if !session.isAnonymous {
-                        activityLink(title: "내 댓글", subtitle: "내가 남긴 댓글 보기") {
-                            MyCommentsView()
-                        }
-                        activityLink(title: "내 피드", subtitle: "내가 공유한 한 줄과 하이라이트 보기") {
-                            MyFeedView()
-                        }
+                        activityLink(title: "내 댓글", subtitle: "내가 남긴 댓글 보기", route: .myComments)
+                        activityLink(title: "내 피드", subtitle: "내가 공유한 한 줄과 하이라이트 보기", route: .myFeed)
                     }
                     // 북마크(서가) — Library 탭이 도서 카탈로그로 바뀌어, 북마크 서가는
                     // 여기 설정에서 연다(Android: 설정 > 북마크 → ArchiveScreen). 익명도 노출.
                     activityRow(title: "북마크", subtitle: "내가 보관한 명대사 보기") {
-                        path.append(BookshelfRoute())
+                        path.append(MyRoute.bookshelf)
                     }
                     // 출석체크 — 보상 지급 없이 출석현황 달력만 여는 보기 전용 진입점.
                     activityRow(title: "출석체크", subtitle: "내 출석현황 보기") {
                         showAttendance = true
                     }
                     // 실타래 구매 — 잔액 표시 + 충전 화면 (PWA 카피, index.html:2041-2042).
-                    navRow(title: "실타래 구매", subtitle: "보유 실타래 충전", trailing: {
+                    navRow(title: "실타래 구매", subtitle: "보유 실타래 충전", route: .yarn, trailing: {
                         HStack(spacing: 5) {
                             Image("daily-script-bar")
                                 .resizable().scaledToFill()
@@ -119,9 +116,7 @@ struct MyPageView: View {
                                 .font(.custom("Pretendard-Medium", size: 12))
                                 .foregroundStyle(.espresso)
                         }
-                    }) {
-                        YarnPurchaseView()
-                    }
+                    })
 
                     Spacer().frame(height: 40)
                     sectionLabel("일반 설정")
@@ -148,9 +143,9 @@ struct MyPageView: View {
 
                     Spacer().frame(height: 40)
                     sectionLabel("약관 및 정보")
-                    legalRow(title: "의견 남기기") { FeedbackView() }
-                    legalRow(title: "이용약관") { LegalView(doc: .terms) }
-                    legalRow(title: "개인정보 처리방침") { LegalView(doc: .privacy) }
+                    legalRow(title: "의견 남기기", route: .feedback)
+                    legalRow(title: "이용약관", route: .terms)
+                    legalRow(title: "개인정보 처리방침", route: .privacy)
                     settingRow(title: "버전 정보", trailingText: appVersion)
 
                     // 로그아웃 — outline 블록 버튼 대신 중앙 밑줄 텍스트 링크 (Android/PWA MY).
@@ -219,10 +214,28 @@ struct MyPageView: View {
         .sheet(isPresented: $showAttendance) {
             AttendanceView()   // 보기 전용 (보상 지급 없음)
         }
-        // 북마크 서가 — Android(Routes.BOOKMARKS)처럼 풀스크린 push. ArchiveView 가
-        // 카드 상세를 같은 스택(path)에 push 한다. 익명도 접근 가능(빈 책장 표시).
-        .navigationDestination(for: BookshelfRoute.self) { _ in
-            ArchiveView(selectedTab: $selectedTab, path: $path, asSubPage: true)
+        // MY 하위 페이지를 모두 값 기반(MyRoute)으로 push — settingsPath 가 추적해
+        // MY 탭 재탭 시 한 번에 닫힌다(다른 탭과 동일). 북마크 서가는 ArchiveView 가
+        // 카드 상세를 같은 스택에 push. 익명도 접근 가능(빈 책장).
+        .navigationDestination(for: MyRoute.self) { route in
+            switch route {
+            case .bookshelf:
+                ArchiveView(selectedTab: $selectedTab, path: $path, asSubPage: true)
+            case .notice:
+                NoticeView()
+            case .myComments:
+                MyCommentsView()
+            case .myFeed:
+                MyFeedView()
+            case .yarn:
+                YarnPurchaseView(asPush: true)
+            case .feedback:
+                FeedbackView()
+            case .terms:
+                LegalView(doc: .terms)
+            case .privacy:
+                LegalView(doc: .privacy)
+            }
         }
         .task { await bookmarks.load(userId: session.userId) }
         .task { latestNoticeId = (try? await Supa.shared.fetchLatestNotice())?.noticeId }
@@ -342,14 +355,14 @@ struct MyPageView: View {
 
     /// Like `activityRow`, but pushes a destination view onto the navigation
     /// stack (e.g. 내 댓글 → MyCommentsView) instead of switching tabs.
-    private func activityLink<Destination: View>(
+    private func activityLink(
         title: String,
         subtitle: String,
-        @ViewBuilder destination: @escaping () -> Destination
+        route: MyRoute
     ) -> some View {
         VStack(spacing: 0) {
-            NavigationLink {
-                destination()
+            Button {
+                path.append(route)
             } label: {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -375,15 +388,15 @@ struct MyPageView: View {
 
     /// Like `activityLink` but with a custom trailing view (unread dot / yarn
     /// balance) before the chevron — for the 공지 and 실타래 충전 rows.
-    private func navRow<Destination: View, Trailing: View>(
+    private func navRow<Trailing: View>(
         title: String,
         subtitle: String,
-        @ViewBuilder trailing: () -> Trailing,
-        @ViewBuilder destination: @escaping () -> Destination
+        route: MyRoute,
+        @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         VStack(spacing: 0) {
-            NavigationLink {
-                destination()
+            Button {
+                path.append(route)
             } label: {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -411,13 +424,13 @@ struct MyPageView: View {
     /// A settings row that pushes a destination (mirrors Android's trailing-arrow
     /// rows). Matches `settingRow`'s metrics but is tappable, so the Legal docs
     /// read as navigable rather than the old dead "Terms of Service" label.
-    private func legalRow<Destination: View>(
+    private func legalRow(
         title: String,
-        @ViewBuilder destination: @escaping () -> Destination
+        route: MyRoute
     ) -> some View {
         VStack(spacing: 0) {
-            NavigationLink {
-                destination()
+            Button {
+                path.append(route)
             } label: {
                 HStack(alignment: .center, spacing: 12) {
                     Text(title)
