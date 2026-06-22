@@ -694,14 +694,8 @@ struct DailyOzPickSection: View {
                 HStack(alignment: .center, spacing: 16) {
                     Image("library-cat-2").resizable().scaledToFit().frame(width: 140)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(nickname.isEmpty ? "오즈" : nickname)
-                            .font(.bodySans(14)).fontWeight(.bold)
-                            .foregroundStyle(.espresso).lineLimit(1)
-                        Spacer().frame(height: 8)
-                        Text("당신의 취향")
-                            .font(.custom("Pretendard-Medium", size: 11))
-                            .foregroundStyle(.espresso)
-                        Spacer().frame(height: 3)
+                        ozNameLine.lineLimit(1)
+                        Spacer().frame(height: 6)
                         ozMetaLine("장르", genreText)
                         Spacer().frame(height: 2)
                         ozMetaLine("주제", themeText)
@@ -782,6 +776,17 @@ struct DailyOzPickSection: View {
             }
             Spacer(minLength: 0)
         }
+    }
+
+    /// PWA Oz 호명 — 닉네임>아이디 + " 님"(님은 작게/walnut), 둘 다 없으면 "당신".
+    /// "당신의 취향" 라벨 없이 바로 장르/주제 (m-app.js:3590-3593).
+    private var ozNameLine: Text {
+        let userName = !nickname.isEmpty ? nickname : loginId
+        guard !userName.isEmpty else {
+            return Text("당신").font(.bodySans(15)).fontWeight(.bold).foregroundColor(.espresso)
+        }
+        return Text(userName).font(.bodySans(15)).fontWeight(.bold).foregroundColor(.espresso)
+            + Text(" 님").font(.bodySans(11)).foregroundColor(.walnut)
     }
 
     private func ozMetaLine(_ label: String, _ value: String) -> some View {
