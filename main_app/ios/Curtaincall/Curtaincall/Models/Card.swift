@@ -11,6 +11,7 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
     let intensity: Int
     let viewCount: Int?
     let commentCount: Int?
+    let shareCount: Int?
     let work: Work
 
     // Original-language source text (typically English), mirroring the PWA's
@@ -64,6 +65,7 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
         case intensity
         case viewCount = "view_count"
         case commentCount = "comment_count"
+        case shareCount = "share_count"
         case work
         case quoteOriginal = "quote_original"
         case scriptExcerptOriginal = "script_excerpt_original"
@@ -124,6 +126,7 @@ extension Card {
         intensity: 4,
         viewCount: 12,
         commentCount: 3,
+        shareCount: 2,
         work: Work(
             title: "타이타닉",
             format: .movie,
