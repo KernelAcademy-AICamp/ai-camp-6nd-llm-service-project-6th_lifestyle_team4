@@ -260,6 +260,13 @@ final class Supa {
         try await client.rpc("grant_yarn", params: ["p_n": n]).execute().value
     }
 
+    /// 공유/다운로드 후 `cards.share_count` +1 — 새 카운트 반환. PWA `bumpShareCount`
+    /// (`increment_share_count`) 미러. 익명도 허용(서버 RPC 가 SECURITY DEFINER).
+    @discardableResult
+    func incrementShareCount(cardId: Int) async throws -> Int {
+        try await client.rpc("increment_share_count", params: ["p_card_id": cardId]).execute().value
+    }
+
     /// First-open +1 reward with **durable server-side dedup** — `(user_id, card_id)`
     /// is UNIQUE in `yarn_card_rewards`, so a reinstall/device-reset can't re-grant
     /// (unlike a client-only guard). Returns the post-reward balance (unchanged if

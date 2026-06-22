@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// A typeset quote card for sharing — the card's quote in NanumMyeongjo with
 /// work attribution on the editorial paper/espresso palette, sized as a portrait
@@ -108,15 +109,19 @@ extension QuoteCardView {
     /// Rasterize the card to a shareable image. Pins light appearance + a fixed
     /// Dynamic Type size so every exported card is the same deliberate look.
     @MainActor
-    static func shareImage(for card: Card) -> Image? {
+    static func shareUIImage(for card: Card) -> UIImage? {
         let renderer = ImageRenderer(
             content: QuoteCardView(card: card)
                 .environment(\.colorScheme, .light)
                 .environment(\.dynamicTypeSize, .large)
         )
         renderer.scale = 3   // @3x — crisp on any device / when re-shared
-        guard let ui = renderer.uiImage else { return nil }
-        return Image(uiImage: ui)
+        return renderer.uiImage
+    }
+
+    @MainActor
+    static func shareImage(for card: Card) -> Image? {
+        shareUIImage(for: card).map { Image(uiImage: $0) }
     }
 
     static func shareTitle(_ card: Card) -> String {
@@ -130,6 +135,27 @@ extension QuoteCardView {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let title = card.work.title.trimmingCharacters(in: .whitespacesAndNewlines)
         return title.isEmpty ? "\u{201C}\(q)\u{201D}" : "\u{201C}\(q)\u{201D}\n— \(title)"
+    }
+}
+
+/// UIActivityViewController 래퍼 — `ShareLink` 와 달리 완료 콜백을 제공한다. 공유가
+/// **실제로 완료**됐을 때(취소 아님)만 `onComplete(true)` 를 호출해, PWA 처럼 그때
+/// 공유 카운트를 올린다. 공유 콘텐츠는 QuoteShareLink 와 동일(이미지→텍스트 폴백).
+struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    let onComplete: (_ completed: Bool) -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        vc.completionWithItemsHandler = { _, completed, _, _ in onComplete(completed) }
+        return vc
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+
+    /// 공유 아이템 — 타이포 카드 이미지(렌더 실패 시 텍스트 폴백).
+    @MainActor
+    static func items(for card: Card) -> [Any] {
+        QuoteCardView.shareUIImage(for: card).map { [$0] } ?? [QuoteCardView.shareText(card)]
     }
 }
 

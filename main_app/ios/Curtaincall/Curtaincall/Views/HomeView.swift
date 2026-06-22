@@ -17,6 +17,8 @@ struct HomeView: View {
     @State private var fetchFailed = false
     @State private var showAccountPrompt = false
     @State private var bookmarkCounts: [Int: Int] = [:]
+    @State private var shareCard: Card?
+    @State private var shareCountOverrides: [Int: Int] = [:]   // cardId → 낙관적 공유 수
 
     var body: some View {
         VStack(spacing: 0) {
@@ -118,6 +120,12 @@ struct HomeView: View {
             }
             .cardHeroDestination($0.cardId, in: heroNS, enabled: !reduceMotion)
         }
+        // 공유 시트 — 완료 시에만 카운트 +1 (취소는 무시), PWA bumpShareCount 미러.
+        .sheet(item: $shareCard) { card in
+            ActivityShareSheet(items: ActivityShareSheet.items(for: card)) { completed in
+                if completed { bumpShare(card) }
+            }
+        }
         .task { await loadOnce() }
         .task { await bookmarks.load(userId: session.userId) }
         .onChange(of: session.userId) { _, newValue in
@@ -164,15 +172,17 @@ struct HomeView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                QuoteShareLink(card: card) {
+                // 공유 — 실제 공유 완료 시 share_count +1(낙관적 +1 후 RPC), PWA bumpShareCount.
+                Button { shareCard = card } label: {
                     VStack(spacing: 3) {
                         Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 22, weight: .regular))
                             .foregroundStyle(.walnut)
-                        Text("\(card.shareCount ?? 0)")
+                        Text("\(shareCountOverrides[card.cardId] ?? (card.shareCount ?? 0))")
                             .font(.bodySans(10)).foregroundStyle(.walnut)
                     }
                 }
+                .buttonStyle(.plain)
             }
             .padding(.top, 14)
 
@@ -252,6 +262,18 @@ struct HomeView: View {
         }
     }
 
+    /// 공유 완료 시 share_count +1 — 낙관적 로컬 증가 후 RPC, 결과로 정정. PWA bumpShareCount
+    /// 미러(액션이 아니라 실제 공유 완료에 연결). 익명도 허용(RPC 가 SECURITY DEFINER).
+    private func bumpShare(_ card: Card) {
+        let current = shareCountOverrides[card.cardId] ?? (card.shareCount ?? 0)
+        shareCountOverrides[card.cardId] = current + 1   // 낙관적
+        Task {
+            if let newCount = try? await Supa.shared.incrementShareCount(cardId: card.cardId) {
+                shareCountOverrides[card.cardId] = newCount   // 서버 권위값으로 정정
+            }
+        }
+    }
+
     private func toggleBookmark(cardId: Int) {
         guard !session.isAnonymous else {
             showAccountPrompt = true
@@ -297,8 +319,18 @@ private struct TodayCardBody: View {
                 if let format = card?.work.format.label(original: showOriginal), !format.isEmpty {
                     Chip(text: format, filled: true)
                 }
-                if let kw = card?.displayKeywords(original: showOriginal).first {
-                    Chip(text: kw, filled: false)
+                // PWA renderCountsForToday: 포맷 칩 옆에 조회 · 댓글 (북마크 수는 하단 아이콘으로
+                // 이동, m-app.js:2027/2245). 키워드는 하단 해시태그로만 표시(상단 칩 없음).
+                if let card {
+                    HStack(spacing: 6) {
+                        Label(Self.countText(card.viewCount ?? 0), systemImage: "eye")
+                        Text("·").foregroundStyle(.walnut)
+                        Label(Self.countText(card.commentCount ?? 0), systemImage: "bubble.right")
+                    }
+                    .font(.bodySans(12))
+                    .foregroundStyle(.walnut)
+                    .labelStyle(.titleAndIcon)
+                    .padding(.leading, 2)
                 }
                 Spacer()
             }
@@ -327,6 +359,13 @@ private struct TodayCardBody: View {
 
     /// Speaker is derived from the displayed script by matching `work.characters`.
     /// In the ENG view the script is English while characters are Korean names,
+    /// PWA formatCount 미러 — 1000 미만은 그대로, 이상은 k 표기.
+    static func countText(_ v: Int) -> String {
+        if v < 1_000 { return "\(v)" }
+        let k = Double(v) / 1_000
+        return k >= 10 ? "\(Int(k.rounded()))k" : "\((k * 10).rounded() / 10)k"
+    }
+
     /// so no match is found and the speaker line is simply hidden (never wrong,
     /// never blank content).
     private var speaker: String? {
