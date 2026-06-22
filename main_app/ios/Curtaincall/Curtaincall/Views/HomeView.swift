@@ -16,6 +16,9 @@ struct HomeView: View {
     @State private var isLoading = false
     @State private var fetchFailed = false
     @State private var showAccountPrompt = false
+    // 프롬프트 카피 — 북마크 게이트(기본) ↔ 새로고침 한도 모달에서 갈아끼운다.
+    @State private var promptTitle = "북마크는 회원 전용"
+    @State private var promptMessage = "마음에 든 명대사를 보관하려면 로그인이 필요해요."
     @State private var bookmarkCounts: [Int: Int] = [:]
     @State private var shareCard: Card?
     @State private var shareCountOverrides: [Int: Int] = [:]   // cardId → 낙관적 공유 수
@@ -45,7 +48,7 @@ struct HomeView: View {
                             .font(.displaySerif(28))
                             .foregroundStyle(.espresso)
                             .frame(maxWidth: .infinity)
-                        Button { Task { await reload(deterministic: false) } } label: {
+                        Button { handleRefreshTap() } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 18, weight: .regular))
                                 .foregroundStyle(.walnut)
@@ -150,12 +153,15 @@ struct HomeView: View {
         }
         .overlay {
             if showAccountPrompt {
-                AccountRequiredPrompt {
-                    showAccountPrompt = false
-                    selectedTab = .settings
-                } onClose: {
-                    showAccountPrompt = false
-                }
+                AccountRequiredPrompt(
+                    title: promptTitle,
+                    message: promptMessage,
+                    onLogin: {
+                        showAccountPrompt = false
+                        selectedTab = .settings
+                    },
+                    onClose: { showAccountPrompt = false }
+                )
             }
         }
         // 갱신됨 토스트 — 하단(yarn 네비 버튼 위), PWA toast('갱신됨') 미러.
@@ -367,8 +373,25 @@ struct HomeView: View {
         }
     }
 
+    /// TODAY 새로고침 — 비회원은 하루 3번 제한(PWA refreshTodayCard / REFRESH_LIMIT).
+    /// 한도 도달 시 '새로운 명대사는 3번까지' 모달, 아니면 카운트 +1 후 새 카드. 회원은 무제한.
+    private func handleRefreshTap() {
+        if session.isAnonymous {
+            if AnonRefreshLimit.atLimit {
+                promptTitle = "새로운 명대사는 3번까지"
+                promptMessage = "오늘 명대사를 3번 받아보셨어요.\n로그인하면 무제한으로 고전 명대사를 즐길 수 있어요."
+                showAccountPrompt = true
+                return
+            }
+            AnonRefreshLimit.bump()
+        }
+        Task { await reload(deterministic: false) }
+    }
+
     private func toggleBookmark(cardId: Int) {
         guard !session.isAnonymous else {
+            promptTitle = "북마크는 회원 전용"
+            promptMessage = "마음에 든 명대사를 보관하려면 로그인이 필요해요."
             showAccountPrompt = true
             return
         }

@@ -26,6 +26,7 @@ struct FeedView: View {
     @State private var toastMessage: String?
     @State private var isSubmitting = false
     @State private var composeError: String?
+    @State private var showWritePrompt = false   // 익명 글쓰기 → 로그인 모달
 
     private var isEmpty: Bool {
         switch category {
@@ -96,6 +97,19 @@ struct FeedView: View {
                     .transition(.opacity)
             }
         }
+        // 익명 글쓰기 → '로그인이 필요해요' 모달 (PWA openFeedPicker). 로그인/회원가입 → 설정.
+        .overlay {
+            if showWritePrompt {
+                AccountRequiredPrompt(
+                    title: "로그인이 필요해요",
+                    message: category == .highlight
+                        ? "북마크한 카드에 하이라이트를 남기려면 로그인이 필요해요."
+                        : "북마크한 명대사에 한줄을 남기려면 로그인이 필요해요.",
+                    onLogin: { showWritePrompt = false; selectedTab = .settings },
+                    onClose: { showWritePrompt = false }
+                )
+            }
+        }
         .navigationDestination(item: $selectedCard) { card in
             CardDetailView(card: card) {
                 selectedTab = .settings
@@ -148,9 +162,8 @@ struct FeedView: View {
     // 의 FeedWriteCat 이 그리고, 탭 시 writeTrigger 를 올려 이 핸들러로 위임한다.
     private func handleWriteTap() {
         if session.isAnonymous {
-            showToast(category == .highlight
-                      ? "로그인 후 하이라이트를 남길 수 있어요."
-                      : "로그인 후 나의 감상평을 남길 수 있어요.")
+            // PWA openFeedPicker: 익명이면 '로그인이 필요해요' 모달 (토스트 X).
+            showWritePrompt = true
         } else {
             showPicker = true
         }
