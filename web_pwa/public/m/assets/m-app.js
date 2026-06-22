@@ -1379,7 +1379,14 @@ function maybeOpenSharedCard() {
   /* 카드지(bg) 만 있어도 미리보기 모달. q 가 있으면 그걸 사용, 없으면 card.quote 로 채움 (URL 단축 케이스). */
   const bgId = safeStorageGet('ds.pendingShareBgId');
   const qRaw = safeStorageGet('ds.pendingShareQuote');
-  const qDecoded = qRaw ? (() => { try { return decodeURIComponent(qRaw); } catch { return qRaw; } })() : '';
+  /* 새 형식: URL-safe base64. 옛 형식: percent-encoding. 둘 다 호환. */
+  const qDecoded = qRaw ? (() => {
+    if (/^[A-Za-z0-9_\-]+$/.test(qRaw)) {
+      const b64 = urlSafeB64Decode(qRaw);
+      if (b64) return b64;
+    }
+    try { return decodeURIComponent(qRaw); } catch { return qRaw; }
+  })() : '';
   if (bgId) {
     safeStorageRemove('ds.pendingShareBgId');
     safeStorageRemove('ds.pendingShareQuote');
@@ -8819,8 +8826,18 @@ async function downloadShareCard() {
   setTimeout(() => URL.revokeObjectURL(url), 6000);
 }
 // 친구 초대 referral 링크 — 본인 user_id + 공유한 카드 id + (선택) 카드지/하이라이트.
-//   파라미터 한 글자 단축으로 URL 짧게: r=ref, c=card, b=bg, q=quote.
-//   받는 사람 진입 시 그 카드 자동 표시 + 공유자가 만든 미리보기(카드지+텍스트) + 가입 시 양쪽 +600.
+//   r=ref c=card b=bg q=quote (URL-safe base64). 한글 percent-encoding(9bytes/char) 대비 ~3x 단축.
+function urlSafeB64Encode(s) {
+  return btoa(unescape(encodeURIComponent(String(s || ''))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function urlSafeB64Decode(s) {
+  try {
+    const t = String(s || '').replace(/-/g, '+').replace(/_/g, '/');
+    const pad = (4 - t.length % 4) % 4;
+    return decodeURIComponent(escape(atob(t + '='.repeat(pad))));
+  } catch { return ''; }
+}
 function buildReferralUrl(cardId, opts) {
   try {
     const base = `${window.location.origin}/m/`;
@@ -8828,7 +8845,7 @@ function buildReferralUrl(cardId, opts) {
     if (state.userId)    params.push(`r=${state.userId}`);
     if (cardId)          params.push(`c=${cardId}`);
     if (opts?.bgId)      params.push(`b=${encodeURIComponent(opts.bgId)}`);
-    if (opts?.quote)     params.push(`q=${encodeURIComponent(opts.quote.slice(0, 300))}`);
+    if (opts?.quote)     params.push(`q=${urlSafeB64Encode(opts.quote.slice(0, 300))}`);
     return params.length ? `${base}?${params.join('&')}` : base;
   } catch { return ''; }
 }
