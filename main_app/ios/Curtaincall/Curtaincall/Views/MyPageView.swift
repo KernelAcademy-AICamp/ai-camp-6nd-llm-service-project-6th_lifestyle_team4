@@ -104,7 +104,7 @@ struct MyPageView: View {
                     activityRow(title: "북마크", subtitle: "수집한 명대사를 책으로 모아 봅니다") {
                         path.append(BookshelfRoute())
                     }
-                    // 출석체크 — 익명도 보상을 받으므로 항상 노출.
+                    // 출석체크 — 보상 지급 없이 출석현황 달력만 여는 보기 전용 진입점.
                     activityRow(title: "출석체크", subtitle: "내 출석현황 보기") {
                         showAttendance = true
                     }

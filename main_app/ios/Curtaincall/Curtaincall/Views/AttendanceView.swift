@@ -2,13 +2,13 @@ import SwiftUI
 
 /// 출석체크 달력 — 이번 달 그리드, 출석한 날에 실타래 표시, 오늘 강조.
 /// PWA `buildAttendanceCalendarHTML` / 출석 모달 미러. 두 곳에서 재사용:
-///   · 하루 첫 진입 자동 모달 (rewarded=true 면 +5 배너 표시)
+///   · 하루 첫 진입 자동 모달 (rewarded=true 면 +100 배너 표시)
 ///   · MY 의 '출석체크 — 내 출석현황 보기' (rewarded=false, 보기 전용)
 struct AttendanceView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var attendance: AttendanceStore
 
-    /// 오늘 첫 출석으로 +5 를 막 받았는지 — true 면 보상 배너를 보여준다.
+    /// 오늘 첫 출석으로 +100 을 막 받았는지 — true 면 보상 배너를 보여준다.
     var rewarded: Bool = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)

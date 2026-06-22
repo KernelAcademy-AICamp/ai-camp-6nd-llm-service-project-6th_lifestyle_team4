@@ -13,7 +13,7 @@ import Combine
 /// - **Spend (gate)**: opening a card costs 1 (`consume_yarn`) unless it's already
 ///   unlocked (opened within the last 3 days) or the coach tour is active. A
 ///   per-card unlock (`ds.yarnUnlocked`, 3-day window) makes re-opens free.
-/// - **Purchase**: mock `grant_yarn` (no StoreKit) + the attendance +5 reward.
+/// - **Purchase**: mock `grant_yarn` (no StoreKit) + the attendance +100 reward.
 @MainActor
 final class YarnStore: ObservableObject {
 
@@ -112,7 +112,7 @@ final class YarnStore: ObservableObject {
         }
     }
 
-    /// 실타래 충전 — 구매 mock("준비 중") + 출석체크 보상(+5) 공용 진입점.
+    /// 실타래 충전 — 구매 mock("준비 중") + 출석체크 보상(+100) 공용 진입점.
     /// `grant_yarn` 노출(attendance UI 는 이후 PR 에서 호출). 성공 시 true.
     @discardableResult
     func grant(_ n: Int) async -> Bool {

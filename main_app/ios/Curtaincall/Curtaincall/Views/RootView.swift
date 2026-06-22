@@ -93,7 +93,7 @@ struct RootView: View {
             Task { await bookmarks.load(userId: newValue) }
             yarn.sync(serverBalance: session.yarnBalance)   // 로그인/로그아웃 시 잔액 재시드
         }
-        // 출석체크 — 그날 첫 진입 1회 모달 + 첫 출석이면 실타래 +5. 온보딩 이후에 띄운다.
+        // 출석체크 — 회원의 그날 첫 진입 1회 모달 + 첫 출석이면 실타래 +100. 온보딩 이후에 띄운다.
         .task { checkAttendance() }
         .onChange(of: session.ready) { _, _ in checkAttendance() }
         .onChange(of: prefs.prefSelected) { _, _ in checkAttendance() }
@@ -271,9 +271,12 @@ struct RootView: View {
         }
     }
 
-    /// 그날 첫 진입이면 출석 모달을 띄우고, 첫 출석이면 실타래 +5 지급.
+    /// 그날 첫 진입이면 출석 모달을 띄우고, 첫 출석이면 실타래 +100 지급.
     /// 세션 준비 + 온보딩 완료 후에만, 앱 실행당 1회 실행(`attendanceChecked`).
     private func checkAttendance() {
+        // PWA: `if (state.isAnonymous || !state.userId) return` — 회원만 출석/지급.
+        // (익명은 grant_yarn 이 RLS 로 실패하므로 모달·지급 자체를 건너뛴다.)
+        guard !session.isAnonymous, session.userId != nil else { return }
         guard session.ready, prefs.prefSelected, !attendanceChecked else { return }
         attendanceChecked = true
         guard attendance.shouldAutoShowToday() else { return }
