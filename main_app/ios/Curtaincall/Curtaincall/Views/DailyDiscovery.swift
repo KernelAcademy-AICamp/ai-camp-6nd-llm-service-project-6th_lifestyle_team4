@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // Daily/Discovery — Home "New Books" + "Contextual" sections.
 // Ported from Android `ui/daily/DailyScreen.kt` (DailyNewBooks / DailyContextual /
@@ -156,15 +157,55 @@ func cleanDiscoveryQuote(_ s: String) -> String {
 
 // MARK: - New Books section
 
+/// 새 책 룰렛 카드들 중 최대 높이 추적용 — 회전/스와이프 시 아래 닷·표지줄이
+/// 튀지 않도록 minHeight 로 고정(PWA measureMaxMainHeight + --newbook-main-min-h).
+private struct NewBookCardHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct DailyNewBooksSection: View {
     let cards: [Card]
 
+    // PWA new-books 룰렛(m-app.js renderDailyNewBooks): 최신 9권을 10초마다 자동
+    // 전환 + 좌우 스와이프 + 닷 트래킹. 사용자가 스와이프/닷 탭하면 자동순환 정지.
+    @State private var idx = 0
+    @State private var userInteracted = false
+    @State private var maxCardHeight: CGFloat = 0
+    // @State 로 한 번만 생성 — View 재초기화마다 새 타이머가 생겨 카운트다운이
+    // 리셋되는 것을 막는다(부모 잦은 렌더 시 회전 정지 방지).
+    @State private var rotation = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
+
     var body: some View {
-        let books = buildNewBooks(cards)
-        if let main = books.first {
-            let rest = Array(books.dropFirst().prefix(8))
+        let books = Array(buildNewBooks(cards).prefix(9))   // PWA sorted.slice(0, 9)
+        if !books.isEmpty {
+            let safeIdx = min(idx, books.count - 1)
+            // PWA rest = sorted.filter(idx != i) — 현재 메인을 뺀 나머지.
+            let rest = books.enumerated().filter { $0.offset != safeIdx }.map(\.element)
             VStack(alignment: .leading, spacing: 0) {
-                featured(main)
+                featured(books[safeIdx])
+                    .background(GeometryReader { g in
+                        Color.clear.preference(key: NewBookCardHeightKey.self, value: g.size.height)
+                    })
+                    .frame(minHeight: maxCardHeight, alignment: .top)
+                    .animation(.easeInOut(duration: 0.35), value: safeIdx)
+                    // 좌우 스와이프 — 왼쪽=다음, 오른쪽=이전(모듈러 순환). simultaneousGesture
+                    // 라 카드 탭(상세 이동)·세로 스크롤은 유지하고 가로 스와이프만 가로챈다.
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 20).onEnded { v in
+                            let dx = v.translation.width, dy = v.translation.height
+                            guard books.count > 1, abs(dx) > 45, abs(dx) > abs(dy) else { return }
+                            userInteracted = true
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                idx = (safeIdx + (dx < 0 ? 1 : -1) + books.count) % books.count
+                            }
+                        }
+                    )
+                if books.count > 1 {
+                    newBookDots(count: books.count, active: safeIdx)
+                }
                 if !rest.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: 12) {
@@ -175,7 +216,53 @@ struct DailyNewBooksSection: View {
                     }
                 }
             }
+            .onPreferenceChange(NewBookCardHeightKey.self) { h in
+                if h > maxCardHeight { maxCardHeight = h }
+            }
+            // 10초 자동 전환 — 사용자가 스와이프/닷 탭하기 전까지(PWA stopNewbooksRotation).
+            .onReceive(rotation) { _ in
+                guard books.count > 1, !userInteracted else { return }
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    idx = (safeIdx + 1) % books.count
+                }
+            }
         }
+    }
+
+    /// PWA `.newbook-dots`: 카드 바로 아래 가운데. 7pt 원, gap 7, 위 14pt. 활성=espresso
+    /// (꽉 참)·비활성=sand. 개수는 책 수에 바인딩(하드코딩 X). 닷 탭 → 해당 책으로 점프.
+    private func newBookDots(count: Int, active: Int) -> some View {
+        HStack(spacing: 7) {
+            ForEach(0..<count, id: \.self) { i in
+                Button {
+                    guard i != active else { return }
+                    userInteracted = true
+                    withAnimation(.easeInOut(duration: 0.35)) { idx = i }
+                } label: {
+                    Circle()
+                        .fill(i == active ? Color.espresso : Color.sand)
+                        .frame(width: 7, height: 7)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(i + 1)번째 새 책 보기")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 14)
+    }
+
+    /// 오늘 날짜 — 새 책 카드 안 상단(PWA new-books). 날짜=sand 볼드, 요일=cta.
+    /// "YYYY년 M월 D일 {요일}요일" (web_pwa m-app.js dailyDateLabel 미러).
+    private static var dateLabel: Text {
+        let cal = Calendar(identifier: .gregorian)
+        let c = cal.dateComponents([.year, .month, .day, .weekday], from: .now)
+        let days = ["일", "월", "화", "수", "목", "금", "토"]   // Calendar weekday: 1 = Sunday
+        let weekday = days[((c.weekday ?? 1) - 1) % 7]
+        // String 으로 먼저 조립 — Text(LocalizedStringKey) 정수 보간은 로캘 천단위
+        // 구분자("2,026년")를 붙이므로 String 보간(구분자 없음) 후 verbatim 으로 넘긴다.
+        let date = "\(c.year ?? 0)년 \(c.month ?? 0)월 \(c.day ?? 0)일 "
+        return Text(date).foregroundColor(.sand).fontWeight(.bold)
+            + Text("\(weekday)요일").foregroundColor(.cta)
     }
 
     private func featured(_ book: DiscoveryWork) -> some View {
@@ -191,6 +278,11 @@ struct DailyNewBooksSection: View {
         return NavigationLink(value: book.representativeCard) {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 0) {
+                    // PWA new-books 카드: 날짜를 카드 안 상단에. 날짜=sand 볼드, 요일=cta.
+                    Self.dateLabel
+                        .font(.custom("Pretendard-Medium", size: 11))
+                        .tracking(0.4)
+                    Spacer().frame(height: 13)
                     Text("NEW · 새로 들어온 고전")
                         .font(.custom("Pretendard-Medium", size: 10))
                         .tracking(1.5)
