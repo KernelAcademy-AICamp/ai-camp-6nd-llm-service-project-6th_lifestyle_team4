@@ -1391,8 +1391,8 @@ function openSharedPreview(card, bgId, quote) {
       <div style="text-align:center;color:#FAF8F2;margin:6px 0 14px;letter-spacing:.18em;font-size:11px;opacity:.7;">A FRIEND SENT YOU</div>
       <canvas id="shared-preview-canvas" width="540" height="960" style="width:auto;max-width:100%;max-height:64vh;aspect-ratio:9/16;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.5);"></canvas>
       <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:380px;margin-top:24px;">
-        <button id="shared-preview-signup" class="sharp-btn" style="width:100%;background:var(--cta);color:#fff;display:${isAnon ? 'inline-flex' : 'none'};">회원가입하고 600 실타래 받기</button>
-        <button id="shared-preview-open"   class="sharp-btn outline" style="width:100%;color:#FAF8F2;border-color:rgba(255,255,255,.35);">카드 자세히 보기</button>
+        <button id="shared-preview-signup" class="sharp-btn" style="width:100%;background:var(--cta);color:#fff;display:${isAnon ? 'inline-flex' : 'none'};align-items:center;justify-content:center;text-align:center;">회원가입하고 600 실타래 받기</button>
+        <button id="shared-preview-open"   class="sharp-btn outline" style="width:100%;color:#FAF8F2;border-color:rgba(255,255,255,.35);display:inline-flex;align-items:center;justify-content:center;text-align:center;">카드 자세히 보기</button>
         <button id="shared-preview-close"  style="background:transparent;border:none;color:#FAF8F2;opacity:.6;font-size:12px;letter-spacing:.12em;padding:8px;cursor:pointer;">닫기</button>
       </div>
     `;
