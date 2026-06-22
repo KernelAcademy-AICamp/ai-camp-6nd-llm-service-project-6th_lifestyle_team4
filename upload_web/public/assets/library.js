@@ -156,14 +156,25 @@ async function loadLibrary() {
 
   try {
     const sb = await getSupabase();
-    const { data, error } = await sb
-      .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original)')
-      .order('card_id', { ascending: false })
-      .limit(500);
-    if (error) throw error;
+    // 전체 카드를 페이지네이션으로 끝까지 가져온다 (예전 .limit(500) 캡 때문에
+    // 카드가 500장을 넘으면 '총 N장' 이 500 에서 멈추던 문제 수정).
+    // PostgREST 기본 최대 행수(1000)도 range 페이지네이션으로 우회.
+    const PAGE = 1000;
+    const COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original)';
+    const all = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await sb
+        .from('cards')
+        .select(COLS)
+        .order('card_id', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+      if (error) throw error;
+      const batch = Array.isArray(data) ? data : [];
+      all.push(...batch);
+      if (batch.length < PAGE) break;
+    }
 
-    state.rows = Array.isArray(data) ? data : [];
+    state.rows = all;
     refreshWorkFilterOptions();
     refreshFormatFilterOptions();
     renderLibrary();
@@ -686,6 +697,23 @@ function renderShelf(rows) {
   });
 }
 
+// 관리자 개인용 점검 체크 — 2차(어드민 화면 확인)/3차(핸드폰 화면 확인) 여부를
+// 브라우저 localStorage 에 작품 그룹별로 저장. DB 변경 없음 — 내가 확인했는지 표시용 메모.
+const INSPECT_CHECKS_KEY = 'admin-inspect-checks';
+function readAllInspect() {
+  try { return JSON.parse(localStorage.getItem(INSPECT_CHECKS_KEY) || '{}') || {}; }
+  catch { return {}; }
+}
+function readInspectState(groupKey) {
+  return readAllInspect()[groupKey] || { c2: false, c3: false };
+}
+function saveInspectState(groupKey, patch) {
+  const all = readAllInspect();
+  all[groupKey] = { ...readInspectState(groupKey), ...patch };
+  try { localStorage.setItem(INSPECT_CHECKS_KEY, JSON.stringify(all)); }
+  catch (e) { console.warn('[library] inspect save failed:', e?.message || e); }
+}
+
 function buildShelfSection(group) {
   const wrap = document.createElement('div');
   wrap.className = 'flex flex-col gap-2';
@@ -733,9 +761,18 @@ function buildShelfSection(group) {
     const formatLabel = work.format ? `· ${work.format}` : '';
     const yearLabel = work.release_year ? `· ${work.release_year}` : '';
     const authorLabel = work.author ? `· ${work.author}` : '';
+    const inspect = readInspectState(group.key);
     header.innerHTML = `
       <h3 class="text-lg font-bold text-on-surface">${escapeHtml(extractSeries(work).series || displayTitle(work.title) || '제목 없음')}</h3>
       <span class="text-xs text-on-surface-variant flex-1">${escapeHtml(`${cards.length}장 ${formatLabel} ${yearLabel} ${authorLabel}${mergedHint}`.trim())}</span>
+      <label class="flex items-center gap-1 text-sm font-semibold text-on-surface-variant cursor-pointer select-none" title="2차 점검 — 어드민 화면에서 확인했는지">
+        <input type="checkbox" class="inspect-2nd-chk w-4 h-4 accent-primary cursor-pointer" ${inspect.c2 ? 'checked' : ''}>
+        2차
+      </label>
+      <label class="flex items-center gap-1 text-sm font-semibold text-on-surface-variant cursor-pointer select-none" title="3차 점검 — 핸드폰 화면에서 확인했는지">
+        <input type="checkbox" class="inspect-3rd-chk w-4 h-4 accent-primary cursor-pointer" ${inspect.c3 ? 'checked' : ''}>
+        3차
+      </label>
       <button type="button" class="shelf-start-delete-btn p-1.5 rounded hover:bg-primary/10 text-primary transition-colors flex items-center gap-1 text-sm font-semibold" title="카드 골라 삭제">
         <span class="material-symbols-outlined text-base">checklist</span>
         카드 골라 삭제
@@ -758,6 +795,12 @@ function buildShelfSection(group) {
         message: `"${displayTitle(work.title) || '제목 없음'}" 작품${uploadInfo}과 카드 ${cards.length}장이 모두 영구 삭제됩니다.\n\n복구할 수 없습니다.`,
         onConfirm: () => deleteWorkGroup(group),
       });
+    });
+    header.querySelector('.inspect-2nd-chk').addEventListener('change', (e) => {
+      saveInspectState(group.key, { c2: e.target.checked });
+    });
+    header.querySelector('.inspect-3rd-chk').addEventListener('change', (e) => {
+      saveInspectState(group.key, { c3: e.target.checked });
     });
   }
   wrap.appendChild(header);

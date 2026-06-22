@@ -1261,9 +1261,9 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
     }
     if (bg) safeStorageSet('ds.pendingShareBgId', bg);
     if (q)  safeStorageSet('ds.pendingShareQuote', q);
-    /* 공유 진입(card+bg+q 모두) — 메인 홈화면이 잠깐 보이는 것조차 차단.
-       body 에 클래스 부여 → CSS 로 main/탭 등 즉시 숨김. 미리보기 모달이 뜨면 해제. */
-    if (card && bg && q) {
+    /* 공유 진입(card+bg 있으면) — 메인 홈화면이 잠깐 보이는 것조차 차단.
+       q 는 옵션(생략 시 받는 쪽에서 card.quote 사용). body 에 클래스 부여 → CSS 로 main/탭 등 즉시 숨김. */
+    if (card && bg) {
       document.documentElement.classList.add('share-entry');
       /* 메인 콘텐츠/하단바를 즉시 가리는 인라인 CSS 1회 주입 */
       if (!document.getElementById('share-entry-css')) {
@@ -1332,12 +1332,25 @@ function loadAllCards() {
   if (loadAllCardsInFlight) return loadAllCardsInFlight;
   loadAllCardsInFlight = (async () => {
     const sb = await getSupabase();
-    const { data, error } = await sb
-      .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url)')
-      .order('card_id', { ascending: false }).limit(500);
-    if (error) throw error;
-    state.allCards = Array.isArray(data) ? data : [];
+    // 전체 카드를 페이지네이션으로 끝까지 가져온다 (예전 .limit(500) 캡 때문에
+    // 카드가 500장을 넘으면 '명대사 N편' 이 500 에서 멈추고, 초과분 카드가
+    // 카탈로그·추천 등에서 아예 누락되던 문제 수정). PostgREST 기본 최대 행수(1000)도
+    // range 페이지네이션으로 우회.
+    const PAGE = 1000;
+    const COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url)';
+    const all = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await sb
+        .from('cards')
+        .select(COLS)
+        .order('card_id', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+      if (error) throw error;
+      const batch = Array.isArray(data) ? data : [];
+      all.push(...batch);
+      if (batch.length < PAGE) break;
+    }
+    state.allCards = all;
     /* 공유받은 카드(?card=) 자동 열기 — 카드 데이터 들어온 직후 1회만 */
     try { maybeOpenSharedCard(); } catch (e) { console.warn('[m] maybeOpenSharedCard failed:', e); }
   })().finally(() => { loadAllCardsInFlight = null; });
@@ -1353,16 +1366,16 @@ function maybeOpenSharedCard() {
   if (!card) return;   /* allCards 에 없으면 retry 위해 키 유지 */
   safeStorageRemove('ds.pendingShareCardId');
   state._sharedCardOpenedId = card.card_id;
-  /* 카드지(bg) + 하이라이트(q) 가 함께 왔으면 → 진입 시 메인 안 보이고 풀스크린 공유 미리보기 모달.
-     익명/로그인 모두 동일 미리보기 (CTA 만 차등 — 로그인은 회원가입 CTA 숨김). 정보 부족 시 기본 흐름. */
+  /* 카드지(bg) 만 있어도 미리보기 모달. q 가 있으면 그걸 사용, 없으면 card.quote 로 채움 (URL 단축 케이스). */
   const bgId = safeStorageGet('ds.pendingShareBgId');
   const qRaw = safeStorageGet('ds.pendingShareQuote');
-  const q = qRaw ? (() => { try { return decodeURIComponent(qRaw); } catch { return qRaw; } })() : '';
-  if (bgId && q) {
+  const qDecoded = qRaw ? (() => { try { return decodeURIComponent(qRaw); } catch { return qRaw; } })() : '';
+  if (bgId) {
     safeStorageRemove('ds.pendingShareBgId');
     safeStorageRemove('ds.pendingShareQuote');
+    const previewQuote = qDecoded || card.quote || '';
     setTimeout(() => {
-      try { openSharedPreview(card, bgId, q); }
+      try { openSharedPreview(card, bgId, previewQuote); }
       catch (e) {
         console.warn('[m] openSharedPreview failed:', e);
         document.documentElement.classList.remove('share-entry');
@@ -8626,12 +8639,18 @@ async function shareImage() {
 }
 
 /* 링크 보내기 — 텍스트(명대사 + URL). 카카오톡 등 SNS 가 OG 메타 기반 카드 미리보기 자동 표시.
-   URL 에 공유자가 선택한 카드지(bg) + 하이라이트 텍스트(q) 인코딩 → 받는 사람이 같은 미리보기를 봄. */
+   URL 단축: payload.quote 가 카드 원본 quote 와 같으면 q 생략 (받은 쪽에서 card.quote 로 채움).
+   하이라이트 일부만 공유한 경우만 q 포함 → URL 짧게 유지. */
 async function shareLink() {
   const payload = shareState.payload || {};
-  const refUrl  = buildReferralUrl(
-    payload?.cardId,
-    { bgId: shareState.bgId, quote: payload?.quote || '' },
+  const cardId  = payload?.cardId;
+  const card    = (state.allCards || []).find((c) => c && c.card_id === cardId);
+  const fullQuote = String(card?.quote || '').trim();
+  const myQuote   = String(payload?.quote || '').trim();
+  const isFullQuote = myQuote && fullQuote && myQuote === fullQuote;
+  const refUrl = buildReferralUrl(
+    cardId,
+    { bgId: shareState.bgId, quote: isFullQuote ? '' : myQuote },
   );
   const quote   = payload.quote ? `"${payload.quote}"` : '';
   const credit  = payload.work  ? ` — ${payload.work}` : '';
