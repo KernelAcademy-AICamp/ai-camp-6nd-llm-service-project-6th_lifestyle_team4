@@ -5104,28 +5104,46 @@ async function playAttendanceRewardAnim(amount, finalBalance) {
 }
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
-/* 작은 +N 보상 액션 — 카드 첫 열람 등에서 토스트 대신 사용.
-   chip 옆에 작은 실타래 + '+N' 알약 떠올라 fade out. chip 의 img 도 잠깐 bounce. */
+/* 보상 액션 — 카드 첫 열람 등에서 토스트 대신 사용.
+   화면 중앙·하단바 위에 큰 실타래 + '+N' 표시. 실타래 자체가 통통 튀는 bounce. 배경 없이 깔끔.
+   2초 지속 후 fade out. chip 안의 img 도 동시에 bounce. */
 function playYarnRewardFly(amount) {
-  if (!yarnChip || !amount) return;
-  /* chip img bounce — 출석 보상 CSS 재사용 (body.ar-active + chip.ar-bounce) */
-  document.body.classList.add('ar-active');
-  yarnChip.classList.add('ar-bounce');
-  setTimeout(() => {
-    yarnChip.classList.remove('ar-bounce');
-    document.body.classList.remove('ar-active');
-  }, 950);
-  /* floating pop */
-  const rect = yarnChip.getBoundingClientRect();
+  if (!amount) return;
+  /* keyframes 1회 inject */
+  if (!document.getElementById('reward-yarn-bounce-css')) {
+    const css = document.createElement('style');
+    css.id = 'reward-yarn-bounce-css';
+    css.textContent = `@keyframes reward-yarn-bounce {
+      0%, 100% { transform: translateY(0) scale(1); }
+      20%      { transform: translateY(-18px) scale(1.12); }
+      40%      { transform: translateY(0)     scale(0.92); }
+      60%      { transform: translateY(-10px) scale(1.06); }
+      80%      { transform: translateY(0)     scale(0.98); }
+    }`;
+    document.head.appendChild(css);
+  }
+  /* chip img 동반 bounce — 출석 보상 CSS 재사용 */
+  if (yarnChip) {
+    document.body.classList.add('ar-active');
+    yarnChip.classList.add('ar-bounce');
+    setTimeout(() => {
+      yarnChip.classList.remove('ar-bounce');
+      document.body.classList.remove('ar-active');
+    }, 950);
+  }
+  /* 화면 중앙 + 하단바 위. 배경 없음. 잉크 색 텍스트. */
   const pop = document.createElement('div');
-  pop.style.cssText = `position:fixed;left:${rect.left + rect.width / 2}px;top:${rect.bottom + 6}px;transform:translate(-50%,0);background:rgba(14,12,10,.88);color:#FAF8F2;padding:6px 12px;border-radius:14px;font-size:13px;font-weight:700;z-index:160;display:inline-flex;align-items:center;gap:5px;box-shadow:0 6px 16px rgba(0,0,0,.25);pointer-events:none;transition:transform .9s cubic-bezier(.34,1.56,.64,1), opacity .9s ease;opacity:1;`;
-  pop.innerHTML = `<img src="/m/assets/daily-script-bar.png" alt="" style="width:16px;height:16px;border-radius:50%;object-fit:cover;display:block;" /><span>+${amount}</span>`;
+  pop.style.cssText = `position:fixed;left:50%;bottom:calc(108px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:160;display:inline-flex;align-items:center;gap:10px;pointer-events:none;opacity:0;transition:opacity .35s ease;`;
+  pop.innerHTML = `
+    <img src="/m/assets/daily-script-bar.png" alt=""
+         style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:block;filter:drop-shadow(0 4px 10px rgba(60,38,18,.35));animation:reward-yarn-bounce 1.4s cubic-bezier(.34,1.56,.64,1) infinite;" />
+    <span style="color:var(--espresso);font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;text-shadow:0 1px 0 rgba(250,248,242,.8);">+${amount}</span>
+  `;
   document.body.appendChild(pop);
-  requestAnimationFrame(() => {
-    pop.style.transform = 'translate(-50%,-46px)';
-    pop.style.opacity = '0';
-  });
-  setTimeout(() => { try { pop.remove(); } catch {} }, 1100);
+  requestAnimationFrame(() => { pop.style.opacity = '1'; });
+  /* 2초 지속 → 0.4s fade → 제거 */
+  setTimeout(() => { pop.style.opacity = '0'; }, 2000);
+  setTimeout(() => { try { pop.remove(); } catch {} }, 2450);
 }
 
 function countYarnTo(fromN, toN, ms) {
