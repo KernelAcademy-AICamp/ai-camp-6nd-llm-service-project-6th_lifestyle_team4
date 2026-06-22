@@ -161,7 +161,7 @@ struct CommentsSection: View {
             Spacer().frame(height: 16)
 
             if isAnonymous {
-                Text("로그인 후 댓글과 하트를 남길 수 있어요.")
+                Text("댓글을 남기려면 로그인이 필요합니다. (하트 반응도 동일)")
                     .font(.bodySans(14))
                     .foregroundStyle(.walnut)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -176,7 +176,7 @@ struct CommentsSection: View {
             Spacer().frame(height: 20)
 
             if model.comments.isEmpty {
-                Text("아직 댓글이 없어요. 첫 감상을 남겨보세요.")
+                Text("아직 댓글이 없어요. 첫 번째 흔적을 남겨보세요.")
                     .font(.bodySans(14))
                     .foregroundStyle(.walnut)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -241,13 +241,13 @@ struct CommentsSection: View {
                         Button {
                             model.editingCommentId = nil
                             editDraft = ""
-                        } label: { Text("취소").labelCaps() }
+                        } label: { Text("CANCEL").labelCaps() }
                             .buttonStyle(.plain)
                         Button {
                             if let uid = userId {
                                 Task { await model.update(userId: uid, commentId: c.commentId, body: editDraft) }
                             }
-                        } label: { Text("저장").labelCaps(color: .cta) }
+                        } label: { Text("SAVE").labelCaps(color: .cta) }
                             .buttonStyle(.plain)
                             .disabled(model.submitting || editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     } else {
@@ -367,7 +367,7 @@ struct CommentComposer: View {
                 }
 
                 Button(action: send) {
-                    Text("등록")
+                    Text("남기기")
                         .labelCaps(color: canSend ? .paper : .walnut)
                         .padding(.horizontal, 16)
                         .frame(height: 36)
