@@ -4226,6 +4226,15 @@ function renderMyCommentsList() {
   myfeedEmpty.style.display = 'none';
   myfeedList.innerHTML = '';
   for (const p of rows) myfeedList.appendChild(buildMyFeedCommentRow(p));
+  // row 클릭 시 그 글의 상세(feedpost-screen) 로 이동 — 버튼/textarea/input 영역 클릭은 무시
+  myfeedList.querySelectorAll('[data-myfeed-post]').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button, textarea, input')) return;
+      const id = parseInt(row.dataset.myfeedPost, 10);
+      const post = (state.myFeedComments || []).find((p) => p.post_id === id);
+      if (post) { try { closeMyFeedScreenInternal?.(); } catch {} ; setTimeout(() => { try { openFeedPostDetail(post); } catch (err) { console.warn('[m] openFeedPostDetail failed:', err); } }, 220); }
+    });
+  });
   // 이벤트 바인딩
   myfeedList.querySelectorAll('.mfc-edit-btn').forEach((b) => b.addEventListener('click', () => {
     state.editingMyFeedId = parseInt(b.dataset.id, 10);
@@ -4279,7 +4288,8 @@ function buildMyFeedCommentRow(p) {
   const isEditing = state.editingMyFeedKind === 'comment' && state.editingMyFeedId === p.post_id;
 
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);';
+  wrap.dataset.myfeedPost = String(p.post_id);
+  wrap.style.cssText = `padding:16px 0;border-bottom:0.5px solid var(--latte);${isEditing ? '' : 'cursor:pointer;'}`;
   if (isEditing) {
     wrap.innerHTML = `
       <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
@@ -4326,6 +4336,15 @@ function renderMyHighlightsList() {
   myfeedEmpty.style.display = 'none';
   myfeedList.innerHTML = '';
   for (const h of rows) myfeedList.appendChild(buildMyFeedHighlightRow(h));
+  // row 클릭 시 그 하이라이트의 상세 모달로 이동 — 버튼 영역은 무시
+  myfeedList.querySelectorAll('[data-myfeed-highlight]').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      const id = parseInt(row.dataset.myfeedHighlight, 10);
+      const highlight = (state.myFeedHighlights || []).find((h) => h.highlight_id === id);
+      if (highlight) { try { closeMyFeedScreenInternal?.(); } catch {} ; setTimeout(() => { try { openHighlightDetail(highlight); } catch (err) { console.warn('[m] openHighlightDetail failed:', err); } }, 220); }
+    });
+  });
   // 하이라이트는 Delete 만 (Edit 제거).
   myfeedList.querySelectorAll('.mfh-delete-btn').forEach((b) => b.addEventListener('click', async () => {
     if (!(await appConfirm({ title: '하이라이트 삭제', message: '이 하이라이트를 삭제할까요?', confirmLabel: '삭제' }))) return;
@@ -4351,7 +4370,8 @@ function buildMyFeedHighlightRow(h) {
   const idTag = `#${String(h.card_id).padStart(5, '0')}`;
 
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);';
+  wrap.dataset.myfeedHighlight = String(h.highlight_id);
+  wrap.style.cssText = 'padding:16px 0;border-bottom:0.5px solid var(--latte);cursor:pointer;';
   wrap.innerHTML = `
     <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
     <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
