@@ -93,7 +93,7 @@ struct RootView: View {
             Task { await bookmarks.load(userId: newValue) }
             yarn.sync(serverBalance: session.yarnBalance)   // 로그인/로그아웃 시 잔액 재시드
         }
-        // 출석체크 — 그날 첫 진입 1회 모달 + 첫 출석이면 실타래 +5. 온보딩 이후에 띄운다.
+        // 출석체크 — 회원의 그날 첫 진입 1회 모달 + 첫 출석이면 실타래 +100. 온보딩 이후에 띄운다.
         .task { checkAttendance() }
         .onChange(of: session.ready) { _, _ in checkAttendance() }
         .onChange(of: prefs.prefSelected) { _, _ in checkAttendance() }

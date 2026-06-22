@@ -4,8 +4,8 @@ import Combine
 /// 출석체크 — faithful port of the PWA attendance module
 /// (`web_pwa/public/m/assets/m-app.js`: `maybeShowAttendance` / `markAttendanceToday`).
 ///
-/// 사용자 명세: 00시(로컬 자정) 기준 그날 처음 앱을 열면 한 달 달력 모달을 1회 띄우고,
-/// 그날 첫 출석이면 실타래 **+5** 를 지급한다. 보상 지급은 `YarnStore.grant(_:)` 가 담당.
+/// 사용자 명세: 회원이 00시(로컬 자정) 기준 그날 처음 앱을 열면 한 달 달력 모달을 1회 띄우고,
+/// 그날 첫 출석이면 실타래 **+100** 을 지급한다. 보상 지급은 `YarnStore.grant(_:)` 가 담당.
 ///
 /// - `ds.attendance.history`  — 출석한 날짜(`yyyy-MM-dd`, 로컬) 집합. PWA 키와 동일.
 /// - `ds.attendance.lastShown` — 모달을 띄운 마지막 날짜(하루 1회 제한).
