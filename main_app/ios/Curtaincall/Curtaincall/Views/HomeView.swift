@@ -60,7 +60,14 @@ struct HomeView: View {
                         }
                         todayCardView(card)
                     } else if isLoading {
-                        TodayCardBody(card: nil, isLoading: true, bookmarkCount: 0, showOriginal: false)
+                        VStack(alignment: .leading, spacing: 0) {
+                            TodayCardBody(card: nil, isLoading: true, showOriginal: false)
+                            Spacer().frame(height: 20)
+                            Text("Read Full Script").editorialButton(style: .filled)
+                        }
+                        .padding(20)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
                     }
 
                     Spacer().frame(height: 56)
@@ -134,31 +141,60 @@ struct HomeView: View {
     }
 
     private func todayCardView(_ card: Card) -> some View {
-        ZStack(alignment: .topTrailing) {
+        let keywords = card.displayKeywords(original: todayShowOriginal)
+        return VStack(alignment: .leading, spacing: 0) {
             NavigationLink(value: card) {
-                TodayCardBody(
-                    card: card,
-                    isLoading: isLoading,
-                    bookmarkCount: bookmarkCounts[card.cardId] ?? 0,
-                    showOriginal: todayShowOriginal
-                )
+                TodayCardBody(card: card, isLoading: isLoading, showOriginal: todayShowOriginal)
             }
             .buttonStyle(.plain)
             .cardContextMenu(card)
             .cardHeroSource(card.cardId)
 
-            Button {
-                toggleBookmark(cardId: card.cardId)
-            } label: {
-                Image(systemName: bookmarks.isBookmarked(card.cardId) ? "bookmark.fill" : "bookmark")
-                    .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(bookmarks.isBookmarked(card.cardId) ? Color.cta : .walnut)
-                    .frame(width: 44, height: 44)
+            // 카드 우측 하단 — 북마크(아이콘+수) · 공유(아이콘+수). PWA today-card 하단 행
+            // (index.html:1796-1805). 링크 밖 실제 버튼이라 탭이 상세 이동으로 새지 않는다.
+            HStack(spacing: 18) {
+                Spacer()
+                Button { toggleBookmark(cardId: card.cardId) } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: bookmarks.isBookmarked(card.cardId) ? "bookmark.fill" : "bookmark")
+                            .font(.system(size: 22, weight: .regular))
+                            .foregroundStyle(bookmarks.isBookmarked(card.cardId) ? Color.cta : .walnut)
+                        Text("\(bookmarkCounts[card.cardId] ?? 0)")
+                            .font(.bodySans(10)).foregroundStyle(.walnut)
+                    }
+                }
+                .buttonStyle(.plain)
+                QuoteShareLink(card: card) {
+                    VStack(spacing: 3) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 22, weight: .regular))
+                            .foregroundStyle(.walnut)
+                        Text("\(card.shareCount ?? 0)")
+                            .font(.bodySans(10)).foregroundStyle(.walnut)
+                    }
+                }
+            }
+            .padding(.top, 14)
+
+            Spacer().frame(height: 14)
+            Hairline()
+            Spacer().frame(height: 12)
+            if !keywords.isEmpty {
+                HStack(spacing: 12) {
+                    ForEach(keywords, id: \.self) { kw in
+                        Text("#\(kw)").font(.bodySans(14)).foregroundStyle(.walnut)
+                    }
+                }
+            }
+            Spacer().frame(height: 20)
+            NavigationLink(value: card) {
+                Text("Read Full Script").editorialButton(style: .filled)
             }
             .buttonStyle(.plain)
-            .padding(.top, 8)
-            .padding(.trailing, 8)
         }
+        .padding(20)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
     }
 
     private static var formattedToday: String {
@@ -248,10 +284,11 @@ struct HomeView: View {
     }
 }
 
+/// 카드 상단~인용~출처(탭하면 상세). 하단 액션 행/구분선/키워드/Read 버튼은 상위
+/// `todayCardView` 가 링크 밖에서 그린다(북마크·공유 버튼이 탭을 가로채지 않도록).
 private struct TodayCardBody: View {
     let card: Card?
     let isLoading: Bool
-    let bookmarkCount: Int
     let showOriginal: Bool
 
     var body: some View {
@@ -262,10 +299,6 @@ private struct TodayCardBody: View {
                 }
                 if let kw = card?.displayKeywords(original: showOriginal).first {
                     Chip(text: kw, filled: false)
-                }
-                if let card {
-                    CardCountsRow(viewCount: card.viewCount ?? 0, bookmarkCount: bookmarkCount)
-                        .padding(.leading, 4)
                 }
                 Spacer()
             }
@@ -289,24 +322,7 @@ private struct TodayCardBody: View {
                     .foregroundStyle(.walnut)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer().frame(height: 24)
-            Hairline()
-            Spacer().frame(height: 12)
-            if let keywords = card?.displayKeywords(original: showOriginal), !keywords.isEmpty {
-                HStack(spacing: 12) {
-                    ForEach(keywords, id: \.self) { kw in
-                        Text("#\(kw)")
-                            .font(.bodySans(14))
-                            .foregroundStyle(.walnut)
-                    }
-                }
-            }
-            Spacer().frame(height: 20)
-            Text("Read Full Script").editorialButton(style: .filled)
         }
-        .padding(20)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
     }
 
     /// Speaker is derived from the displayed script by matching `work.characters`.

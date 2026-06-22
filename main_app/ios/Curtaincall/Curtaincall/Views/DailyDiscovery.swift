@@ -801,40 +801,50 @@ struct DailyOzPickSection: View {
 struct DailyNoticeCarousel: View {
     let notices: [Notice]
 
+    // 10초마다 회전 + PWA 크로스페이드(제목만 opacity 0→swap→1, 각 200ms).
+    @State private var idx = 0
+    @State private var titleOpacity = 1.0
+    @State private var rotation = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
+
     var body: some View {
         let items = Array(notices.prefix(3))
         if !items.isEmpty {
             NavigationLink {
                 NoticeView()
             } label: {
-                TimelineView(.periodic(from: .now, by: 10)) { context in
-                    let idx = items.count > 1
-                        ? Int(context.date.timeIntervalSince1970 / 10) % items.count
-                        : 0
-                    HStack(spacing: 10) {
-                        Image(systemName: "megaphone")
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(Color.cta)
-                        Text(items[min(idx, items.count - 1)].title)
-                            .font(.bodySans(13))
-                            .fontWeight(.medium)
-                            .foregroundStyle(.espresso)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text("›")
-                            .font(.titleSerif(16))
-                            .foregroundStyle(.walnut)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.latte))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.sand, lineWidth: 0.5))
-                    .shadow(color: Color.black.opacity(0.08), radius: 5, x: 0, y: 2)
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                HStack(spacing: 10) {
+                    Image(systemName: "megaphone")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(Color.cta)
+                    Text(items[min(idx, items.count - 1)].title)
+                        .font(.bodySans(13))
+                        .fontWeight(.medium)
+                        .foregroundStyle(.espresso)
+                        .lineLimit(1)
+                        .opacity(titleOpacity)   // PWA daily-notice-title-line 페이드
+                    Spacer(minLength: 8)
+                    Text("›")
+                        .font(.titleSerif(16))
+                        .foregroundStyle(.walnut)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.latte))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.sand, lineWidth: 0.5))
+                .shadow(color: Color.black.opacity(0.08), radius: 5, x: 0, y: 2)
+                .contentShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
+            // PWA renderDailyNotice: 제목을 200ms 페이드아웃 → 교체 → 200ms 페이드인.
+            .onReceive(rotation) { _ in
+                guard items.count > 1 else { return }
+                withAnimation(.easeInOut(duration: 0.2)) { titleOpacity = 0 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    idx = (idx + 1) % items.count
+                    withAnimation(.easeInOut(duration: 0.2)) { titleOpacity = 1 }
+                }
+            }
         }
     }
 }
