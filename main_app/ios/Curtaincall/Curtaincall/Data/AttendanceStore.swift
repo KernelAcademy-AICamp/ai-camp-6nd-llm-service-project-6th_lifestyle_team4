@@ -12,8 +12,8 @@ import Combine
 @MainActor
 final class AttendanceStore: ObservableObject {
 
-    /// 출석 첫 기록 시 지급할 실타래 수 (PWA `ATTENDANCE_REWARD`).
-    static let reward = 5
+    /// 출석 첫 기록 시 지급할 실타래 수 (PWA `ATTENDANCE_REWARD = 100`).
+    static let reward = 100
 
     /// 출석한 날짜 집합 — 달력 렌더링의 단일 출처.
     @Published private(set) var attendedDates: Set<String> = []
