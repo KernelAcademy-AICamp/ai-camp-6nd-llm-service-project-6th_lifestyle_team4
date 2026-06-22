@@ -16,9 +16,19 @@ struct HomeView: View {
     @State private var isLoading = false
     @State private var fetchFailed = false
     @State private var showAccountPrompt = false
+    // 프롬프트 카피 — 북마크 게이트(기본) ↔ 새로고침 한도 모달에서 갈아끼운다.
+    @State private var promptTitle = "북마크는 회원 전용"
+    @State private var promptMessage = "마음에 든 명대사를 보관하려면 로그인이 필요해요."
     @State private var bookmarkCounts: [Int: Int] = [:]
     @State private var shareCard: Card?
     @State private var shareCountOverrides: [Int: Int] = [:]   // cardId → 낙관적 공유 수
+    // 당겨서 새로고침(Android RefreshableBox 미러: 실타래가 위에서 내려와 회전) + 갱신됨 토스트.
+    @State private var pullDistance: CGFloat = 0
+    @State private var pullArmed = false
+    @State private var pullRefreshing = false
+    @State private var spinAngle: Double = 0
+    @State private var refreshToast: String?
+    private let pullThreshold: CGFloat = 90
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,7 +48,7 @@ struct HomeView: View {
                             .font(.displaySerif(28))
                             .foregroundStyle(.espresso)
                             .frame(maxWidth: .infinity)
-                        Button { Task { await reload(deterministic: false) } } label: {
+                        Button { handleRefreshTap() } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 18, weight: .regular))
                                 .foregroundStyle(.walnut)
@@ -107,6 +117,11 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 20)
             }
+            // 당겨서 새로고침 — 스크롤이 위로 당겨진 거리를 추적, 임계 넘겨 놓으면 실행.
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, y in
+                handlePull(offsetY: y)
+            }
+            .overlay(alignment: .top) { yarnPullIndicator }
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
@@ -138,12 +153,39 @@ struct HomeView: View {
         }
         .overlay {
             if showAccountPrompt {
-                AccountRequiredPrompt {
-                    showAccountPrompt = false
-                    selectedTab = .settings
-                } onClose: {
-                    showAccountPrompt = false
+                AccountRequiredPrompt(
+                    title: promptTitle,
+                    message: promptMessage,
+                    onLogin: {
+                        showAccountPrompt = false
+                        selectedTab = .settings
+                    },
+                    onClose: { showAccountPrompt = false }
+                )
+            }
+        }
+        // 갱신됨 토스트 — 하단(yarn 네비 버튼 위), PWA toast('갱신됨') 미러.
+        .overlay(alignment: .bottom) {
+            if let refreshToast {
+                Text(refreshToast)
+                    .font(.bodySans(13))
+                    .foregroundStyle(Color.paper)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.espresso))
+                    .padding(.bottom, 130)
+                    .transition(.opacity)
+            }
+        }
+        // 새로고침 중에만 실타래를 연속 회전(750ms/회전, Android YarnRefreshIndicator).
+        .onChange(of: pullRefreshing) { _, refreshing in
+            if refreshing {
+                spinAngle = 0
+                withAnimation(.linear(duration: 0.75).repeatForever(autoreverses: false)) {
+                    spinAngle = 360
                 }
+            } else {
+                spinAngle = 0
             }
         }
     }
@@ -260,6 +302,63 @@ struct HomeView: View {
         } catch {
             fetchFailed = true
         }
+        // 새로고침(랜덤) 완료 시 갱신됨/갱신 실패 토스트 — 버튼·당김 둘 다 여기로 모인다
+        // (초기/시드 로드는 deterministic=true 라 토스트 없음). PWA toast('갱신됨') 미러.
+        if !deterministic {
+            showRefreshToast(fetchFailed ? "갱신 실패" : "갱신됨")
+        }
+    }
+
+    /// Android YarnRefreshIndicator 미러 — 당기는 거리만큼 위에서 내려오며 페이드·확대·
+    /// 살짝 감기고(windup), 새로고침 중엔 연속 회전. 실타래 = 하단탭 홈 버튼 아이콘.
+    private var yarnPullIndicator: some View {
+        let size: CGFloat = 44
+        let restY: CGFloat = 16
+        let shown: CGFloat = pullRefreshing ? 1 : min(1, pullDistance / pullThreshold)
+        let translateY = -size + shown * (size + restY)
+        let rotation: Double = pullRefreshing ? spinAngle : Double(shown) * 200
+        return Image("daily-script-bar")
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .opacity(Double(shown))
+            .scaleEffect(0.5 + 0.5 * shown)
+            .rotationEffect(.degrees(rotation))
+            .offset(y: translateY)
+            .allowsHitTesting(false)
+    }
+
+    /// 스크롤 당김 추적 — 임계(pullThreshold) 넘기면 arm, 손 떼고 상단 복귀 시 1회 실행.
+    private func handlePull(offsetY: CGFloat) {
+        guard !pullRefreshing else { return }
+        let pull = max(0, -offsetY)
+        pullDistance = pull
+        if pull >= pullThreshold { pullArmed = true }
+        if pullArmed && pull <= 1 {
+            pullArmed = false
+            pullRefresh()
+        }
+    }
+
+    /// 당겨서 새로고침 — 실타래 스피너를 돌리며 reload(랜덤). 토스트는 reload 안에서.
+    /// (헤더 새로고침 버튼은 reload 를 직접 호출 → 같은 토스트, 버튼 라인은 안 건드림.)
+    private func pullRefresh() {
+        Task {
+            pullRefreshing = true
+            await reload(deterministic: false)
+            pullRefreshing = false
+        }
+    }
+
+    private func showRefreshToast(_ msg: String) {
+        withAnimation(.easeInOut(duration: 0.2)) { refreshToast = msg }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_600_000_000)   // PWA 1600ms
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if refreshToast == msg { refreshToast = nil }
+            }
+        }
     }
 
     /// 공유 완료 시 share_count +1 — 낙관적 로컬 증가 후 RPC, 결과로 정정. PWA bumpShareCount
@@ -274,8 +373,25 @@ struct HomeView: View {
         }
     }
 
+    /// TODAY 새로고침 — 비회원은 하루 3번 제한(PWA refreshTodayCard / REFRESH_LIMIT).
+    /// 한도 도달 시 '새로운 명대사는 3번까지' 모달, 아니면 카운트 +1 후 새 카드. 회원은 무제한.
+    private func handleRefreshTap() {
+        if session.isAnonymous {
+            if AnonRefreshLimit.atLimit {
+                promptTitle = "새로운 명대사는 3번까지"
+                promptMessage = "오늘 명대사를 3번 받아보셨어요.\n로그인하면 무제한으로 고전 명대사를 즐길 수 있어요."
+                showAccountPrompt = true
+                return
+            }
+            AnonRefreshLimit.bump()
+        }
+        Task { await reload(deterministic: false) }
+    }
+
     private func toggleBookmark(cardId: Int) {
         guard !session.isAnonymous else {
+            promptTitle = "북마크는 회원 전용"
+            promptMessage = "마음에 든 명대사를 보관하려면 로그인이 필요해요."
             showAccountPrompt = true
             return
         }

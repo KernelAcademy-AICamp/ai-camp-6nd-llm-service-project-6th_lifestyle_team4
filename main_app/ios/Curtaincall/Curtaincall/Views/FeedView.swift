@@ -26,6 +26,7 @@ struct FeedView: View {
     @State private var toastMessage: String?
     @State private var isSubmitting = false
     @State private var composeError: String?
+    @State private var showWritePrompt = false   // 익명 글쓰기 → 로그인 모달
 
     private var isEmpty: Bool {
         switch category {
@@ -44,6 +45,11 @@ struct FeedView: View {
                         Text("피드")
                             .font(.displaySerif(32))
                             .foregroundStyle(.espresso)
+                        // PWA 피드 헤더 태그라인 (index.html:1882).
+                        Spacer().frame(height: 6)
+                        Text("매일 한 문장, 그리고 기억에 남은 장면들")
+                            .font(.bodySans(13))
+                            .foregroundStyle(.walnut)
                         Spacer().frame(height: 18)
                         categoryChips
                         Spacer().frame(height: 20)
@@ -94,6 +100,19 @@ struct FeedView: View {
                     .background(Capsule().fill(Color.espresso))
                     .padding(.bottom, 130)
                     .transition(.opacity)
+            }
+        }
+        // 익명 글쓰기 → '로그인이 필요해요' 모달 (PWA openFeedPicker). 로그인/회원가입 → 설정.
+        .overlay {
+            if showWritePrompt {
+                AccountRequiredPrompt(
+                    title: "로그인이 필요해요",
+                    message: category == .highlight
+                        ? "북마크한 카드에 하이라이트를 남기려면 로그인이 필요해요."
+                        : "북마크한 명대사에 한줄을 남기려면 로그인이 필요해요.",
+                    onLogin: { showWritePrompt = false; selectedTab = .settings },
+                    onClose: { showWritePrompt = false }
+                )
             }
         }
         .navigationDestination(item: $selectedCard) { card in
@@ -148,9 +167,8 @@ struct FeedView: View {
     // 의 FeedWriteCat 이 그리고, 탭 시 writeTrigger 를 올려 이 핸들러로 위임한다.
     private func handleWriteTap() {
         if session.isAnonymous {
-            showToast(category == .highlight
-                      ? "로그인 후 하이라이트를 남길 수 있어요."
-                      : "로그인 후 나의 감상평을 남길 수 있어요.")
+            // PWA openFeedPicker: 익명이면 '로그인이 필요해요' 모달 (토스트 X).
+            showWritePrompt = true
         } else {
             showPicker = true
         }
@@ -277,7 +295,8 @@ private enum FeedCategory {
         case .today:
             return "아직 올라온 한줄이 없어요.\n첫 글을 남겨보세요."
         case .highlight:
-            return "아직 하이라이트가 없어요. 명대사 본문을 길게 눌러 저장해보세요."
+            // PWA 두 줄 가이드 (index.html:1899-1900).
+            return "아직 하이라이트가 없어요\n명대사 본문을 길게 눌러 한 구절을 하이라이트해보세요."
         }
     }
 
@@ -422,7 +441,8 @@ private struct FeedPostCard: View {
                 // 책 줄 + 초판 표지가 오른쪽 아래로 '빼꼼' (cover_url, 없으면 가죽 폴백).
                 ZStack(alignment: .bottomTrailing) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(post.card?.work.feedTitle ?? "—")
+                        // PWA buildFeedItem: displayTitle(title) — 제목만(부제 제외).
+                        Text(post.card?.work.title ?? "—")
                             .font(.bodySans(15))
                             .foregroundStyle(.espresso)
                             .lineLimit(1)
@@ -599,12 +619,21 @@ private struct HighlightFeedCard: View {
 }
 
 /// Post detail sheet (Android FeedPostDetailSheet). Shows the review + its source
-/// card; "원문 카드 보기" opens the full card. NOTE: the feed_post_comments list/compose
-/// is deferred — iOS has no post-comments networking yet (separate backend PR).
+/// card; "명대사 읽어보기" opens the full card. Below the body, the PWA feed_post_comments
+/// section (list + compose, 500자, 로그인 게이트) via the shared CommentsModel(.feedPost).
 private struct FeedPostDetailSheet: View {
     let post: FeedPost
     let onOpenCard: (Card) -> Void
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: AuthSession
+    @StateObject private var comments: CommentsModel
+    @FocusState private var composerFocused: Bool
+
+    init(post: FeedPost, onOpenCard: @escaping (Card) -> Void) {
+        self.post = post
+        self.onOpenCard = onOpenCard
+        _comments = StateObject(wrappedValue: CommentsModel(backend: .feedPost(post.postId)))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -643,8 +672,32 @@ private struct FeedPostDetailSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 20)
-                    Spacer().frame(height: 28)
+                    Spacer().frame(height: 24)
+                    Hairline().padding(.horizontal, 20)
+                    Spacer().frame(height: 20)
+                    // PWA 피드 게시물 댓글 — 공유 CommentsModel(.feedPost) 재사용.
+                    CommentsSection(
+                        model: comments,
+                        userId: session.userId,
+                        isAnonymous: session.isAnonymous,
+                        nickname: session.nickname,
+                        copy: .feedPost
+                    )
+                    .padding(.horizontal, 20)
+                    Spacer().frame(height: 24)
                 }
+            }
+            .scrollDismissesKeyboard(.interactively)
+            // 회원만 작성 — 익명은 CommentsSection 로그인 프롬프트만(RLS 도 익명 insert 차단).
+            .dockedBottomBar(isActive: !session.isAnonymous, clearTabBar: true) {
+                CommentComposer(
+                    model: comments,
+                    userId: session.userId,
+                    nickname: session.nickname,
+                    focused: $composerFocused,
+                    placeholder: "이 글에 대한 생각을 남겨주세요…",
+                    submitLabel: "등록"
+                )
             }
         }
         .background(Color.paper)
