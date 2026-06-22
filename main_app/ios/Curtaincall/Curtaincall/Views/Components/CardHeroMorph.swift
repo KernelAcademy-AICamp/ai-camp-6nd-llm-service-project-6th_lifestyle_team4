@@ -32,7 +32,7 @@ extension EnvironmentValues {
 /// exactly ONE cell — otherwise duplicate `matchedTransitionSource` ids in one
 /// namespace make the zoom pick the wrong source or fail to animate.
 enum DailyHeroSection: Hashable {
-    case newBooks, trending, oz, recent
+    case newBooks, trending, oz
 }
 
 private struct CardHeroOwnerKey: EnvironmentKey {

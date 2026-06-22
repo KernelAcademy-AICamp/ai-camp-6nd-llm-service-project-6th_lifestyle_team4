@@ -33,7 +33,7 @@ struct FeedView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AppMasthead(onMyPage: { selectedTab = .settings })
+            AppMasthead()
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {

@@ -2,9 +2,9 @@ import SwiftUI
 
 /// DAILY tab — the discovery screen (PWA bottom-nav "DAILY"). Ports Android
 /// `ui/daily/DailyScreen.kt`: notice carousel, New Books, Contextual (mood
-/// chips), Trending, Oz Pick, and a recent-bookmark section. Read-only over the
-/// existing card set — reuses `fetchCards(limit:500)` + `fetchBookmarkCounts`,
-/// no new fetches, no analytics. Korean labels verbatim.
+/// chips), Trending, and Oz Pick. Read-only over the existing card set — reuses
+/// `fetchCards(limit:500)` + `fetchBookmarkCounts`, no new fetches, no analytics.
+/// Korean labels verbatim.
 struct DailyView: View {
     @Binding var selectedTab: Tab
     @EnvironmentObject private var session: AuthSession
@@ -22,7 +22,7 @@ struct DailyView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AppMasthead(onMyPage: { selectedTab = .settings })
+            AppMasthead()
             if fetchFailed {
                 FetchErrorBanner { Task { await load(force: true) } }
             }
@@ -59,10 +59,6 @@ struct DailyView: View {
                             taste: taste,
                             onRequestPreferences: { prefs.prefSelected = false }
                         )
-                        if let recent = recentBookmark {
-                            Spacer().frame(height: 36)
-                            DailyRecentSection(card: recent.card, bookmarkedAt: recent.date)
-                        }
                     } else if !fetchFailed {
                         Text("Loading⋯")
                             .font(.bodySans(14))
@@ -109,17 +105,8 @@ struct DailyView: View {
         Set(bookmarks.bookmarkCards.flatMap { $0.keywords })
     }
 
-    /// Most recently bookmarked card (다시 만나기).
-    private var recentBookmark: (card: Card, date: Date?)? {
-        let latest = bookmarks.bookmarks
-            .filter { $0.card != nil }
-            .max { ($0.createdDate ?? .distantPast) < ($1.createdDate ?? .distantPast) }
-        guard let latest, let card = latest.card else { return nil }
-        return (card, latest.createdDate)
-    }
-
     /// Assigns each card that appears in a *predictable* Daily section to exactly
-    /// one owner, by priority (newBooks > trending > oz > recent), so a card shown
+    /// one owner, by priority (newBooks > trending > oz), so a card shown
     /// in several sections morphs from a single cell. Cards absent from the map are
     /// owned by the interactive Contextual cell (which DailyView can't predict).
     /// Mirrors the sections' own derivations (buildNewBooks / trending score) so the
@@ -134,7 +121,6 @@ struct DailyView: View {
         }
         // Guest Oz shows the CTA (no card), so don't claim ozCard for `.oz`.
         if !ozIsGuest, let id = ozCard?.cardId, owner[id] == nil { owner[id] = .oz }
-        if let id = recentBookmark?.card.cardId, owner[id] == nil { owner[id] = .recent }
         return owner
     }
 
