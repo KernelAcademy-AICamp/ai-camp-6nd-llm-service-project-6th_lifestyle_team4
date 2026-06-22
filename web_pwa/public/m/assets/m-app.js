@@ -4885,9 +4885,9 @@ async function rewardYarnForFirstView(cardId) {
     if (Number.isFinite(newBalance) && newBalance >= 0) {
       state.yarnPurchased = newBalance;
       renderYarnChip();
-      /* 잔액이 실제로 늘었을 때만 토스트 — 이미 보상 받은 카드면 노이즈 X */
+      /* 잔액이 실제로 늘었을 때만 액션 — chip 옆 floating '+N' + chip img bounce */
       if (newBalance > prev) {
-        try { toast('실타래 +300 (카드 첫 열람)'); } catch {}
+        try { playYarnRewardFly(newBalance - prev); } catch (e) { console.warn('[m] reward fly failed:', e); }
       }
     }
   } catch (e) {
@@ -5103,6 +5103,31 @@ async function playAttendanceRewardAnim(amount, finalBalance) {
   document.body.classList.remove('ar-active');
 }
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+/* 작은 +N 보상 액션 — 카드 첫 열람 등에서 토스트 대신 사용.
+   chip 옆에 작은 실타래 + '+N' 알약 떠올라 fade out. chip 의 img 도 잠깐 bounce. */
+function playYarnRewardFly(amount) {
+  if (!yarnChip || !amount) return;
+  /* chip img bounce — 출석 보상 CSS 재사용 (body.ar-active + chip.ar-bounce) */
+  document.body.classList.add('ar-active');
+  yarnChip.classList.add('ar-bounce');
+  setTimeout(() => {
+    yarnChip.classList.remove('ar-bounce');
+    document.body.classList.remove('ar-active');
+  }, 950);
+  /* floating pop */
+  const rect = yarnChip.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.style.cssText = `position:fixed;left:${rect.left + rect.width / 2}px;top:${rect.bottom + 6}px;transform:translate(-50%,0);background:rgba(14,12,10,.88);color:#FAF8F2;padding:6px 12px;border-radius:14px;font-size:13px;font-weight:700;z-index:160;display:inline-flex;align-items:center;gap:5px;box-shadow:0 6px 16px rgba(0,0,0,.25);pointer-events:none;transition:transform .9s cubic-bezier(.34,1.56,.64,1), opacity .9s ease;opacity:1;`;
+  pop.innerHTML = `<img src="/m/assets/daily-script-bar.png" alt="" style="width:16px;height:16px;border-radius:50%;object-fit:cover;display:block;" /><span>+${amount}</span>`;
+  document.body.appendChild(pop);
+  requestAnimationFrame(() => {
+    pop.style.transform = 'translate(-50%,-46px)';
+    pop.style.opacity = '0';
+  });
+  setTimeout(() => { try { pop.remove(); } catch {} }, 1100);
+}
+
 function countYarnTo(fromN, toN, ms) {
   if (!yarnChip) return;
   const label = yarnChip.querySelector('.yarn-chip-count');
