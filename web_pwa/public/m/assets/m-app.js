@@ -1258,10 +1258,11 @@ async function migrateAnonymousBookmarks(oldUserId, newUserId) {
 (function _captureReferralFromUrl() {
   try {
     const sp = new URLSearchParams(window.location.search);
-    const ref = sp.get('ref');
-    const card = sp.get('card');
-    const bg = sp.get('bg');
-    const q = sp.get('q');
+    /* 새 단축 파라미터(r/c/b/q) 우선, 옛 전체 이름(ref/card/bg) 도 호환 */
+    const ref  = sp.get('r')    || sp.get('ref');
+    const card = sp.get('c')    || sp.get('card');
+    const bg   = sp.get('b')    || sp.get('bg');
+    const q    = sp.get('q');
     if (ref && /^\d+$/.test(ref) && !safeStorageGet('ds.pendingReferrerId')) {
       safeStorageSet('ds.pendingReferrerId', ref);
     }
@@ -8411,6 +8412,141 @@ function boldSpeakerLines(cleanedText, characterNames) {
   }).join('\n');
 }
 
+// ============================================================
+// 알림 (확성기) — 댓글/대댓글 발생 시 자동 생성 (DB 040 트리거).
+//   헤더 #notif-btn 클릭 시 모달 → 항목 클릭 시 해당 컨텐츠로 이동 + is_read 마킹.
+//   미읽음 개수는 #notif-badge 에 표시.
+// ============================================================
+async function loadNotifUnreadCount() {
+  if (!state.userId) { setNotifBadge(0); return; }
+  try {
+    const sb = await getSupabase();
+    const { count, error } = await sb
+      .from('notifications')
+      .select('notification_id', { count: 'exact', head: true })
+      .eq('recipient_user_id', state.userId)
+      .eq('is_read', false);
+    if (error) throw error;
+    setNotifBadge(Number(count) || 0);
+  } catch (e) { console.warn('[m] notif count failed:', e); }
+}
+function setNotifBadge(n) {
+  const badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  if (n > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = n > 99 ? '99+' : String(n);
+  } else {
+    badge.style.display = 'none';
+  }
+}
+async function openNotifModal() {
+  const modal = document.getElementById('notif-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  await renderNotifList();
+  /* 모달 열린 시점에 모든 알림 read 처리 (badge 0 으로) */
+  try {
+    if (state.userId) {
+      const sb = await getSupabase();
+      await sb.from('notifications').update({ is_read: true })
+        .eq('recipient_user_id', state.userId)
+        .eq('is_read', false);
+      setNotifBadge(0);
+    }
+  } catch (e) { console.warn('[m] notif mark read failed:', e); }
+}
+function closeNotifModal() {
+  const modal = document.getElementById('notif-modal');
+  if (modal) modal.style.display = 'none';
+}
+async function renderNotifList() {
+  const list = document.getElementById('notif-list');
+  const empty = document.getElementById('notif-empty');
+  if (!list) return;
+  list.innerHTML = '<p class="t-body-sm c-walnut" style="padding:24px;text-align:center;">불러오는 중⋯</p>';
+  if (!state.userId) { list.innerHTML = ''; if (empty) { empty.style.display = 'block'; empty.textContent = '로그인 후 사용할 수 있어요.'; } return; }
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('notifications')
+      .select('notification_id, actor_user_id, actor_nickname, kind, target_post_id, target_highlight_id, target_comment_id, body_preview, is_read, created_at')
+      .eq('recipient_user_id', state.userId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    const rows = data || [];
+    state._notifications = rows;
+    if (rows.length === 0) {
+      list.innerHTML = '';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    list.innerHTML = rows.map(notifRowHtml).join('');
+    list.querySelectorAll('[data-notif-id]').forEach((el) => {
+      el.addEventListener('click', () => onNotifClick(parseInt(el.dataset.notifId, 10)));
+    });
+  } catch (e) {
+    console.warn('[m] notif list failed:', e);
+    list.innerHTML = '<p class="t-body-sm c-cta" style="padding:24px;text-align:center;">불러오기 실패</p>';
+  }
+}
+function notifRowHtml(n) {
+  const actor = escapeHtml(n.actor_nickname || '익명');
+  const verb = {
+    post_comment: '내 감상평에 댓글을 남겼어요',
+    comment_reply: '내 댓글에 답글을 남겼어요',
+    highlight_comment: '내 하이라이트에 댓글을 남겼어요',
+    highlight_comment_reply: '내 하이라이트 댓글에 답글을 남겼어요',
+  }[n.kind] || '댓글을 남겼어요';
+  const when = formatRelativeTime(n.created_at) || '';
+  const preview = n.body_preview ? `<p class="t-body-sm c-walnut" style="margin:6px 0 0;line-height:1.5;white-space:pre-wrap;word-break:keep-all;">${escapeHtml(n.body_preview)}</p>` : '';
+  return `
+    <div data-notif-id="${n.notification_id}" style="padding:14px 18px;border-bottom:0.5px solid var(--latte);cursor:pointer;${n.is_read ? '' : 'background:rgba(216,90,48,.06);'}">
+      <p class="t-body-md c-espresso" style="margin:0;line-height:1.5;"><b>${actor}</b> 님이 ${verb}</p>
+      ${preview}
+      <p class="t-label-sm c-walnut" style="margin:6px 0 0;letter-spacing:.04em;">${escapeHtml(when)}</p>
+    </div>
+  `;
+}
+async function onNotifClick(notifId) {
+  const n = (state._notifications || []).find((x) => x.notification_id === notifId);
+  if (!n) return;
+  closeNotifModal();
+  /* kind 별로 해당 컨텐츠로 이동 */
+  setTimeout(async () => {
+    try {
+      if (n.kind === 'post_comment' || n.kind === 'comment_reply') {
+        /* feed_post 상세 열기 */
+        const sb = await getSupabase();
+        const { data: post } = await sb.from('feed_posts')
+          .select('post_id, card_id, user_id, author_nickname, body, created_at, cards(card_id, quote, works(work_id, title, subtitle, format, author, cover_url))')
+          .eq('post_id', n.target_post_id).single();
+        if (post) openFeedPostDetail(post);
+      } else if (n.kind === 'highlight_comment' || n.kind === 'highlight_comment_reply') {
+        const sb = await getSupabase();
+        const { data: h } = await sb.from('card_highlights')
+          .select('highlight_id, card_id, user_id, author_nickname, selected_text, user_note, created_at, cards(card_id, works(work_id, title, subtitle, format, author, cover_url))')
+          .eq('highlight_id', n.target_highlight_id).single();
+        if (h) openHighlightDetail(h);
+      }
+    } catch (e) { console.warn('[m] notif navigation failed:', e); toast('이동 실패'); }
+  }, 200);
+}
+
+/* 헤더 확성기 클릭 + 모달 닫기 */
+document.getElementById('notif-btn')?.addEventListener('click', openNotifModal);
+document.getElementById('notif-close')?.addEventListener('click', closeNotifModal);
+document.getElementById('notif-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'notif-modal') closeNotifModal();
+});
+
+/* 주기적 unread count 폴링 — 60초마다 + 페이지 visible 변화 시 + 첫 진입 1.5s 후 */
+setInterval(() => { if (!document.hidden) loadNotifUnreadCount(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadNotifUnreadCount(); });
+setTimeout(() => { if (state.userId) loadNotifUnreadCount(); }, 1500);
+
 let toastTimer = null;
 function toast(msg) {
   if (!toastEl) {
@@ -8683,14 +8819,15 @@ async function downloadShareCard() {
   setTimeout(() => URL.revokeObjectURL(url), 6000);
 }
 // 친구 초대 referral 링크 — 본인 user_id + 공유한 카드 id + (선택) 카드지/하이라이트.
+//   파라미터 한 글자 단축으로 URL 짧게: r=ref, c=card, b=bg, q=quote.
 //   받는 사람 진입 시 그 카드 자동 표시 + 공유자가 만든 미리보기(카드지+텍스트) + 가입 시 양쪽 +600.
 function buildReferralUrl(cardId, opts) {
   try {
     const base = `${window.location.origin}/m/`;
     const params = [];
-    if (state.userId)    params.push(`ref=${state.userId}`);
-    if (cardId)          params.push(`card=${cardId}`);
-    if (opts?.bgId)      params.push(`bg=${encodeURIComponent(opts.bgId)}`);
+    if (state.userId)    params.push(`r=${state.userId}`);
+    if (cardId)          params.push(`c=${cardId}`);
+    if (opts?.bgId)      params.push(`b=${encodeURIComponent(opts.bgId)}`);
     if (opts?.quote)     params.push(`q=${encodeURIComponent(opts.quote.slice(0, 300))}`);
     return params.length ? `${base}?${params.join('&')}` : base;
   } catch { return ''; }
