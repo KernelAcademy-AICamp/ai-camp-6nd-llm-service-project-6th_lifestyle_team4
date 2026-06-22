@@ -454,6 +454,9 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                             userId = session.userId,
                             isAnonymous = session.isAnonymous,
                             myNickname = session.nickname,
+                            yarnBalance = yarnAvailable,
+                            purchasedThemeIds = purchasedShareThemes,
+                            onBuyTheme = { bg -> yarnVm.buyShareTheme(bg.id, bg.price) },
                             onBack = { navController.popBackStack() },
                             // 하단바 탭 전환과 같은 패턴 — 방문 순서대로 쌓아 뒤로가기가 직전 화면으로 가게 한다.
                             onGoLibrary = {

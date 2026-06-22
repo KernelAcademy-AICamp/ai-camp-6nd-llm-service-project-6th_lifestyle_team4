@@ -24,7 +24,21 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -71,18 +85,25 @@ import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.DetailTopBar
 import com.lifestyle.dailyscript.ui.components.RefreshableBox
-import com.lifestyle.dailyscript.ui.components.EditorialField
 import com.lifestyle.dailyscript.ui.components.LangSegmented
+import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
+import com.lifestyle.dailyscript.ui.share.ShareBackground
+import com.lifestyle.dailyscript.ui.share.ShareCardPayload
+import com.lifestyle.dailyscript.ui.share.ShareCardSheet
+import com.lifestyle.dailyscript.ui.share.toSharePayload
+import com.lifestyle.dailyscript.ui.yarn.SpendResult
 import com.lifestyle.dailyscript.ui.feed.FeedComposeSheet
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
+import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
+import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.ScreenplayMono
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.Markdown
@@ -102,6 +123,9 @@ fun DetailScreen(
     userId: Long,
     isAnonymous: Boolean,
     myNickname: String,
+    yarnBalance: Int,
+    purchasedThemeIds: Set<String>,
+    onBuyTheme: suspend (ShareBackground) -> SpendResult,
     onBack: () -> Unit,
     onGoLibrary: () -> Unit,
     onGoFeed: () -> Unit,
@@ -158,7 +182,10 @@ fun DetailScreen(
     }
     val scriptSel = scriptTfv.selection
     val scriptSelected = if (!scriptSel.collapsed) scriptTfv.text.substring(scriptSel.min, scriptSel.max).trim() else ""
-    var hlComposeText by remember(cardId) { mutableStateOf<String?>(null) }
+    // NEW HIGHLIGHT 화면 — 선택 텍스트를 담고 우측에서 슬라이드 인. 공유 시트는 sharePayload 로 띄움.
+    var hlScreenText by remember(cardId) { mutableStateOf<String?>(null) }
+    var hlScreenVisible by remember(cardId) { mutableStateOf(false) }
+    var sharePayload by remember(cardId) { mutableStateOf<ShareCardPayload?>(null) }
     var feedComposeOpen by remember(cardId) { mutableStateOf(false) }
     val selectedForTour by rememberUpdatedState(scriptSelected)
     val userIdForTour by rememberUpdatedState(userId)
@@ -413,12 +440,11 @@ fun DetailScreen(
         }
       }
 
-      // Floating highlight action — appears when script text is selected (PWA #hl-add-btn).
+      // 본문 선택 시 등장하는 '+' FAB (PWA #hl-add-btn) — 떠 있는 하단 바(고양이) 위로.
       if (scriptSelected.isNotEmpty()) {
-          HlFloatingButton(
+          HlAddFab(
               modifier = Modifier
                   .align(Alignment.BottomEnd)
-                  // 떠 있는 하단 바 위로 — 카드 높이만큼 올려 가리지 않게.
                   .padding(end = 18.dp, bottom = BottomBarContentInset + 24.dp)
                   .coachAnchor(coach, "detail_hl_button"),
               onClick = {
@@ -429,20 +455,51 @@ fun DetailScreen(
                           android.widget.Toast.LENGTH_SHORT,
                       ).show()
                   } else {
-                      hlComposeText = scriptSelected
+                      hlScreenText = scriptSelected
+                      hlScreenVisible = true
                   }
               },
           )
       }
-      hlComposeText?.let { text ->
-          HighlightComposeDialog(
-              selectedText = text,
-              onDismiss = { hlComposeText = null },
-              onSave = { note ->
-                  vm.saveHighlight(userId, myNickname, text, note)
-                  hlComposeText = null
-                  scriptTfv = scriptTfv.copy(selection = TextRange(scriptTfv.selection.end))
-              },
+
+      // NEW HIGHLIGHT 화면 — 우측에서 슬라이드 인('한 칸 들어감'). 하단 고양이 바는 루트에서 이 위로 비친다.
+      AnimatedVisibility(
+          visible = hlScreenVisible,
+          enter = slideInHorizontally(tween(280)) { it } + fadeIn(tween(200)),
+          exit = slideOutHorizontally(tween(240)) { it } + fadeOut(tween(180)),
+      ) {
+          val card = state.card
+          val text = hlScreenText
+          if (card != null && text != null) {
+              HighlightComposeScreen(
+                  card = card,
+                  english = english,
+                  selectedText = text,
+                  saving = state.highlightSaving,
+                  onBack = { hlScreenVisible = false },
+                  onShare = { sharePayload = card.toSharePayload(english, speaker = "", quoteOverride = text) },
+                  onSave = {
+                      vm.saveHighlight(userId, myNickname, text, "") {
+                          scriptTfv = scriptTfv.copy(selection = TextRange(scriptTfv.selection.end))
+                          hlScreenVisible = false
+                          // PWA: 저장 후 피드 > 하이라이트 로 이동.
+                          scrollScope.launch { AppPreferences.setFeedCategory("highlight") }
+                          onGoFeed()
+                      }
+                  },
+              )
+          }
+      }
+
+      // 하이라이트 공유 시트 — 선택 텍스트를 명대사 자리에 넣어 공유.
+      sharePayload?.let { p ->
+          ShareCardSheet(
+              payload = p,
+              yarnBalance = yarnBalance,
+              purchasedIds = purchasedThemeIds,
+              onBuy = onBuyTheme,
+              onDismiss = { sharePayload = null },
+              onShared = {},
           )
       }
       // 오늘의 한줄 작성 시트 — 피드 탭과 같은 FeedComposeSheet, 이 카드로 고정.
@@ -609,25 +666,22 @@ private fun ScriptBody(
     }
 }
 
-/** Coral pill that floats at the screen's bottom-right (mirrors the PWA #hl-add-btn). */
+/** 본문 선택 시 우하단에 뜨는 동그란 '+' FAB (PWA #hl-add-btn). 탭하면 NEW HIGHLIGHT 화면 진입. */
 @Composable
-private fun HlFloatingButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(999.dp)
-    Row(
+private fun HlAddFab(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
         modifier = modifier
-            .shadow(8.dp, shape)
-            .background(Cta, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .size(48.dp)
+            .shadow(8.dp, CircleShape)
+            .clip(CircleShape)
+            .background(Cta)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "하이라이트 추가",
+            text = "+",
             color = Color.White,
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.08.em,
-            ),
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
         )
     }
 }
@@ -651,37 +705,131 @@ private object NoTextToolbar : TextToolbar {
     override fun hide() { /* intentionally empty */ }
 }
 
+/**
+ * NEW HIGHLIGHT 전체 화면 (PWA #hl-compose-screen 이식).
+ * 상단 바: ← / NEW HIGHLIGHT / SAVE. 우상단 공유 fab. 본문: 표지+제목·작가·연도·#id + 선택문 인용박스.
+ */
 @Composable
-private fun HighlightComposeDialog(
+private fun HighlightComposeScreen(
+    card: CardDto,
+    english: Boolean,
     selectedText: String,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
+    saving: Boolean,
+    onBack: () -> Unit,
+    onShare: () -> Unit,
+    onSave: () -> Unit,
 ) {
-    var note by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = { onSave(note) }) { Text("저장", color = Cta) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소", color = Walnut) } },
-        title = { Text("하이라이트 저장", color = Espresso) },
-        text = {
-            Column {
-                Text(
-                    text = "“$selectedText”",
-                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = EditorialSerif),
-                    color = Espresso,
+    val work = card.works
+    val title = ((if (english) work?.titleOriginal?.ifBlank { null } else null) ?: work?.title).orEmpty()
+    val subtitle = (if (english) work?.subtitleOriginal?.ifBlank { null } else null) ?: work?.subtitle
+    val author = (if (english) work?.authorOriginal?.ifBlank { null } else null) ?: work?.author
+    val year = work?.releaseYear?.toString()
+
+    Box(modifier = Modifier.fillMaxSize().background(Paper)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 상단 바
+            Row(
+                modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "뒤로",
+                    tint = Espresso,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onBack)
+                        .padding(8.dp),
                 )
-                Box(modifier = Modifier.height(12.dp))
-                EditorialField(
-                    value = note,
-                    onValueChange = { note = it },
-                    placeholder = "메모 (선택)",
-                    minHeight = 64.dp,
-                    maxLength = 500,
+                Text(
+                    text = "NEW HIGHLIGHT",
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
+                    color = Walnut,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = if (saving) "저장 중⋯" else "SAVE",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.18.em,
+                    ),
+                    color = Cta,
+                    modifier = Modifier
+                        .clickable(enabled = !saving, onClick = onSave)
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                 )
             }
-        },
-        containerColor = Paper,
-    )
+            Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Latte))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                BookCover(work = work, modifier = Modifier.width(120.dp).aspectRatio(132f / 188f))
+                Box(modifier = Modifier.height(14.dp))
+                Text(
+                    text = title.ifBlank { "제목 없음" },
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Espresso,
+                    textAlign = TextAlign.Center,
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Box(modifier = Modifier.height(4.dp))
+                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Walnut, textAlign = TextAlign.Center)
+                }
+                val authorYear = listOfNotNull(author?.takeIf { it.isNotBlank() }, year).joinToString(" · ")
+                if (authorYear.isNotBlank()) {
+                    Box(modifier = Modifier.height(6.dp))
+                    Text(authorYear, style = MaterialTheme.typography.labelSmall, color = Walnut)
+                }
+                Box(modifier = Modifier.height(4.dp))
+                Text("#${"%05d".format(card.cardId)}", style = MaterialTheme.typography.labelSmall, color = Sand)
+                Box(modifier = Modifier.height(24.dp))
+
+                // 선택 본문 — card-warm 배경 + 좌측 코랄 스트라이프 + 인용부호.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(CardWarm)
+                        .border(0.5.dp, Latte, RoundedCornerShape(2.dp)),
+                ) {
+                    Box(modifier = Modifier.width(3.dp).fillMaxHeight().background(Cta))
+                    Text(
+                        text = "“$selectedText”",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontFamily = EditorialSerif),
+                        color = Espresso,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f).padding(horizontal = 18.dp, vertical = 18.dp),
+                    )
+                }
+                Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
+            }
+        }
+
+        // 공유 fab — 우상단(SAVE 아래), 선택 텍스트를 공유 카드로.
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 72.dp, end = 14.dp)
+                .shadow(4.dp, RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(999.dp))
+                .background(Espresso)
+                .clickable(onClick = onShare)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.IosShare, contentDescription = null, tint = Paper, modifier = Modifier.size(14.dp))
+            Box(modifier = Modifier.width(5.dp))
+            Text("공유", color = Paper, style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.06.em))
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

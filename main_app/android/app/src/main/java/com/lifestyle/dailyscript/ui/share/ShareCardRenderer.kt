@@ -7,11 +7,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.os.Build
 import androidx.core.content.res.ResourcesCompat
 import com.lifestyle.dailyscript.R
 import kotlin.math.max
-import kotlin.math.roundToInt
 
 /**
  * PWA renderShareCard (m-app.js:8295) 이식 — 명대사 카드를 9:16 비트맵에 그린다.
@@ -21,7 +19,6 @@ import kotlin.math.roundToInt
 class ShareCardRenderer(context: Context) {
 
     private val appCtx = context.applicationContext
-    private val sans: Typeface by lazy { ResourcesCompat.getFont(appCtx, R.font.noto_sans_kr) ?: Typeface.SANS_SERIF }
     private val serif: Typeface by lazy { ResourcesCompat.getFont(appCtx, R.font.nanum_myeongjo) ?: Typeface.SERIF }
 
     /** 이미지 배경 디코드 캐시 — assets/ 경로별 1회만 디코드(썸네일/미리보기/최종이 공유). */
@@ -39,7 +36,7 @@ class ShareCardRenderer(context: Context) {
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         val ink = paintBackground(canvas, bg, width, height, payload.cardId)
-        drawText(canvas, payload, ink, width)
+        drawText(canvas, payload, ink, width, height)
         return bmp
     }
 
@@ -70,68 +67,70 @@ class ShareCardRenderer(context: Context) {
         canvas.drawBitmap(src, null, RectF(left, top, left + dw, top + dh), Paint(Paint.FILTER_BITMAP_FLAG))
     }
 
-    private fun drawText(c: Canvas, p: ShareCardPayload, ink: Int, w: Int) {
+    private fun drawText(c: Canvas, p: ShareCardPayload, ink: Int, w: Int, h: Int) {
         val s = w / 540f
+        // 카드지 상/하단 장식을 피하는 안전 영역. 명대사+화자+메타 한 블록을 이 안에 세로 중앙 배치.
+        val zoneTop = h * 0.27f
+        val zoneBot = h * 0.75f
+        val zoneH = zoneBot - zoneTop
+        val maxW = w - 260f * s   // 좌우 장식(코너 장미 등) 여백 — 넉넉히(여백 클수록 본문 자동 줄바꿈 ↑)
 
-        // 'Daily Script' 상단 워터마크 — alphabetic baseline.
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = weighted(sans, 700); applyFakeBold(700)
-            textSize = 22f * s
-            color = withAlpha(ink, 0x80)
-            textAlign = Paint.Align.CENTER
-        }.also { c.drawText("Daily Script", w / 2f, 110f * s, it) }
-
-        // 따옴표 — 본문 위, 매우 여린 농도. left + alphabetic.
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        // 1) 명대사 — 명조체(정자), 폭 맞춰 줄바꿈 + 크기 점진 축소(메타 공간 위해 영역 62% 안).
+        val quote = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = serif
-            textSize = 48f * s
-            color = withAlpha(ink, 0x38)
-            textAlign = Paint.Align.LEFT
-        }.also { c.drawText("“", 90f * s, 270f * s, it) }
-
-        // 본문 — 영역(290~760) 안 자동 줄바꿈 + 크기 점진 축소. center + top baseline.
-        val bodyTop = 290f * s
-        val bodyMaxH = (760f - 290f) * s
-        val bodyMaxW = w - 160f * s
-        val body = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = weighted(sans, 600); applyFakeBold(600)
             color = ink
             textAlign = Paint.Align.CENTER
         }
-        var lines: List<String> = emptyList()
-        var lineH = 0
-        for (fs in intArrayOf(44, 40, 36, 32, 28, 24)) {
-            body.textSize = fs * s
-            lines = wrapText(body, p.quote, bodyMaxW)
-            lineH = (fs * s * 1.55f).roundToInt()
-            if ((lines.size * lineH).toFloat() <= bodyMaxH) break
-        }
-        val topOffset = -body.ascent()
-        var y = bodyTop + max(0f, (bodyMaxH - lines.size * lineH) / 2f)
-        for (ln in lines) {
-            c.drawText(ln, w / 2f, y + topOffset, body)
-            y += lineH
+        var qLines: List<String> = emptyList()
+        var qLineH = 0f
+        for (fs in intArrayOf(40, 36, 32, 28, 24, 20)) {
+            quote.textSize = fs * s
+            qLines = wrapText(quote, p.quote, maxW)
+            qLineH = fs * s * 1.6f
+            if (qLines.size * qLineH <= zoneH * 0.62f) break
         }
 
-        // speaker — 본문 아래. center + top baseline.
-        if (p.speaker.isNotBlank()) {
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                typeface = weighted(sans, 500)
-                textSize = 24f * s
-                color = withAlpha(ink, 0xCC)
-                textAlign = Paint.Align.CENTER
-            }.also { c.drawText("— ${p.speaker}", w / 2f, 800f * s + (-it.ascent()), it) }
+        val speakerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = serif; textSize = 22f * s; color = withAlpha(ink, 0xCC); textAlign = Paint.Align.CENTER
+        }
+        val metaKoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = serif; textSize = 19f * s; color = withAlpha(ink, 0x99); textAlign = Paint.Align.CENTER
+        }
+        val metaEnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = serif; textSize = 16f * s; color = withAlpha(ink, 0x80); textAlign = Paint.Align.CENTER
         }
 
-        // 작품 · 작가 — 최하단. center + top baseline. (한글 italic 금지 → 정자체 serif)
-        val workLine = listOf(p.work, p.author).filter { it.isNotBlank() }.joinToString(" · ")
-        if (workLine.isNotBlank()) {
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                typeface = serif
-                textSize = 24f * s
-                color = withAlpha(ink, 0xCC)
-                textAlign = Paint.Align.CENTER
-            }.also { c.drawText(workLine, w / 2f, 880f * s + (-it.ascent()), it) }
+        val hasSpeaker = p.speaker.isNotBlank()
+        val gapSpeaker = 18f * s
+        val speakerLineH = 30f * s
+        val gapMeta = 40f * s
+        val metaKoLineH = 26f * s
+        val metaEnLineH = 22f * s
+
+        // 2) 블록 전체 높이 → 안전 영역 세로 중앙.
+        var blockH = qLines.size * qLineH
+        if (hasSpeaker) blockH += gapSpeaker + speakerLineH
+        if (p.metaKo.isNotBlank()) blockH += gapMeta + metaKoLineH
+        if (p.metaEn.isNotBlank()) blockH += metaEnLineH
+
+        var y = zoneTop + max(0f, (zoneH - blockH) / 2f)
+
+        // 명대사(top baseline: baseline = y - ascent)
+        for (ln in qLines) { c.drawText(ln, w / 2f, y - quote.ascent(), quote); y += qLineH }
+        // 화자
+        if (hasSpeaker) {
+            y += gapSpeaker
+            c.drawText("— ${p.speaker}", w / 2f, y - speakerPaint.ascent(), speakerPaint)
+            y += speakerLineH
+        }
+        // 메타 — 한글 / 영문 2줄
+        if (p.metaKo.isNotBlank()) {
+            y += gapMeta
+            c.drawText(p.metaKo, w / 2f, y - metaKoPaint.ascent(), metaKoPaint)
+            y += metaKoLineH
+        }
+        if (p.metaEn.isNotBlank()) {
+            c.drawText(p.metaEn, w / 2f, y - metaEnPaint.ascent(), metaEnPaint)
         }
     }
 
@@ -152,13 +151,6 @@ class ShareCardRenderer(context: Context) {
             if (cur.isNotEmpty()) out.add(cur.toString())
         }
         return out
-    }
-
-    private fun weighted(base: Typeface, weight: Int): Typeface =
-        if (Build.VERSION.SDK_INT >= 28) Typeface.create(base, weight, false) else base
-
-    private fun Paint.applyFakeBold(weight: Int) {
-        if (Build.VERSION.SDK_INT < 28) isFakeBoldText = weight >= 600
     }
 
     companion object {
