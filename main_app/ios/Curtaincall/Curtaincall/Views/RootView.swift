@@ -59,6 +59,8 @@ struct RootView: View {
     /// Bumped to re-create FeedView (resetting its private `category` @State to the
     /// default `.today`) after a Card Detail "오늘의 한줄" post routes to Feed.
     @State private var feedResetToken = 0
+    /// Bumped when the RootView-owned feed write bubble is tapped → FeedView handles it.
+    @State private var feedWriteTrigger = 0
     @State private var latestNoticeId: Int?
 
     var body: some View {
@@ -207,7 +209,7 @@ struct RootView: View {
             }
             .tag(Tab.daily)
             NavigationStack(path: $feedPath) {
-                FeedView(selectedTab: $selectedTab, reselect: feedReselect)
+                FeedView(selectedTab: $selectedTab, reselect: feedReselect, writeTrigger: feedWriteTrigger)
                     .id(feedResetToken)   // re-create → category resets to .today
             }
             .tag(Tab.feed)
@@ -256,6 +258,15 @@ struct RootView: View {
                     onReselect: popToRoot
                 )
                 .transition(.move(edge: .bottom))
+            }
+        }
+        // 피드 글쓰기 말풍선+고양이 — 탭바 '위(앞)' 레이어라 고양이가 탭바에 앉고
+        // 말풍선이 머리 위에 뜬다(Android). 피드 루트에서만, 컴포저 활성 시 숨김.
+        .overlay(alignment: .bottomTrailing) {
+            if selectedTab == .feed && feedPath.isEmpty && !composerActive {
+                FeedWriteCat { feedWriteTrigger += 1 }
+                    .padding(.trailing, -4)    // LIBRARY~MY 사이로 (가로)
+                    .padding(.bottom, 54)      // 책 아랫면이 탭바 윗면에 앉도록 (세로) — 조정 가능
             }
         }
     }

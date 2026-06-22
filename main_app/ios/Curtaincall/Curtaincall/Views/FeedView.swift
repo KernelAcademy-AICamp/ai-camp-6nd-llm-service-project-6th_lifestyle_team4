@@ -5,6 +5,9 @@ struct FeedView: View {
     /// Bumped by RootView each time the already-active Feed tab is tapped — drives
     /// scroll-to-top + refresh.
     var reselect: Int = 0
+    /// Bumped by RootView when the (RootView-owned) write bubble is tapped — routes
+    /// to `handleWriteTap` so the category-aware toast/picker stays in FeedView.
+    var writeTrigger: Int = 0
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
 
@@ -77,30 +80,10 @@ struct FeedView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        // 장식 고양이(펼친 책) — 우하단. 아래 글쓰기 pill 의 safeAreaInset 이 이 overlay
-        // '뒤에(나중에)' 적용돼 pill 이 고양이 머리 위에 그려진다(Android 동일).
-        // click-through 라 pill/콘텐츠 탭을 막지 않는다.
-        .overlay(alignment: .bottomTrailing) {
-            Image("cat_pen")
-                .resizable()
-                .scaledToFit()
-                .frame(height: 104)
-                .padding(.trailing, 34)
-                .padding(.bottom, -26)   // 책은 탭바 뒤로 내려가고 머리에 pill 이 얹히게
-                .allowsHitTesting(false)
-        }
-        // 글쓰기 말풍선 pill — 로그인 여부와 무관하게 항상 표시 (비로그인은 토스트만).
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack {
-                Spacer()
-                writePill
-            }
-            .padding(.top, 12)
-            .padding(.trailing, 20)
-            .padding(.bottom, 16)
-            .background(Color.paper)
-            .overlay(alignment: .top) { Hairline() }
-        }
+        // 글쓰기 말풍선+고양이(FeedWriteCat)는 RootView 가 탭바 '위(앞)' 레이어에
+        // 그린다 — 그래야 고양이가 탭바에 앉고(뒤로 가리지 않고) 말풍선이 머리 위에
+        // 뜬다(Android BottomNavBar 구성). 탭은 writeTrigger 로 위임받아 처리.
+        .onChange(of: writeTrigger) { _, _ in handleWriteTap() }
         .overlay(alignment: .bottom) {
             if let toastMessage {
                 Text(toastMessage)
@@ -161,39 +144,16 @@ struct FeedView: View {
         }
     }
 
-    // 글쓰기 말풍선 pill (cat_pen 고양이가 "글쓰기"라 말하는 듯한 모양). 익명은 토스트만.
-    private var writePill: some View {
-        Button {
-            if session.isAnonymous {
-                showToast(category == .highlight
-                          ? "로그인 후 하이라이트를 남길 수 있어요."
-                          : "로그인 후 나의 감상평을 남길 수 있어요.")
-            } else {
-                showPicker = true
-            }
-        } label: {
-            VStack(alignment: .trailing, spacing: 0) {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(.espresso)
-                    Text("글쓰기")
-                        .font(.custom("Pretendard-Medium", size: 14))
-                        .foregroundStyle(.espresso)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color.paper))
-                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.espresso, lineWidth: 1.5))
-                BubbleTail()
-                    .fill(Color.paper)
-                    .overlay(BubbleTail().stroke(Color.espresso, lineWidth: 1.5))
-                    .frame(width: 16, height: 9)
-                    .padding(.trailing, 18)
-                    .offset(y: -1.5)   // overlap the bubble border so the top edge is hidden
-            }
+    // 글쓰기 말풍선 탭 처리 — 익명은 토스트, 회원은 북마크 피커. 말풍선 UI 는 RootView
+    // 의 FeedWriteCat 이 그리고, 탭 시 writeTrigger 를 올려 이 핸들러로 위임한다.
+    private func handleWriteTap() {
+        if session.isAnonymous {
+            showToast(category == .highlight
+                      ? "로그인 후 하이라이트를 남길 수 있어요."
+                      : "로그인 후 나의 감상평을 남길 수 있어요.")
+        } else {
+            showPicker = true
         }
-        .buttonStyle(.plain)
     }
 
     private var categoryChips: some View {
@@ -350,7 +310,8 @@ private struct FeedChip: View {
     }
 }
 
-/// Speech-bubble tail triangle pointing down-right (Android Canvas tail).
+/// Speech-bubble tail triangle pointing down-right (Android Canvas tail). Closed
+/// for the paper fill that hides the bubble's bottom border under it.
 private struct BubbleTail: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
@@ -359,6 +320,79 @@ private struct BubbleTail: Shape {
         p.addLine(to: CGPoint(x: rect.width * 0.38, y: rect.height))
         p.closeSubpath()
         return p
+    }
+}
+
+/// Only the two slanted sides of the tail (no top edge) — so the seam where the
+/// tail joins the bubble isn't drawn, making bubble+tail read as one shape.
+private struct BubbleTailSides: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: 0))
+        p.addLine(to: CGPoint(x: rect.width * 0.38, y: rect.height))
+        p.addLine(to: CGPoint(x: rect.width, y: 0))
+        return p
+    }
+}
+
+/// Write-pill press feedback — a resting drop shadow that deepens + a slight
+/// scale-down on press (Android FAB-style tap animation).
+private struct WritePillButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .shadow(
+                color: .black.opacity(configuration.isPressed ? 0.30 : 0.12),
+                radius: configuration.isPressed ? 9 : 4,
+                x: 0,
+                y: configuration.isPressed ? 5 : 2
+            )
+            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
+    }
+}
+
+/// 피드 글쓰기 말풍선(+꼬리) 위에 cat_pen 고양이를 한 덩어리로 묶은 장식.
+/// **RootView 가 탭바 '위(앞)' 레이어에 그린다** → 고양이가 탭바에 앉고(뒤로 가리지
+/// 않고) 말풍선이 머리 위에 뜬다(Android BottomNavBar cat_pen + FeedScreen 말풍선
+/// 미러). 말풍선만 탭 가능(고양이는 click-through). 탭은 `onTap` 으로 위임.
+struct FeedWriteCat: View {
+    let onTap: () -> Void
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Button(action: onTap) {
+                VStack(alignment: .trailing, spacing: 0) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(.espresso)
+                        Text("글쓰기")
+                            .font(.custom("Pretendard-Medium", size: 14))
+                            .foregroundStyle(.espresso)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.paper))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.espresso, lineWidth: 1.5))
+                    // 꼬리는 paper 로 채워 말풍선 하단 보더를 덮고(이음새 제거), 보더는 두
+                    // 빗변만 그린다 → 말풍선+꼬리가 한 도형(Android Canvas 꼬리 동일).
+                    BubbleTail()
+                        .fill(Color.paper)
+                        .overlay(BubbleTailSides().stroke(Color.espresso, lineWidth: 1.5))
+                        .frame(width: 16, height: 9)
+                        .padding(.trailing, 18)
+                        .offset(y: -1.5)
+                }
+            }
+            .buttonStyle(WritePillButtonStyle())
+            .offset(x: -34)               // 꼬리가 고양이 머리(중앙) 위로
+            Image("cat_pen")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 92)        // Android CatHeightFeed=92
+                .offset(y: -4)            // 꼬리 끝이 고양이 머리에 살짝 겹치게
+                .allowsHitTesting(false)
+        }
     }
 }
 
@@ -797,9 +831,10 @@ private struct FeedBookmarkPicker: View {
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 12)
+            .padding(.top, 28)
+            .padding(.bottom, 18)
             Hairline()
+            Spacer().frame(height: 16)   // 닫기 버튼/헤더와 본문 사이 여백(Android 팝업 정도)
             if cards.isEmpty {
                 Text("아직 북마크한 명대사가 없어요.\n마음에 드는 명대사를 먼저 보관해보세요.")
                     .font(.bodySans(14))
@@ -892,7 +927,9 @@ private struct FeedComposeSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
             Hairline()
             VStack(alignment: .leading, spacing: 12) {
                 Text("이 명대사에 대한 한줄을 남겨보세요.")
