@@ -4,6 +4,9 @@ struct AccountRequiredPrompt: View {
     var title = "북마크는 회원 전용"
     var message = "마음에 든 명대사를 보관하려면 로그인이 필요해요."
     let onLogin: () -> Void
+    /// 회원가입 — PWA 처럼 로그인/회원가입 모두 같은 인증 화면(설정 로그인 블록)으로
+    /// 라우팅. 미지정 시 onLogin 과 동일.
+    var onRegister: (() -> Void)? = nil
     let onClose: () -> Void
 
     var body: some View {
@@ -41,9 +44,14 @@ struct AccountRequiredPrompt: View {
 
                 Spacer().frame(height: 24)
                 Button(action: onLogin) {
-                    Text("로그인 / 회원가입")
+                    Text("로그인")
                 }
                 .buttonStyle(EditorialButtonStyle(.filled))
+                Spacer().frame(height: 10)
+                Button(action: onRegister ?? onLogin) {
+                    Text("회원가입")
+                }
+                .buttonStyle(EditorialButtonStyle(.outlined))
             }
             .padding(20)
             .frame(maxWidth: 340)
