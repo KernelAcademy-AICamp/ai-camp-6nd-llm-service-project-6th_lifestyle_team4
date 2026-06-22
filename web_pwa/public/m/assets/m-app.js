@@ -5131,9 +5131,9 @@ function playYarnRewardFly(amount) {
       document.body.classList.remove('ar-active');
     }, 950);
   }
-  /* 화면 중앙 + 하단바 위. 배경 없음. 잉크 색 텍스트. */
+  /* 화면 정중앙. 배경 없음. 잉크 색 텍스트. 하단바와 안 겹침. */
   const pop = document.createElement('div');
-  pop.style.cssText = `position:fixed;left:50%;bottom:calc(108px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:160;display:inline-flex;align-items:center;gap:10px;pointer-events:none;opacity:0;transition:opacity .35s ease;`;
+  pop.style.cssText = `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:160;display:inline-flex;align-items:center;gap:10px;pointer-events:none;opacity:0;transition:opacity .35s ease;`;
   pop.innerHTML = `
     <img src="/m/assets/daily-script-bar.png" alt=""
          style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:block;filter:drop-shadow(0 4px 10px rgba(60,38,18,.35));animation:reward-yarn-bounce 1.4s cubic-bezier(.34,1.56,.64,1) infinite;" />
