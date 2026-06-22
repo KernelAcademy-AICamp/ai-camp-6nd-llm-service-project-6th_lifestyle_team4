@@ -1332,12 +1332,25 @@ function loadAllCards() {
   if (loadAllCardsInFlight) return loadAllCardsInFlight;
   loadAllCardsInFlight = (async () => {
     const sb = await getSupabase();
-    const { data, error } = await sb
-      .from('cards')
-      .select('card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url)')
-      .order('card_id', { ascending: false }).limit(500);
-    if (error) throw error;
-    state.allCards = Array.isArray(data) ? data : [];
+    // 전체 카드를 페이지네이션으로 끝까지 가져온다 (예전 .limit(500) 캡 때문에
+    // 카드가 500장을 넘으면 '명대사 N편' 이 500 에서 멈추고, 초과분 카드가
+    // 카탈로그·추천 등에서 아예 누락되던 문제 수정). PostgREST 기본 최대 행수(1000)도
+    // range 페이지네이션으로 우회.
+    const PAGE = 1000;
+    const COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url)';
+    const all = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await sb
+        .from('cards')
+        .select(COLS)
+        .order('card_id', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+      if (error) throw error;
+      const batch = Array.isArray(data) ? data : [];
+      all.push(...batch);
+      if (batch.length < PAGE) break;
+    }
+    state.allCards = all;
     /* 공유받은 카드(?card=) 자동 열기 — 카드 데이터 들어온 직후 1회만 */
     try { maybeOpenSharedCard(); } catch (e) { console.warn('[m] maybeOpenSharedCard failed:', e); }
   })().finally(() => { loadAllCardsInFlight = null; });
