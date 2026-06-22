@@ -485,6 +485,9 @@ final class Supa {
 
     private let highlightCommentColumns =
         "comment_id, card_id:highlight_id, user_id, parent_comment_id, author_nickname, body, created_at"
+    // post_id 를 card_id 로 alias → 공유 `Comment` 모델로 디코드 (highlight 와 동일 패턴).
+    private let feedPostCommentColumns =
+        "comment_id, card_id:post_id, user_id, parent_comment_id, author_nickname, body, created_at"
 
     func loadHighlightComments(highlightId: Int) async throws -> [Comment] {
         try await client.from("card_highlight_comments")
@@ -552,6 +555,81 @@ final class Supa {
                 .execute()
         } else {
             try await client.from("card_highlight_comment_likes").delete()
+                .eq("comment_id", value: commentId)
+                .eq("user_id", value: userId)
+                .execute()
+        }
+    }
+
+    // MARK: - Feed-post comments (feed_post_comments / feed_post_comment_likes)
+    // highlight 댓글과 동일 구조. RLS: 읽기 공개, insert/update/delete 는 본인(auth.uid)만.
+
+    func loadFeedPostComments(postId: Int) async throws -> [Comment] {
+        try await client.from("feed_post_comments")
+            .select(feedPostCommentColumns)
+            .eq("post_id", value: postId)
+            .order("created_at", ascending: true)
+            .execute()
+            .value
+    }
+
+    func loadFeedPostCommentLikes(commentIds: [Int]) async throws -> [CommentLike] {
+        guard !commentIds.isEmpty else { return [] }
+        return try await client.from("feed_post_comment_likes")
+            .select("comment_id, user_id")
+            .in("comment_id", values: commentIds)
+            .execute()
+            .value
+    }
+
+    func addFeedPostComment(
+        postId: Int,
+        userId: Int,
+        body: String,
+        authorNickname: String?,
+        parentCommentId: Int?
+    ) async throws -> Comment {
+        try await client.from("feed_post_comments")
+            .insert(
+                FeedPostCommentInsert(
+                    postId: postId,
+                    userId: userId,
+                    parentCommentId: parentCommentId,
+                    authorNickname: authorNickname,
+                    body: body
+                )
+            )
+            .select(feedPostCommentColumns)
+            .single()
+            .execute()
+            .value
+    }
+
+    func deleteFeedPostComment(commentId: Int, userId: Int) async throws {
+        try await client.from("feed_post_comments").delete()
+            .eq("comment_id", value: commentId)
+            .eq("user_id", value: userId)
+            .execute()
+    }
+
+    func updateFeedPostComment(commentId: Int, userId: Int, body: String) async throws -> Comment {
+        try await client.from("feed_post_comments")
+            .update(CommentUpdate(body: body))
+            .eq("comment_id", value: commentId)
+            .eq("user_id", value: userId)
+            .select(feedPostCommentColumns)
+            .single()
+            .execute()
+            .value
+    }
+
+    func setFeedPostCommentLike(commentId: Int, userId: Int, liked: Bool) async throws {
+        if liked {
+            try await client.from("feed_post_comment_likes")
+                .insert(CommentLike(commentId: commentId, userId: userId))
+                .execute()
+        } else {
+            try await client.from("feed_post_comment_likes").delete()
                 .eq("comment_id", value: commentId)
                 .eq("user_id", value: userId)
                 .execute()
