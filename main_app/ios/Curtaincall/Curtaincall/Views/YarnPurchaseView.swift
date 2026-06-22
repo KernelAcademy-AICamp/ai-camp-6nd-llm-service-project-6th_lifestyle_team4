@@ -142,7 +142,7 @@ struct YarnPurchaseView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.sand.opacity(0.3)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.sand.opacity(0.14)))   // PWA rgba(...,0.14)
     }
 
     // Android yarn_daily_note — 결제 UI 대신 매일 출석 적립을 안내(좌측 정렬).
@@ -222,7 +222,7 @@ struct YarnPurchaseView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(18)
                 .frame(maxWidth: .infinity)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.sand.opacity(0.3)))
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.sand.opacity(0.14)))   // PWA rgba(...,0.14)
             Spacer().frame(height: 20)
             Text("한올의 실타래로 나만의 공간을 꾸며보세요")
                 .font(.bodySans(14))
