@@ -43,6 +43,41 @@ struct CommentBackend {
             update: { try await Supa.shared.updateHighlightComment(commentId: $0, userId: $1, body: $2) }
         )
     }
+
+    static func feedPost(_ postId: Int) -> CommentBackend {
+        CommentBackend(
+            load: { try await Supa.shared.loadFeedPostComments(postId: postId) },
+            loadLikes: { try await Supa.shared.loadFeedPostCommentLikes(commentIds: $0) },
+            add: { try await Supa.shared.addFeedPostComment(postId: postId, userId: $0, body: $1, authorNickname: $2, parentCommentId: $3) },
+            setLike: { try await Supa.shared.setFeedPostCommentLike(commentId: $0, userId: $1, liked: $2) },
+            delete: { try await Supa.shared.deleteFeedPostComment(commentId: $0, userId: $1) },
+            update: { try await Supa.shared.updateFeedPostComment(commentId: $0, userId: $1, body: $2) }
+        )
+    }
+}
+
+/// Per-surface comment copy + capabilities. Card/Highlight keep the "READER NOTES"
+/// header; Feed posts use the PWA "댓글 N" header and disable edit (PWA has none).
+struct CommentsCopy {
+    enum Header { case readerNotes, count }
+    let header: Header
+    let loginPrompt: String
+    let emptyText: String
+    let allowEdit: Bool
+
+    static let card = CommentsCopy(
+        header: .readerNotes,
+        loginPrompt: "댓글을 남기려면 로그인이 필요합니다. (하트 반응도 동일)",
+        emptyText: "아직 댓글이 없어요. 첫 번째 흔적을 남겨보세요.",
+        allowEdit: true
+    )
+    // PWA 피드 게시물 댓글 (index.html:2271-2293).
+    static let feedPost = CommentsCopy(
+        header: .count,
+        loginPrompt: "로그인 후 댓글을 남길 수 있어요.",
+        emptyText: "아직 댓글이 없어요. 첫 생각을 남겨보세요.",
+        allowEdit: false
+    )
 }
 
 @MainActor
@@ -152,16 +187,28 @@ struct CommentsSection: View {
     let userId: Int?
     let isAnonymous: Bool
     let nickname: String
+    var copy: CommentsCopy = .card
 
     @State private var editDraft = ""
 
+    @ViewBuilder private var header: some View {
+        switch copy.header {
+        case .readerNotes:
+            Text("READER NOTES").labelCaps()
+        case .count:
+            Text("댓글 \(model.comments.count)")
+                .font(.titleSerif(16))
+                .foregroundStyle(.espresso)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("READER NOTES").labelCaps()
+            header
             Spacer().frame(height: 16)
 
             if isAnonymous {
-                Text("댓글을 남기려면 로그인이 필요합니다. (하트 반응도 동일)")
+                Text(copy.loginPrompt)
                     .font(.bodySans(14))
                     .foregroundStyle(.walnut)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -176,7 +223,7 @@ struct CommentsSection: View {
             Spacer().frame(height: 20)
 
             if model.comments.isEmpty {
-                Text("아직 댓글이 없어요. 첫 번째 흔적을 남겨보세요.")
+                Text(copy.emptyText)
                     .font(.bodySans(14))
                     .foregroundStyle(.walnut)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -251,11 +298,13 @@ struct CommentsSection: View {
                             .buttonStyle(.plain)
                             .disabled(model.submitting || editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     } else {
-                        Button {
-                            editDraft = c.body
-                            model.editingCommentId = c.commentId
-                        } label: { Text("EDIT").labelCaps() }
-                            .buttonStyle(.plain)
+                        if copy.allowEdit {
+                            Button {
+                                editDraft = c.body
+                                model.editingCommentId = c.commentId
+                            } label: { Text("EDIT").labelCaps() }
+                                .buttonStyle(.plain)
+                        }
                         Button {
                             if let uid = userId {
                                 Task { await model.delete(userId: uid, commentId: c.commentId) }
@@ -324,6 +373,10 @@ struct CommentComposer: View {
     let userId: Int?
     let nickname: String
     var focused: FocusState<Bool>.Binding
+    /// 비답글 플레이스홀더 — 표면별 카피(카드/피드). 기본은 카드.
+    var placeholder: String = "이 명대사에 대한 생각을 남겨보세요…"
+    /// 전송 버튼 라벨 — 카드="남기기", 피드="등록"(PWA fp-comment-submit).
+    var submitLabel: String = "남기기"
 
     @State private var draft = ""
 
@@ -352,7 +405,7 @@ struct CommentComposer: View {
 
             HStack(alignment: .bottom, spacing: 0) {
                 TextField(
-                    model.replyingTo == nil ? "이 명대사에 대한 생각을 남겨보세요…" : "답글을 남기세요…",
+                    model.replyingTo == nil ? placeholder : "답글을 남기세요…",
                     text: $draft,
                     axis: .vertical
                 )
@@ -367,7 +420,7 @@ struct CommentComposer: View {
                 }
 
                 Button(action: send) {
-                    Text("남기기")
+                    Text(submitLabel)
                         .labelCaps(color: canSend ? .paper : .walnut)
                         .padding(.horizontal, 16)
                         .frame(height: 36)
