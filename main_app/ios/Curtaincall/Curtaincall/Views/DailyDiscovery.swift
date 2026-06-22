@@ -184,25 +184,39 @@ struct DailyNewBooksSection: View {
             let safeIdx = min(idx, books.count - 1)
             // PWA rest = sorted.filter(idx != i) — 현재 메인을 뺀 나머지.
             let rest = books.enumerated().filter { $0.offset != safeIdx }.map(\.element)
+            // 스와이프 = TabView 선택 변경. 사용자 스와이프 시에만 set 이 호출되므로
+            // 그때만 자동순환을 멈춘다(PWA stopNewbooksRotation). 자동회전은 idx 를 직접
+            // 바꿔(set 미경유) 멈추지 않는다.
+            let selection = Binding<Int>(
+                get: { min(idx, books.count - 1) },
+                set: { newValue in
+                    if newValue != min(idx, books.count - 1) { userInteracted = true }
+                    idx = newValue
+                }
+            )
             VStack(alignment: .leading, spacing: 0) {
-                featured(books[safeIdx])
-                    .background(GeometryReader { g in
-                        Color.clear.preference(key: NewBookCardHeightKey.self, value: g.size.height)
-                    })
-                    .frame(minHeight: maxCardHeight, alignment: .top)
-                    .animation(.easeInOut(duration: 0.35), value: safeIdx)
-                    // 좌우 스와이프 — 왼쪽=다음, 오른쪽=이전(모듈러 순환). simultaneousGesture
-                    // 라 카드 탭(상세 이동)·세로 스크롤은 유지하고 가로 스와이프만 가로챈다.
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 20).onEnded { v in
-                            let dx = v.translation.width, dy = v.translation.height
-                            guard books.count > 1, abs(dx) > 45, abs(dx) > abs(dy) else { return }
-                            userInteracted = true
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                idx = (safeIdx + (dx < 0 ? 1 : -1) + books.count) % books.count
-                            }
+                ZStack(alignment: .top) {
+                    // 9권 중 최대 높이 측정(숨김) — TabView 는 콘텐츠에 맞춰 늘지 않아
+                    // 고정 높이가 필요. 전환 시 아래 닷·표지줄 높이 튐 방지(PWA measureMaxMainHeight).
+                    ForEach(books) { b in
+                        featuredContent(b)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .background(GeometryReader { g in
+                                Color.clear.preference(key: NewBookCardHeightKey.self, value: g.size.height)
+                            })
+                            .hidden()
+                    }
+                    // 좌우 스와이프 페이저 — TabView.page 가 가로 스와이프를 안정적으로
+                    // 처리하고(왼쪽=다음·오른쪽=이전) 세로 스크롤·카드 탭(상세)과 공존한다.
+                    // PWA 는 끝에서 wrap, TabView 스와이프는 clamp(자동회전·닷 탭은 wrap 유지).
+                    TabView(selection: selection) {
+                        ForEach(Array(books.enumerated()), id: \.offset) { i, b in
+                            featured(b).tag(i)
                         }
-                    )
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(height: maxCardHeight > 0 ? maxCardHeight : 280)
+                }
                 if books.count > 1 {
                     newBookDots(count: books.count, active: safeIdx)
                 }
@@ -223,7 +237,7 @@ struct DailyNewBooksSection: View {
             .onReceive(rotation) { _ in
                 guard books.count > 1, !userInteracted else { return }
                 withAnimation(.easeInOut(duration: 0.35)) {
-                    idx = (safeIdx + 1) % books.count
+                    idx = (min(idx, books.count - 1) + 1) % books.count
                 }
             }
         }
@@ -265,7 +279,9 @@ struct DailyNewBooksSection: View {
             + Text("\(weekday)요일").foregroundColor(.cta)
     }
 
-    private func featured(_ book: DiscoveryWork) -> some View {
+    /// 카드 시각 본문만 — NavigationLink/hero 없이. 페이저(TabView) 각 페이지와
+    /// 숨김 높이 측정(중복 matchedTransitionSource 방지)에서 공유한다.
+    private func featuredContent(_ book: DiscoveryWork) -> some View {
         let work = book.work
         let title = work.title.isEmpty ? "—" : work.title
         let meta = [work.author, work.releaseYear.map(String.init), work.format.displayName]
@@ -275,8 +291,7 @@ struct DailyNewBooksSection: View {
         let cleaned = cleanDiscoveryQuote(book.cards.first?.quote ?? "")
         let sample = String(cleaned.prefix(60))
 
-        return NavigationLink(value: book.representativeCard) {
-            HStack(alignment: .top, spacing: 16) {
+        return HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 0) {
                     // PWA new-books 카드: 날짜를 카드 안 상단에. 날짜=sand 볼드, 요일=cta.
                     Self.dateLabel
@@ -315,9 +330,15 @@ struct DailyNewBooksSection: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 discoveryCover(work, width: 90)
             }
-            .padding(20)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color.espresso))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte.opacity(0.25), lineWidth: 0.5))
+        .padding(20)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.espresso))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte.opacity(0.25), lineWidth: 0.5))
+    }
+
+    /// 탭하면 상세로(NavigationLink + hero). 페이저 각 페이지가 이 뷰다.
+    private func featured(_ book: DiscoveryWork) -> some View {
+        NavigationLink(value: book.representativeCard) {
+            featuredContent(book)
         }
         .buttonStyle(.plain)
         .cardContextMenu(book.representativeCard)
