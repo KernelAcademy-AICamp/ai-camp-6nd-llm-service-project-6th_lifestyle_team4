@@ -44,8 +44,9 @@ struct CardDetailView: View {
     private var bookmarked: Bool { bookmarks.isBookmarked(card.cardId) }
 
     private var showSignificance: Bool {
-        let f = card.work.format.rawValue.lowercased()
-        return !(card.significance ?? "").isEmpty && (f == "opera" || f == "play")
+        // PWA: 네 프롬프트(screen/opera/play/literature) 모두 significance 를 생성하므로
+        // format 게이팅 없이 값이 있으면 표시 (m-app.js:5895-5900).
+        !(card.significance ?? "").isEmpty
     }
 
     var body: some View {
@@ -624,7 +625,8 @@ struct CardDetailView: View {
         }
     }
 
-    /// Two centered lines (Android MetadataChipsRow): FORMAT · AUTHOR / YEAR · 👁 · 💬.
+    /// Two centered lines: FORMAT · AUTHOR / YEAR · 👁 · 🔖 · 💬.
+    /// PWA 상세 메타 행 순서 — 조회 · 북마크 · 댓글 (m-app.js:2166-2170).
     private var metadataBlock: some View {
         VStack(spacing: 6) {
             let head: [String] = [
@@ -642,6 +644,8 @@ struct CardDetailView: View {
                     Text("·").font(.bodySans(12)).foregroundStyle(.walnut)
                 }
                 Label(Self.countLabel(displayedViewCount), systemImage: "eye")
+                Text("·").font(.bodySans(12)).foregroundStyle(.walnut)
+                Label(Self.countLabel(bookmarkCount), systemImage: "bookmark")
                 Text("·").font(.bodySans(12)).foregroundStyle(.walnut)
                 Label(Self.countLabel(comments.comments.count), systemImage: "bubble.right")
             }
