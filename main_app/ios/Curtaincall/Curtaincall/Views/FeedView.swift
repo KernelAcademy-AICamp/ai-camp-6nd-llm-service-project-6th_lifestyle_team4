@@ -310,87 +310,44 @@ private struct FeedChip: View {
     }
 }
 
-/// Speech-bubble tail triangle pointing down-right (Android Canvas tail). Closed
-/// for the paper fill that hides the bubble's bottom border under it.
-private struct BubbleTail: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: 0, y: 0))
-        p.addLine(to: CGPoint(x: rect.width, y: 0))
-        p.addLine(to: CGPoint(x: rect.width * 0.38, y: rect.height))
-        p.closeSubpath()
-        return p
-    }
-}
-
-/// Only the two slanted sides of the tail (no top edge) — so the seam where the
-/// tail joins the bubble isn't drawn, making bubble+tail read as one shape.
-private struct BubbleTailSides: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: 0, y: 0))
-        p.addLine(to: CGPoint(x: rect.width * 0.38, y: rect.height))
-        p.addLine(to: CGPoint(x: rect.width, y: 0))
-        return p
-    }
-}
-
-/// Write-pill press feedback — a resting drop shadow that deepens + a slight
-/// scale-down on press (Android FAB-style tap animation).
-private struct WritePillButtonStyle: ButtonStyle {
+/// 글쓰기 FAB 누름 피드백 — PWA `#feed-fab:active { transform: scale(0.94) }` 미러.
+private struct FeedFabButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1)
-            .shadow(
-                color: .black.opacity(configuration.isPressed ? 0.30 : 0.12),
-                radius: configuration.isPressed ? 9 : 4,
-                x: 0,
-                y: configuration.isPressed ? 5 : 2
-            )
-            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
-/// 피드 글쓰기 말풍선(+꼬리) 위에 cat_pen 고양이를 한 덩어리로 묶은 장식.
-/// **RootView 가 탭바 '위(앞)' 레이어에 그린다** → 고양이가 탭바에 앉고(뒤로 가리지
-/// 않고) 말풍선이 머리 위에 뜬다(Android BottomNavBar cat_pen + FeedScreen 말풍선
-/// 미러). 말풍선만 탭 가능(고양이는 click-through). 탭은 `onTap` 으로 위임.
+/// 피드 글쓰기 — PWA(web_pwa) `#feed-fab` 미러: cat_pen 고양이 머리 위에 떠 있는
+/// 주황 원형 연필 버튼. **RootView 가 탭바 '위(앞)' 레이어에 그린다** → 고양이가
+/// 탭바에 앉고(뒤로 가리지 않고) 버튼이 머리 위에 뜬다. 버튼만 탭 가능(고양이는
+/// click-through). 탭은 `onTap` 으로 위임. (고양이는 #76 그대로 유지.)
 struct FeedWriteCat: View {
     let onTap: () -> Void
 
+    /// PWA #feed-fab 아이콘 색 (#FFFDF7) — 주황 원 위라 라이트/다크 모두 크림 고정.
+    private static let fabIcon = Color(red: 1.0, green: 0.992, blue: 0.969)
+
     var body: some View {
-        VStack(alignment: .trailing, spacing: 0) {
+        VStack(alignment: .trailing, spacing: 6) {
+            // 주황 원형 연필 FAB — 52pt, cta 배경, 크림 연필 아이콘 + 주황 그림자.
+            // (PWA index.html #feed-fab: 52×52, --cta, edit 아이콘, shadow 0 4 14 cta/.38)
             Button(action: onTap) {
-                VStack(alignment: .trailing, spacing: 0) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundStyle(.espresso)
-                        Text("글쓰기")
-                            .font(.custom("Pretendard-Medium", size: 14))
-                            .foregroundStyle(.espresso)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.paper))
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.espresso, lineWidth: 1.5))
-                    // 꼬리는 paper 로 채워 말풍선 하단 보더를 덮고(이음새 제거), 보더는 두
-                    // 빗변만 그린다 → 말풍선+꼬리가 한 도형(Android Canvas 꼬리 동일).
-                    BubbleTail()
-                        .fill(Color.paper)
-                        .overlay(BubbleTailSides().stroke(Color.espresso, lineWidth: 1.5))
-                        .frame(width: 16, height: 9)
-                        .padding(.trailing, 18)
-                        .offset(y: -1.5)
-                }
+                Image(systemName: "pencil")
+                    .font(.system(size: 24, weight: .regular))
+                    .foregroundStyle(Self.fabIcon)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(Color.cta))
+                    .shadow(color: Color.cta.opacity(0.38), radius: 7, x: 0, y: 4)
             }
-            .buttonStyle(WritePillButtonStyle())
-            .offset(x: -34)               // 꼬리가 고양이 머리(중앙) 위로
+            .buttonStyle(FeedFabButtonStyle())
+            .offset(x: -34)               // 고양이 머리(중앙) 위로
             Image("cat_pen")
                 .resizable()
                 .scaledToFit()
-                .frame(height: 92)        // Android CatHeightFeed=92
-                .offset(y: -4)            // 꼬리 끝이 고양이 머리에 살짝 겹치게
+                .frame(height: 92)        // Android CatHeightFeed=92 (#76 유지)
+                .offset(y: -4)
                 .allowsHitTesting(false)
         }
     }

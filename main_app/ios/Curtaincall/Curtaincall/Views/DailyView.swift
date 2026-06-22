@@ -28,26 +28,16 @@ struct DailyView: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Android Daily header (DailyScreen.kt:120-137): date · "디스커버리".
-                    Spacer().frame(height: 24)
-                    Text(Self.dailyDateLabel)
-                        .labelCaps()
-                    Spacer().frame(height: 8)
-                    Text("디스커버리")
-                        .font(.displaySerif(34))
-                        .foregroundStyle(.espresso)
-                    Spacer().frame(height: 28)
+                    // PWA(web_pwa) view-daily 미러: 상단 날짜·"디스커버리" 제목 제거.
+                    // 공지 룰렛이 최상단, 날짜는 새 책 카드 안으로 이동(DailyNewBooksSection).
+                    Spacer().frame(height: 16)
                     DailyNoticeCarousel(notices: notices)
-                    if !notices.isEmpty { Spacer().frame(height: 28) }
+                    if !notices.isEmpty { Spacer().frame(height: 12) }
 
                     if !allCards.isEmpty {
+                        // PWA view-daily 순서: 새 책 → Oz 픽 → 트렌딩.
+                        // (Contextual 「이럴 땐, 이런 문장」 섹션은 PWA 에서 제거됨 → iOS 도 제거.)
                         DailyNewBooksSection(cards: allCards)
-                        Spacer().frame(height: 36)
-                        DailyContextualSection(cards: allCards)
-                        Spacer().frame(height: 36)
-                        DailyTrendingSection(cards: allCards, bookmarkCounts: trendingCounts) {
-                            selectedTab = .archive
-                        }
                         // Oz Pick — 개인화 카드 또는 게스트(취향 미설정) CTA. 섹션이 분기.
                         Spacer().frame(height: 36)
                         DailyOzPickSection(
@@ -59,6 +49,10 @@ struct DailyView: View {
                             taste: taste,
                             onRequestPreferences: { prefs.prefSelected = false }
                         )
+                        Spacer().frame(height: 36)
+                        DailyTrendingSection(cards: allCards, bookmarkCounts: trendingCounts) {
+                            selectedTab = .archive
+                        }
                     } else if !fetchFailed {
                         Text("Loading⋯")
                             .font(.bodySans(14))
@@ -169,15 +163,5 @@ struct DailyView: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: .now)
-    }
-
-    /// "YYYY년 M월 D일 {요일}요일" — Android 날짜 표기(DailyScreen.kt) 형식.
-    /// (DailyScreen.kt:859).
-    private static var dailyDateLabel: String {
-        let cal = Calendar(identifier: .gregorian)
-        let c = cal.dateComponents([.year, .month, .day, .weekday], from: .now)
-        let days = ["일", "월", "화", "수", "목", "금", "토"]   // Calendar weekday: 1 = Sunday
-        let weekday = days[((c.weekday ?? 1) - 1) % 7]
-        return "\(c.year ?? 0)년 \(c.month ?? 0)월 \(c.day ?? 0)일 \(weekday)요일"
     }
 }

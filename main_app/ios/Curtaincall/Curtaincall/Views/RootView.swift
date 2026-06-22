@@ -252,16 +252,16 @@ struct RootView: View {
                     noticeUnread: hasUnreadNotice,
                     // 고양이는 탭 루트에만 — 카드 상세 등 푸시된 읽기 화면(스택 비어있지
                     // 않음)에선 본문 위에 얹히므로 숨긴다(Android 상세엔 고양이 없음).
-                    // 피드는 글쓰기 pill 과 z-order/탭 충돌 → 탭바 고양이 대신
-                    // FeedView 안에서 pill '뒤'에 직접 그린다.
+                    // 피드는 글쓰기 FAB 와 z-order/탭 충돌 → 탭바 고양이 대신
+                    // 아래 overlay 의 FeedWriteCat(고양이+주황 연필 FAB)이 담당한다.
                     showCat: activeStackAtRoot && selectedTab != .feed,
                     onReselect: popToRoot
                 )
                 .transition(.move(edge: .bottom))
             }
         }
-        // 피드 글쓰기 말풍선+고양이 — 탭바 '위(앞)' 레이어라 고양이가 탭바에 앉고
-        // 말풍선이 머리 위에 뜬다(Android). 피드 루트에서만, 컴포저 활성 시 숨김.
+        // 피드 글쓰기 FAB+고양이 — 탭바 '위(앞)' 레이어라 고양이가 탭바에 앉고
+        // 주황 연필 버튼이 머리 위에 뜬다(PWA). 피드 루트에서만, 컴포저 활성 시 숨김.
         .overlay(alignment: .bottomTrailing) {
             if selectedTab == .feed && feedPath.isEmpty && !composerActive {
                 FeedWriteCat { feedWriteTrigger += 1 }

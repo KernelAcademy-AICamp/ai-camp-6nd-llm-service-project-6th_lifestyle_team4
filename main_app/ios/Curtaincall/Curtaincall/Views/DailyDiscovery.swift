@@ -178,6 +178,20 @@ struct DailyNewBooksSection: View {
         }
     }
 
+    /// 오늘 날짜 — 새 책 카드 안 상단(PWA new-books). 날짜=sand 볼드, 요일=cta.
+    /// "YYYY년 M월 D일 {요일}요일" (web_pwa m-app.js dailyDateLabel 미러).
+    private static var dateLabel: Text {
+        let cal = Calendar(identifier: .gregorian)
+        let c = cal.dateComponents([.year, .month, .day, .weekday], from: .now)
+        let days = ["일", "월", "화", "수", "목", "금", "토"]   // Calendar weekday: 1 = Sunday
+        let weekday = days[((c.weekday ?? 1) - 1) % 7]
+        // String 으로 먼저 조립 — Text(LocalizedStringKey) 정수 보간은 로캘 천단위
+        // 구분자("2,026년")를 붙이므로 String 보간(구분자 없음) 후 verbatim 으로 넘긴다.
+        let date = "\(c.year ?? 0)년 \(c.month ?? 0)월 \(c.day ?? 0)일 "
+        return Text(date).foregroundColor(.sand).fontWeight(.bold)
+            + Text("\(weekday)요일").foregroundColor(.cta)
+    }
+
     private func featured(_ book: DiscoveryWork) -> some View {
         let work = book.work
         let title = work.title.isEmpty ? "—" : work.title
@@ -191,6 +205,11 @@ struct DailyNewBooksSection: View {
         return NavigationLink(value: book.representativeCard) {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 0) {
+                    // PWA new-books 카드: 날짜를 카드 안 상단에. 날짜=sand 볼드, 요일=cta.
+                    Self.dateLabel
+                        .font(.custom("Pretendard-Medium", size: 11))
+                        .tracking(0.4)
+                    Spacer().frame(height: 13)
                     Text("NEW · 새로 들어온 고전")
                         .font(.custom("Pretendard-Medium", size: 10))
                         .tracking(1.5)
