@@ -39,7 +39,7 @@ struct ArchiveView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 24)
-                    Text("수집한 대본")
+                    Text("북마크")   // PWA 북마크 서가 헤더 (index.html:2304)
                         .font(.displaySerif(32))
                         .foregroundStyle(.espresso)
                     if !bookmarks.bookmarks.isEmpty {
@@ -111,8 +111,8 @@ struct ArchiveView: View {
     }
 
     private var genreChips: some View {
+        // PWA renderShelfChips: 사용 가능한 장르만 — "기타" 칩 없음(서가 그룹핑은 유지).
         let available = Set(allWorks.map(\.format))
-        let otherCount = allWorks.filter { !Self.genreOrder.contains($0.format) }.count
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 Button { selectedGenre = nil } label: {
@@ -123,12 +123,6 @@ struct ArchiveView: View {
                     let count = allWorks.filter { $0.format == format }.count
                     Button { selectedGenre = format } label: {
                         Chip(text: "\(format.displayName) · \(count)", filled: selectedGenre == format)
-                    }
-                    .buttonStyle(.plain)
-                }
-                if otherCount > 0 {
-                    Button { selectedGenre = .unknown } label: {
-                        Chip(text: "기타 · \(otherCount)", filled: selectedGenre == .unknown)
                     }
                     .buttonStyle(.plain)
                 }
@@ -180,19 +174,17 @@ struct ArchiveView: View {
     }
 
     private var emptyState: some View {
-        Text("아직 북마크한 카드가 없습니다.")
-            .font(.bodySans(14))
-            .foregroundStyle(.walnut)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 24)
+        // PWA bm-empty: bookmark_border + 헤드라인 + 서브라인 (index.html:2317-2320).
+        EmptyStateView(icon: "bookmark", iconSize: 48,
+                       headline: "아직 보관한 명대사가 없습니다.",
+                       subline: "마음에 드는 명대사를 북마크하면 여기에 모입니다.")
     }
 
     private var noResultState: some View {
-        Text("검색 결과가 없습니다.")
-            .font(.bodySans(14))
-            .foregroundStyle(.walnut)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 24)
+        // PWA bm-no-result: search_off + 헤드라인 + 서브라인 (index.html:2322-2325).
+        EmptyStateView(icon: "magnifyingglass", iconSize: 42,
+                       headline: "검색 결과가 없습니다",
+                       subline: "다른 단어로 시도해보세요")
     }
 
     private static let genreOrder: [WorkFormat] = [
@@ -207,11 +199,12 @@ struct ArchiveView: View {
             let series = work.title
             let subtitle = work.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
             let title = subtitle?.isEmpty == false ? subtitle! : series
+            // PWA workGroupKey: series/subtitle/author 만 (format 제외) — 같은 작품이
+            // 두 포맷이어도 한 권으로 병합 (m-app.js:2377-2381).
             let key = [
                 series.lowercased(),
                 subtitle?.lowercased() ?? "",
                 work.author?.lowercased() ?? "",
-                work.format.rawValue,
             ].joined(separator: "__")
 
             if grouped[key] == nil {
