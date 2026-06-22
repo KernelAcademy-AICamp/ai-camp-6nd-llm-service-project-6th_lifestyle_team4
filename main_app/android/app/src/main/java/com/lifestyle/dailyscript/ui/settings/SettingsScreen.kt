@@ -59,6 +59,7 @@ import com.lifestyle.dailyscript.data.model.UserPrefs
 import com.lifestyle.dailyscript.data.repo.AuthRepository
 import com.lifestyle.dailyscript.data.repo.SocialProvider
 import com.lifestyle.dailyscript.data.repo.UserSession
+import com.lifestyle.dailyscript.ui.IdCheckState
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.onboarding.GENRES
 import com.lifestyle.dailyscript.ui.onboarding.THEMES
@@ -77,7 +78,10 @@ fun SettingsScreen(
     yarn: Int,
     authMessage: String?,
     authInProgress: Boolean,
-    onSignIn: (id: String, password: String, signUp: Boolean) -> Unit,
+    idCheck: IdCheckState,
+    onSignIn: (id: String, password: String, signUp: Boolean, gender: String?, ageGroup: String?) -> Unit,
+    onCheckId: (id: String) -> Unit,
+    onResetIdCheck: () -> Unit,
     onSocialSignIn: (provider: SocialProvider) -> Unit,
     onSignOut: () -> Unit,
     onDeleteAccount: () -> Unit,
@@ -370,9 +374,12 @@ fun SettingsScreen(
         SignInDialog(
             inProgress = authInProgress,
             message = authMessage,
+            idCheck = idCheck,
             onSignIn = onSignIn,
+            onCheckId = onCheckId,
+            onResetIdCheck = onResetIdCheck,
             onSocialSignIn = onSocialSignIn,
-            onDismiss = { showSignInDialog = false },
+            onDismiss = { showSignInDialog = false; onResetIdCheck() },
         )
     }
 
@@ -441,20 +448,29 @@ private fun SocialLoginButton(
 private fun SignInDialog(
     inProgress: Boolean,
     message: String?,
-    onSignIn: (id: String, password: String, signUp: Boolean) -> Unit,
+    idCheck: IdCheckState,
+    onSignIn: (id: String, password: String, signUp: Boolean, gender: String?, ageGroup: String?) -> Unit,
+    onCheckId: (id: String) -> Unit,
+    onResetIdCheck: () -> Unit,
     onSocialSignIn: (provider: SocialProvider) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var id by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var signUp by remember { mutableStateOf(false) }
+    var gender by remember { mutableStateOf<String?>(null) }
+    var age by remember { mutableStateOf<String?>(null) }
+
+    // 회원가입 제출 게이트: 중복확인 통과(AVAILABLE) 또는 네트워크 오류로 건너뜀(SKIPPED)일 때만.
+    val signupReady = idCheck == IdCheckState.AVAILABLE || idCheck == IdCheckState.SKIPPED
+    val canSubmit = !inProgress && id.isNotBlank() && password.isNotBlank() && (!signUp || signupReady)
 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(
-                enabled = !inProgress && id.isNotBlank() && password.isNotBlank(),
-                onClick = { onSignIn(id, password, signUp) },
+                enabled = canSubmit,
+                onClick = { onSignIn(id, password, signUp, if (signUp) gender else null, if (signUp) age else null) },
             ) {
                 Text(
                     text = if (inProgress) "⋯" else if (signUp) stringResource(R.string.sign_up_action) else stringResource(R.string.sign_in_action),
@@ -470,16 +486,46 @@ private fun SignInDialog(
             )
         },
         text = {
-            Column {
-                FieldBox(value = id, placeholder = stringResource(R.string.sign_in_id), onChange = { id = it })
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                FieldBox(value = id, placeholder = stringResource(R.string.sign_in_id), onChange = { id = it; onResetIdCheck() })
+                // 회원가입 — 아이디 중복확인 버튼 + 결과(PWA email_available).
+                if (signUp) {
+                    Box(modifier = Modifier.height(4.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        val (statusText, statusColor) = when (idCheck) {
+                            IdCheckState.CHECKING -> "확인 중⋯" to Walnut
+                            IdCheckState.AVAILABLE -> "사용 가능한 아이디예요" to Color(0xFF2E7D32)
+                            IdCheckState.TAKEN -> "이미 사용 중인 아이디예요" to Cta
+                            IdCheckState.SKIPPED -> "중복확인을 건너뜁니다 — 가입 시 확인돼요" to Walnut
+                            IdCheckState.NONE -> "" to Walnut
+                        }
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusColor,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            enabled = id.isNotBlank() && idCheck != IdCheckState.CHECKING,
+                            onClick = { onCheckId(id) },
+                        ) { Text("중복확인", color = Cta) }
+                    }
+                }
                 Box(modifier = Modifier.height(8.dp))
                 FieldBox(value = password, placeholder = stringResource(R.string.sign_in_password), onChange = { password = it }, isPassword = true)
+                // 회원가입 — 성별·나이대(선택). PWA 가입 폼 패리티.
+                if (signUp) {
+                    Box(modifier = Modifier.height(14.dp))
+                    DropdownField(label = "성별", options = GENDER_OPTIONS, selected = gender, onSelect = { gender = it })
+                    Box(modifier = Modifier.height(8.dp))
+                    DropdownField(label = "나이대", options = AGE_OPTIONS, selected = age, onSelect = { age = it })
+                }
                 Box(modifier = Modifier.height(10.dp))
                 Text(
                     text = if (signUp) stringResource(R.string.have_account_sign_in) else stringResource(R.string.no_account_sign_up),
                     style = MaterialTheme.typography.labelSmall,
                     color = Walnut,
-                    modifier = Modifier.clickable { signUp = !signUp }.padding(vertical = 4.dp),
+                    modifier = Modifier.clickable { signUp = !signUp; onResetIdCheck() }.padding(vertical = 4.dp),
                 )
                 message?.let {
                     Box(modifier = Modifier.height(8.dp))

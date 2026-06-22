@@ -7,12 +7,6 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
-    <!-- 공유 카드 '카카오톡' 버튼 — Android 11+ 패키지 가시성 때문에 카카오톡 패키지를 명시해야
-         setPackage("com.kakao.talk") 인텐트가 해석/실행된다. -->
-    <queries>
-        <package android:name="com.kakao.talk" />
-    </queries>
-
     <application
         android:name=".DailyScriptApp"
         android:allowBackup="false"

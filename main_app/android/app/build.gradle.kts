@@ -24,6 +24,10 @@ val amplitudeApiKey: String = localProps.getProperty("AMPLITUDE_API_KEY")
 val clarityProjectId: String = localProps.getProperty("CLARITY_PROJECT_ID")
     ?: System.getenv("CLARITY_PROJECT_ID")
     ?: ""
+// 공유 short URL(/m/?s=<id>)이 열리는 웹(PWA) 도메인. prod 기본값, local.properties 로 덮어쓰기 가능.
+val webBaseUrl: String = localProps.getProperty("WEB_BASE_URL")
+    ?: System.getenv("WEB_BASE_URL")
+    ?: "https://ai-camp-6nd-llm-service-project-6th-psi.vercel.app"
 
 // Release signing. Values live in keystore.properties (git-ignored, per machine);
 // absent on machines without the keystore, so debug builds keep working.
@@ -55,6 +59,7 @@ android {
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", buildConfigString(googleWebClientId))
         buildConfigField("String", "AMPLITUDE_API_KEY", buildConfigString(amplitudeApiKey))
         buildConfigField("String", "CLARITY_PROJECT_ID", buildConfigString(clarityProjectId))
+        buildConfigField("String", "WEB_BASE_URL", buildConfigString(webBaseUrl))
     }
 
     signingConfigs {

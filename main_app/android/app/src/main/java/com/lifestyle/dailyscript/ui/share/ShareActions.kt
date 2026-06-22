@@ -9,7 +9,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Base64
 import androidx.core.content.FileProvider
+import com.lifestyle.dailyscript.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -18,11 +20,43 @@ import java.io.FileOutputStream
 /** FileProvider authority — AndroidManifest 의 <provider> 와 반드시 일치. */
 const val SHARE_AUTHORITY = "com.lifestyle.dailyscript.fileprovider"
 
-/** 공유 텍스트 — PWA sendShareCard: `"명대사" — 작품` (referral 링크는 이번 범위 밖). */
+/** 공유 텍스트 — PWA sendShareCard: `"명대사" — 작품`. 링크 공유 시 뒤에 URL 한 줄을 덧붙인다. */
 fun buildShareText(p: ShareCardPayload): String {
     val quote = if (p.quote.isNotBlank()) "“${p.quote}”" else ""
     val credit = if (p.work.isNotBlank()) " — ${p.work}" else ""
     return (quote + credit).trim().ifBlank { "Daily Script" }
+}
+
+/** 공유 short URL 이 열리는 웹(PWA) 도메인. */
+private val webBase: String get() = BuildConfig.WEB_BASE_URL.trimEnd('/')
+
+/** PWA urlSafeB64Encode 와 동일 — UTF-8 → base64url(패딩 제거). 한글 quote 단축용. */
+fun urlSafeB64Encode(s: String): String =
+    Base64.encodeToString(s.toByteArray(Charsets.UTF_8), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+
+/** short_id → /m/?s=<id> (PWA shareLink 성공 경로). */
+fun buildShortShareUrl(shortId: String): String = "$webBase/m/?s=$shortId"
+
+/** create_share_link 실패 시 long URL 폴백 — /m/?r=&c=&b=&q= (PWA buildReferralUrl). */
+fun buildReferralUrl(referrerId: Long?, cardId: Long?, bgId: String?, quote: String?): String {
+    val params = buildList {
+        if (referrerId != null) add("r=$referrerId")
+        if (cardId != null) add("c=$cardId")
+        if (!bgId.isNullOrBlank()) add("b=${Uri.encode(bgId)}")
+        if (!quote.isNullOrBlank()) add("q=${urlSafeB64Encode(quote.take(300))}")
+    }
+    return if (params.isEmpty()) "$webBase/m/" else "$webBase/m/?${params.joinToString("&")}"
+}
+
+/** 링크 보내기 — 명대사+작품 텍스트에 공유 URL 한 줄을 덧붙여 시스템 공유 시트(text/plain)로. */
+fun shareLink(context: Context, url: String, payload: ShareCardPayload) {
+    val text = listOf(buildShareText(payload), url).filter { it.isNotBlank() }.joinToString("\n")
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+        putExtra(Intent.EXTRA_TITLE, "Daily Script")
+    }
+    context.startActivity(Intent.createChooser(send, "Daily Script"))
 }
 
 /** PNG 를 cacheDir/share 에 쓰고 FileProvider content:// URI 반환. */
@@ -47,24 +81,6 @@ suspend fun shareCard(context: Context, bmp: Bitmap, payload: ShareCardPayload) 
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(chooser)
-}
-
-/**
- * 카카오톡으로 바로 보내기 — ACTION_SEND 를 com.kakao.talk 패키지로 지정해 카카오톡만 띄운다.
- * 카카오톡 미설치(또는 차단)면 startActivity 가 ActivityNotFoundException → false 반환(호출측이 안내).
- * 정식 Kakao SDK 피드 템플릿('카드 보기' 버튼 등)은 네이티브 앱키·키해시 등록이 필요해 이번 범위 밖.
- * (Android 11+ 패키지 가시성 때문에 AndroidManifest 에 <queries> com.kakao.talk 필요.)
- */
-suspend fun shareCardToKakao(context: Context, bmp: Bitmap, payload: ShareCardPayload): Boolean {
-    val uri = withContext(Dispatchers.IO) { writePngToCache(context, bmp) }
-    val send = Intent(Intent.ACTION_SEND).apply {
-        setPackage("com.kakao.talk")
-        type = "image/png"
-        putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_TEXT, buildShareText(payload))
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    return runCatching { context.startActivity(send); true }.getOrDefault(false)
 }
 
 /** 갤러리(Pictures/DailyScript) 저장. 성공 시 true. */

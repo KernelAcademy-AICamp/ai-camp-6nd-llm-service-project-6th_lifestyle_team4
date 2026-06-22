@@ -131,6 +131,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
 
     val authMessage by sessionVm.authMessage.collectAsState()
     val authInProgress by sessionVm.authInProgress.collectAsState()
+    val idCheck by sessionVm.idCheck.collectAsState()
     val showProfilePrompt by sessionVm.profilePromptVisible.collectAsState()
 
     val noticeVm: NoticeViewModel = viewModel()
@@ -348,7 +349,10 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         yarn = yarnAvailable,
                         authMessage = authMessage,
                         authInProgress = authInProgress,
-                        onSignIn = { id, pw, signUp -> sessionVm.signIn(id, pw, signUp) },
+                        idCheck = idCheck,
+                        onSignIn = { id, pw, signUp, gender, age -> sessionVm.signIn(id, pw, signUp, gender, age) },
+                        onCheckId = sessionVm::checkIdAvailability,
+                        onResetIdCheck = sessionVm::resetIdCheck,
                         onSocialSignIn = { provider -> sessionVm.signInWithProvider(provider, activity) },
                         onSignOut = sessionVm::signOutAndReauth,
                         onDeleteAccount = sessionVm::deleteAccountAndReauth,

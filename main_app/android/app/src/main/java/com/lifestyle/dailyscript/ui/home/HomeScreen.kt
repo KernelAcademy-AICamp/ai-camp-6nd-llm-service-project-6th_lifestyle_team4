@@ -214,6 +214,7 @@ fun HomeScreen(
       sharePayload?.let { p ->
           ShareCardSheet(
               payload = p,
+              userId = userId,
               yarnBalance = yarnBalance,
               purchasedIds = purchasedThemeIds,
               onBuy = onBuyTheme,

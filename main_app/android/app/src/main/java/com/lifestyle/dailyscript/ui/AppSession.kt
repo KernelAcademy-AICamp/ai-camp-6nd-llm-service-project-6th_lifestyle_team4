@@ -44,6 +44,10 @@ class AppSessionViewModel : ViewModel() {
     private val _profilePromptVisible = MutableStateFlow(false)
     val profilePromptVisible: StateFlow<Boolean> = _profilePromptVisible.asStateFlow()
 
+    /** 회원가입 아이디 중복확인 상태 (PWA signupIdAvailable). */
+    private val _idCheck = MutableStateFlow(IdCheckState.NONE)
+    val idCheck: StateFlow<IdCheckState> = _idCheck.asStateFlow()
+
     // init 의 bootstrap() 과 observeAuthChanges() 가 콜드스타트에 동시에 진입할 수 있다.
     // 직렬화하지 않으면 두 코루틴이 각각 signInAnonymously() 를 호출해 익명 계정이 둘 생기거나
     // _state/lastAuthUid 쓰기가 경쟁한다. Mutex 로 단일화하고, 잠금 안에서 이미 같은 사용자로
@@ -98,16 +102,23 @@ class AppSessionViewModel : ViewModel() {
         }
     }
 
-    fun signIn(id: String, password: String, signUp: Boolean) {
+    fun signIn(
+        id: String,
+        password: String,
+        signUp: Boolean,
+        gender: String? = null,
+        ageGroup: String? = null,
+    ) {
         if (_authInProgress.value) return
         val current = (_state.value as? SessionState.Ready)?.session
         _authInProgress.value = true
         _authMessage.value = null
         viewModelScope.launch {
             runCatching {
-                authRepo.signInWithId(id, password, signUp, current?.userId)
+                authRepo.signInWithId(id, password, signUp, current?.userId, gender, ageGroup)
             }.onSuccess {
                 bootstrapIntoState()
+                _idCheck.value = IdCheckState.NONE
                 AppAnalytics.track(
                     if (signUp) "sign_up" else "login",
                     mapOf("method" to "id_password"),
@@ -117,6 +128,23 @@ class AppSessionViewModel : ViewModel() {
                 _authMessage.value = friendlyAuthError(it.message.orEmpty())
             }
             _authInProgress.value = false
+        }
+    }
+
+    fun resetIdCheck() { _idCheck.value = IdCheckState.NONE }
+
+    /**
+     * 회원가입 아이디 중복확인 — email_available RPC. 네트워크 오류면 SKIPPED 로 두어
+     * 제출은 허용하되(가입 단계에서 중복이면 서버가 안내) PWA 와 동일하게 동작한다.
+     */
+    fun checkIdAvailability(id: String) {
+        if (AuthRepository.idToEmail(id) == null) { _idCheck.value = IdCheckState.NONE; return }
+        if (_idCheck.value == IdCheckState.CHECKING) return
+        _idCheck.value = IdCheckState.CHECKING
+        viewModelScope.launch {
+            runCatching { authRepo.emailAvailable(id) }
+                .onSuccess { _idCheck.value = if (it) IdCheckState.AVAILABLE else IdCheckState.TAKEN }
+                .onFailure { _idCheck.value = IdCheckState.SKIPPED }
         }
     }
 
@@ -277,3 +305,6 @@ sealed interface SessionState {
     data class Ready(val session: UserSession) : SessionState
     data class Error(val message: String) : SessionState
 }
+
+/** 회원가입 아이디 중복확인 상태 — 미확인 / 확인중 / 사용가능 / 사용중 / 건너뜀(네트워크 오류). */
+enum class IdCheckState { NONE, CHECKING, AVAILABLE, TAKEN, SKIPPED }

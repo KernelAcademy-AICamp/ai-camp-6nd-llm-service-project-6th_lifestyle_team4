@@ -59,6 +59,7 @@ import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
+import com.lifestyle.dailyscript.data.repo.ShareRepository
 import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.yarn.SpendResult
 import kotlinx.coroutines.Dispatchers
@@ -84,11 +85,11 @@ private fun normalizeWorkTitle(s: String?): String {
 
 /**
  * 명대사 공유 카드 시트 (PWA #share-modal 이식) — 카드 펼치기(미리보기 토글) + Free/Premium/Royal 탭 +
- * 배경 그리드 + 다운로드/카카오톡/공유하기.
+ * 배경 그리드 + 다운로드/공유하기 + 링크 보내기.
  *
  * - Premium/Royal 은 PWA 와 동일하게 아직 배경 이미지가 없어 '곧 만나요' 빈 상태(구매·잠금해제 미연결).
  * - 미리보기는 540×960, 썸네일은 144×256 으로 백그라운드 스레드 렌더 후 캐시. 최종 저장/공유만 1080×1920.
- * - 다운로드/카카오톡/공유하기 성공 시 [onShared] 1회 호출 → HomeViewModel 이 공유수 +1 & RPC 담당.
+ * - 다운로드/공유하기 성공 시 [onShared] 1회 호출 → HomeViewModel 이 공유수 +1 & RPC 담당.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,6 +97,7 @@ fun ShareCardSheet(
     payload: ShareCardPayload,
     onDismiss: () -> Unit,
     onShared: () -> Unit,
+    userId: Long = 0L,
     yarnBalance: Int = 0,
     purchasedIds: Set<String> = emptySet(),
     onBuy: suspend (ShareBackground) -> SpendResult = { SpendResult.ERROR },
@@ -104,6 +106,7 @@ fun ShareCardSheet(
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val renderer = remember { ShareCardRenderer(context) }
+    val shareRepo = remember { ShareRepository() }
 
     var selectedTier by remember { mutableStateOf(ShareTier.Free) }
     var selectedBg by remember { mutableStateOf(SHARE_BACKGROUNDS.first()) }
@@ -275,7 +278,7 @@ fun ShareCardSheet(
             }
             Box(modifier = Modifier.height(20.dp))
 
-            // 액션 — 다운로드 / 카카오톡 / 공유하기.
+            // 액션 — 다운로드 / 공유하기.
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SheetActionButton(
                     label = if (busy) "처리 중⋯" else "다운로드",
@@ -289,26 +292,6 @@ fun ShareCardSheet(
                         ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
                         PackageManager.PERMISSION_GRANTED
                     if (needPerm) permLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else runSave()
-                }
-                SheetActionButton(
-                    label = "카카오톡",
-                    container = Color(0xFFFEE500),
-                    content = Color(0xFF191919),
-                    outline = false,
-                    enabled = !busy,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    scope.launch {
-                        busy = true
-                        val ok = shareCardToKakao(context, finalBitmap(), payload)
-                        if (ok) {
-                            onShared()
-                            onDismiss()
-                        } else {
-                            Toast.makeText(context, "카카오톡이 설치되어 있지 않아요", Toast.LENGTH_SHORT).show()
-                        }
-                        busy = false
-                    }
                 }
                 SheetActionButton(
                     label = "공유하기",
@@ -325,6 +308,33 @@ fun ShareCardSheet(
                         busy = false
                         onDismiss()
                     }
+                }
+            }
+            Box(modifier = Modifier.height(8.dp))
+
+            // 링크 보내기 — create_share_link 로 short URL(/m/?s=<id>) 발급 후 텍스트로 공유.
+            // referrer_id 를 실어 친구가 이 링크로 가입하면 양쪽 +600 실타래(친구 초대 '보내기' 측).
+            SheetActionButton(
+                label = if (busy) "처리 중⋯" else "링크 보내기",
+                container = Color.Transparent,
+                content = Espresso,
+                outline = true,
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                scope.launch {
+                    busy = true
+                    val referrer = userId.takeIf { it > 0L }
+                    val cardId = payload.cardId.takeIf { it > 0L }
+                    val quote = payload.quote.trim().take(300).ifBlank { null }
+                    val quoteB64 = quote?.let { urlSafeB64Encode(it) }
+                    val shortId = shareRepo.createShareLink(referrer, cardId, selectedBg.id, quoteB64)
+                    val url = if (shortId != null) buildShortShareUrl(shortId)
+                        else buildReferralUrl(referrer, cardId, selectedBg.id, quote)
+                    shareLink(context, url, payload)
+                    onShared()
+                    busy = false
+                    onDismiss()
                 }
             }
         }

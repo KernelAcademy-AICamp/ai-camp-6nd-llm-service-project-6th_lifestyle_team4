@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
@@ -58,6 +60,9 @@ class AuthRepository {
     // entered login id onto the new (non-anonymous) users row.
     private var pendingMigrationUserId: Long? = null
     private var pendingLoginId: String? = null
+    // ID/PW 회원가입 시 입력받은 성별·나이대(선택) — 다음 bootstrap 이 새 users 행에 기록한다.
+    private var pendingGender: String? = null
+    private var pendingAgeGroup: String? = null
 
     /**
      * Ensures we have a session (anonymous if none) + a row in public.users.
@@ -122,10 +127,16 @@ class AuthRepository {
         // Just signed up / logged in → stamp the entered id and carry the old
         // anonymous bookmarks into the freshly created account.
         val recordedLoginId = pendingLoginId?.takeIf { it.isNotBlank() }
+        val recordedGender = pendingGender
+        val recordedAgeGroup = pendingAgeGroup
         // 소셜(OAuth) 첫 가입: 비익명 신규인데 입력 아이디가 없음(= ID/PW 가입이 아님).
         val isSocialSignup = !isAnonymous && recordedLoginId == null
         if (!isAnonymous) {
             recordedLoginId?.let { id -> runCatching { updateLoginId(newUserId, id) } }
+            // ID/PW 회원가입의 성별·나이(선택) — PWA applySignupProfile 대응. null 필드는 미기록.
+            if (recordedGender != null || recordedAgeGroup != null) {
+                runCatching { updateDemographics(newUserId, recordedGender, recordedAgeGroup) }
+            }
             val oldUserId = pendingMigrationUserId
             if (oldUserId != null && oldUserId != newUserId) {
                 runCatching { migrateBookmarks(oldUserId, newUserId) }
@@ -134,6 +145,8 @@ class AuthRepository {
         clearPending()
         return UserSession(
             newUserId, isAnonymous, startingNickname,
+            gender = recordedGender,
+            ageGroup = recordedAgeGroup,
             loginId = recordedLoginId,
             needsProfileSetup = isSocialSignup,
         )
@@ -150,12 +163,17 @@ class AuthRepository {
         password: String,
         signUp: Boolean,
         currentUserId: Long?,
+        gender: String? = null,
+        ageGroup: String? = null,
     ) {
         val email = idToEmail(id) ?: throw IllegalArgumentException("아이디를 입력해주세요.")
         if (password.isBlank()) throw IllegalArgumentException("비밀번호를 입력해주세요.")
 
         pendingMigrationUserId = currentUserId
         pendingLoginId = id.trim()
+        // 성별·나이는 회원가입일 때만 기록 대상으로 둔다(로그인은 기존 값 유지).
+        pendingGender = if (signUp) gender else null
+        pendingAgeGroup = if (signUp) ageGroup else null
 
         if (signUp) {
             auth.signUpWith(Email) {
@@ -247,9 +265,31 @@ class AuthRepository {
         clearPending()
     }
 
+    /**
+     * 회원가입 전 아이디 중복확인 — PWA email_available(idToEmail(id)). true = 사용 가능(미가입).
+     * 합성 이메일 스킴(idToEmail)이 실제 가입과 동일해야 결과가 일치한다.
+     */
+    suspend fun emailAvailable(id: String): Boolean {
+        val email = idToEmail(id) ?: return false
+        return client.postgrest.rpc(
+            function = "email_available",
+            parameters = buildJsonObject { put("p_email", email) },
+        ).decodeAs<Boolean>()
+    }
+
     /** Stamp the human-entered login id onto the user's row (shown in the UI). */
     suspend fun updateLoginId(userId: Long, loginId: String) {
         client.postgrest["users"].update({ set("login_id", loginId) }) {
+            filter { eq("user_id", userId) }
+        }
+    }
+
+    /** ID/PW 가입 시 입력받은 성별·나이대(선택)를 새 행에 기록. null 필드는 건드리지 않음(DB CHECK 가 빈문자 거부). */
+    private suspend fun updateDemographics(userId: Long, gender: String?, ageGroup: String?) {
+        client.postgrest["users"].update({
+            if (gender != null) set("gender", gender)
+            if (ageGroup != null) set("age_group", ageGroup)
+        }) {
             filter { eq("user_id", userId) }
         }
     }
@@ -321,6 +361,8 @@ class AuthRepository {
     private fun clearPending() {
         pendingMigrationUserId = null
         pendingLoginId = null
+        pendingGender = null
+        pendingAgeGroup = null
     }
 
     companion object {
