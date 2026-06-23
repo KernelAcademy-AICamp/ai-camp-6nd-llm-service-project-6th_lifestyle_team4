@@ -38,3 +38,22 @@ struct AppMasthead: View {
         }
     }
 }
+
+/// 탭 본문 콘텐츠 로딩 표시 — 시스템 스피너 대신 앱의 조용한 문예 톤에 맞춘 은은한
+/// '불러오는 중…' opacity 펄스. (런치/부트스트랩은 LaunchLoadingView 가 워드마크로
+/// 처리하고, 이건 이미 마스트헤드가 보이는 탭 본문용 — 워드마크 중복을 피한다.)
+struct QuietLoadingLabel: View {
+    @State private var pulse = false
+
+    var body: some View {
+        Text("불러오는 중…")
+            .font(.bodySans(14))
+            .foregroundStyle(.walnut)
+            .opacity(pulse ? 0.45 : 0.9)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
+                    pulse = true
+                }
+            }
+    }
+}
