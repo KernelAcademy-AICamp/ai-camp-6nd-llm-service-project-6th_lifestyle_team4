@@ -797,8 +797,16 @@
       <div class="flex flex-col gap-1">
         <div class="flex items-center justify-between">
           <label class="text-xs font-semibold text-on-surface-variant">대본 발췌 (한국어)</label>
-          <button type="button" data-bold-for=".lib-edit-excerpt"
-                  class="lib-bold-btn font-bold text-xs px-2 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors">B</button>
+          <div class="flex items-center gap-1">
+            <button type="button" data-align-for=".lib-edit-excerpt" data-align="left"
+                    class="lib-align-btn text-xs px-1.5 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors" title="왼쪽 정렬">⇤</button>
+            <button type="button" data-align-for=".lib-edit-excerpt" data-align="center"
+                    class="lib-align-btn text-xs px-1.5 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors" title="중앙 정렬">⇔</button>
+            <button type="button" data-align-for=".lib-edit-excerpt" data-align="right"
+                    class="lib-align-btn text-xs px-1.5 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors" title="우측 정렬">⇥</button>
+            <button type="button" data-bold-for=".lib-edit-excerpt"
+                    class="lib-bold-btn font-bold text-xs px-2 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors">B</button>
+          </div>
         </div>
         <textarea class="lib-edit-excerpt w-full p-2 rounded-lg border border-outline-variant bg-surface-container-low text-[13px] font-mono leading-relaxed resize-y" rows="10"></textarea>
       </div>
@@ -806,6 +814,12 @@
         <div class="flex items-center justify-between">
           <label class="text-xs font-semibold text-amber-700">Script Excerpt (영문 원본)</label>
           <div class="flex items-center gap-1">
+            <button type="button" data-align-for=".lib-edit-excerpt-original" data-align="left"
+                    class="lib-align-btn text-xs px-1.5 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors" title="왼쪽 정렬">⇤</button>
+            <button type="button" data-align-for=".lib-edit-excerpt-original" data-align="center"
+                    class="lib-align-btn text-xs px-1.5 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors" title="중앙 정렬">⇔</button>
+            <button type="button" data-align-for=".lib-edit-excerpt-original" data-align="right"
+                    class="lib-align-btn text-xs px-1.5 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors" title="우측 정렬">⇥</button>
             <button type="button" data-bold-for=".lib-edit-excerpt-original"
                     class="lib-bold-btn font-bold text-xs px-2 py-0.5 rounded border border-outline-variant hover:border-primary hover:text-primary transition-colors">B</button>
             <button type="button" data-translate-for=".lib-edit-excerpt-original" data-field="script_excerpt"

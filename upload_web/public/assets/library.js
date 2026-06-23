@@ -1333,6 +1333,7 @@ function buildEditNode(card) {
   attachKeywordHint(kwEl);
   // B 버튼 + Ctrl/Cmd+B 단축키로 선택 영역에 **굵게** 마커 토글
   wireBoldButtons(node);
+  wireAlignButtons(node);
   // ↻ KO — 영문 칸의 텍스트를 한국어로 재번역해서 좌측에 채우기
   wireTranslateButtons(node, work);
 
@@ -2117,6 +2118,26 @@ function wireBoldButtons(root) {
         e.preventDefault();
         toggleBoldOnTextarea(ta);
       }
+    });
+  });
+}
+
+// 정렬 버튼 — textarea 의 text-align 을 좌/중앙/우 로 토글. 현재 단계는 편집 UI 시각화만(저장 X).
+// 저장된 정렬 정보로 클라이언트에 적용하려면 cards.text_align 컬럼 + 표시 로직 후속 작업 필요.
+function wireAlignButtons(root) {
+  root.querySelectorAll('.lib-align-btn').forEach((btn) => {
+    const sel = btn.dataset.alignFor;
+    const align = btn.dataset.align;
+    const ta = sel ? root.querySelector(sel) : null;
+    if (!ta || !align) return;
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ta.style.textAlign = align;
+      // 같은 그룹 버튼 활성 상태 표시
+      root.querySelectorAll(`.lib-align-btn[data-align-for="${sel}"]`).forEach((b) => {
+        b.classList.toggle('text-primary', b === btn);
+        b.classList.toggle('border-primary', b === btn);
+      });
     });
   });
 }
