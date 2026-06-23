@@ -2,6 +2,8 @@ import SwiftUI
 
 struct HomeView: View {
     @Binding var selectedTab: Tab
+    /// TODAY(center) 재탭 토큰 — 증가하면 새 명대사 새로고침(상단 버튼과 동일 경로).
+    var reselect: Int = 0
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
@@ -178,16 +180,17 @@ struct HomeView: View {
             }
         }
         // 새로고침 중에만 실타래를 연속 회전(750ms/회전, Android YarnRefreshIndicator).
+        // 당겨서 새로고침 시작 시 실타래 한 바퀴 — 센터 네비 탭과 같은 스핀(.yarnSpin) 재사용.
         .onChange(of: pullRefreshing) { _, refreshing in
             if refreshing {
                 spinAngle = 0
-                withAnimation(.linear(duration: 0.75).repeatForever(autoreverses: false)) {
-                    spinAngle = 360
-                }
+                withAnimation(.yarnSpin) { spinAngle = 360 }
             } else {
                 spinAngle = 0
             }
         }
+        // 센터(TODAY) 재탭 → 새 명대사 (상단 새로고침 버튼과 동일: 익명 3회 제한·토스트 포함).
+        .onChange(of: reselect) { _, _ in handleRefreshTap() }
     }
 
     private func todayCardView(_ card: Card) -> some View {

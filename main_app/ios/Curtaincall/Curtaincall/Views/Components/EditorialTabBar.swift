@@ -14,6 +14,12 @@ private struct NavCatPose: Equatable {
     let ledgeFraction: CGFloat
 }
 
+extension Animation {
+    /// 실타래 한 바퀴 회전 스펙 — Android CubicBezierEasing(0.34, 1.4, 0.5, 1), 600ms(overshoot).
+    /// 센터 네비 탭 / 당겨서 새로고침 인디케이터 두 트리거가 같은 스핀을 재사용한다.
+    static var yarnSpin: Animation { .timingCurve(0.34, 1.4, 0.5, 1, duration: 0.6) }
+}
+
 struct EditorialTabBar: View {
     @Binding var selection: Tab
     /// Unread-notice dot on the MY tab (Notice is no longer its own tab).
@@ -131,24 +137,23 @@ struct EditorialTabBar: View {
         } else {
             selection = tab
         }
-        // TODAY(center) 를 누르면 실타래를 톡 흔든다 (재탭 포함 = '새 명대사' 신호).
+        // TODAY(center) 를 누르면 실타래를 한 바퀴 돌린다 (재탭 포함 = '새 명대사' 신호).
         if tab.isCenter {
             yarnTapCount += 1
-            jiggleYarn()
+            spinYarn()
         }
     }
 
-    /// 실타래 한 번 'jiggle' — 스프링으로 살짝 키웠다 회전했다 제자리로. Reduce Motion 시 생략.
-    private func jiggleYarn() {
+    /// 실타래 한 바퀴 회전 — 360°, 600ms, 살짝 튕기는(overshoot) 이징. Android HomeCenterButton
+    /// (spin.animateTo(360f, tween(600, CubicBezierEasing(0.34,1.4,0.5,1)))) 미러. 당겨서
+    /// 새로고침 인디케이터와 같은 스핀(.yarnSpin)을 공유한다. Reduce Motion 시 생략.
+    private func spinYarn() {
         guard !reduceMotion else { return }
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.38)) {
-            yarnScale = 1.18
-            yarnRotation = 12
+        yarnRotation = 0
+        withAnimation(.yarnSpin) {
+            yarnRotation = 360
         } completion: {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.55)) {
-                yarnScale = 1
-                yarnRotation = 0
-            }
+            yarnRotation = 0   // 360 ≡ 0 — 다음 탭이 0 에서 다시 돌도록 즉시 리셋(무애니).
         }
     }
 
