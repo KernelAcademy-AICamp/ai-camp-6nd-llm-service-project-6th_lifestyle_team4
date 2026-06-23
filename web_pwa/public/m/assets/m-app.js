@@ -1362,7 +1362,7 @@ function loadAllCards() {
     // 카탈로그·추천 등에서 아예 누락되던 문제 수정). PostgREST 기본 최대 행수(1000)도
     // range 페이지네이션으로 우회.
     const PAGE = 1000;
-    const COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url)';
+    const COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, text_align, text_align_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url)';
     const all = [];
     for (let offset = 0; ; offset += PAGE) {
       const { data, error } = await sb
@@ -6036,6 +6036,10 @@ function openDetailApproved(card) {
           ? escapeHtml(flowProseScript(card.script_excerpt || ''))
           : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', w.characters), w.characters);
     detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
+    /* 본문 정렬 — 관리자 편집에서 저장한 text_align 적용. NULL 이면 format 기본값 (poem=center, else=left). */
+    const _fmt = String(w.format || '').toLowerCase();
+    const _defaultAlign = _fmt === 'poem' ? 'center' : 'left';
+    detailScript.style.textAlign = card.text_align || _defaultAlign;
   }
 
   // significance — 네 프롬프트(screen/opera/play/literature) 모두 생성하므로
@@ -6131,6 +6135,11 @@ function applyDetailLang(lang) {
           ? escapeHtml(flowProseScript(scriptSrc || ''))
           : boldSpeakerLines(cleanForDisplay(scriptSrc || '', w.characters), w.characters);
     detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
+    /* 본문 정렬 — KO/EN 별도 저장된 text_align 적용. NULL 이면 format 기본 (poem=center, else=left). */
+    const _fmt = String(w.format || '').toLowerCase();
+    const _defaultAlign = _fmt === 'poem' ? 'center' : 'left';
+    const _alignSrc = useEn ? (card.text_align_original || card.text_align) : card.text_align;
+    detailScript.style.textAlign = _alignSrc || _defaultAlign;
   }
 
   // 상황 설명 (excerpt_description) + 의의 (significance) 스왑
