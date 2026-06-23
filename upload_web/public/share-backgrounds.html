@@ -104,11 +104,19 @@
       <span class="text-sm font-medium">관리자 권한이 없는 계정입니다. 카드지 추가·수정·삭제는 admin 계정만 가능합니다.</span>
     </div>
 
-    <div class="flex items-start gap-3 p-4 rounded-lg bg-surface-container-low text-on-surface-variant text-sm leading-relaxed">
-      <span class="material-symbols-outlined text-primary">info</span>
-      <span>Premium(999🧶) / Royal(2999🧶) 공유 카드지 배경 이미지를 등록합니다. 무료 8종은 앱 코드에서 그려지므로 여기서 관리하지 않습니다.
-        이미지는 <b>9:16 세로(권장 1080×1920)</b> PNG/JPG 가 좋습니다. <code>slug</code> 은 고유 id 이며 같은 slug 로 저장하면 덮어씁니다.</span>
+    <!-- 탭: 등록 / 조회 -->
+    <div class="flex gap-1 border-b border-outline-variant">
+      <button id="tab-btn-register" type="button" class="px-4 py-2.5 text-sm font-bold text-primary border-b-2 border-primary -mb-px transition-colors">등록</button>
+      <button id="tab-btn-browse" type="button" class="px-4 py-2.5 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent -mb-px transition-colors hover:text-on-background">조회 <span id="browse-count" class="text-xs text-on-surface-variant/60"></span></button>
     </div>
+
+    <!-- ===== 등록 탭 ===== -->
+    <div id="tab-register" class="flex flex-col gap-6">
+      <div class="flex items-start gap-3 p-4 rounded-lg bg-surface-container-low text-on-surface-variant text-sm leading-relaxed">
+        <span class="material-symbols-outlined text-primary">info</span>
+        <span>Premium(999🧶) / Royal(2999🧶) 공유 카드지 배경 이미지를 등록합니다. 무료 8종은 앱 코드에서 그려지므로 여기서 관리하지 않습니다.
+          <b>등급 · 책 · 이미지</b>만 고르면 됩니다(고유 id·이름·가격 자동). 이미지는 <b>9:16 세로(권장 1080×1920)</b> PNG/JPG 권장.</span>
+      </div>
 
     <!-- 작성 / 수정 폼 -->
     <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 flex flex-col gap-4">
@@ -145,27 +153,6 @@
         </label>
       </div>
 
-      <!-- 고급(선택): 글자색·정렬 -->
-      <details class="rounded-lg border border-outline-variant px-4 py-2">
-        <summary class="text-sm font-semibold text-on-surface-variant cursor-pointer select-none">고급 설정 (선택)</summary>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3">
-          <div class="flex flex-col gap-1.5">
-            <label for="f-ink" class="text-sm font-semibold text-on-surface-variant">글자색 (ink)</label>
-            <div class="flex items-center gap-2">
-              <input id="f-ink-color" type="color" value="#3B2A1A" class="h-9 w-12 rounded border-outline-variant bg-surface-container-lowest p-0.5" />
-              <input id="f-ink" type="text" maxlength="7" value="#3B2A1A" placeholder="#3B2A1A"
-                     class="flex-1 rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background font-mono focus:border-primary focus:ring-primary" />
-            </div>
-            <p class="text-xs text-on-surface-variant/70">이미지가 어두우면 밝은색(예: #FAF8F2)으로.</p>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <label for="f-sort" class="text-sm font-semibold text-on-surface-variant">정렬 순서 <span class="text-on-surface-variant/60 font-normal">(작을수록 앞)</span></label>
-            <input id="f-sort" type="number" step="1" value="0"
-                   class="rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background focus:border-primary focus:ring-primary" />
-          </div>
-        </div>
-      </details>
-
       <!-- 이미지 -->
       <div class="flex flex-col gap-2">
         <label class="text-sm font-semibold text-on-surface-variant">배경 이미지 <span class="text-on-surface-variant/60 font-normal">(PNG/JPG · 최대 5MB · 9:16 권장)</span></label>
@@ -192,14 +179,20 @@
         <p id="form-msg" class="hidden text-sm"></p>
       </div>
     </section>
+    </div><!-- /tab-register -->
 
-    <!-- 목록 -->
-    <section class="flex flex-col gap-3">
-      <h3 class="text-lg font-bold text-on-background">등록된 카드지</h3>
+    <!-- ===== 조회 탭 ===== -->
+    <div id="tab-browse" class="flex flex-col gap-3" style="display:none;">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-on-background">등록된 카드지</h3>
+        <button id="browse-refresh" type="button" class="text-sm text-on-surface-variant hover:text-on-background flex items-center gap-1">
+          <span class="material-symbols-outlined text-base">refresh</span>새로고침
+        </button>
+      </div>
       <div id="bg-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"></div>
       <p id="list-empty" class="hidden text-on-surface-variant text-sm py-10 text-center">아직 등록된 카드지가 없습니다.</p>
       <p id="list-loading" class="text-on-surface-variant text-sm py-10 text-center">불러오는 중…</p>
-    </section>
+    </div><!-- /tab-browse -->
 
   </div>
 </main>

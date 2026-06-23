@@ -34,8 +34,26 @@ function toast(msg) {
   toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 1800);
 }
 
-const FORM_IDS = ['f-tier', 'f-book', 'f-book-filter', 'f-active', 'f-ink', 'f-ink-color', 'f-sort',
-  'pick-image', 'save-btn'];
+const FORM_IDS = ['f-tier', 'f-book', 'f-book-filter', 'f-active', 'pick-image', 'save-btn'];
+
+// ---------- 탭 (등록 / 조회) ----------
+function tabBtnClass(active) {
+  return `px-4 py-2.5 text-sm border-b-2 -mb-px transition-colors ${active
+    ? 'font-bold text-primary border-primary'
+    : 'font-semibold text-on-surface-variant border-transparent hover:text-on-background'}`;
+}
+function setTab(which) {
+  const isReg = which === 'register';
+  const reg = document.getElementById('tab-register');
+  const brw = document.getElementById('tab-browse');
+  if (reg) reg.style.display = isReg ? 'flex' : 'none';
+  if (brw) brw.style.display = isReg ? 'none' : 'flex';
+  const rb = document.getElementById('tab-btn-register');
+  const bb = document.getElementById('tab-btn-browse');
+  if (rb) rb.className = tabBtnClass(isReg);
+  if (bb) bb.className = tabBtnClass(!isReg);
+  if (!isReg) loadAndRender();   // 조회 진입 시 최신 목록으로 갱신
+}
 
 (async () => {
   const token = await requireSessionOrRedirect('/');
@@ -64,12 +82,10 @@ const FORM_IDS = ['f-tier', 'f-book', 'f-book-filter', 'f-active', 'f-ink', 'f-i
   $('#img-file')?.addEventListener('change', onPickImage);
   $('#f-book-filter')?.addEventListener('input', (e) => populateBookSelect(e.target.value));
 
-  // ink 색상 입력 ↔ hex 텍스트 동기화
-  $('#f-ink-color')?.addEventListener('input', (e) => { $('#f-ink').value = e.target.value.toUpperCase(); });
-  $('#f-ink')?.addEventListener('input', (e) => {
-    const v = e.target.value.trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(v)) $('#f-ink-color').value = v;
-  });
+  // 탭 — 등록 / 조회
+  $('#tab-btn-register')?.addEventListener('click', () => setTab('register'));
+  $('#tab-btn-browse')?.addEventListener('click', () => setTab('browse'));
+  $('#browse-refresh')?.addEventListener('click', () => loadAndRender());
 
   await loadWorks();
   await loadAndRender();
@@ -186,6 +202,8 @@ async function loadAndRender() {
 function renderList(rows) {
   const list = $('#bg-list');
   const empty = $('#list-empty');
+  const countEl = $('#browse-count');
+  if (countEl) countEl.textContent = rows.length ? `(${rows.length})` : '';
   if (!list) return;
   list.innerHTML = '';
   if (!rows.length) { empty?.classList.remove('hidden'); return; }
@@ -228,8 +246,6 @@ function readForm() {
     tier: $('#f-tier').value || 'premium',
     workId,
     workTitle: book?.title || '',
-    ink: (($('#f-ink').value || '').trim() || '#3B2A1A'),
-    sortOrder: parseInt($('#f-sort').value, 10) || 0,
     isActive: $('#f-active').checked,
   };
 }
@@ -246,7 +262,6 @@ async function onSave() {
   if (!isAdmin) return;
   const f = readForm();
   if (f.workId == null) { showMsg('책을 선택해주세요.', false); return; }
-  if (!/^#[0-9a-fA-F]{6}$/.test(f.ink)) { showMsg('글자색은 #RRGGBB 형식이어야 해요.', false); return; }
   if (!pendingFile && !currentImageUrl) { showMsg('배경 이미지를 선택해주세요.', false); return; }
 
   const slug = makeSlug(f.tier, f.workId);
@@ -260,10 +275,11 @@ async function onSave() {
     if (pendingFile) { imageUrl = await uploadImage(slug, pendingFile); uploadedUrl = imageUrl; }
 
     const sb = await getSupabase();
+    // ink·sort_order 는 보내지 않음 → DB 기본값(ink #3B2A1A, sort_order 0) 적용. (관리자는 등급/책/이미지만)
     const payload = {
       slug, tier: f.tier, price: DEFAULT_PRICE[f.tier] || 0,
       name: f.workTitle, work_id: f.workId, work_title: f.workTitle,
-      image_url: imageUrl, ink: f.ink, sort_order: f.sortOrder, is_active: f.isActive,
+      image_url: imageUrl, is_active: f.isActive,
       updated_at: new Date().toISOString(),
     };
     const { error } = await sb.from(TABLE).upsert(payload, { onConflict: 'slug' });
@@ -295,6 +311,7 @@ async function onSave() {
 }
 
 function startEdit(b) {
+  setTab('register');   // 조회 탭에서 '수정' 눌러도 폼(등록 탭)이 보이도록 전환
   editingSlug = b.slug;
   currentImageUrl = b.image_url || '';
   pendingFile = null;
@@ -308,9 +325,6 @@ function startEdit(b) {
     const m = works.find((w) => (w.title || '') === (b.work_title || b.name));
     if (m) $('#f-book').value = String(m.work_id);
   }
-  $('#f-ink').value = b.ink || '#3B2A1A';
-  if (/^#[0-9a-fA-F]{6}$/.test(b.ink || '')) $('#f-ink-color').value = b.ink;
-  $('#f-sort').value = b.sort_order ?? 0;
   $('#f-active').checked = !!b.is_active;
   const preview = $('#img-preview');
   if (preview && b.image_url) { preview.src = b.image_url; preview.classList.remove('hidden'); }
@@ -331,9 +345,6 @@ function resetForm() {
   $('#f-book-filter').value = '';
   populateBookSelect('');
   $('#f-book').value = '';
-  $('#f-ink').value = '#3B2A1A';
-  $('#f-ink-color').value = '#3B2A1A';
-  $('#f-sort').value = '0';
   $('#f-active').checked = true;
   const preview = $('#img-preview');
   if (preview) { preview.src = ''; preview.classList.add('hidden'); }
