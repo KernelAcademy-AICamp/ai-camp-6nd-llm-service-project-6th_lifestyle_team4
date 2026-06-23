@@ -649,6 +649,14 @@ private fun ScriptBody(
         val speakerNames = if (ScriptFormat.usesSpeakerBold(format)) names else emptyList()
         MarkdownBoldTransformation(speakerNames)
     }
+    // 본문 정렬 — 관리자 편집에서 저장된 card.textAlign 우선, 없으면 format 기본 (poem=center, else=left).
+    // (migration 042 + library.js 저장부)
+    val align = when (card.textAlign) {
+        "center" -> TextAlign.Center
+        "right"  -> TextAlign.End
+        "left"   -> TextAlign.Start
+        else     -> if ((format ?: "").lowercase() == "poem") TextAlign.Center else TextAlign.Start
+    }
     CompositionLocalProvider(
         LocalTextSelectionColors provides HighlightSelectionColors,
         LocalTextToolbar provides NoTextToolbar,
@@ -661,6 +669,7 @@ private fun ScriptBody(
                 fontFamily = ScreenplayMono,
                 letterSpacing = 0.02.em,
                 color = Espresso,
+                textAlign = align,
             ),
             visualTransformation = transformation,
             cursorBrush = SolidColor(Cta),

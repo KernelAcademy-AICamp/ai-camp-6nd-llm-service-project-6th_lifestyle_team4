@@ -391,6 +391,12 @@ struct CardDetailView: View {
         let lines = card.displayScript(original: showOriginal).components(separatedBy: "\n")
         let para = NSMutableParagraphStyle()
         para.lineSpacing = 8
+        // 본문 정렬 — 관리자 편집에서 저장된 text_align 적용. NULL 이면 format 기본 (poem=center, else=left). (migration 042)
+        switch card.displayTextAlign(original: showOriginal) {
+        case "center": para.alignment = .center
+        case "right":  para.alignment = .right
+        default:       para.alignment = .left
+        }
         let result = NSMutableAttributedString()
         // 라벨에 따라붙는 마침표/콜론/세미콜론/콤마/느낌·물음표 제거 후 names 매칭 —
         // LLM 출력의 "Romeo.", "노라:", "햄릿;" 같은 형식도 등장인물명으로 인식.
