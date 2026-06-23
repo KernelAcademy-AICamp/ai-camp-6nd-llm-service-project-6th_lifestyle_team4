@@ -18,7 +18,7 @@
 
 const STEPS = [
   // ── 홈 화면 ──  (홈 탭을 다시 누르면 새 명대사로 바뀌어 별도 새로고침 버튼은 없앴어요)
-  { sel: '.bottom-nav [data-nav="home"]',    scr: '홈',   n: 1, tot: 4, title: 'TODAY · 오늘의 명대사', desc: '여기가 홈이에요. 매일 새 명대사 한 장이 도착해요. 가운데 실뭉치(TODAY)를 한 번 더 누르면 다른 명대사로 바뀌어요.' },
+  { sel: '.bottom-nav [data-nav="home"]', spot: '.bottom-nav [data-nav="home"] .nav-home-circle', round: true, scr: '홈', n: 1, tot: 4, eyebrow: '사용법', title: 'TODAY', desc: '오늘의 명대사를 볼 수 있어요.\n가운데 실타래(TODAY)를 누를 때마다 다른 명대사로 바뀌어요.' },
   { sel: '#today-bookmark',                  scr: '홈',   n: 2, tot: 4, title: '북마크해 두기',    desc: '마음에 들었다면 이 책갈피를 탭하세요. MY 페이지의 북마크에서 다시 꺼내볼 수 있어요.' },
   { sel: '.bottom-nav [data-nav="archive"]', scr: '홈',   n: 3, tot: 4, title: '도서 카탈로그(LIBRARY)', desc: '이제 LIBRARY에는 모든 작품이 책으로 진열돼요. 표지를 펼쳐 작품별 명대사를 둘러보세요.' },
   { sel: '#today-read',                      scr: '홈',   n: 4, tot: 4, title: '전문 읽으러 가기', desc: '한 줄만으론 아쉽죠. 이 버튼을 누르면 그 장면 전체가 펼쳐져요.', action: 'onOpenDetail' },
@@ -160,7 +160,7 @@ function renderStep() {
   const s = STEPS[idx];
   const isFinal = !!s.final;
 
-  els.eyebrow.textContent = isFinal ? '사용법' : ('사용법 · ' + s.scr);
+  els.eyebrow.textContent = isFinal ? '사용법' : (s.eyebrow || ('사용법 · ' + s.scr));
   els.title.textContent = s.title;
   els.desc.textContent = s.desc || '';
   els.prog.textContent = isFinal ? '' : (s.scr + ' ' + s.n + ' / ' + s.tot);
@@ -201,14 +201,27 @@ function positionCurrent() {
   if (!target || target.getClientRects().length === 0) { advance(); return; }  // 없거나 숨겨진 단계는 건너뜀
 
   els.tip.style.transform = '';  // final 에서 넘어온 inline transform 초기화
-  const r = target.getBoundingClientRect();
+  // 강조 영역(spot)은 클릭 대상(sel)과 다를 수 있음 — 예: TODAY 버튼은 sel, 원형 실타래는 spot
+  const spotEl = (s.spot && document.querySelector(s.spot)) || target;
+  const r = spotEl.getBoundingClientRect();
   const pad = 8;
 
   els.hole.style.display = 'block';
-  els.hole.style.left   = (r.left - pad) + 'px';
-  els.hole.style.top    = (r.top  - pad) + 'px';
-  els.hole.style.width  = (r.width  + pad * 2) + 'px';
-  els.hole.style.height = (r.height + pad * 2) + 'px';
+  if (s.round) {  // 원형 실타래에 딱 맞는 원형 구멍
+    const size = Math.max(r.width, r.height) + pad * 2;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    els.hole.style.left   = (cx - size / 2) + 'px';
+    els.hole.style.top    = (cy - size / 2) + 'px';
+    els.hole.style.width  = size + 'px';
+    els.hole.style.height = size + 'px';
+    els.hole.style.borderRadius = '50%';
+  } else {
+    els.hole.style.left   = (r.left - pad) + 'px';
+    els.hole.style.top    = (r.top  - pad) + 'px';
+    els.hole.style.width  = (r.width  + pad * 2) + 'px';
+    els.hole.style.height = (r.height + pad * 2) + 'px';
+    els.hole.style.borderRadius = '';  // CSS 기본(12px) 사각 모서리
+  }
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
