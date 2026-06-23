@@ -20,6 +20,7 @@ struct FeedView: View {
     var writeTrigger: Int = 0
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
+    @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
 
     private static let topID = "feedTop"
 
@@ -120,14 +121,14 @@ struct FeedView: View {
                     message: category == .highlight
                         ? "북마크한 카드에 하이라이트를 남기려면 로그인이 필요해요."
                         : "북마크한 명대사에 한줄을 남기려면 로그인이 필요해요.",
-                    onLogin: { showWritePrompt = false; selectedTab = .settings },
+                    onLogin: { showWritePrompt = false; requestLogin() },   // MY 이동 대신 인증 모달
                     onClose: { showWritePrompt = false }
                 )
             }
         }
         .navigationDestination(item: $selectedCard) { card in
             CardDetailView(card: card) {
-                selectedTab = .settings
+                requestLogin()   // 카드 상세 댓글 게이트 → 인증 모달 직접 호출(MY 스크롤 헌트 제거)
             }
         }
         .navigationDestination(item: $selectedHighlight) { highlight in

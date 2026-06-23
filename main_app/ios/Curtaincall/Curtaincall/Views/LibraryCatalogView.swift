@@ -9,6 +9,7 @@ import SwiftUI
 struct LibraryCatalogView: View {
     @Binding var selectedTab: Tab
     @Binding var path: NavigationPath
+    @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
 
     @StateObject private var model = LibraryCatalogModel()
     @State private var selectedGenre: WorkFormat?
@@ -68,7 +69,7 @@ struct LibraryCatalogView: View {
         .onPreferenceChange(CatalogWidthKey.self) { contentWidth = $0 }
         .onChange(of: searchText) { _, _ in page = 0 }
         .navigationDestination(for: Card.self) { card in
-            CardDetailView(card: card) { selectedTab = .settings }
+            CardDetailView(card: card) { requestLogin() }   // 댓글 게이트 → 인증 모달 직접 호출
         }
         // 책 탭 → ArchiveView 와 동일한 OpenedBookView 가 펼쳐지며 그 작품의 카드를
         // 보여주고, 카드 탭 시 상세로 push(서가와 같은 동작).

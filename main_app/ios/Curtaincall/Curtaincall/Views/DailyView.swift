@@ -10,6 +10,7 @@ struct DailyView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var heroNS
 
@@ -71,7 +72,7 @@ struct DailyView: View {
         .environment(\.cardHeroNamespace, reduceMotion ? nil : heroNS)
         .environment(\.cardHeroOwner, reduceMotion ? nil : heroOwner)
         .navigationDestination(for: Card.self) {
-            CardDetailView(card: $0) { selectedTab = .settings }
+            CardDetailView(card: $0) { requestLogin() }   // 댓글 게이트 → 인증 모달 직접 호출
                 .cardHeroDestination($0.cardId, in: heroNS, enabled: !reduceMotion)
         }
         .task { await load() }
