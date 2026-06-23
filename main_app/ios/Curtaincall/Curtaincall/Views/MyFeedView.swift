@@ -205,7 +205,9 @@ struct MyFeedView: View {
             Button { selectedHighlight = highlight } label: {
                 VStack(alignment: .leading, spacing: 8) {
                     // LLM 출력의 `**화자**` 마커가 그대로 노출되던 문제 — markdownBold 로 볼드 변환.
-                    Text("“") + Text(highlight.selectedText.markdownBold) + Text("”")
+                    // 괄호로 Text 연결을 먼저 묶음 — 무괄호 시 타입체커가 깨끗한 빌드에서
+                    // 'too complex' 로 실패(잠재 버그, main 도 동일). 의미 불변.
+                    (Text("“") + Text(highlight.selectedText.markdownBold) + Text("”"))
                         .font(.bodySans(14))
                         .foregroundStyle(.espresso)
                         .bookLeading(size: 14)

@@ -22,21 +22,19 @@ struct BrandWordmark: View {
 struct AppMasthead: View {
     @EnvironmentObject private var yarn: YarnStore
 
-    @State private var showYarnPurchase = false
-
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 10) {
                 BrandWordmark()
                 Spacer()
-                // 실타래 잔액 칩 — 모든 탭의 상단바에 표시 (PWA/Android 미러). 탭 → 충전 화면.
-                YarnChip(balance: yarn.balance) { showYarnPurchase = true }
+                // 실타래 잔액 칩 — 잔액 표시 전용(비활성). v1 은 충전(구매) 진입점을 막아
+                // App Store 2.1/3.1.1 을 피한다(적립 전용). 탭해도 충전 화면으로 가지 않는다.
+                YarnChip(balance: yarn.balance)
             }
             .padding(.horizontal, 20)
             .frame(height: 64)
             .background(Color.paper)
             Hairline()
         }
-        .sheet(isPresented: $showYarnPurchase) { YarnPurchaseView() }
     }
 }
