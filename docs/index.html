@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Script — 오늘의 명대사</title>
+<style>
+  :root {
+    --paper: #faf8f2;
+    --ink: #0e0c0a;
+    --walnut: #5b5048;
+    --latte: #e6e0d4;
+    --cta: #d85a30;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+      "Pretendard", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    line-height: 1.7;
+  }
+  .card { max-width: 460px; padding: 48px 28px; text-align: center; }
+  h1 {
+    font-family: "Apple SD Gothic Neo", "Noto Serif KR", Georgia, serif;
+    font-size: 28px; margin: 0 0 6px; letter-spacing: -0.01em;
+  }
+  .accent { color: var(--cta); }
+  .tagline { color: var(--walnut); font-size: 15px; margin: 0 0 32px; }
+  nav { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+  a.link {
+    display: block;
+    padding: 14px 18px;
+    border: 1px solid var(--latte);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 15px;
+  }
+  a.link:hover { border-color: var(--cta); }
+  a.link .arrow { float: right; color: var(--walnut); }
+  footer { margin-top: 36px; color: var(--walnut); font-size: 13px; }
+  footer a { color: var(--cta); }
+</style>
+</head>
+<body>
+  <main class="card">
+    <h1>Daily Script <span class="accent">.</span></h1>
+    <p class="tagline">오늘의 명대사 · 약관 및 정책</p>
+    <nav>
+      <a class="link" href="privacy.html">개인정보 처리방침 <span class="arrow">→</span></a>
+      <a class="link" href="terms.html">이용약관 <span class="arrow">→</span></a>
+    </nav>
+    <footer>
+      <p>문의: <a href="mailto:iambricoleur@gmail.com">iambricoleur@gmail.com</a></p>
+    </footer>
+  </main>
+</body>
+</html>
