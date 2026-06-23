@@ -267,6 +267,10 @@ struct RootView: View {
                     onReselect: popToRoot
                 )
                 .transition(.move(edge: .bottom))
+                // 키보드가 올라와도 탭바·고양이는 바닥에 고정 — 키보드가 덮도록.
+                // (기본 동작은 safeAreaInset 콘텐츠가 키보드 위로 떠올라 고양이가
+                // 키보드 위에 앉는 버그. 본문 텍스트필드 회피는 그대로 유지된다.)
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         // 피드 글쓰기 FAB+고양이 — 탭바 '위(앞)' 레이어라 고양이가 탭바에 앉고
