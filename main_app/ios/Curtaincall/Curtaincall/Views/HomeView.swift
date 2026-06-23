@@ -28,9 +28,17 @@ struct HomeView: View {
     @State private var pullDistance: CGFloat = 0
     @State private var pullArmed = false
     @State private var pullRefreshing = false
+    // 새로고침 직후 인디케이터 재표시 억제 — 스크롤이 실제 rest(pull≈0)로 복귀할 때 해제.
+    @State private var pullCooldown = false
+    // rest 콜백이 전혀 안 와도 게이트가 고착돼 다음 당김을 먹지 않도록 하는 '보장 플로어'
+    // 타이머. 새 쿨다운/해제 시 취소·재설정한다.
+    @State private var cooldownBackstop: Task<Void, Never>?
     @State private var spinAngle: Double = 0
     @State private var refreshToast: String?
     private let pullThreshold: CGFloat = 90
+    // 인디케이터 표시 데드밴드 — 새로고침 후 reflow/바운스의 작은 잔여 당김(≤8pt)으로는
+    // 실타래가 다시 보이지 않게 한다(rest-gated 쿨다운과 함께 재출현 제거).
+    private let pullReshowDeadband: CGFloat = 8
 
     var body: some View {
         VStack(spacing: 0) {
@@ -319,9 +327,13 @@ struct HomeView: View {
     /// Android YarnRefreshIndicator 미러 — 당기는 거리만큼 위에서 내려오며 페이드·확대·
     /// 살짝 감기고(windup), 새로고침 중엔 연속 회전. 실타래 = 하단탭 홈 버튼 아이콘.
     private var yarnPullIndicator: some View {
-        let size: CGFloat = 44
+        let size: CGFloat = 50   // 상단 새로고침 실타래 — 네비 센터(54)보다 작게
         let restY: CGFloat = 16
-        let shown: CGFloat = pullRefreshing ? 1 : min(1, pullDistance / pullThreshold)
+        // 데드밴드: 새로고침 중엔 1, 그 외엔 당김이 8pt 넘을 때만 진행도 표시(작은 잔여
+        // 당김으로 재출현하지 않게).
+        let shown: CGFloat = pullRefreshing
+            ? 1
+            : (pullDistance > pullReshowDeadband ? min(1, pullDistance / pullThreshold) : 0)
         let translateY = -size + shown * (size + restY)
         let rotation: Double = pullRefreshing ? spinAngle : Double(shown) * 200
         return Image("daily-script-bar")
@@ -340,6 +352,15 @@ struct HomeView: View {
     private func handlePull(offsetY: CGFloat) {
         guard !pullRefreshing else { return }
         let pull = max(0, -offsetY)
+        // 새로고침 직후: 새 카드 reflow/바운스가 일시적으로 pull>0 콜백을 내보내 실타래가
+        // 깜빡 다시 떴다 사라지는 버그(갱신됨 토스트와 겹쳐 더 도드라짐) 방지. 인디케이터를
+        // 숨긴 채, '스크롤이 실제 rest(pull≈0)로 복귀'할 때만 해제한다(일시적 pull>0 으로는
+        // 해제 X). 다음 당김은 항상 rest 에서 시작하므로 그 순간 해제돼 정상 추적된다.
+        if pullCooldown {
+            pullDistance = 0
+            if pull <= 1 { clearCooldown() }
+            return
+        }
         pullDistance = pull
         if pull >= pullThreshold { pullArmed = true }
         if pullArmed && pull <= 1 {
@@ -354,8 +375,31 @@ struct HomeView: View {
         Task {
             pullRefreshing = true
             await reload(deterministic: false)
+            // 끝나는 순간 인디케이터 즉시 숨김 + rest 복귀까지 재표시 억제(재출현 제거).
+            pullDistance = 0
             pullRefreshing = false
+            startCooldown()
         }
+    }
+
+    /// 재표시 억제 시작 — 해제는 handlePull 의 rest(pull≈0) 복귀가 한다. 스크롤 콜백이
+    /// 전혀 안 와도 게이트가 고착되지 않도록 '보장 플로어' 백스톱(어떤 settle 보다 긴
+    /// 1.8s)을 ONE 개만 둔다. 직전 백스톱은 항상 취소 후 재설정(댕글링/중복 방지).
+    private func startCooldown() {
+        pullCooldown = true
+        cooldownBackstop?.cancel()
+        cooldownBackstop = Task {
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard !Task.isCancelled else { return }
+            clearCooldown()
+        }
+    }
+
+    /// 쿨다운 해제 + 백스톱 취소. rest 복귀(다음 당김 직전 포함)·백스톱 만료에서 호출.
+    private func clearCooldown() {
+        pullCooldown = false
+        cooldownBackstop?.cancel()
+        cooldownBackstop = nil
     }
 
     private func showRefreshToast(_ msg: String) {

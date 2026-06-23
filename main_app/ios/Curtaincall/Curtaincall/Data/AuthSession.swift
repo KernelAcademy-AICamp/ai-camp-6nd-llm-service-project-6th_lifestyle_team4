@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import Supabase
 import AuthenticationServices
+import CryptoKit
 import UIKit
 
 /// App session: anonymous bootstrap + ID/password login + nickname, mirroring
@@ -54,7 +55,9 @@ final class AuthSession: ObservableObject {
         await bootstrap()
     }
 
-    func bootstrap(migrateFromUserId: Int? = nil, recordLoginId: String? = nil) async {
+    /// `socialDisplayName`: Apple은 최초 인증에서만 이름을 돌려준다. 신규 소셜 가입이면
+    /// 랜덤 닉네임 대신 이 이름을 시작 닉네임으로 쓴다(이후 로그인엔 nil이라도 기존 행 유지).
+    func bootstrap(migrateFromUserId: Int? = nil, recordLoginId: String? = nil, socialDisplayName: String? = nil) async {
         guard !bootstrapInProgress else { return }
         bootstrapInProgress = true
         bootstrapStatus = .bootstrapping
@@ -89,8 +92,16 @@ final class AuthSession: ObservableObject {
                 ageGroup = existing.ageGroup ?? ""
                 yarnBalance = existing.yarnBalance ?? 0
             } else {
-                // 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다.
-                let starting = anon ? "" : Self.randomCuteNickname()
+                // 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다. 애플 등
+                // 소셜 최초 인증이 이름을 주면 랜덤 대신 그 이름을 쓴다(24자 컷).
+                let starting: String
+                if anon {
+                    starting = ""
+                } else if let name = socialDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+                    starting = String(name.prefix(24))
+                } else {
+                    starting = Self.randomCuteNickname()
+                }
                 let row = try await Supa.shared.insertUser(anonymousId: anonId, nickname: starting)
                 userId = row.userId
                 isAnonymous = anon
@@ -149,6 +160,8 @@ final class AuthSession: ObservableObject {
             await bootstrap(migrateFromUserId: prevUserId, recordLoginId: enteredId)
             authMessage = signUp ? "가입 완료" : "로그인 됐어요"
         } catch {
+            // 실제 오류는 기록 + 친화 메시지(원시 시스템 문자열 그대로 노출 X).
+            AppLog.error("password sign-in", error)
             authMessage = Self.friendlyAuthError(error.localizedDescription)
         }
         authInProgress = false
@@ -175,10 +188,46 @@ final class AuthSession: ObservableObject {
             await bootstrap(migrateFromUserId: prevUserId)
             authMessage = "로그인 됐어요"
         } catch {
-            // 사용자가 취소한 경우(canceledLogin)는 조용히 무시.
-            let msg = error.localizedDescription
-            if !msg.lowercased().contains("cancel") {
-                authMessage = Self.friendlyAuthError(msg)
+            // 사용자가 웹 인증 시트를 취소/닫음(ASWebAuthenticationSessionError.canceledLogin)
+            // → 정상 흐름이므로 무음 no-op(배너 X). 실제 오류만 기록 + 친화 메시지.
+            if AppLog.isAuthCancellation(error) {
+                AppLog.debug("OAuth sign-in canceled by user")
+            } else {
+                AppLog.error("OAuth sign-in", error)
+                authMessage = Self.friendlyAuthError(error.localizedDescription)
+            }
+        }
+        authInProgress = false
+    }
+
+    /// Sign in with Apple (가이드라인 4.8 — 구글과 동등한 로그인 옵션). 네이티브 Apple
+    /// 인증(ASAuthorizationController, 뷰에서 SignInWithAppleButton로 트리거)으로 받은
+    /// idToken + rawNonce를 Supabase Apple 프로바이더로 교환한다. 성공하면 구글과 **동일**
+    /// 하게 bootstrap(migrateFromUserId:)로 익명 북마크를 이전 — 별도 인증 스택 없음.
+    /// `fullName`은 Apple이 최초 인증에서만 주므로 신규 가입 시 닉네임으로 저장한다.
+    /// (이메일은 idToken에 담겨 Supabase auth 유저에 자동 기록 — 프라이빗 릴레이 주소일
+    ///  수 있어 앱은 이메일을 실주소로 가정하지 않고 닉네임/아이디만 쓴다.)
+    /// ⚠️ Supabase 대시보드에 Apple 프로바이더(Services ID·Team ID·Key ID·private key)가
+    ///    설정돼야 동작한다. 미설정 시 토큰 교환에서 실패한다(현재 대시보드 미설정).
+    func signInWithApple(idToken: String, rawNonce: String, fullName: String?) async {
+        guard !authInProgress else { return }
+        authInProgress = true
+        authMessage = nil
+        let prevUserId = userId
+        do {
+            _ = try await auth.signInWithIdToken(
+                credentials: .init(provider: .apple, idToken: idToken, nonce: rawNonce)
+            )
+            await bootstrap(migrateFromUserId: prevUserId, socialDisplayName: fullName)
+            authMessage = "로그인 됐어요"
+        } catch {
+            // 사용자가 Apple 시트를 취소(ASAuthorizationError.canceled) → 무음 no-op.
+            // 실제 오류만 기록 + 친화 메시지.
+            if AppLog.isAuthCancellation(error) {
+                AppLog.debug("Apple sign-in canceled by user")
+            } else {
+                AppLog.error("Apple sign-in", error)
+                authMessage = Self.friendlyAuthError(error.localizedDescription)
             }
         }
         authInProgress = false
@@ -268,6 +317,31 @@ final class AuthSession: ObservableObject {
         }
         let slug = String(("00000000" + String(hash, radix: 36)).suffix(8))
         return "u_\(slug)@user.local"
+    }
+
+    /// Apple Sign In용 일회성 nonce — 뷰가 요청 시 raw를 만들어 보관하고, 요청엔
+    /// sha256(raw)를 실어 보낸다. 응답 검증 시 raw를 Supabase에 넘겨 재현 공격을 막는다.
+    static func randomNonce(length: Int = 32) -> String {
+        let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remaining = length
+        while remaining > 0 {
+            var bytes = [UInt8](repeating: 0, count: 16)
+            let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+            guard status == errSecSuccess else { continue }
+            for byte in bytes where remaining > 0 {
+                if byte < charset.count {
+                    result.append(charset[Int(byte)])
+                    remaining -= 1
+                }
+            }
+        }
+        return result
+    }
+
+    /// SHA256 hex — Apple 요청의 `nonce`에 싣는 해시.
+    static func sha256(_ input: String) -> String {
+        SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     static func randomCuteNickname() -> String {

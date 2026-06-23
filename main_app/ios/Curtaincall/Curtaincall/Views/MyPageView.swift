@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AuthenticationServices
 
 /// 설정 내비게이션 스택에 push 되는 라우트(값 기반). 값 기반이라야 settingsPath 가
 /// 추적해 MY 탭 재탭 시 popToRoot(스택 비우기)로 한 번에 닫힌다 — 다른 탭과 동일.
@@ -15,9 +16,7 @@ struct MyPageView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
 
-    @State private var loginId = ""
-    @State private var loginPassword = ""
-    @State private var signUpMode = false
+    @State private var showSignIn = false   // 로그인/회원가입 모달 (Android SignInDialog)
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
     @State private var showAttendance = false
@@ -148,19 +147,23 @@ struct MyPageView: View {
                     legalRow(title: "개인정보 처리방침", route: .privacy)
                     settingRow(title: "버전 정보", trailingText: appVersion)
 
-                    // 로그아웃 — outline 블록 버튼 대신 중앙 밑줄 텍스트 링크 (Android/PWA MY).
-                    Spacer().frame(height: 40)
-                    Button {
-                        Task { await session.signOut() }
-                    } label: {
-                        Text("로그아웃")
-                            .font(.custom("Pretendard-Medium", size: 10))
-                            .underline()
-                            .foregroundStyle(.walnut)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
+                    // 로그아웃 — 회원만. 익명/비로그인은 (PWA처럼) 로그아웃 대신 상단
+                    // 로그인/회원가입 진입점만 보여준다. (PWA는 익명일 때 이 버튼을
+                    // 'Reset Anonymous'로 바꾸지만, iOS는 혼란을 줄이려 숨긴다.)
+                    if !session.isAnonymous {
+                        Spacer().frame(height: 40)
+                        Button {
+                            Task { await session.signOut() }
+                        } label: {
+                            Text("로그아웃")
+                                .font(.custom("Pretendard-Medium", size: 10))
+                                .underline()
+                                .foregroundStyle(.walnut)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
 
                     // Account deletion (App Store Guideline 5.1.1(v)). Members only.
                     if FeatureFlags.accountDeletionEnabled && !session.isAnonymous {
@@ -213,6 +216,9 @@ struct MyPageView: View {
         }
         .sheet(isPresented: $showAttendance) {
             AttendanceView()   // 보기 전용 (보상 지급 없음)
+        }
+        .sheet(isPresented: $showSignIn) {
+            SignInSheet()
         }
         // MY 하위 페이지를 모두 값 기반(MyRoute)으로 push — settingsPath 가 추적해
         // MY 탭 재탭 시 한 번에 닫힌다(다른 탭과 동일). 북마크 서가는 ArchiveView 가
@@ -271,6 +277,8 @@ struct MyPageView: View {
         return String(format: "온도 %.1f · 강도 %.1f (북마크 %d개 기반)", t.avgTemperature, t.avgIntensity, t.count)
     }
 
+    // Android SettingsScreen ACCOUNT 블록 — 인라인 폼/구글 버튼 대신 단일 CTA 하나.
+    // 탭하면 SignInDialog(=SignInSheet) 가 폼+구글을 담아 뜬다.
     private var signInBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
             Spacer().frame(height: 16)
@@ -278,47 +286,13 @@ struct MyPageView: View {
             Text("아이디와 비밀번호로 로그인하면 다른 기기에서도 북마크가 동기화됩니다.")
                 .font(.bodySans(12))
                 .foregroundStyle(.walnut)
-            Spacer().frame(height: 4)
-            FieldBox(placeholder: "아이디", text: $loginId)
-            FieldBox(placeholder: "비밀번호", text: $loginPassword, isSecure: true)
-            Button {
-                Task { await session.signIn(id: loginId, password: loginPassword, signUp: signUpMode) }
-            } label: {
-                Text(session.authInProgress ? "⋯" : (signUpMode ? "가입" : "로그인"))
-            }
-            .buttonStyle(EditorialButtonStyle(.filled))
-            .disabled(session.authInProgress || loginId.isEmpty || loginPassword.isEmpty)
-            Button { signUpMode.toggle() } label: {
-                Text(signUpMode ? "이미 계정이 있나요? 로그인" : "계정이 없으신가요? 회원가입")
-                    .labelCaps()
-            }
-            .buttonStyle(.plain)
-
-            // 소셜 로그인 (Supabase OAuth — 시크릿은 대시보드에)
             Spacer().frame(height: 14)
-            Text("또는 소셜 계정으로")
-                .font(.bodySans(12))
-                .foregroundStyle(.walnut)
-            Spacer().frame(height: 10)
-            // 구글 — 공식 컬러 G 로고, 흰 배경 + 회색 테두리, 둥근 모서리(10)
-            Button {
-                Task { await session.signInWithOAuth(.google) }
-            } label: {
-                HStack(spacing: 10) {
-                    Image("GoogleLogo").resizable().renderingMode(.original).frame(width: 18, height: 18)
-                    Text("Google로 로그인").font(.bodySans(15)).foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(red: 0.855, green: 0.863, blue: 0.878), lineWidth: 1))
+            Button { showSignIn = true } label: {
+                Text("로그인 · 회원가입")
             }
-            .buttonStyle(.plain)
-            .disabled(session.authInProgress)
-            // 카카오는 백엔드 게이트(준비 중)라 Android처럼 UI 미노출 — 자리표시 버튼
-            // 제거(비기능 스텁 + App Store 2.1 플레이스홀더 리스크). 구글만 노출.
+            .buttonStyle(EditorialButtonStyle(.outlined))   // Android SharpButtonVariant.Outline
             Spacer().frame(height: 14)
-            Text("소셜 로그인은 회원 식별 및 로그인 목적으로만 사용되며, 소셜 계정의 프로필 정보는 사용하지 않습니다.")
+            Text("가입 시 현재 익명 북마크는 자동으로 새 계정에 옮겨집니다.")
                 .font(.bodySans(12))
                 .foregroundStyle(.walnut)
                 .bookLeading(size: 12)
@@ -477,6 +451,120 @@ struct MyPageView: View {
             }
             .padding(.vertical, 18)
             Hairline()
+        }
+    }
+}
+
+/// 로그인/회원가입 모달 — Android `SignInDialog` 미러. MY 화면의 단일 CTA 가 띄운다.
+/// 인라인이었던 아이디/비번 폼 + '또는 소셜 계정으로' + Google 버튼을 그대로 이 안으로
+/// 옮긴 것(인증 로직 변경 없음). 폼+키보드 때문에 중앙 팝업 대신 시트로(탭바 위로 떠
+/// 키보드 이슈 없음). 인증 성공(익명 해제) 시 자동으로 닫힌다.
+private struct SignInSheet: View {
+    @EnvironmentObject private var session: AuthSession
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var loginId = ""
+    @State private var loginPassword = ""
+    @State private var signUpMode = false
+    @State private var appleNonce = ""   // Apple 요청 시 생성 → 응답 검증에 사용
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("아이디와 비밀번호로 로그인하면 다른 기기에서도 북마크가 동기화됩니다.")
+                        .font(.bodySans(12))
+                        .foregroundStyle(.walnut)
+                    Spacer().frame(height: 6)
+                    FieldBox(placeholder: "아이디", text: $loginId)
+                    FieldBox(placeholder: "비밀번호", text: $loginPassword, isSecure: true)
+                    Button {
+                        Task { await session.signIn(id: loginId, password: loginPassword, signUp: signUpMode) }
+                    } label: {
+                        Text(session.authInProgress ? "⋯" : (signUpMode ? "가입" : "로그인"))
+                    }
+                    .buttonStyle(EditorialButtonStyle(.filled))
+                    .disabled(session.authInProgress || loginId.isEmpty || loginPassword.isEmpty)
+                    Button { signUpMode.toggle() } label: {
+                        Text(signUpMode ? "이미 계정이 있나요? 로그인" : "계정이 없으신가요? 회원가입")
+                            .labelCaps()
+                    }
+                    .buttonStyle(.plain)
+
+                    // 소셜 로그인 (Supabase OAuth — 기존 배선 그대로, 위치만 모달로 이동)
+                    Spacer().frame(height: 14)
+                    Text("또는 소셜 계정으로")
+                        .font(.bodySans(12))
+                        .foregroundStyle(.walnut)
+                    Spacer().frame(height: 10)
+                    // Apple — 가이드라인 4.8(구글 동등 옵션). 공식 버튼 스타일(HIG)로 구글 위에,
+                    // 동등 이상 높이로 노출. nonce 생성 → 응답의 idToken+nonce 를 Supabase Apple
+                    // 프로바이더(signInWithIdToken)로 교환. 성공 시 구글과 동일한 세션 경로.
+                    SignInWithAppleButton(.signIn) { request in
+                        let nonce = AuthSession.randomNonce()
+                        appleNonce = nonce
+                        request.requestedScopes = [.fullName, .email]
+                        request.nonce = AuthSession.sha256(nonce)
+                    } onCompletion: { result in
+                        guard case let .success(authResults) = result,
+                              let cred = authResults.credential as? ASAuthorizationAppleIDCredential,
+                              let tokenData = cred.identityToken,
+                              let idToken = String(data: tokenData, encoding: .utf8) else { return }
+                        // 이름은 최초 인증에서만 옴(이후 nil) → 신규 가입 시 닉네임으로 저장.
+                        let name = [cred.fullName?.givenName, cred.fullName?.familyName]
+                            .compactMap { $0 }
+                            .joined(separator: " ")
+                        Task {
+                            await session.signInWithApple(
+                                idToken: idToken,
+                                rawNonce: appleNonce,
+                                fullName: name.isEmpty ? nil : name
+                            )
+                        }
+                    }
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)   // 구글(≈44pt)보다 크거나 같게 — HIG 동등 노출 요건
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .disabled(session.authInProgress)
+                    Spacer().frame(height: 10)
+                    // 구글 — 공식 컬러 G 로고, 흰 배경 + 회색 테두리, 둥근 모서리(10)
+                    Button {
+                        Task { await session.signInWithOAuth(.google) }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image("GoogleLogo").resizable().renderingMode(.original).frame(width: 18, height: 18)
+                            Text("Google로 로그인").font(.bodySans(15)).foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(red: 0.855, green: 0.863, blue: 0.878), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(session.authInProgress)
+                    Spacer().frame(height: 14)
+                    Text("소셜 로그인은 회원 식별 및 로그인 목적으로만 사용되며, 소셜 계정의 프로필 정보는 사용하지 않습니다.")
+                        .font(.bodySans(12))
+                        .foregroundStyle(.walnut)
+                        .bookLeading(size: 12)
+                }
+                .padding(20)
+            }
+            .background(Color.paper)
+            .navigationTitle(signUpMode ? "가입" : "로그인")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("취소") { dismiss() }.foregroundStyle(.walnut)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        // Android SignInDialog: 인증 성공(익명 해제)되면 자동으로 닫힌다.
+        .onChange(of: session.isAnonymous) { _, anon in
+            if !anon { dismiss() }
         }
     }
 }

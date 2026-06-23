@@ -1389,6 +1389,12 @@ async function maybeResolveShortShareLink() {
   const shortId = window._pendingShortShareLookup;
   if (!shortId) return;
   window._pendingShortShareLookup = null;
+  /* stale 차단 — 직전 공유 진입의 잔재 (ds.pendingShareBgId='beige' 등) 가 남아있으면
+     lookup 실패 시 maybeOpenSharedCard 가 그 stale 값으로 엉뚱한 모달을 띄움.
+     try 진입 시 무조건 clear 후 lookup 결과로만 set 한다. */
+  safeStorageRemove('ds.pendingShareCardId');
+  safeStorageRemove('ds.pendingShareBgId');
+  safeStorageRemove('ds.pendingShareQuote');
   try {
     const sb = await getSupabase();
     const { data, error } = await sb
@@ -1397,6 +1403,7 @@ async function maybeResolveShortShareLink() {
       .eq('short_id', shortId)
       .single();
     if (error || !data) throw error || new Error('share_link not found');
+    console.log('[m] short share lookup ok:', { short_id: shortId, bg_id: data.bg_id, card_id: data.card_id });
     if (data.referrer_id && !safeStorageGet('ds.pendingReferrerId')) {
       safeStorageSet('ds.pendingReferrerId', String(data.referrer_id));
     }
@@ -1451,6 +1458,11 @@ async function openSharedPreview(card, bgId, quote) {
   const w = card.works || {};
   await loadShareBackgrounds();   // 친구가 보낸 카드지가 premium/royal 이면 원격 목록이 있어야 찾힘
   const bg = allShareBackgrounds().find((b) => b.id === bgId) || SHARE_BACKGROUNDS[0];
+  if (bg.id !== bgId) {
+    /* 조용한 beige 폴백 차단 — bgId 가 통합 목록에도 없으면 (옛 캐시·신규 ID·삭제된 카드지)
+       콘솔에 명시. 사용자가 "왜 beige 만 떠?" 진단 가능. */
+    console.warn('[m] openSharedPreview: bgId not in SHARE_BACKGROUNDS, falling back to', bg.id, '— received:', bgId);
+  }
   const isAnon = state.isAnonymous;
   /* 1회용 모달 DOM 생성 */
   let modal = document.getElementById('shared-preview-modal');
@@ -9074,7 +9086,9 @@ async function shareLink() {
       p_quote_b64: quoteForUrl ? urlSafeB64Encode(quoteForUrl.slice(0, 300)) : null,
     });
     if (!error && shortId) refUrl = `${window.location.origin}/m/?s=${shortId}`;
-  } catch (e) { console.warn('[m] create_share_link RPC failed, fallback to long URL:', e); }
+    else if (error) console.warn('[m] create_share_link RPC error, fallback to long URL:', error);
+    console.log('[m] shareLink RPC sent bg_id=', shareState.bgId, '→ shortId=', shortId, 'refUrl=', refUrl);
+  } catch (e) { console.warn('[m] create_share_link RPC threw, fallback to long URL:', e); }
   if (!refUrl) refUrl = buildReferralUrl(cardId, { bgId: shareState.bgId, quote: quoteForUrl });
   const quote   = payload.quote ? `"${payload.quote}"` : '';
   const credit  = payload.work  ? ` — ${payload.work}` : '';
