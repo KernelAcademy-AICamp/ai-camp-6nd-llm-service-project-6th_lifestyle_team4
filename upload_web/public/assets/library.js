@@ -2123,24 +2123,26 @@ function wireBoldButtons(root) {
 }
 
 // 정렬 버튼 — textarea 의 text-align 을 좌/중앙/우 로 토글. 현재 단계는 편집 UI 시각화만(저장 X).
-// 저장된 정렬 정보로 클라이언트에 적용하려면 cards.text_align 컬럼 + 표시 로직 후속 작업 필요.
-function wireAlignButtons(root) {
-  root.querySelectorAll('.lib-align-btn').forEach((btn) => {
-    const sel = btn.dataset.alignFor;
-    const align = btn.dataset.align;
-    const ta = sel ? root.querySelector(sel) : null;
-    if (!ta || !align) return;
-    btn.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ta.style.textAlign = align;
-      // 같은 그룹 버튼 활성 상태 표시
-      root.querySelectorAll(`.lib-align-btn[data-align-for="${sel}"]`).forEach((b) => {
-        b.classList.toggle('text-primary', b === btn);
-        b.classList.toggle('border-primary', b === btn);
-      });
-    });
+// (no-op — 실제 핸들러는 document.body 의 event delegation. 모달이 dynamic 으로 다시
+//  렌더되더라도 binding 이 살아있다.)
+function wireAlignButtons(_root) { /* event delegation 으로 처리 — 아래 document listener 참고 */ }
+
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest && ev.target.closest('.lib-align-btn');
+  if (!btn) return;
+  ev.preventDefault();
+  const sel = btn.dataset.alignFor;
+  const align = btn.dataset.align;
+  if (!sel || !align) return;
+  const ta = document.querySelector(sel);
+  if (!ta) return;
+  ta.style.textAlign = align;
+  document.querySelectorAll(`.lib-align-btn[data-align-for="${CSS.escape(sel)}"]`).forEach((b) => {
+    const on = b === btn;
+    b.classList.toggle('text-primary', on);
+    b.classList.toggle('border-primary', on);
   });
-}
+});
 
 // DB에 콜론·em-dash·libretto 스타일 카드도 화면에선 정리해 보여줌
 // 처리하는 패턴:
