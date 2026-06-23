@@ -126,7 +126,7 @@ class MarkdownBoldTransformation(
             val trimmed = line.trim()
             val namePart = trimmed.substringBefore("(").trim()
             val isBlockStart = index == 0 || lines[index - 1].trim().isEmpty()
-            val isSpeaker = isBlockStart && trimmed.isNotEmpty() && (trimmed in nameSet || namePart in nameSet)
+            val isSpeaker = isBlockStart && trimmed.isNotEmpty() && isSpeakerLabel(trimmed, namePart, nameSet)
             if (isSpeaker) {
                 builder.addStyle(SpanStyle(fontWeight = FontWeight.Bold), pos, pos + line.length)
             }
@@ -145,7 +145,7 @@ class MarkdownBoldTransformation(
             val trimmed = line.trim()
             val namePart = trimmed.substringBefore("(").trim()
             val isBlockStart = index == 0 || lines[index - 1].trim().isEmpty()
-            val isSpeaker = isBlockStart && trimmed.isNotEmpty() && (trimmed in nameSet || namePart in nameSet)
+            val isSpeaker = isBlockStart && trimmed.isNotEmpty() && isSpeakerLabel(trimmed, namePart, nameSet)
             if (isSpeaker) {
                 builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
                 builder.append(line)
@@ -156,5 +156,17 @@ class MarkdownBoldTransformation(
             if (index < lines.lastIndex) builder.append("\n")
         }
         return builder.toAnnotatedString()
+    }
+
+    /**
+     * 라벨에 따라붙는 마침표/콜론/세미콜론/콤마/느낌·물음표 제거 후 nameSet 매칭 —
+     * LLM 출력의 "Romeo.", "노라:", "햄릿;" 같은 형식도 등장인물명으로 인식.
+     */
+    private val TRAILING_PUNCT = Regex("[.,:;!?！？：]+$")
+    private fun isSpeakerLabel(trimmed: String, namePart: String, nameSet: Set<String>): Boolean {
+        if (trimmed in nameSet || namePart in nameSet) return true
+        val trimmedNorm = trimmed.replace(TRAILING_PUNCT, "").trim()
+        val nameNorm = namePart.replace(TRAILING_PUNCT, "").trim()
+        return trimmedNorm in nameSet || nameNorm in nameSet
     }
 }

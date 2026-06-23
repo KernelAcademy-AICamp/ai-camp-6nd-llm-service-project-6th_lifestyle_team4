@@ -8447,6 +8447,9 @@ function boldSpeakerLines(cleanedText, characterNames) {
   if (names.length === 0) return escapeHtml(text);
   const nameSet = new Set(names.map((n) => String(n).trim()).filter(Boolean));
   const lines = text.split('\n');
+  // 라벨에 따라붙는 마침표/콜론/세미콜론/콤마/느낌·물음표 제거 후 nameSet 매칭 —
+  // LLM 출력의 "Romeo.", "노라:", "햄릿;" 같은 형식도 등장인물명으로 인식하기 위함.
+  const TRAILING_PUNCT = /[.,:;!?！？：]+$/;
   return lines.map((line, i) => {
     const safe = escapeHtml(line);
     const t = line.trim();
@@ -8454,7 +8457,10 @@ function boldSpeakerLines(cleanedText, characterNames) {
     const isBlockStart = i === 0 || lines[i - 1].trim() === '';
     if (!isBlockStart) return safe;
     const namePart = t.split('(')[0].trim();
-    const isSpeaker = nameSet.has(t) || nameSet.has(namePart);
+    const tNorm = t.replace(TRAILING_PUNCT, '').trim();
+    const nameNorm = namePart.replace(TRAILING_PUNCT, '').trim();
+    const isSpeaker = nameSet.has(t) || nameSet.has(namePart) ||
+                      nameSet.has(tNorm) || nameSet.has(nameNorm);
     return isSpeaker ? `<strong>${safe}</strong>` : safe;
   }).join('\n');
 }

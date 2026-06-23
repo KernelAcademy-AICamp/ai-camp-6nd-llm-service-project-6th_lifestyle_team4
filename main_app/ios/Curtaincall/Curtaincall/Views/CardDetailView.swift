@@ -392,10 +392,18 @@ struct CardDetailView: View {
         let para = NSMutableParagraphStyle()
         para.lineSpacing = 8
         let result = NSMutableAttributedString()
+        // 라벨에 따라붙는 마침표/콜론/세미콜론/콤마/느낌·물음표 제거 후 names 매칭 —
+        // LLM 출력의 "Romeo.", "노라:", "햄릿;" 같은 형식도 등장인물명으로 인식.
+        let trailingPunct = CharacterSet(charactersIn: ".,:;!?！？：")
         for (i, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let namePart = trimmed.components(separatedBy: "(").first?.trimmingCharacters(in: .whitespaces) ?? trimmed
-            let isSpeaker = !trimmed.isEmpty && (names.contains(trimmed) || names.contains(namePart))
+            let trimmedNorm = trimmed.trimmingCharacters(in: trailingPunct).trimmingCharacters(in: .whitespaces)
+            let nameNorm = namePart.trimmingCharacters(in: trailingPunct).trimmingCharacters(in: .whitespaces)
+            let isSpeaker = !trimmed.isEmpty && (
+                names.contains(trimmed) || names.contains(namePart) ||
+                names.contains(trimmedNorm) || names.contains(nameNorm)
+            )
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: UIFont.monospacedSystemFont(ofSize: 14, weight: isSpeaker ? .bold : .regular),
                 .foregroundColor: Self.espressoUIColor,
