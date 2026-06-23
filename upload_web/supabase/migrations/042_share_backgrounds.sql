@@ -24,6 +24,10 @@ create table if not exists public.share_backgrounds (
   updated_at  timestamptz not null default now()
 );
 
+-- 기존 설치(work_id 없이 만든 테이블) 호환 — 재실행 시 컬럼 보강.
+alter table public.share_backgrounds
+  add column if not exists work_id bigint references public.works(work_id) on delete set null;
+
 create index if not exists share_backgrounds_active_idx
   on public.share_backgrounds (is_active, tier, sort_order);
 
