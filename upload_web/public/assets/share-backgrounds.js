@@ -1,7 +1,7 @@
-// 공유 카드지(Premium/Royal) 관리 — 어드민 전용. getSupabase 클라이언트로 직접 CRUD.
-// 이미지는 share-backgrounds 버킷에 올리고, 메타는 share_backgrounds 테이블에 upsert.
-// 쓰기 권한은 RLS(public.is_admin())가 강제한다. 비관리자 계정은 폼을 비활성화한다.
-// (notices.js 패턴 미러)
+// 공유 카드지(Premium/Royal) 관리 — 어드민 전용.
+// 관리자는 [등급 + 책 + 이미지]만 입력하면 된다. 고유 id(slug)·이름·가격·work_title 은 자동.
+// 테마는 work_id 로 책에 연결 → 앱에서 그 책 카드를 공유할 때 해당 테마가 맨 앞에 뜬다.
+// 이미지는 share-backgrounds 버킷, 메타는 share_backgrounds 테이블. 쓰기 권한은 RLS(is_admin())가 강제.
 import { getSupabase, requireSessionOrRedirect } from './supabase-client.js';
 
 const $ = (s) => document.querySelector(s);
@@ -9,13 +9,14 @@ const $ = (s) => document.querySelector(s);
 const BUCKET = 'share-backgrounds';
 const TABLE = 'share_backgrounds';
 const DEFAULT_PRICE = { premium: 999, royal: 2999 };
-// 무료 8종(앱 코드에서 그려짐)과 slug 충돌 방지 — 이 id 들은 예약. (ShareBackgrounds.SHARE_BACKGROUNDS 미러)
-const RESERVED_SLUGS = new Set(['beige', 'rose', 'mint', 'sky', 'parchment', 'kraft', 'midnight', 'rosegold']);
 
 let editingSlug = null;     // 수정 중인 카드지 slug (null = 새로 추가)
 let currentImageUrl = '';   // 수정 시 기존 이미지 URL (새 파일 안 고르면 유지)
 let pendingFile = null;     // 선택했지만 아직 업로드 안 한 이미지 파일
 let isAdmin = false;
+let works = [];                       // [{work_id, title, author}] (제목순)
+const worksById = new Map();          // String(work_id) -> {title, author}
+let existingSlugs = new Set();        // 등록된 slug — 자동 slug 충돌 회피용
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -33,8 +34,8 @@ function toast(msg) {
   toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 1800);
 }
 
-const FORM_IDS = ['f-slug', 'f-tier', 'f-name', 'f-price', 'f-work', 'f-sort',
-  'f-ink', 'f-ink-color', 'f-active', 'pick-image', 'save-btn'];
+const FORM_IDS = ['f-tier', 'f-book', 'f-book-filter', 'f-active', 'f-ink', 'f-ink-color', 'f-sort',
+  'pick-image', 'save-btn'];
 
 (async () => {
   const token = await requireSessionOrRedirect('/');
@@ -61,6 +62,7 @@ const FORM_IDS = ['f-slug', 'f-tier', 'f-name', 'f-price', 'f-work', 'f-sort',
   $('#cancel-edit')?.addEventListener('click', resetForm);
   $('#pick-image')?.addEventListener('click', () => $('#img-file')?.click());
   $('#img-file')?.addEventListener('change', onPickImage);
+  $('#f-book-filter')?.addEventListener('input', (e) => populateBookSelect(e.target.value));
 
   // ink 색상 입력 ↔ hex 텍스트 동기화
   $('#f-ink-color')?.addEventListener('input', (e) => { $('#f-ink').value = e.target.value.toUpperCase(); });
@@ -68,14 +70,46 @@ const FORM_IDS = ['f-slug', 'f-tier', 'f-name', 'f-price', 'f-work', 'f-sort',
     const v = e.target.value.trim();
     if (/^#[0-9a-fA-F]{6}$/.test(v)) $('#f-ink-color').value = v;
   });
-  // 등급 바꾸면 가격이 비어 있을 때만 기본값 제안
-  $('#f-tier')?.addEventListener('change', (e) => {
-    const p = $('#f-price');
-    if (p && !p.value) p.value = DEFAULT_PRICE[e.target.value] || 0;
-  });
 
+  await loadWorks();
   await loadAndRender();
 })();
+
+// ---------- 책 목록 ----------
+async function loadWorks() {
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb.from('works').select('work_id, title, author').order('title');
+    if (error) throw error;
+    works = data || [];
+    worksById.clear();
+    works.forEach((w) => worksById.set(String(w.work_id), { title: w.title, author: w.author }));
+    populateBookSelect('');
+  } catch (e) {
+    console.warn('[share-bg] loadWorks failed', e);
+    const sel = $('#f-book');
+    if (sel) sel.innerHTML = '<option value="">책 목록을 불러오지 못했어요</option>';
+  }
+}
+
+// 필터로 좁힌 책 목록을 select(listbox)에 렌더. 선택 중인 책은 필터에서 빠져도 유지.
+function populateBookSelect(filter) {
+  const sel = $('#f-book');
+  if (!sel) return;
+  const keep = sel.value;
+  const f = (filter || '').trim().toLowerCase();
+  let list = f
+    ? works.filter((w) => (w.title || '').toLowerCase().includes(f) || (w.author || '').toLowerCase().includes(f))
+    : works;
+  if (keep && !list.some((w) => String(w.work_id) === keep) && worksById.has(keep)) {
+    const b = worksById.get(keep);
+    list = [{ work_id: Number(keep), title: b.title, author: b.author }, ...list];
+  }
+  sel.innerHTML = list.map((w) =>
+    `<option value="${w.work_id}">${escapeHtml(w.title)}${w.author ? ' — ' + escapeHtml(w.author) : ''}</option>`
+  ).join('') || '<option value="" disabled>일치하는 책이 없어요</option>';
+  if (keep) sel.value = keep;
+}
 
 // ---------- 이미지 선택(미리보기만, 업로드는 저장 시) ----------
 function onPickImage(ev) {
@@ -118,6 +152,16 @@ function pathFromPublicUrl(url) {
   return i >= 0 ? url.slice(i + marker.length) : null;
 }
 
+// 자동 slug — 등급+책 기준. 수정 시 기존 slug 유지. 같은 책에 같은 등급 테마가 또 있으면 _2, _3…
+function makeSlug(tier, workId) {
+  if (editingSlug) return editingSlug;
+  const base = `${tier}_w${workId}`;
+  if (!existingSlugs.has(base)) return base;
+  let n = 2;
+  while (existingSlugs.has(`${base}_${n}`)) n++;
+  return `${base}_${n}`;
+}
+
 async function loadAndRender() {
   const loading = $('#list-loading');
   try {
@@ -125,10 +169,11 @@ async function loadAndRender() {
     // admin 은 share_bg_admin_select 정책 덕에 비활성 행까지 전부 조회된다(숨김 카드지 재표시 가능).
     const { data, error } = await sb
       .from(TABLE)
-      .select('slug, name, tier, price, image_url, ink, work_title, sort_order, is_active, updated_at')
+      .select('slug, name, tier, price, image_url, ink, work_id, work_title, sort_order, is_active, updated_at')
       .order('tier', { ascending: true })
       .order('sort_order', { ascending: true });
     if (error) throw error;
+    existingSlugs = new Set((data || []).map((r) => r.slug));
     renderList(data || []);
   } catch (err) {
     console.warn('[share-bg] load failed', err);
@@ -158,7 +203,7 @@ function renderList(rows) {
         <span class="absolute top-1.5 left-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded ${tierBadge}">${escapeHtml((b.tier || '').toUpperCase())}</span>
       </div>
       <div class="p-2.5 flex flex-col gap-1">
-        <p class="text-sm font-bold text-on-background truncate" title="${escapeHtml(b.name)}">${escapeHtml(b.name || '')}</p>
+        <p class="text-sm font-bold text-on-background truncate" title="${escapeHtml(b.name)}">${escapeHtml(b.name || '(책 미지정)')}</p>
         <p class="text-xs font-mono text-on-surface-variant truncate">${escapeHtml(b.slug)} · ${b.price || 0}🧶</p>
         ${isAdmin ? `<div class="flex gap-1.5 pt-1">
           <button class="edit-btn flex-1 px-2 py-1 rounded-lg text-xs border border-outline-variant text-on-surface-variant hover:bg-surface-container-low">수정</button>
@@ -177,15 +222,15 @@ function renderList(rows) {
 }
 
 function readForm() {
+  const workId = $('#f-book').value ? parseInt($('#f-book').value, 10) : null;
+  const book = workId != null ? worksById.get(String(workId)) : null;
   return {
-    slug: ($('#f-slug').value || '').trim(),
     tier: $('#f-tier').value || 'premium',
-    name: ($('#f-name').value || '').trim(),
-    price: parseInt($('#f-price').value, 10) || 0,
-    work_title: ($('#f-work').value || '').trim() || null,
-    sort_order: parseInt($('#f-sort').value, 10) || 0,
+    workId,
+    workTitle: book?.title || '',
     ink: (($('#f-ink').value || '').trim() || '#3B2A1A'),
-    is_active: $('#f-active').checked,
+    sortOrder: parseInt($('#f-sort').value, 10) || 0,
+    isActive: $('#f-active').checked,
   };
 }
 
@@ -200,13 +245,11 @@ function showMsg(text, ok) {
 async function onSave() {
   if (!isAdmin) return;
   const f = readForm();
-  if (!f.slug) { showMsg('slug(고유 id)을 입력해주세요.', false); return; }
-  if (!/^[a-z0-9_-]+$/i.test(f.slug)) { showMsg('slug 은 영문/숫자/_/- 만 사용하세요.', false); return; }
-  if (RESERVED_SLUGS.has(f.slug.toLowerCase())) { showMsg('이 slug 은 무료 기본 카드지와 충돌해요. 다른 이름을 쓰세요.', false); return; }
-  if (!f.name) { showMsg('이름/라벨을 입력해주세요.', false); return; }
+  if (f.workId == null) { showMsg('책을 선택해주세요.', false); return; }
   if (!/^#[0-9a-fA-F]{6}$/.test(f.ink)) { showMsg('글자색은 #RRGGBB 형식이어야 해요.', false); return; }
   if (!pendingFile && !currentImageUrl) { showMsg('배경 이미지를 선택해주세요.', false); return; }
 
+  const slug = makeSlug(f.tier, f.workId);
   const btn = $('#save-btn');
   btn.disabled = true;
   showMsg('저장 중…', true);
@@ -214,13 +257,13 @@ async function onSave() {
   let uploadedUrl = null;                // 이번 호출에서 새로 올린 객체 (실패 시 정리)
   try {
     let imageUrl = currentImageUrl;
-    if (pendingFile) { imageUrl = await uploadImage(f.slug, pendingFile); uploadedUrl = imageUrl; }
+    if (pendingFile) { imageUrl = await uploadImage(slug, pendingFile); uploadedUrl = imageUrl; }
 
     const sb = await getSupabase();
     const payload = {
-      slug: f.slug, name: f.name, tier: f.tier, price: f.price,
-      image_url: imageUrl, ink: f.ink, work_title: f.work_title,
-      sort_order: f.sort_order, is_active: f.is_active,
+      slug, tier: f.tier, price: DEFAULT_PRICE[f.tier] || 0,
+      name: f.workTitle, work_id: f.workId, work_title: f.workTitle,
+      image_url: imageUrl, ink: f.ink, sort_order: f.sortOrder, is_active: f.isActive,
       updated_at: new Date().toISOString(),
     };
     const { error } = await sb.from(TABLE).upsert(payload, { onConflict: 'slug' });
@@ -255,15 +298,19 @@ function startEdit(b) {
   editingSlug = b.slug;
   currentImageUrl = b.image_url || '';
   pendingFile = null;
-  $('#f-slug').value = b.slug || '';
-  $('#f-slug').disabled = true;          // 수정 중 slug(PK) 변경 금지
   $('#f-tier').value = b.tier || 'premium';
-  $('#f-name').value = b.name || '';
-  $('#f-price').value = b.price ?? '';
-  $('#f-work').value = b.work_title || '';
-  $('#f-sort').value = b.sort_order ?? 0;
+  // 책 선택 — work_id 우선, 없으면 work_title/name 으로 역매칭.
+  $('#f-book-filter').value = '';
+  populateBookSelect('');
+  if (b.work_id != null) {
+    $('#f-book').value = String(b.work_id);
+  } else {
+    const m = works.find((w) => (w.title || '') === (b.work_title || b.name));
+    if (m) $('#f-book').value = String(m.work_id);
+  }
   $('#f-ink').value = b.ink || '#3B2A1A';
   if (/^#[0-9a-fA-F]{6}$/.test(b.ink || '')) $('#f-ink-color').value = b.ink;
+  $('#f-sort').value = b.sort_order ?? 0;
   $('#f-active').checked = !!b.is_active;
   const preview = $('#img-preview');
   if (preview && b.image_url) { preview.src = b.image_url; preview.classList.remove('hidden'); }
@@ -280,15 +327,13 @@ function resetForm() {
   editingSlug = null;
   currentImageUrl = '';
   pendingFile = null;
-  $('#f-slug').value = '';
-  $('#f-slug').disabled = !isAdmin ? true : false;
   $('#f-tier').value = 'premium';
-  $('#f-name').value = '';
-  $('#f-price').value = '';
-  $('#f-work').value = '';
-  $('#f-sort').value = '0';
+  $('#f-book-filter').value = '';
+  populateBookSelect('');
+  $('#f-book').value = '';
   $('#f-ink').value = '#3B2A1A';
   $('#f-ink-color').value = '#3B2A1A';
+  $('#f-sort').value = '0';
   $('#f-active').checked = true;
   const preview = $('#img-preview');
   if (preview) { preview.src = ''; preview.classList.add('hidden'); }

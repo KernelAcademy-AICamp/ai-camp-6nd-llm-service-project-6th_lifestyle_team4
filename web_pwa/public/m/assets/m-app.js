@@ -7740,6 +7740,7 @@ document.getElementById('hl-compose-share')?.addEventListener('click', () => {
     quote: draft.selectedText,
     speaker: card.speaker || '',
     work: w.title || '',
+    workId: w.work_id ?? null,
     author: w.author || '',
     coverUrl: w.cover_url || '',
   });
@@ -8639,12 +8640,13 @@ async function loadShareBackgrounds() {
   try {
     const sb = await getSupabase();
     const { data, error } = await sb.from('share_backgrounds')
-      .select('slug,name,tier,price,image_url,ink,work_title,sort_order')
+      .select('slug,name,tier,price,image_url,ink,work_id,work_title,sort_order')
       .eq('is_active', true).order('sort_order');
     if (error) throw error;
     shareBgRemote = (data || []).map((r) => ({
       id: r.slug, name: r.name, tier: r.tier, price: r.price || 0,
-      imageUrl: r.image_url, ink: r.ink || '#3B2A1A', workTitle: r.work_title || '',
+      imageUrl: r.image_url, ink: r.ink || '#3B2A1A',
+      workId: r.work_id ?? null, workTitle: r.work_title || '',
       /* paint 없음 → 렌더/썸네일 코드가 이미지 배경으로 식별 */
     }));
   } catch (e) {
@@ -8882,13 +8884,16 @@ function renderShareBgList() {
   /* Premium / Royal — 카드지 name(=책 제목)이 현재 공유 카드의 책 제목과 같은 것을 맨 앞으로.
      예: 프랑켄슈타인 카드 공유 → name:'프랑켄슈타인' 카드지가 그리드 첫번째. */
   if (shareState.tab === 'premium' || shareState.tab === 'royal') {
-    const target = normalizeWorkTitle(shareState.payload?.work);
-    if (target) {
-      items.sort((a, b) => {
-        const am = normalizeWorkTitle(a.workTitle || a.name) === target ? 1 : 0;
-        const bm = normalizeWorkTitle(b.workTitle || b.name) === target ? 1 : 0;
-        return bm - am;
-      });
+    /* 공유 카드의 책에 연결된 카드지를 맨 앞으로 — work_id 우선, 없으면 제목 매칭 */
+    const targetId = shareState.payload?.workId;
+    const targetTitle = normalizeWorkTitle(shareState.payload?.work);
+    if (targetId != null || targetTitle) {
+      const score = (bg) => {
+        if (targetId != null && bg.workId != null && Number(bg.workId) === Number(targetId)) return 2;
+        if (targetTitle && normalizeWorkTitle(bg.workTitle || bg.name) === targetTitle) return 1;
+        return 0;
+      };
+      items.sort((a, b) => score(b) - score(a));
     }
   }
   if (items.length === 0) {
@@ -9161,6 +9166,7 @@ function payloadForToday() {
     quote: c.quote || '',
     speaker: c.speaker || '',
     work: w.title || '',
+    workId: w.work_id ?? null,
     author: w.author || '',
     coverUrl: w.cover_url || '',
   };
@@ -9173,6 +9179,7 @@ function payloadForDetail() {
     quote: c.quote || '',
     speaker: c.speaker || '',
     work: w.title || '',
+    workId: w.work_id ?? null,
     author: w.author || '',
     coverUrl: w.cover_url || '',
   };

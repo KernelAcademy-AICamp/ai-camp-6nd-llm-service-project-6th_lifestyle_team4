@@ -16,6 +16,7 @@ data class ShareBackgroundDto(
     val price: Int = 0,
     @SerialName("image_url") val imageUrl: String,
     val ink: String = "#3B2A1A",
+    @SerialName("work_id") val workId: Long? = null,
     @SerialName("work_title") val workTitle: String? = null,
     @SerialName("sort_order") val sortOrder: Int = 0,
 )

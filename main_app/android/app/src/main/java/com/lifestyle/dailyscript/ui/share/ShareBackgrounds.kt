@@ -28,7 +28,9 @@ data class ShareBackground(
     val assetPath: String? = null,
     /** 원격 이미지 배경(프리미엄/로얄) — share_backgrounds 의 Supabase Storage 공개 URL. */
     val imageUrl: String? = null,
-    /** 책 제목 우선정렬 타깃(없으면 name 으로 매칭). DB 카드지에서 채워진다. */
+    /** 연결된 책 id — 공유 카드의 책과 일치하면 그리드 맨 앞(workTitle 보다 우선). DB 카드지에서 채워진다. */
+    val workId: Long? = null,
+    /** 책 제목 매칭 폴백(work_id 없을 때). DB 카드지에서 채워진다. */
     val workTitle: String? = null,
     /**
      * 이미지 배경 위에 그릴 글자색(ARGB, 명대사·화자·작품). 기본은 어두운 에스프레소.
@@ -147,6 +149,7 @@ fun ShareBackgroundDto.toShareBackground(): ShareBackground = ShareBackground(
     price = price,
     assetPath = BUNDLED_SHARE_ASSETS[slug],   // 시드 4종은 원격 실패 시 번들 PNG 폴백
     imageUrl = imageUrl,
+    workId = workId,
     workTitle = workTitle,
     ink = parseInkHex(ink),
 )

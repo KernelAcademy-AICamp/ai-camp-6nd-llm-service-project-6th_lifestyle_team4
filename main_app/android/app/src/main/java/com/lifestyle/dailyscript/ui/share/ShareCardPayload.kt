@@ -14,8 +14,10 @@ data class ShareCardPayload(
     val cardId: Long,
     val quote: String,
     val speaker: String,
-    /** KO 제목 — 카드지 매칭(normalizeWorkTitle)·공유 텍스트용. */
+    /** KO 제목 — 카드지 제목 매칭(normalizeWorkTitle 폴백)·공유 텍스트용. */
     val work: String,
+    /** 연결된 책 id — 카드지 우선 매칭(그 책 테마를 그리드 맨 앞으로). */
+    val workId: Long? = null,
     /** 하단 메타 1줄(한글): "연극 <로미오와 줄리엣>, 윌리엄 셰익스피어". */
     val metaKo: String,
     /** 하단 메타 2줄(영문): "play <Romeo and Juliet>, William Shakespeare". 영문 원본 없으면 "". */
@@ -50,6 +52,7 @@ fun CardDto.toSharePayload(
         quote = Markdown.cleanQuote(quoteOverride ?: quoteFor(english)),
         speaker = if (quoteOverride != null) "" else speaker,
         work = titleKo,
+        workId = w?.workId,
         metaKo = metaKo,
         metaEn = metaEn,
     )

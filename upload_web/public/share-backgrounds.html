@@ -117,12 +117,8 @@
         <button id="cancel-edit" class="hidden text-sm text-on-surface-variant hover:text-on-background underline">수정 취소</button>
       </div>
 
+      <!-- 등급 + 책 (관리자는 이 둘 + 이미지만 입력; 고유 id·이름·가격은 자동) -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="flex flex-col gap-1.5">
-          <label for="f-slug" class="text-sm font-semibold text-on-surface-variant">slug (고유 id)</label>
-          <input id="f-slug" type="text" maxlength="60" placeholder="예) premium_1"
-                 class="rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background font-mono focus:border-primary focus:ring-primary" />
-        </div>
         <div class="flex flex-col gap-1.5">
           <label for="f-tier" class="text-sm font-semibold text-on-surface-variant">등급</label>
           <select id="f-tier" class="rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background focus:border-primary focus:ring-primary">
@@ -131,39 +127,44 @@
           </select>
         </div>
         <div class="flex flex-col gap-1.5">
-          <label for="f-name" class="text-sm font-semibold text-on-surface-variant">이름/라벨 <span class="text-on-surface-variant/60 font-normal">(책 제목과 같으면 그 카드 공유 시 맨 앞)</span></label>
-          <input id="f-name" type="text" maxlength="80" placeholder="예) 프랑켄슈타인"
+          <label for="f-book" class="text-sm font-semibold text-on-surface-variant">책 <span class="text-on-surface-variant/60 font-normal">(이 테마가 연결될 책)</span></label>
+          <input id="f-book-filter" type="text" placeholder="책 제목/작가로 좁히기…"
                  class="rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background focus:border-primary focus:ring-primary" />
+          <select id="f-book" size="6" class="rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background focus:border-primary focus:ring-primary">
+            <option value="">불러오는 중…</option>
+          </select>
         </div>
-        <div class="flex flex-col gap-1.5">
-          <label for="f-price" class="text-sm font-semibold text-on-surface-variant">가격 (실타래)</label>
-          <input id="f-price" type="number" min="0" step="1" placeholder="999"
-                 class="rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background focus:border-primary focus:ring-primary" />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <label for="f-work" class="text-sm font-semibold text-on-surface-variant">work_title <span class="text-on-surface-variant/60 font-normal">(선택 · 정렬 매칭용)</span></label>
-          <input id="f-work" type="text" maxlength="120" placeholder="비우면 이름으로 매칭"
-                 class="rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background focus:border-primary focus:ring-primary" />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <label for="f-sort" class="text-sm font-semibold text-on-surface-variant">정렬 순서 <span class="text-on-surface-variant/60 font-normal">(작을수록 앞)</span></label>
-          <input id="f-sort" type="number" step="1" value="0"
-                 class="rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background focus:border-primary focus:ring-primary" />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <label for="f-ink" class="text-sm font-semibold text-on-surface-variant">글자색 (ink)</label>
-          <div class="flex items-center gap-2">
-            <input id="f-ink-color" type="color" value="#3B2A1A" class="h-9 w-12 rounded border-outline-variant bg-surface-container-lowest p-0.5" />
-            <input id="f-ink" type="text" maxlength="7" value="#3B2A1A" placeholder="#3B2A1A"
-                   class="flex-1 rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background font-mono focus:border-primary focus:ring-primary" />
-          </div>
-          <p class="text-xs text-on-surface-variant/70">이미지가 어두우면 밝은색(예: #FAF8F2)으로.</p>
-        </div>
-        <label class="flex items-center gap-2 text-sm text-on-background cursor-pointer select-none self-end pb-2">
+      </div>
+
+      <!-- 자동 안내 + 활성 -->
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <p class="text-xs text-on-surface-variant/80">고유 id·이름·가격은 등급/책으로 <b>자동 지정</b>됩니다.</p>
+        <label class="flex items-center gap-2 text-sm text-on-background cursor-pointer select-none">
           <input id="f-active" type="checkbox" checked class="rounded border-outline-variant text-primary focus:ring-primary" />
           활성 (앱에 노출)
         </label>
       </div>
+
+      <!-- 고급(선택): 글자색·정렬 -->
+      <details class="rounded-lg border border-outline-variant px-4 py-2">
+        <summary class="text-sm font-semibold text-on-surface-variant cursor-pointer select-none">고급 설정 (선택)</summary>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3">
+          <div class="flex flex-col gap-1.5">
+            <label for="f-ink" class="text-sm font-semibold text-on-surface-variant">글자색 (ink)</label>
+            <div class="flex items-center gap-2">
+              <input id="f-ink-color" type="color" value="#3B2A1A" class="h-9 w-12 rounded border-outline-variant bg-surface-container-lowest p-0.5" />
+              <input id="f-ink" type="text" maxlength="7" value="#3B2A1A" placeholder="#3B2A1A"
+                     class="flex-1 rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background font-mono focus:border-primary focus:ring-primary" />
+            </div>
+            <p class="text-xs text-on-surface-variant/70">이미지가 어두우면 밝은색(예: #FAF8F2)으로.</p>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label for="f-sort" class="text-sm font-semibold text-on-surface-variant">정렬 순서 <span class="text-on-surface-variant/60 font-normal">(작을수록 앞)</span></label>
+            <input id="f-sort" type="number" step="1" value="0"
+                   class="rounded-lg border-outline-variant bg-surface-container-lowest text-sm text-on-background focus:border-primary focus:ring-primary" />
+          </div>
+        </div>
+      </details>
 
       <!-- 이미지 -->
       <div class="flex flex-col gap-2">

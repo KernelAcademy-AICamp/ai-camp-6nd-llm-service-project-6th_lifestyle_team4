@@ -234,11 +234,19 @@ fun ShareCardSheet(
             // 배경 그리드(4열) 또는 빈 상태. Premium/Royal 은 PWA 처럼 카드지 name(=책 제목)이
             // 공유 카드의 책 제목과 같은 것을 맨 앞으로 정렬(normalizeWorkTitle 비교).
             val allBackgrounds = remember(remoteBackgrounds) { SHARE_BACKGROUNDS + remoteBackgrounds }
-            val items = remember(selectedTier, payload.work, allBackgrounds) {
+            val items = remember(selectedTier, payload.work, payload.workId, allBackgrounds) {
                 val base = allBackgrounds.filter { it.tier == selectedTier }
-                val target = normalizeWorkTitle(payload.work)
-                if (selectedTier == ShareTier.Free || target.isEmpty()) base
-                else base.sortedByDescending { if (normalizeWorkTitle(it.workTitle ?: it.name) == target) 1 else 0 }
+                val targetId = payload.workId
+                val targetTitle = normalizeWorkTitle(payload.work)
+                if (selectedTier == ShareTier.Free || (targetId == null && targetTitle.isEmpty())) base
+                // 공유 카드의 책에 연결된 카드지를 맨 앞으로 — work_id 우선, 없으면 제목 매칭.
+                else base.sortedByDescending { bg ->
+                    when {
+                        targetId != null && bg.workId == targetId -> 2
+                        targetTitle.isNotEmpty() && normalizeWorkTitle(bg.workTitle ?: bg.name) == targetTitle -> 1
+                        else -> 0
+                    }
+                }
             }
             if (items.isEmpty()) {
                 Text(

@@ -25,7 +25,7 @@ class ShareRepository {
      */
     suspend fun listBackgrounds(): List<ShareBackground> = runCatching {
         client.postgrest["share_backgrounds"]
-            .select(Columns.raw("slug,name,tier,price,image_url,ink,work_title,sort_order")) {
+            .select(Columns.raw("slug,name,tier,price,image_url,ink,work_id,work_title,sort_order")) {
                 filter { eq("is_active", true) }
                 order("sort_order", Order.ASCENDING)
             }

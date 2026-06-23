@@ -16,7 +16,8 @@ create table if not exists public.share_backgrounds (
   price       int  not null default 0,
   image_url   text not null,                    -- Storage 공개 URL
   ink         text not null default '#3B2A1A',  -- 이미지 위 글자색 hex (#RRGGBB)
-  work_title  text,                             -- 책 제목 우선정렬 타깃(없으면 name 폴백)
+  work_id     bigint references public.works(work_id) on delete set null,  -- 연결된 책(앱에서 우선 매칭)
+  work_title  text,                             -- 책 제목 스냅샷(표시·매칭 폴백). 선택 책에서 자동 채움.
   sort_order  int  not null default 0,
   is_active   boolean not null default true,
   created_at  timestamptz not null default now(),
