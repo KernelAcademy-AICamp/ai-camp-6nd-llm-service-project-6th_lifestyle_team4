@@ -17,8 +17,14 @@ enum WidgetDataLoader {
             url: supabaseURL.appendingPathComponent("rest/v1/cards"),
             resolvingAgainstBaseURL: false
         )!
+        // 공개도메인(works.is_public_domain=true) 작품만 — 위젯/잠금화면은 심사·노출 면에서
+        // PD 만 안전. PostgREST 임베디드 필터는 그냥 `works.is_public_domain=eq.true` 만 쓰면
+        // 비-PD 카드를 works:null 로 '반환'(left join)하므로, `works!inner(...)` 로 inner-join
+        // 시켜 비-PD 카드를 아예 '제외'한다(라이브 REST로 검증: !inner 없으면 works:null 행
+        // 반환, !inner 면 빈 배열). PD 플래그가 하나도 없으면 빈 결과 → 위젯은 아무것도 안 보임.
         components.queryItems = [
-            URLQueryItem(name: "select", value: "card_id,quote,works(title)"),
+            URLQueryItem(name: "select", value: "card_id,quote,works!inner(title)"),
+            URLQueryItem(name: "works.is_public_domain", value: "eq.true"),
             URLQueryItem(name: "order", value: "card_id.desc"),
             URLQueryItem(name: "limit", value: "1"),
         ]
