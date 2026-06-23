@@ -160,6 +160,8 @@ final class AuthSession: ObservableObject {
             await bootstrap(migrateFromUserId: prevUserId, recordLoginId: enteredId)
             authMessage = signUp ? "가입 완료" : "로그인 됐어요"
         } catch {
+            // 실제 오류는 기록 + 친화 메시지(원시 시스템 문자열 그대로 노출 X).
+            AppLog.error("password sign-in", error)
             authMessage = Self.friendlyAuthError(error.localizedDescription)
         }
         authInProgress = false
@@ -186,10 +188,13 @@ final class AuthSession: ObservableObject {
             await bootstrap(migrateFromUserId: prevUserId)
             authMessage = "로그인 됐어요"
         } catch {
-            // 사용자가 취소한 경우(canceledLogin)는 조용히 무시.
-            let msg = error.localizedDescription
-            if !msg.lowercased().contains("cancel") {
-                authMessage = Self.friendlyAuthError(msg)
+            // 사용자가 웹 인증 시트를 취소/닫음(ASWebAuthenticationSessionError.canceledLogin)
+            // → 정상 흐름이므로 무음 no-op(배너 X). 실제 오류만 기록 + 친화 메시지.
+            if AppLog.isAuthCancellation(error) {
+                AppLog.debug("OAuth sign-in canceled by user")
+            } else {
+                AppLog.error("OAuth sign-in", error)
+                authMessage = Self.friendlyAuthError(error.localizedDescription)
             }
         }
         authInProgress = false
@@ -216,9 +221,13 @@ final class AuthSession: ObservableObject {
             await bootstrap(migrateFromUserId: prevUserId, socialDisplayName: fullName)
             authMessage = "로그인 됐어요"
         } catch {
-            let msg = error.localizedDescription
-            if !msg.lowercased().contains("cancel") {
-                authMessage = Self.friendlyAuthError(msg)
+            // 사용자가 Apple 시트를 취소(ASAuthorizationError.canceled) → 무음 no-op.
+            // 실제 오류만 기록 + 친화 메시지.
+            if AppLog.isAuthCancellation(error) {
+                AppLog.debug("Apple sign-in canceled by user")
+            } else {
+                AppLog.error("Apple sign-in", error)
+                authMessage = Self.friendlyAuthError(error.localizedDescription)
             }
         }
         authInProgress = false
