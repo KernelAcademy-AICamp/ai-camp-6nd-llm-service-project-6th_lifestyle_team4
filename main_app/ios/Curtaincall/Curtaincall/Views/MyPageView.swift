@@ -147,19 +147,23 @@ struct MyPageView: View {
                     legalRow(title: "개인정보 처리방침", route: .privacy)
                     settingRow(title: "버전 정보", trailingText: appVersion)
 
-                    // 로그아웃 — outline 블록 버튼 대신 중앙 밑줄 텍스트 링크 (Android/PWA MY).
-                    Spacer().frame(height: 40)
-                    Button {
-                        Task { await session.signOut() }
-                    } label: {
-                        Text("로그아웃")
-                            .font(.custom("Pretendard-Medium", size: 10))
-                            .underline()
-                            .foregroundStyle(.walnut)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
+                    // 로그아웃 — 회원만. 익명/비로그인은 (PWA처럼) 로그아웃 대신 상단
+                    // 로그인/회원가입 진입점만 보여준다. (PWA는 익명일 때 이 버튼을
+                    // 'Reset Anonymous'로 바꾸지만, iOS는 혼란을 줄이려 숨긴다.)
+                    if !session.isAnonymous {
+                        Spacer().frame(height: 40)
+                        Button {
+                            Task { await session.signOut() }
+                        } label: {
+                            Text("로그아웃")
+                                .font(.custom("Pretendard-Medium", size: 10))
+                                .underline()
+                                .foregroundStyle(.walnut)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
 
                     // Account deletion (App Store Guideline 5.1.1(v)). Members only.
                     if FeatureFlags.accountDeletionEnabled && !session.isAnonymous {
