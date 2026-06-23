@@ -254,9 +254,7 @@ struct LibraryCatalogView: View {
     @ViewBuilder
     private var loadOrEmptyState: some View {
         if model.loading {
-            Text("Loading⋯")
-                .font(.bodySans(14))
-                .foregroundStyle(.walnut)
+            QuietLoadingLabel()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 24)
         } else if model.loadError {

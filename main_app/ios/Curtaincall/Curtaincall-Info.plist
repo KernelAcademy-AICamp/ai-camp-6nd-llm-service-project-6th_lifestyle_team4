@@ -6,6 +6,19 @@
 	     매 업로드마다 뜨는 export-compliance 프롬프트를 건너뛴다. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- 런치 스크린(정적) — 크림 배경(BrandPaper = DesignTokens.paper 0xFAF8F2) +
+	     중앙 Daily Script 워드마크(LaunchWordmark, NanumMyeongjo + 코랄 악센트 점).
+	     앱 .paper 배경과 동일해 런치→로딩→콘텐츠가 크림으로 끊김 없이 이어진다.
+	     이미지 기반이라 폰트가 런치 시점에 필요 없음(폰트는 앱 시작 시 등록). -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>BrandPaper</string>
+		<key>UIImageName</key>
+		<string>LaunchWordmark</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<true/>
+	</dict>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

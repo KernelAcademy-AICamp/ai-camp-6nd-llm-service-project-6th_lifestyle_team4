@@ -72,12 +72,9 @@ struct RootView: View {
             if session.ready {
                 tabs
             } else {
-                ZStack {
-                    Color.paper.ignoresSafeArea()
-                    Text("Loading⋯")
-                        .font(.bodySans(15))
-                        .foregroundStyle(.walnut)
-                }
+                // 런치 스크린(크림 + 워드마크)에서 그대로 이어지는 로딩 뷰 — 같은 크림 배경,
+                // 같은 워드마크(중앙)에 은은한 펄스 + '불러오는 중…'. 흰 화면 없이 크림 연속.
+                LaunchLoadingView()
             }
         }
         // First-run preference picker, once. Shown over everything as soon as the
@@ -333,6 +330,34 @@ struct RootView: View {
             homePath.append(card)
         } catch {
             // graceful fallback: stay where we are
+        }
+    }
+}
+
+/// 런치 스크린(정적 크림 + 워드마크)에서 그대로 이어지는 로딩 뷰. 같은 크림 배경 +
+/// 같은 워드마크 처치(NanumMyeongjo + 코랄 악센트 점, 런치 이미지와 동일 크기 40)에
+/// 은은한 opacity 펄스 + '불러오는 중…'. 런치 스크린은 정적이고, 모션은 여기서만.
+private struct LaunchLoadingView: View {
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            Color.paper.ignoresSafeArea()
+            // 워드마크 — AppMasthead BrandWordmark 와 동일 처치(크기만 런치에 맞춰 40).
+            (Text("Daily Script ").foregroundColor(.espresso) + Text(".").foregroundColor(.cta))
+                .font(.displaySerif(40))
+                .tracking(0.4)
+                .opacity(pulse ? 0.55 : 1)
+            Text("불러오는 중…")
+                .font(.bodySans(13))
+                .foregroundStyle(.walnut)
+                .opacity(pulse ? 0.4 : 0.85)
+                .offset(y: 56)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
         }
     }
 }
