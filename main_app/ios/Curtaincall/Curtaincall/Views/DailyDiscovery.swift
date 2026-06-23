@@ -285,7 +285,7 @@ struct DailyNewBooksSection: View {
 
     /// 카드 시각 본문만 — NavigationLink/hero 없이. 페이저(TabView) 각 페이지와
     /// 숨김 높이 측정(중복 matchedTransitionSource 방지)에서 공유한다.
-    private func featuredContent(_ book: DiscoveryWork) -> some View {
+    private func featuredContent(_ book: DiscoveryWork, fixedHeight: CGFloat? = nil) -> some View {
         let work = book.work
         let title = work.title.isEmpty ? "—" : work.title
         // PWA: author · {year}년 · GENRE_LABEL[format] (연도 뒤 '년').
@@ -356,6 +356,11 @@ struct DailyNewBooksSection: View {
             }
         .padding(.horizontal, 22)   // PWA padding 24px 22px
         .padding(.vertical, 24)
+        // 고정 높이(측정된 최대) + 콘텐츠 세로 중앙. fixedHeight 는 '표시용' 카드에만
+        // 전달하고 숨김 측정(ForEach)엔 nil → 자연 높이로 최대치를 잰다(순환 방지).
+        // PWA min-height: var(--newbook-main-min-h)=measureMaxMainHeight 미러 — 카드
+        // 배경이 고정 높이를 채워, 길이가 다른 카드로 스와이프해도 리사이즈/점프하지 않음.
+        .frame(maxWidth: .infinity, minHeight: fixedHeight, alignment: .center)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color.espresso))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte.opacity(0.25), lineWidth: 0.5))
     }
@@ -363,7 +368,8 @@ struct DailyNewBooksSection: View {
     /// 탭하면 상세로(NavigationLink + hero). 페이저 각 페이지가 이 뷰다.
     private func featured(_ book: DiscoveryWork) -> some View {
         NavigationLink(value: book.representativeCard) {
-            featuredContent(book)
+            // 표시용 — 측정된 최대 높이로 고정(콘텐츠 세로 중앙). 측정값이 아직 0이면 자연 높이.
+            featuredContent(book, fixedHeight: maxCardHeight > 0 ? maxCardHeight : nil)
         }
         .buttonStyle(.plain)
         .cardContextMenu(book.representativeCard)
