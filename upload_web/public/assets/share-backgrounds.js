@@ -78,8 +78,9 @@ function setTab(which) {
   });
   $('#save-btn')?.addEventListener('click', onSave);
   $('#cancel-edit')?.addEventListener('click', resetForm);
-  $('#pick-image')?.addEventListener('click', () => $('#img-file')?.click());
+  $('#pick-image')?.addEventListener('click', (e) => { e.stopPropagation(); openImagePicker(); });
   $('#img-file')?.addEventListener('change', onPickImage);
+  setupDropZone();
   $('#f-book-filter')?.addEventListener('input', (e) => populateBookSelect(e.target.value));
 
   // 탭 — 등록 / 조회
@@ -127,11 +128,12 @@ function populateBookSelect(filter) {
   if (keep) sel.value = keep;
 }
 
-// ---------- 이미지 선택(미리보기만, 업로드는 저장 시) ----------
-function onPickImage(ev) {
-  const input = ev.target;
-  const file = input.files && input.files[0];
-  input.value = '';
+// ---------- 이미지 선택/드래그 (미리보기만, 업로드는 저장 시) ----------
+function openImagePicker() {
+  if (!isAdmin) return;
+  $('#img-file')?.click();
+}
+function acceptImageFile(file) {
   if (!file) return;
   if (!isAdmin) return;
   if (!/^image\//.test(file.type)) { toast('이미지 파일만 올릴 수 있어요'); return; }
@@ -146,6 +148,29 @@ function onPickImage(ev) {
   ph?.classList.add('hidden');
   const st = $('#img-status');
   if (st) st.textContent = file.name;
+}
+function onPickImage(ev) {
+  const input = ev.target;
+  const file = input.files && input.files[0];
+  input.value = '';   // 같은 파일 다시 선택 가능하게 초기화
+  acceptImageFile(file);
+}
+// 드롭존 — 클릭=파일 선택, 드래그&드롭=첫 이미지 파일 채택. 드래그 중 테두리 강조.
+function setupDropZone() {
+  const dz = document.getElementById('drop-zone');
+  if (!dz) return;
+  dz.addEventListener('click', () => openImagePicker());
+  const hi = () => { if (isAdmin) dz.classList.add('border-primary', 'bg-primary/5'); };
+  const lo = () => dz.classList.remove('border-primary', 'bg-primary/5');
+  ['dragenter', 'dragover'].forEach((t) =>
+    dz.addEventListener(t, (e) => { e.preventDefault(); e.stopPropagation(); hi(); }));
+  ['dragleave', 'dragend'].forEach((t) =>
+    dz.addEventListener(t, (e) => { e.preventDefault(); e.stopPropagation(); lo(); }));
+  dz.addEventListener('drop', (e) => {
+    e.preventDefault(); e.stopPropagation(); lo();
+    if (!isAdmin) return;
+    acceptImageFile(e.dataTransfer?.files?.[0]);
+  });
 }
 
 async function uploadImage(slug, file) {

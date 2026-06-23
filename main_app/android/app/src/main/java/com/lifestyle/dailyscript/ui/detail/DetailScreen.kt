@@ -63,6 +63,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.TextToolbar
@@ -94,6 +96,7 @@ import com.lifestyle.dailyscript.ui.share.ShareCardPayload
 import com.lifestyle.dailyscript.ui.share.ShareCardSheet
 import com.lifestyle.dailyscript.ui.share.toSharePayload
 import com.lifestyle.dailyscript.ui.yarn.SpendResult
+import com.lifestyle.dailyscript.ui.yarn.YarnRewardFly
 import com.lifestyle.dailyscript.ui.feed.FeedComposeSheet
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
@@ -112,6 +115,7 @@ import com.lifestyle.dailyscript.ui.util.ScriptFormat
 import com.lifestyle.dailyscript.ui.util.descriptionFor
 import com.lifestyle.dailyscript.ui.util.displayAuthor
 import com.lifestyle.dailyscript.ui.util.significanceFor
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -127,6 +131,10 @@ fun DetailScreen(
     purchasedThemeIds: Set<String>,
     remoteBackgrounds: List<ShareBackground> = emptyList(),
     onBuyTheme: suspend (ShareBackground) -> SpendResult,
+    // 본문을 스크롤로 끝까지 읽었을 때 호출 — 첫 열람 보상(+300)을 지급하고 실제 지급량을 돌려준다(없으면 0).
+    onContentRead: suspend () -> Int,
+    // 떠 있는 하단 탭 카드의 top(window px) — 본문 끝이 이 선을 통과하면 '다 읽음'으로 판정. 0이면 미측정.
+    bottomBarTopPx: Float = 0f,
     onBack: () -> Unit,
     onGoLibrary: () -> Unit,
     onGoFeed: () -> Unit,
@@ -136,6 +144,43 @@ fun DetailScreen(
     val state by vm.state.collectAsState()
     val scrollState = rememberScrollState()
     val scrollScope = rememberCoroutineScope()
+
+    // ── 첫 열람 보상(+300) — 본문을 스크롤로 끝까지 읽으면 1회 지급 + 화면 중앙 보상 애니. (PWA rewardYarnForFirstView)
+    //   트리거: 카드 본문 끝(에디션 표기)이 떠 있는 하단 탭 카드 top 을 통과하는 순간 = 마지막 줄까지 다 읽음.
+    //   폴백: 스크롤 95% 도달(바 측정 전 등). 스크롤이 없는 짧은 카드는 잠시 뒤 그대로 지급.
+    val onContentReadState by rememberUpdatedState(onContentRead)
+    var rewardFlyAmount by remember(cardId) { mutableStateOf<Int?>(null) }
+    var rewardFired by remember(cardId) { mutableStateOf(false) }
+    // 본문 끝 앵커(에디션 표기) top(window px) — 모든 포맷에서 렌더되며 댓글 바로 위에 위치. 의의 블록(opera/play 한정)에 묶지 않는다.
+    var contentEndTopPx by remember(cardId) { mutableStateOf<Float?>(null) }
+    val readComplete by remember(cardId) {
+        derivedStateOf {
+            val max = scrollState.maxValue
+            if (max <= 0) return@derivedStateOf false
+            val ratioPassed = scrollState.value.toFloat() / max >= 0.95f
+            // 본문 끝 top 이 하단 탭 카드 top 보다 위로 올라옴 = 마지막 줄이 하단 탭을 통과.
+            val endPassed = contentEndTopPx?.let { bottomBarTopPx > 0f && it <= bottomBarTopPx } ?: false
+            ratioPassed || endPassed
+        }
+    }
+    LaunchedEffect(cardId) {
+        snapshotFlow { readComplete }.first { it }
+        if (!rewardFired) {
+            rewardFired = true
+            val granted = onContentReadState()
+            if (granted > 0) rewardFlyAmount = granted
+        }
+    }
+    // 스크롤이 아예 없는 짧은 카드 — 레이아웃 안정 뒤 그대로 지급(콘텐츠를 한눈에 다 봄).
+    LaunchedEffect(cardId, state.card?.cardId) {
+        if (state.card == null) return@LaunchedEffect
+        delay(1500)
+        if (!rewardFired && scrollState.maxValue <= 0) {
+            rewardFired = true
+            val granted = onContentReadState()
+            if (granted > 0) rewardFlyAmount = granted
+        }
+    }
 
     LaunchedEffect(cardId, userId) { vm.load(cardId, userId) }
     LaunchedEffect(state.card?.cardId) {
@@ -408,7 +453,10 @@ fun DetailScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = Walnut,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
+                    // 첫 열람 보상 트리거 앵커 — 본문 끝(댓글 직전)이 화면 중앙을 통과하면 읽음 완료로 판정.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { contentEndTopPx = it.positionInWindow().y },
                 )
 
                 // ---------- Comments ----------
@@ -566,6 +614,15 @@ fun DetailScreen(
                   )
               },
               containerColor = Paper,
+          )
+      }
+
+      // 첫 열람 보상 — 본문을 끝까지 읽으면 화면 중앙에 통통 튀는 +N 실타래 애니 (PWA playYarnRewardFly).
+      rewardFlyAmount?.let { amt ->
+          YarnRewardFly(
+              amount = amt,
+              modifier = Modifier.align(Alignment.Center),
+              onFinished = { rewardFlyAmount = null },
           )
       }
     }

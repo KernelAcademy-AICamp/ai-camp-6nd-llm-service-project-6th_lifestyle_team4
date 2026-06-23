@@ -53,7 +53,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -84,6 +83,7 @@ import com.lifestyle.dailyscript.ui.library.LibraryBook
 import com.lifestyle.dailyscript.ui.library.OpenedLibraryBook
 import com.lifestyle.dailyscript.ui.theme.CardWarm
 import com.lifestyle.dailyscript.ui.theme.Cta
+import com.lifestyle.dailyscript.ui.theme.EditorialSans
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Highlight
@@ -98,6 +98,7 @@ import com.lifestyle.dailyscript.ui.util.formatCount
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import com.lifestyle.dailyscript.ui.util.parseEpochMillis
 import kotlinx.coroutines.delay
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.abs
@@ -284,29 +285,24 @@ private fun DailyNewBooks(books: List<DailyWork>, onOpenWork: (Long) -> Unit) {
     }
     val safeIdx = mainIdx.coerceIn(0, pool.lastIndex)
 
-    // 날짜 — PWA 와 동일하게 블랙 카드 상단 안쪽에 표시(날짜=Sand 굵게, 요일=Cta).
-    // Cta 는 @Composable 게터라 remember 계산 람다 밖(컴포지션)에서 읽어 캡처.
-    val ctaColor = Cta
-    val today = remember { LocalDate.now() }
-    val dateLabel = remember(today, ctaColor) {
-        val dayKo = listOf("일", "월", "화", "수", "목", "금", "토")[today.dayOfWeek.value % 7]
-        buildAnnotatedString {
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                append("${today.year}년 ${today.monthValue}월 ${today.dayOfMonth}일 ")
-            }
-            withStyle(SpanStyle(color = ctaColor)) {
-                append("${dayKo}요일")
-            }
-        }
-    }
+    // 날짜는 각 책의 등록일(newestMillis)로 DailyNewBookHero 안에서 책마다 계산한다 (카드 넘기면 날짜도 바뀜).
 
     // 높이 고정 + 방향성 슬라이드. 고스트(alpha 0)로 9권 중 최대 높이를 잡고,
     // 그 위에 AnimatedContent 로 현재 카드만 슬라이드 전환(PWA: 왼쪽=다음, 오른쪽=이전).
-    Box(modifier = Modifier.fillMaxWidth()) {
+    // 검정 배경 카드(그림자·둥근모서리·검정·보더)는 이 Box 가 고정으로 그리고,
+    // 그 안의 내용(텍스트·표지)만 슬라이드된다 (clip 으로 슬라이드 내용이 둥근 카드 안에 갇힘).
+    val cardShape = RoundedCornerShape(14.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(2.dp, cardShape)
+            .clip(cardShape)
+            .background(Espresso)
+            .border(0.5.dp, Latte.copy(alpha = 0.25f), cardShape),
+    ) {
         pool.forEach { ghost ->
             DailyNewBookHero(
                 hero = ghost,
-                dateLabel = dateLabel,
                 modifier = Modifier
                     .fillMaxWidth()
                     .alpha(0f),
@@ -325,7 +321,6 @@ private fun DailyNewBooks(books: List<DailyWork>, onOpenWork: (Long) -> Unit) {
             val hero = pool[idx.coerceIn(0, pool.lastIndex)]
             DailyNewBookHero(
                 hero = hero,
-                dateLabel = dateLabel,
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(pool.size) {
@@ -473,26 +468,40 @@ private fun DailyNewBooks(books: List<DailyWork>, onOpenWork: (Long) -> Unit) {
     SectionGap()
 }
 
-// 새 책 hero 카드(블랙 박스) — 날짜·NEW 뱃지·제목·저자·인용 + 표지.
+// 새 책 hero 카드의 '내용' — 날짜·NEW 뱃지·제목·저자·인용 + 표지.
+// 검정 배경/둥근모서리/그림자/보더는 부모 Box 가 고정으로 그리고, 여기선 슬라이드되는 내용만 그린다.
 // modifier 로 사이즈/클릭/스와이프를 외부에서 주입(고스트는 alpha 0, 보이는 카드는 클릭·드래그).
 @Composable
 private fun DailyNewBookHero(
     hero: DailyWork,
-    dateLabel: AnnotatedString,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(14.dp)
     val work = hero.work
     val intro = work.intro?.trim().orEmpty()
     val sampleQuote = Markdown.cleanQuote(hero.cards.firstOrNull()?.quote).take(60)
+    // 날짜 = 그 책의 등록일(가장 최신 카드 created_at = newestMillis). 값이 없으면(0) 오늘로 폴백.
+    // 날짜=Sand 굵게, 요일=Cta. Cta 는 @Composable 게터라 remember 람다 밖에서 읽어 캡처.
+    val ctaColor = Cta
+    val dateLabel = remember(hero.newestMillis, ctaColor) {
+        val date = if (hero.newestMillis > 0L) {
+            Instant.ofEpochMilli(hero.newestMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+        } else {
+            LocalDate.now()
+        }
+        val dayKo = listOf("일", "월", "화", "수", "목", "금", "토")[date.dayOfWeek.value % 7]
+        buildAnnotatedString {
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                append("${date.year}년 ${date.monthValue}월 ${date.dayOfMonth}일 ")
+            }
+            withStyle(SpanStyle(color = ctaColor)) {
+                append("${dayKo}요일")
+            }
+        }
+    }
     // 텍스트 컬럼 간격은 PWA renderDailyNewBooks 의 마진을 그대로 옮긴 값.
     // 카드 padding 24/22 · inner gap 20 · 날짜 mb13 · NEW→제목 10 · 제목 28/lh1.25 · 제목→메타 5 · 메타→본문 15.
     Row(
         modifier = modifier
-            .shadow(2.dp, shape)
-            .clip(shape)
-            .background(Espresso)
-            .border(0.5.dp, Latte.copy(alpha = 0.25f), shape)
             .padding(horizontal = 22.dp, vertical = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         // PWA .daily-newbook-main-inner: align-items:center → 표지를 텍스트 기준 세로 중앙 정렬.
@@ -539,14 +548,14 @@ private fun DailyNewBookHero(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 3.dp),
             )
-            // PWA renderDailyNewBooks: 책 소개(intro) 우선 노출(정자체), 없으면 명대사 폴백(italic + 따옴표).
+            // 책 소개(intro)는 고딕체(EditorialSans)로, 없으면 명대사 폴백(serif italic + 따옴표).
             // 둘 다 14sp / line-height 1.75(≈24.5sp) / 3줄 클램프.
             if (intro.isNotBlank()) {
                 Box(modifier = Modifier.height(15.dp))
                 Text(
                     text = intro,
                     style = TextStyle(
-                        fontFamily = EditorialSerif,
+                        fontFamily = EditorialSans,
                         fontSize = 14.sp,
                         lineHeight = 24.5.sp,
                     ),

@@ -4,12 +4,17 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -17,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.lifestyle.dailyscript.ui.components.YarnIcon
+import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.WordmarkSerif
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -156,5 +163,86 @@ fun YarnRewardAnimation(
                 }
             }
         }
+    }
+}
+
+/**
+ * 카드 첫 열람 보상(스크롤로 본문을 끝까지 읽었을 때) 가벼운 보상 애니메이션 — PWA playYarnRewardFly 이식.
+ * 백드롭 없이 화면 위에 떠올라, 통통 튀는 실타래 + '+N' 텍스트가 페이드 인 → 약 2초 유지 → 페이드 아웃.
+ * 호출부의 [modifier] 로 위치(보통 화면 중앙)를 지정하고, 끝나면 [onFinished] 로 정리한다.
+ * 포인터를 가로채지 않아 애니메이션 중에도 스크롤이 그대로 동작한다.
+ */
+@Composable
+fun YarnRewardFly(
+    amount: Int,
+    modifier: Modifier = Modifier,
+    onFinished: () -> Unit,
+) {
+    val alpha = remember { Animatable(0f) }
+    // 실타래가 통통 튀는 bounce — PWA @keyframes reward-yarn-bounce 와 동일한 키프레임.
+    val infinite = rememberInfiniteTransition(label = "yarnFly")
+    val bobY by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 1400
+                0f at 0
+                -18f at 280
+                0f at 560
+                -10f at 840
+                0f at 1120
+            },
+        ),
+        label = "bobY",
+    )
+    val bobScale by infinite.animateFloat(
+        initialValue = 1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 1400
+                1f at 0
+                1.12f at 280
+                0.92f at 560
+                1.06f at 840
+                0.98f at 1120
+            },
+        ),
+        label = "bobScale",
+    )
+
+    LaunchedEffect(amount) {
+        alpha.snapTo(0f)
+        alpha.animateTo(1f, tween(350))
+        delay(2000)
+        alpha.animateTo(0f, tween(400))
+        onFinished()
+    }
+
+    Row(
+        modifier = modifier.graphicsLayer { this.alpha = alpha.value },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        YarnIcon(
+            contentDescription = null,
+            modifier = Modifier
+                .size(46.dp)
+                .graphicsLayer {
+                    translationY = bobY
+                    scaleX = bobScale
+                    scaleY = bobScale
+                }
+                .shadow(10.dp, CircleShape),
+        )
+        Text(
+            text = "+$amount",
+            style = TextStyle(
+                fontSize = 30.sp,
+                fontWeight = FontWeight.ExtraBold,
+            ),
+            color = Espresso,
+        )
     }
 }

@@ -605,6 +605,8 @@ private fun OpenedBook(
         leather = book.leather,
         onClose = onClose,
         header = { dismiss -> BookHeader(book = book, volumeNo = volumeNo, onClose = dismiss) },
+        // ShelfBook 엔 intro 필드가 없어 모은 카드의 work.intro 에서 가져온다 (같은 작품이라 동일).
+        intro = book.cards.firstOrNull()?.works?.intro,
     ) {
         book.cards.forEach { card ->
             BookQuoteItem(

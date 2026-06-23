@@ -153,22 +153,23 @@
         </label>
       </div>
 
-      <!-- 이미지 -->
+      <!-- 이미지 (클릭 또는 드래그 & 드롭) -->
       <div class="flex flex-col gap-2">
         <label class="text-sm font-semibold text-on-surface-variant">배경 이미지 <span class="text-on-surface-variant/60 font-normal">(PNG/JPG · 최대 5MB · 9:16 권장)</span></label>
-        <div class="flex items-center gap-4">
+        <div id="drop-zone" class="flex items-center gap-4 rounded-lg border-2 border-dashed border-outline-variant p-4 cursor-pointer transition-colors hover:border-primary/50">
           <div class="w-[90px] aspect-[9/16] rounded-lg border border-outline-variant bg-surface-container-low overflow-hidden flex items-center justify-center shrink-0">
             <img id="img-preview" alt="" class="w-full h-full object-cover hidden" />
             <span id="img-placeholder" class="material-symbols-outlined text-on-surface-variant/40 text-3xl">image</span>
           </div>
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-1.5 pointer-events-none">
+            <p class="text-sm text-on-background font-medium">여기로 이미지를 <span class="text-primary">드래그</span> 하거나</p>
             <button type="button" id="pick-image"
-                    class="px-3 py-2 rounded-lg border border-primary/40 text-sm font-medium text-primary hover:bg-surface-container-low transition-colors flex items-center gap-1 w-fit disabled:opacity-40 disabled:cursor-not-allowed">
+                    class="px-3 py-2 rounded-lg border border-primary/40 text-sm font-medium text-primary hover:bg-surface-container-low transition-colors flex items-center gap-1 w-fit pointer-events-auto disabled:opacity-40 disabled:cursor-not-allowed">
               <span class="material-symbols-outlined text-base">upload</span>이미지 선택
             </button>
             <span id="img-status" class="text-xs text-on-surface-variant"></span>
-            <input type="file" id="img-file" accept="image/*" class="hidden" />
           </div>
+          <input type="file" id="img-file" accept="image/*" class="hidden" />
         </div>
       </div>
 

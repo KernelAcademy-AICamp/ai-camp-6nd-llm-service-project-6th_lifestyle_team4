@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.lifestyle.dailyscript.ui.components.YarnIcon
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
@@ -66,13 +67,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** 공유 시트 탭 — PWA Free / Premium·999🧶 / Royal·2999🧶 패리티. */
-private data class ShareTab(val tier: ShareTier, val label: String)
+/**
+ * 공유 시트 탭 — PWA Free / Premium·999 / Royal·2999 패리티.
+ * 가격(price)이 있으면 라벨 뒤에 실타래 개수 + 실타래 아이콘(상단바와 동일한 YarnIcon)을 붙인다.
+ */
+private data class ShareTab(val tier: ShareTier, val name: String, val price: Int? = null)
 
 private val SHARE_TABS = listOf(
     ShareTab(ShareTier.Free, "Free"),
-    ShareTab(ShareTier.Premium, "Premium · 999🧶"),
-    ShareTab(ShareTier.Royal, "Royal · 2999🧶"),
+    ShareTab(ShareTier.Premium, "Premium", 999),
+    ShareTab(ShareTier.Royal, "Royal", 2999),
 )
 
 /** PWA normalizeWorkTitle 흉내 — 영문 관사 제거 + 공백·구두점 무시(한/영/숫자만). 카드지↔책 제목 매칭용. */
@@ -196,7 +200,7 @@ fun ShareCardSheet(
             }
             Box(modifier = Modifier.height(16.dp))
 
-            // 탭 — Free / Premium·999🧶 / Royal·2999🧶.
+            // 탭 — Free / Premium · 999 + 실타래 / Royal · 2999 + 실타래 (실타래는 상단바와 같은 YarnIcon 이미지).
             Row(modifier = Modifier.fillMaxWidth()) {
                 SHARE_TABS.forEach { tab ->
                     val active = tab.tier == selectedTier
@@ -208,15 +212,25 @@ fun ShareCardSheet(
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = tab.label,
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontSize = 13.sp,
-                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                                ),
-                                color = if (active) Espresso else Walnut,
-                                maxLines = 1,
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            ) {
+                                Text(
+                                    // 이모지(🧶) 대신 상단바와 같은 실타래 이미지(YarnIcon)를 옆에 붙인다.
+                                    // 3등분 폭(가로패딩 18dp 기준 ~108dp)에 가장 긴 "Premium · 999"+아이콘이 들어가도록 12sp.
+                                    text = if (tab.price != null) "${tab.name} · ${tab.price}" else tab.name,
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontSize = 12.sp,
+                                        fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                                    ),
+                                    color = if (active) Espresso else Walnut,
+                                    maxLines = 1,
+                                )
+                                if (tab.price != null) {
+                                    YarnIcon(modifier = Modifier.size(14.dp))
+                                }
+                            }
                             Box(modifier = Modifier.height(8.dp))
                             Box(
                                 modifier = Modifier

@@ -1,6 +1,5 @@
 package com.lifestyle.dailyscript.ui.feed
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,8 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -60,12 +57,12 @@ import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.data.model.Highlight
 import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
-import com.lifestyle.dailyscript.ui.components.FeedCatImageTopInset
 import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.detail.relativeTime
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
 import com.lifestyle.dailyscript.ui.theme.CardWarm
+import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSans
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -207,72 +204,36 @@ fun FeedScreen(
             }
         }
 
-        // Compose FAB — 말풍선 모양(하단 바 우측 cat_pen 고양이가 "글쓰기"라고 말하듯).
+        // 글쓰기 FAB — 우하단에 떠 있는 동그란 코랄 연필 버튼 (PWA #feed-fab 미러).
+        // 고양이(cat_pen)는 하단바 좌측으로 비켜 앉아 FAB 와 겹치지 않는다.
         // PWA 와 동일하게 로그인 여부와 무관하게 피드면 항상 표시하고, 비로그인 클릭 시 로그인 안내 토스트.
-        // 세로: 고양이 머리(= 이미지 상단) 바로 위에 꼬리 끝이 오도록 FeedCatImageTopInset 기준으로 배치.
-        // 가로: end 패딩으로 고양이 위쪽에 맞춤 (고양이 hBias 와 함께 미세조정 가능).
-        run {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 24.dp, bottom = FeedCatImageTopInset - 6.dp)
-                    .coachAnchor(coach, "feed_fab"),
-                horizontalAlignment = Alignment.End,
-            ) {
-                val bubbleShape = RoundedCornerShape(18.dp)
-                Row(
-                    modifier = Modifier
-                        .background(Paper, bubbleShape)
-                        .border(1.5.dp, Espresso, bubbleShape)
-                        .clip(bubbleShape)
-                        .clickable {
-                            if (isAnonymous) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    if (state.category == FEED_HIGHLIGHT) "로그인 후 하이라이트를 남길 수 있어요."
-                                    else "로그인 후 나의 감상평을 남길 수 있어요.",
-                                    android.widget.Toast.LENGTH_SHORT,
-                                ).show()
-                            } else if (state.category == FEED_HIGHLIGHT) hlPickerOpen = true else todayPickerOpen = true
-                        }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Outlined.Edit,
-                        contentDescription = null,
-                        tint = Espresso,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Box(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "글쓰기",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Espresso,
-                    )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = BottomBarContentInset + 16.dp)
+                .size(56.dp)
+                .shadow(8.dp, CircleShape)
+                .clip(CircleShape)
+                .background(Cta)
+                .clickable {
+                    if (isAnonymous) {
+                        android.widget.Toast.makeText(
+                            context,
+                            if (state.category == FEED_HIGHLIGHT) "로그인 후 하이라이트를 남길 수 있어요."
+                            else "로그인 후 나의 감상평을 남길 수 있어요.",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    } else if (state.category == FEED_HIGHLIGHT) hlPickerOpen = true else todayPickerOpen = true
                 }
-                // 우측 아래로 향하는 꼬리 삼각형. 위 모서리는 말풍선 하단 보더에 살짝 겹쳐 가린다.
-                // 색은 @Composable 스코프에서 미리 잡아 DrawScope 람다로 넘긴다(테마 색은 composable 프로퍼티).
-                val tailFill = Paper
-                val tailStroke = Espresso
-                Canvas(
-                    modifier = Modifier
-                        .padding(end = 18.dp)
-                        .offset(y = (-1.5).dp)
-                        .size(width = 16.dp, height = 9.dp),
-                ) {
-                    val tail = Path().apply {
-                        moveTo(0f, 0f)
-                        lineTo(size.width, 0f)
-                        lineTo(size.width * 0.38f, size.height)
-                        close()
-                    }
-                    drawPath(tail, color = tailFill)
-                    val stroke = 1.5.dp.toPx()
-                    drawLine(tailStroke, Offset(0f, 0f), Offset(size.width * 0.38f, size.height), strokeWidth = stroke)
-                    drawLine(tailStroke, Offset(size.width, 0f), Offset(size.width * 0.38f, size.height), strokeWidth = stroke)
-                }
-            }
+                .coachAnchor(coach, "feed_fab"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Outlined.Edit,
+                contentDescription = "글쓰기",
+                tint = Paper,
+                modifier = Modifier.size(24.dp),
+            )
         }
     }
 

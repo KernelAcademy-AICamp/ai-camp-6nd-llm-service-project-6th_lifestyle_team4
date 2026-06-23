@@ -5,6 +5,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -36,6 +39,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -43,8 +47,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import com.lifestyle.dailyscript.ui.theme.Espresso
+import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Sand
+import com.lifestyle.dailyscript.ui.theme.Walnut
 
 private val BookCoverEasing = CubicBezierEasing(0.34f, 1.2f, 0.64f, 1f)
 
@@ -55,6 +62,7 @@ private val BookCoverEasing = CubicBezierEasing(0.34f, 1.2f, 0.64f, 1f)
  *
  * @param onClose 즉시 닫기(아이템 열기 후처럼). 표지를 닫는 애니메이션은 [header]에 넘기는 dismiss 가 처리한다.
  * @param header  상단 책 머리말. 닫기(X) 버튼은 받은 dismiss 를 써야 표지가 스윙하며 닫힌다.
+ * @param intro   작품 소개(works.intro). 비어있지 않으면 divider 와 본문 사이에 메모 박스로 노출 (PWA .book-intro).
  * @param body    페이지 본문(명대사 항목들). Column 안에서 호출된다.
  */
 @Composable
@@ -62,6 +70,7 @@ fun OpenedBookShell(
     leather: Color,
     onClose: () -> Unit,
     header: @Composable (dismiss: () -> Unit) -> Unit,
+    intro: String? = null,
     body: @Composable ColumnScope.() -> Unit,
 ) {
     // progress 0→1 이 펼침을 구동. 닫을 땐 visible=false 로 닫힘 애니메이션이 끝난 뒤 진짜 onClose 호출.
@@ -143,6 +152,10 @@ fun OpenedBookShell(
                     Box(modifier = Modifier.height(20.dp))
                     Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Sand))
                     Box(modifier = Modifier.height(12.dp))
+                    intro?.trim()?.takeIf { it.isNotEmpty() }?.let { text ->
+                        BookIntroNote(text)
+                        Box(modifier = Modifier.height(16.dp))
+                    }
                     body()
                     Box(modifier = Modifier.height(12.dp))
                     Text(
@@ -154,5 +167,38 @@ fun OpenedBookShell(
                 }
             }
         }
+    }
+}
+
+/**
+ * 작품 소개 메모 박스 — PWA .book-intro 미러. 인용 카드와 구별되도록 따뜻한 종이톤(Latte)에
+ * 살짝 떠 있는 그림자를 주고, 위에 '작품 소개' 라벨을 붙여 설명임을 명확히 한다.
+ */
+@Composable
+private fun BookIntroNote(intro: String) {
+    val shape = RoundedCornerShape(3.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(6.dp, shape)
+            .background(Latte, shape)
+            .border(0.5.dp, Sand, shape)
+            .padding(horizontal = 15.dp, vertical = 13.dp),
+    ) {
+        Text(
+            text = "작품 소개",
+            style = TextStyle(
+                fontSize = 9.sp,
+                letterSpacing = 0.22.em,
+                fontWeight = FontWeight.Bold,
+                color = Walnut,
+            ),
+        )
+        Box(modifier = Modifier.height(7.dp))
+        Text(
+            text = intro,
+            // PWA: font-size 13 / line-height 1.75 (≈ 22.75sp), 본문 기본 산세리프.
+            style = TextStyle(fontSize = 13.sp, lineHeight = 22.75.sp, color = Espresso),
+        )
     }
 }

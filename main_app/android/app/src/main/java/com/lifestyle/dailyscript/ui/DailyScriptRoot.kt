@@ -72,7 +72,6 @@ import com.lifestyle.dailyscript.ui.settings.ProfileDialog
 import com.lifestyle.dailyscript.ui.settings.SettingsScreen
 import com.lifestyle.dailyscript.ui.settings.privacyDoc
 import com.lifestyle.dailyscript.ui.settings.termsDoc
-import com.lifestyle.dailyscript.ui.yarn.YarnGate
 import com.lifestyle.dailyscript.ui.yarn.YarnPurchaseScreen
 import com.lifestyle.dailyscript.ui.yarn.YarnViewModel
 import com.lifestyle.dailyscript.ui.theme.Cta
@@ -167,6 +166,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     var yarnChipCenter by remember { mutableStateOf(Offset.Zero) }   // 칩 중심 window px (버스트 목표)
     var chipDisplayOverride by remember { mutableStateOf<Int?>(null) } // 카운트업 동안 칩 표시값 덮어쓰기
     var chipBounceKey by remember { mutableStateOf(0) }               // ++ 하면 칩 실타래 이미지 bounce
+    var bottomBarTopPx by remember { mutableStateOf(0f) }             // 하단 바 카드 top(window px) — 상세 '본문 끝 통과' 보상 판정
     LaunchedEffect(session.userId, session.isAnonymous) {
         if (session.isAnonymous) return@LaunchedEffect
         val today = java.time.LocalDate.now().toString()
@@ -448,40 +448,34 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                     arguments = listOf(navArgument("cardId") { type = NavType.LongType }),
                 ) { entry ->
                     val cardId = entry.arguments?.getLong("cardId") ?: -1L
-                    // 실타래 게이트 — 차감 승인 후에만 DetailScreen(=vm.load/incrementView) 컴포즈.
-                    YarnGate(
+                    DetailScreen(
                         cardId = cardId,
-                        yarnVm = yarnVm,
-                        onGoCharge = {
-                            navController.popBackStack(Routes.DETAIL, inclusive = true)
-                            navController.navigate(Routes.YARN_PURCHASE)
+                        userId = session.userId,
+                        isAnonymous = session.isAnonymous,
+                        myNickname = session.nickname,
+                        yarnBalance = yarnAvailable,
+                        purchasedThemeIds = purchasedShareThemes,
+                        remoteBackgrounds = shareBackgrounds,
+                        onBuyTheme = { bg -> yarnVm.buyShareTheme(bg.id, bg.price) },
+                        // 본문을 스크롤로 끝까지 읽으면 첫 열람 보상(+300) 지급 — 지급량 반환(보상 애니 트리거).
+                        // 게스트(익명)는 출석 보상과 동일하게 제외 (PWA: !state.userId 시 보상 없음).
+                        onContentRead = { if (session.isAnonymous) 0 else yarnVm.rewardFirstView(cardId) },
+                        // 본문 끝(에디션 표기)이 떠 있는 하단 탭 카드 top 을 통과하는 순간 보상 판정.
+                        bottomBarTopPx = bottomBarTopPx,
+                        onBack = { navController.popBackStack() },
+                        // 하단바 탭 전환과 같은 패턴 — 방문 순서대로 쌓아 뒤로가기가 직전 화면으로 가게 한다.
+                        onGoLibrary = {
+                            AppAnalytics.track("nav", mapOf("from" to Routes.DETAIL, "to" to Routes.ARCHIVE))
+                            navController.navigate(Routes.ARCHIVE) { launchSingleTop = true }
                         },
-                        onCancel = { navController.popBackStack() },
-                    ) {
-                        DetailScreen(
-                            cardId = cardId,
-                            userId = session.userId,
-                            isAnonymous = session.isAnonymous,
-                            myNickname = session.nickname,
-                            yarnBalance = yarnAvailable,
-                            purchasedThemeIds = purchasedShareThemes,
-                            remoteBackgrounds = shareBackgrounds,
-                            onBuyTheme = { bg -> yarnVm.buyShareTheme(bg.id, bg.price) },
-                            onBack = { navController.popBackStack() },
-                            // 하단바 탭 전환과 같은 패턴 — 방문 순서대로 쌓아 뒤로가기가 직전 화면으로 가게 한다.
-                            onGoLibrary = {
-                                AppAnalytics.track("nav", mapOf("from" to Routes.DETAIL, "to" to Routes.ARCHIVE))
-                                navController.navigate(Routes.ARCHIVE) { launchSingleTop = true }
-                            },
-                            onGoFeed = {
-                                navController.navigate(Routes.FEED) { launchSingleTop = true }
-                            },
-                            onOpenFeedback = {
-                                AppAnalytics.track("nav", mapOf("from" to Routes.DETAIL, "to" to Routes.FEEDBACK))
-                                navController.navigate(Routes.FEEDBACK) { launchSingleTop = true }
-                            },
-                        )
-                    }
+                        onGoFeed = {
+                            navController.navigate(Routes.FEED) { launchSingleTop = true }
+                        },
+                        onOpenFeedback = {
+                            AppAnalytics.track("nav", mapOf("from" to Routes.DETAIL, "to" to Routes.FEEDBACK))
+                            navController.navigate(Routes.FEEDBACK) { launchSingleTop = true }
+                        },
+                    )
                 }
             }
         }
@@ -499,6 +493,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                     }
                 },
                 modifier = Modifier.align(Alignment.BottomCenter),
+                onBarTopPositioned = { bottomBarTopPx = it },
             )
         }
         CoachTourOverlay(coach)

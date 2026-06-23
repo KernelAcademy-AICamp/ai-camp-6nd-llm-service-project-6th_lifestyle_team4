@@ -485,6 +485,7 @@ internal fun OpenedLibraryBook(
         leather = leatherColorFor(book.work.title),
         onClose = onClose,
         header = { dismiss -> LibraryBookHeader(book = book, onClose = dismiss) },
+        intro = book.work.intro,
     ) {
         book.cards.forEachIndexed { index, card ->
             LibraryQuoteItem(

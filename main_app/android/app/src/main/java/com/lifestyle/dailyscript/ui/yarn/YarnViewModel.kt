@@ -61,12 +61,16 @@ class YarnViewModel : ViewModel() {
     /** 세션의 서버 잔액으로 시드(재bootstrap 동기화). */
     fun setPurchased(balance: Int) { purchased.value = balance }
 
-    /** 카드 첫 열람 보상 — 카드당 1회 +300. */
-    suspend fun rewardFirstView(cardId: Long) {
-        if (AppPreferences.isRewarded(cardId)) return
+    /**
+     * 카드 첫 열람 보상 — 카드당 1회 +300. 실제 지급한 양을 돌려준다(없으면 0).
+     * 호출부(상세 화면)가 반환값 > 0 일 때만 보상 애니메이션을 띄운다.
+     */
+    suspend fun rewardFirstView(cardId: Long): Int {
+        if (AppPreferences.isRewarded(cardId)) return 0
         AppPreferences.markRewarded(cardId)
-        val newBalance = runCatching { repo.grantYarn(FIRST_VIEW_REWARD) }.getOrNull() ?: return
+        val newBalance = runCatching { repo.grantYarn(FIRST_VIEW_REWARD) }.getOrNull() ?: return 0
         purchased.value = newBalance
+        return FIRST_VIEW_REWARD
     }
 
     /**
