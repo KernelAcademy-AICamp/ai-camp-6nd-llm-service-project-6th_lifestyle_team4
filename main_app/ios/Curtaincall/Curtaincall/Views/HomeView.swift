@@ -180,11 +180,15 @@ struct HomeView: View {
             }
         }
         // 새로고침 중에만 실타래를 연속 회전(750ms/회전, Android YarnRefreshIndicator).
-        // 당겨서 새로고침 시작 시 실타래 한 바퀴 — 센터 네비 탭과 같은 스핀(.yarnSpin) 재사용.
+        // 새로고침 중엔 실타래를 연속 회전(750ms/회전, Android YarnRefreshIndicator —
+        // refreshing 동안 infiniteRepeatable linear). 센터 탭의 1회 .yarnSpin 과는 별개:
+        // 인디케이터는 reload 가 길어져도 끝까지 돌아야 하므로 continuous 유지.
         .onChange(of: pullRefreshing) { _, refreshing in
             if refreshing {
                 spinAngle = 0
-                withAnimation(.yarnSpin) { spinAngle = 360 }
+                withAnimation(.linear(duration: 0.75).repeatForever(autoreverses: false)) {
+                    spinAngle = 360
+                }
             } else {
                 spinAngle = 0
             }

@@ -15,8 +15,9 @@ private struct NavCatPose: Equatable {
 }
 
 extension Animation {
-    /// 실타래 한 바퀴 회전 스펙 — Android CubicBezierEasing(0.34, 1.4, 0.5, 1), 600ms(overshoot).
-    /// 센터 네비 탭 / 당겨서 새로고침 인디케이터 두 트리거가 같은 스핀을 재사용한다.
+    /// 센터 실타래 네비 버튼 '탭' 1회 회전 스펙 — Android HomeCenterButton
+    /// CubicBezierEasing(0.34, 1.4, 0.5, 1), 600ms(overshoot). (당겨서 새로고침
+    /// 인디케이터는 별개 — refreshing 동안 750ms linear 연속 회전.)
     static var yarnSpin: Animation { .timingCurve(0.34, 1.4, 0.5, 1, duration: 0.6) }
 }
 
@@ -145,8 +146,7 @@ struct EditorialTabBar: View {
     }
 
     /// 실타래 한 바퀴 회전 — 360°, 600ms, 살짝 튕기는(overshoot) 이징. Android HomeCenterButton
-    /// (spin.animateTo(360f, tween(600, CubicBezierEasing(0.34,1.4,0.5,1)))) 미러. 당겨서
-    /// 새로고침 인디케이터와 같은 스핀(.yarnSpin)을 공유한다. Reduce Motion 시 생략.
+    /// (spin.animateTo(360f, tween(600, CubicBezierEasing(0.34,1.4,0.5,1)))) 미러. Reduce Motion 시 생략.
     private func spinYarn() {
         guard !reduceMotion else { return }
         yarnRotation = 0
