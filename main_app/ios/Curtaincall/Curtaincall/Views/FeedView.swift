@@ -1,5 +1,15 @@
 import SwiftUI
 
+/// 피드에서 카드/하이라이트 상세가 푸시(item 기반 nav)되면 true. RootView 가 읽어
+/// 글쓰기 고양이(FeedWriteCat)를 그 위로 새지 않게 숨긴다 — PWA 는 상세 화면에서
+/// 글쓰기 fab 을 숨긴다(m-app.js: "카드 상세에서는 글쓰기 연필 fab 절대 안 보임").
+struct FeedDetailPresentedPreferenceKey: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
 struct FeedView: View {
     @Binding var selectedTab: Tab
     /// Bumped by RootView each time the already-active Feed tab is tapped — drives
@@ -125,6 +135,12 @@ struct FeedView: View {
                 selectedCard = card
             }
         }
+        // 카드/하이라이트 상세가 열리면 RootView 가 글쓰기 고양이를 숨기도록 신호.
+        // (item 기반 nav 라 feedPath 에 안 잡혀서, 이 신호가 없으면 고양이가 상세 위로 샌다.)
+        .preference(
+            key: FeedDetailPresentedPreferenceKey.self,
+            value: selectedCard != nil || selectedHighlight != nil
+        )
         .task {
             await bookmarks.load(userId: session.userId)
             await reload()

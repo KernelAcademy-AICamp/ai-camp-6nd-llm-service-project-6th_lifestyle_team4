@@ -55,6 +55,8 @@ struct RootView: View {
     @State private var feedPath = NavigationPath()
     @State private var settingsPath = NavigationPath()
     @State private var composerActive = false
+    /// 피드에서 카드/하이라이트 상세가 열렸는지 — true 면 글쓰기 고양이를 숨긴다.
+    @State private var feedDetailPresented = false
     @State private var feedReselect = 0
     /// TODAY(center) 재탭 시 1씩 증가 → HomeView 가 새 명대사 새로고침(상단 버튼과 동일).
     @State private var homeReselect = 0
@@ -247,6 +249,11 @@ struct RootView: View {
         .onPreferenceChange(ComposerFocusedPreferenceKey.self) { active in
             withAnimation(.easeInOut(duration: 0.2)) { composerActive = active }
         }
+        // 피드에서 카드/하이라이트 상세가 푸시되면 글쓰기 고양이를 숨긴다 (상세 위로 새지
+        // 않게 + 익명 글쓰기 모달이 상세 레이어 위에 못 뜨는 문제 제거). PWA 와 동일.
+        .onPreferenceChange(FeedDetailPresentedPreferenceKey.self) { presented in
+            feedDetailPresented = presented
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !composerActive {
                 EditorialTabBar(
@@ -265,7 +272,7 @@ struct RootView: View {
         // 피드 글쓰기 FAB+고양이 — 탭바 '위(앞)' 레이어라 고양이가 탭바에 앉고
         // 주황 연필 버튼이 머리 위에 뜬다(PWA). 피드 루트에서만, 컴포저 활성 시 숨김.
         .overlay(alignment: .bottomTrailing) {
-            if selectedTab == .feed && feedPath.isEmpty && !composerActive {
+            if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
                 FeedWriteCat { feedWriteTrigger += 1 }
                     .padding(.trailing, -4)    // LIBRARY~MY 사이로 (가로)
                     .padding(.bottom, 54)      // 책 아랫면이 탭바 윗면에 앉도록 (세로) — 조정 가능
