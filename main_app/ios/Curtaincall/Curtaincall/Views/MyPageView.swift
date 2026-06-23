@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AuthenticationServices
 
 /// 설정 내비게이션 스택에 push 되는 라우트(값 기반). 값 기반이라야 settingsPath 가
 /// 추적해 MY 탭 재탭 시 popToRoot(스택 비우기)로 한 번에 닫힌다 — 다른 탭과 동일.
@@ -457,9 +458,11 @@ struct MyPageView: View {
 private struct SignInSheet: View {
     @EnvironmentObject private var session: AuthSession
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var loginId = ""
     @State private var loginPassword = ""
     @State private var signUpMode = false
+    @State private var appleNonce = ""   // Apple 요청 시 생성 → 응답 검증에 사용
 
     var body: some View {
         NavigationStack {
@@ -489,6 +492,37 @@ private struct SignInSheet: View {
                     Text("또는 소셜 계정으로")
                         .font(.bodySans(12))
                         .foregroundStyle(.walnut)
+                    Spacer().frame(height: 10)
+                    // Apple — 가이드라인 4.8(구글 동등 옵션). 공식 버튼 스타일(HIG)로 구글 위에,
+                    // 동등 이상 높이로 노출. nonce 생성 → 응답의 idToken+nonce 를 Supabase Apple
+                    // 프로바이더(signInWithIdToken)로 교환. 성공 시 구글과 동일한 세션 경로.
+                    SignInWithAppleButton(.signIn) { request in
+                        let nonce = AuthSession.randomNonce()
+                        appleNonce = nonce
+                        request.requestedScopes = [.fullName, .email]
+                        request.nonce = AuthSession.sha256(nonce)
+                    } onCompletion: { result in
+                        guard case let .success(authResults) = result,
+                              let cred = authResults.credential as? ASAuthorizationAppleIDCredential,
+                              let tokenData = cred.identityToken,
+                              let idToken = String(data: tokenData, encoding: .utf8) else { return }
+                        // 이름은 최초 인증에서만 옴(이후 nil) → 신규 가입 시 닉네임으로 저장.
+                        let name = [cred.fullName?.givenName, cred.fullName?.familyName]
+                            .compactMap { $0 }
+                            .joined(separator: " ")
+                        Task {
+                            await session.signInWithApple(
+                                idToken: idToken,
+                                rawNonce: appleNonce,
+                                fullName: name.isEmpty ? nil : name
+                            )
+                        }
+                    }
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)   // 구글(≈44pt)보다 크거나 같게 — HIG 동등 노출 요건
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .disabled(session.authInProgress)
                     Spacer().frame(height: 10)
                     // 구글 — 공식 컬러 G 로고, 흰 배경 + 회색 테두리, 둥근 모서리(10)
                     Button {
