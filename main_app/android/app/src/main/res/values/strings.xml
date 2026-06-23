@@ -94,7 +94,7 @@
     <string name="yarn_info_lede">DAILY SCRIPT의 화폐</string>
     <string name="yarn_info_body">실타래는 명대사가 포함된 명장면을 읽을 때\n지급되는 한 올입니다.</string>
     <string name="yarn_info_note">text(텍스트)의 어원은 라틴어 textere ‘짜다’. 문장은 한 올, 한 올을 엮은 것입니다.</string>
-    <string name="yarn_info_outro">한올의 실타래로 나만의 공간을 꾸며보세요</string>
+    <string name="yarn_info_outro">실타래로 멋진 테마의 텍스트를 공유해보세요</string>
     <string name="attendance_title">출석체크</string>
     <string name="attendance_reward">출석체크 완료! 실타래 +100</string>
     <string name="yarn_confirm_title">실타래 사용</string>
