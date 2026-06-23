@@ -5,7 +5,7 @@ import AuthenticationServices
 /// 설정 내비게이션 스택에 push 되는 라우트(값 기반). 값 기반이라야 settingsPath 가
 /// 추적해 MY 탭 재탭 시 popToRoot(스택 비우기)로 한 번에 닫힌다 — 다른 탭과 동일.
 enum MyRoute: Hashable {
-    case bookshelf, notice, myComments, myFeed, yarn, feedback, terms, privacy
+    case bookshelf, notice, myComments, myFeed, feedback, terms, privacy   // v1: yarn(충전) 제거
 }
 
 struct MyPageView: View {
@@ -104,18 +104,8 @@ struct MyPageView: View {
                     activityRow(title: "출석체크", subtitle: "내 출석현황 보기") {
                         showAttendance = true
                     }
-                    // 실타래 구매 — 잔액 표시 + 충전 화면 (PWA 카피, index.html:2041-2042).
-                    navRow(title: "실타래 구매", subtitle: "보유 실타래 충전", route: .yarn, trailing: {
-                        HStack(spacing: 5) {
-                            Image("daily-script-bar")
-                                .resizable().scaledToFill()
-                                .frame(width: 15, height: 15)
-                                .clipShape(Circle())
-                            Text("\(yarn.balance)")
-                                .font(.custom("Pretendard-Medium", size: 12))
-                                .foregroundStyle(.espresso)
-                        }
-                    })
+                    // v1: '실타래 구매' 행 제거 — 충전(구매) 진입점 차단(App Store 2.1/3.1.1).
+                    // 적립(출석·열람 보상)·게이트 로직은 그대로. 잔액은 상단바 칩에 표시.
 
                     Spacer().frame(height: 40)
                     sectionLabel("일반 설정")
@@ -233,8 +223,6 @@ struct MyPageView: View {
                 MyCommentsView()
             case .myFeed:
                 MyFeedView()
-            case .yarn:
-                YarnPurchaseView(asPush: true)
             case .feedback:
                 FeedbackView()
             case .terms:
@@ -459,7 +447,8 @@ struct MyPageView: View {
 /// 인라인이었던 아이디/비번 폼 + '또는 소셜 계정으로' + Google 버튼을 그대로 이 안으로
 /// 옮긴 것(인증 로직 변경 없음). 폼+키보드 때문에 중앙 팝업 대신 시트로(탭바 위로 떠
 /// 키보드 이슈 없음). 인증 성공(익명 해제) 시 자동으로 닫힌다.
-private struct SignInSheet: View {
+/// (internal — 카드 게이트의 비로그인 안내 팝업에서도 같은 모달을 재사용한다.)
+struct SignInSheet: View {
     @EnvironmentObject private var session: AuthSession
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
