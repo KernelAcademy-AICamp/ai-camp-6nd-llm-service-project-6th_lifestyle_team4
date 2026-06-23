@@ -8,6 +8,7 @@ struct ArchiveView: View {
     var asSubPage = false
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var session: AuthSession
+    @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Environment(\.dismiss) private var dismiss
 
     @State private var searchText = ""
@@ -68,7 +69,7 @@ struct ArchiveView: View {
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Card.self) { card in
-            CardDetailView(card: card) { selectedTab = .settings }
+            CardDetailView(card: card) { requestLogin() }   // 댓글 게이트 → 인증 모달 직접 호출
         }
         // Leather "open the book" modal: the tapped spine swings its cover open
         // to reveal the saved quotes, over a scrim that stops above the tab bar

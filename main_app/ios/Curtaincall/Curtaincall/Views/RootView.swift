@@ -47,6 +47,9 @@ struct RootView: View {
     @State private var shakeHaptic = 0
     @State private var lastShakeAt: Date?
     @State private var showAttendance = false
+    // 로그인 유도(requestLogin) → MY 탭 이동 대신 루트에서 인증 모달(SignInSheet)을 직접 띄운다.
+    // 사용자가 '로그인'을 눌렀으니 그 자리에서 로그인 UI 를 보여준다(MY 스크롤 헌트 제거).
+    @State private var showLoginModal = false
     @State private var attendanceRewarded = false
     @State private var attendanceChecked = false   // 앱 실행당 1회만 자동 체크
     @State private var dailyPath = NavigationPath()
@@ -101,6 +104,10 @@ struct RootView: View {
         .sheet(isPresented: $showAttendance) {
             AttendanceView(rewarded: attendanceRewarded)
         }
+        // 로그인/회원가입 모달 — MY 의 그 모달(#97/#99 SignInSheet)을 루트에서 재사용.
+        // requestLogin 을 부르는 모든 유도(북마크 프롬프트·새로고침 제한·피드 익명)가
+        // 이 한 곳을 띄운다(모달 분기 없음). 인증 성공 시 SignInSheet 가 자동으로 닫힌다.
+        .sheet(isPresented: $showLoginModal) { SignInSheet() }
         .task {
             if let id = pendingCardId { await resolveAndPush(id: id) }
         }
@@ -228,8 +235,9 @@ struct RootView: View {
             .tag(Tab.settings)
         }
         .toolbar(.hidden, for: .tabBar)
-        // 카드 컨텍스트 메뉴(비회원 북마크 프롬프트)의 '로그인' → MY 탭으로.
-        .environment(\.requestLogin) { selectedTab = .settings }
+        // 로그인 유도(컨텍스트 메뉴 북마크 프롬프트·3회 새로고침 제한·피드 익명 프롬프트 등)
+        // → MY 탭 이동 대신 인증 모달(SignInSheet, #97/#99)을 그 자리에서 직접 띄운다.
+        .environment(\.requestLogin) { showLoginModal = true }
         // 카드 상세 '서재로 가기' → LIBRARY 탭으로 (requestLogin 패턴 동일).
         .environment(\.requestLibrary) { selectedTab = .archive }
         // 카드 상세 '오늘의 한줄' 작성 후 → FEED 탭 + '나의 감상평'(today) 카테고리로.

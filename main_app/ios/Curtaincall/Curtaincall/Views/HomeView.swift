@@ -8,6 +8,7 @@ struct HomeView: View {
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Namespace private var heroNS
 
     @State private var allCards: [Card] = []
@@ -141,7 +142,7 @@ struct HomeView: View {
         .navigationDestination(for: Card.self) {
             CardDetailView(card: $0) {
                 showAccountPrompt = false
-                selectedTab = .settings
+                requestLogin()   // 카드 상세 댓글 게이트 → 인증 모달 직접 호출
             }
             .cardHeroDestination($0.cardId, in: heroNS, enabled: !reduceMotion)
         }
@@ -168,7 +169,7 @@ struct HomeView: View {
                     message: promptMessage,
                     onLogin: {
                         showAccountPrompt = false
-                        selectedTab = .settings
+                        requestLogin()   // MY 탭 이동 대신 인증 모달 직접 호출(스크롤 헌트 제거)
                     },
                     onClose: { showAccountPrompt = false }
                 )
