@@ -28,6 +28,7 @@ struct HomeView: View {
     @State private var pullDistance: CGFloat = 0
     @State private var pullArmed = false
     @State private var pullRefreshing = false
+    @State private var pullCooldown = false   // 새로고침 직후 상단 복귀까지 인디케이터 재표시 억제
     @State private var spinAngle: Double = 0
     @State private var refreshToast: String?
     private let pullThreshold: CGFloat = 90
@@ -319,7 +320,7 @@ struct HomeView: View {
     /// Android YarnRefreshIndicator 미러 — 당기는 거리만큼 위에서 내려오며 페이드·확대·
     /// 살짝 감기고(windup), 새로고침 중엔 연속 회전. 실타래 = 하단탭 홈 버튼 아이콘.
     private var yarnPullIndicator: some View {
-        let size: CGFloat = 44
+        let size: CGFloat = 50   // 상단 새로고침 실타래 — 네비 센터(54)보다 작게
         let restY: CGFloat = 16
         let shown: CGFloat = pullRefreshing ? 1 : min(1, pullDistance / pullThreshold)
         let translateY = -size + shown * (size + restY)
@@ -340,6 +341,14 @@ struct HomeView: View {
     private func handlePull(offsetY: CGFloat) {
         guard !pullRefreshing else { return }
         let pull = max(0, -offsetY)
+        // 새로고침 직후: 스크롤이 상단으로 튕겨 돌아오는 동안 잔여 당김값 때문에 실타래가
+        // 깜빡 다시 떴다 사라지는 버그(갱신됨 토스트와 겹쳐 더 도드라짐) 방지 — 완전히
+        // 상단 복귀할 때까지 인디케이터를 숨겨둔다.
+        if pullCooldown {
+            pullDistance = 0
+            if pull <= 1 { pullCooldown = false }
+            return
+        }
         pullDistance = pull
         if pull >= pullThreshold { pullArmed = true }
         if pullArmed && pull <= 1 {
@@ -354,6 +363,9 @@ struct HomeView: View {
         Task {
             pullRefreshing = true
             await reload(deterministic: false)
+            // 끝나는 순간 인디케이터 즉시 숨김 + 상단 복귀까지 재표시 억제(깜빡임 제거).
+            pullDistance = 0
+            pullCooldown = true
             pullRefreshing = false
         }
     }
