@@ -54,9 +54,7 @@ struct DailyView: View {
                             selectedTab = .archive
                         }
                     } else if !fetchFailed {
-                        Text("Loading⋯")
-                            .font(.bodySans(14))
-                            .foregroundStyle(.walnut)
+                        QuietLoadingLabel()
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 80)
                     }

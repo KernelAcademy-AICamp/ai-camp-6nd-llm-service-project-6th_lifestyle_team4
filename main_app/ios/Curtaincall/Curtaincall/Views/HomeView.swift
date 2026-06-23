@@ -509,7 +509,7 @@ private struct TodayCardBody: View {
                     .foregroundStyle(.espresso)
                 Spacer().frame(height: 12)
             }
-            Text(card.map { "\u{201C}\($0.displayQuote(original: showOriginal))\u{201D}" } ?? (isLoading ? "Loading…" : "—"))
+            Text(card.map { "\u{201C}\($0.displayQuote(original: showOriginal))\u{201D}" } ?? (isLoading ? "불러오는 중…" : "—"))
                 .font(.headlineSerif(22))
                 .foregroundStyle(.espresso)
                 .fixedSize(horizontal: false, vertical: true)
