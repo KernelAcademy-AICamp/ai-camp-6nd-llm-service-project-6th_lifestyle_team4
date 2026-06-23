@@ -166,6 +166,13 @@ private struct NewBookCardHeightKey: PreferenceKey {
     }
 }
 
+private struct NewBookWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct DailyNewBooksSection: View {
     let cards: [Card]
 
@@ -174,6 +181,8 @@ struct DailyNewBooksSection: View {
     @State private var idx = 0
     @State private var userInteracted = false
     @State private var maxCardHeight: CGFloat = 0
+    @State private var slideDir = 1        // 전환 방향(1=다음, -1=이전) — PWA dir
+    @State private var cardWidth: CGFloat = 0   // 40% 슬라이드 오프셋 계산용
     // @State 로 한 번만 생성 — View 재초기화마다 새 타이머가 생겨 카운트다운이
     // 리셋되는 것을 막는다(부모 잦은 렌더 시 회전 정지 방지).
     @State private var rotation = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
@@ -184,20 +193,10 @@ struct DailyNewBooksSection: View {
             let safeIdx = min(idx, books.count - 1)
             // PWA rest = sorted.filter(idx != i) — 현재 메인을 뺀 나머지.
             let rest = books.enumerated().filter { $0.offset != safeIdx }.map(\.element)
-            // 스와이프 = TabView 선택 변경. 사용자 스와이프 시에만 set 이 호출되므로
-            // 그때만 자동순환을 멈춘다(PWA stopNewbooksRotation). 자동회전은 idx 를 직접
-            // 바꿔(set 미경유) 멈추지 않는다.
-            let selection = Binding<Int>(
-                get: { min(idx, books.count - 1) },
-                set: { newValue in
-                    if newValue != min(idx, books.count - 1) { userInteracted = true }
-                    idx = newValue
-                }
-            )
             VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .top) {
-                    // 9권 중 최대 높이 측정(숨김) — TabView 는 콘텐츠에 맞춰 늘지 않아
-                    // 고정 높이가 필요. 전환 시 아래 닷·표지줄 높이 튐 방지(PWA measureMaxMainHeight).
+                    // 9권 중 최대 높이 측정(숨김) — 카드 고정 높이용. 전환 시 아래 닷·표지줄
+                    // 높이 튐 방지(PWA measureMaxMainHeight). 폭도 함께 캡처(슬라이드 오프셋).
                     ForEach(books) { b in
                         featuredContent(b)
                             .fixedSize(horizontal: false, vertical: true)
@@ -206,17 +205,34 @@ struct DailyNewBooksSection: View {
                             })
                             .hidden()
                     }
-                    // 좌우 스와이프 페이저 — TabView.page 가 가로 스와이프를 안정적으로
-                    // 처리하고(왼쪽=다음·오른쪽=이전) 세로 스크롤·카드 탭(상세)과 공존한다.
-                    // PWA 는 끝에서 wrap, TabView 스와이프는 clamp(자동회전·닷 탭은 wrap 유지).
-                    TabView(selection: selection) {
-                        ForEach(Array(books.enumerated()), id: \.offset) { i, b in
-                            featured(b).tag(i)
-                        }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .frame(height: maxCardHeight > 0 ? maxCardHeight : 280)
+                    // 단일 카드 — idx 가 바뀌면(스와이프/자동/닷) 같은 슬라이드+페이드 전환.
+                    // PWA renderTemplate animate: 나가는 카드 40% 슬라이드+페이드, 들어오는
+                    // 카드 반대쪽 40%에서 슬라이드+페이드. 끝에서 clamp(#79, wrap X) — 단,
+                    // 자동회전·닷 탭은 wrap 유지.
+                    featured(books[safeIdx])
+                        .id(safeIdx)
+                        .transition(rouletteTransition(dir: slideDir, width: cardWidth))
+                        .frame(maxWidth: .infinity)
                 }
+                .frame(height: maxCardHeight > 0 ? maxCardHeight : 280, alignment: .top)
+                .clipped()   // 슬라이드 중 카드가 섹션 밖으로 나가는 부분 가림(PWA overflow:hidden)
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: NewBookWidthKey.self, value: g.size.width)
+                })
+                // 드래그 스와이프 — 카드 탭(상세)과 공존하도록 simultaneous. |dx|>45 & 가로 우세.
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 24)
+                        .onEnded { v in
+                            let dx = v.translation.width, dy = v.translation.height
+                            guard books.count > 1, abs(dx) > 45, abs(dx) > abs(dy) else { return }
+                            userInteracted = true
+                            let dir = dx < 0 ? 1 : -1
+                            let next = safeIdx + dir
+                            guard next >= 0, next < books.count else { return }   // clamp
+                            slideDir = dir
+                            idx = next
+                        }
+                )
                 if books.count > 1 {
                     newBookDots(count: books.count, active: safeIdx)
                 }
@@ -230,15 +246,20 @@ struct DailyNewBooksSection: View {
                     }
                 }
             }
+            // PWA 전환 곡선/시간 ≈ in cubic-bezier(0.25,0.8,0.3,1) 420ms. idx 변경(스와이프·
+            // 자동·닷) 모두 이 애니메이션으로 슬라이드+페이드된다.
+            .animation(.timingCurve(0.25, 0.8, 0.3, 1, duration: 0.42), value: safeIdx)
             .onPreferenceChange(NewBookCardHeightKey.self) { h in
                 if h > maxCardHeight { maxCardHeight = h }
+            }
+            .onPreferenceChange(NewBookWidthKey.self) { w in
+                if w > 0 { cardWidth = w }
             }
             // 10초 자동 전환 — 사용자가 스와이프/닷 탭하기 전까지(PWA stopNewbooksRotation).
             .onReceive(rotation) { _ in
                 guard books.count > 1, !userInteracted else { return }
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    idx = (min(idx, books.count - 1) + 1) % books.count
-                }
+                slideDir = 1
+                idx = (min(idx, books.count - 1) + 1) % books.count
             }
         }
     }
@@ -251,7 +272,8 @@ struct DailyNewBooksSection: View {
                 Button {
                     guard i != active else { return }
                     userInteracted = true
-                    withAnimation(.easeInOut(duration: 0.35)) { idx = i }
+                    slideDir = i > active ? 1 : -1   // 방향 맞춰 슬라이드(컨테이너 .animation)
+                    idx = i
                 } label: {
                     Circle()
                         .fill(i == active ? Color.espresso : Color.sand)
@@ -263,6 +285,16 @@ struct DailyNewBooksSection: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 14)
+    }
+
+    /// PWA renderTemplate animate 미러 — 들어오는 카드는 진행방향 반대쪽 40%에서 슬라이드+
+    /// 페이드인, 나가는 카드는 진행방향 40%로 슬라이드+페이드아웃. dir=1 다음 / -1 이전.
+    private func rouletteTransition(dir: Int, width: CGFloat) -> AnyTransition {
+        let dx = max(40, width * 0.4)   // PWA translateX 40%
+        return .asymmetric(
+            insertion: .offset(x: dir >= 0 ? dx : -dx).combined(with: .opacity),
+            removal: .offset(x: dir >= 0 ? -dx : dx).combined(with: .opacity)
+        )
     }
 
     /// 오늘 날짜 — 새 책 카드 안 상단(PWA new-books). 날짜=sand 볼드, 요일=cta.
@@ -284,20 +316,31 @@ struct DailyNewBooksSection: View {
     private func featuredContent(_ book: DiscoveryWork) -> some View {
         let work = book.work
         let title = work.title.isEmpty ? "—" : work.title
-        let meta = [work.author, work.releaseYear.map(String.init), work.format.displayName]
+        // PWA: author · {year}년 · GENRE_LABEL[format] (연도 뒤 '년').
+        let yearText = work.releaseYear.map { "\($0)년" }
+        let meta = [work.author, yearText, work.format.displayName]
             .compactMap { $0 }
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
+        let subtitle = work.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let intro = work.intro?.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleaned = cleanDiscoveryQuote(book.cards.first?.quote ?? "")
         let sample = String(cleaned.prefix(60))
+        // PWA 제목: series/title (paper) + subtitle span(0.6em ≈ 17, sand).
+        var titleText = Text(title).font(.displaySerif(28)).foregroundColor(.paper)
+        if let subtitle, !subtitle.isEmpty {
+            titleText = titleText + Text(" \(subtitle)").font(.titleSerif(17)).foregroundColor(.sand)
+        }
 
-        return HStack(alignment: .top, spacing: 16) {
+        // PWA: HStack gap 20 / align center · content flex:1 + cover 82.
+        return HStack(alignment: .center, spacing: 20) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // PWA new-books 카드: 날짜를 카드 안 상단에. 날짜=sand 볼드, 요일=cta.
+                    // 날짜 — 카드 안 상단(sand 볼드 + 요일 cta). 11px, mb 13.
                     Self.dateLabel
                         .font(.custom("Pretendard-Medium", size: 11))
-                        .tracking(0.4)
+                        .tracking(0.44)
                     Spacer().frame(height: 13)
+                    // NEW 뱃지 — 10px, cta bg, padding 4/10, radius 12.
                     Text("NEW · 새로 들어온 고전")
                         .font(.custom("Pretendard-Medium", size: 10))
                         .tracking(1.5)
@@ -305,32 +348,42 @@ struct DailyNewBooksSection: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color.cta))
-                    Spacer().frame(height: 14)
-                    Text(title)
-                        .font(.displaySerif(28))
-                        .foregroundStyle(Color.paper)
-                        .lineLimit(3)
+                    Spacer().frame(height: 10)   // PWA 제목 margin-top 10
+                    titleText
                         .fixedSize(horizontal: false, vertical: true)
-                    Spacer().frame(height: 8)
+                    Spacer().frame(height: 5)    // PWA 제목 margin-bottom 5
                     if !meta.isEmpty {
                         Text(meta)
-                            .labelCaps(color: .sand, size: 10)
+                            .font(.custom("Pretendard-Regular", size: 11))
+                            .tracking(0.55)
+                            .foregroundStyle(Color.sand)
                             .lineLimit(1)
+                            .padding(.leading, 3)   // PWA margin-left 3
                     }
-                    if !sample.isEmpty {
-                        Spacer().frame(height: 12)
+                    Spacer().frame(height: 15)   // PWA 작가줄 margin-bottom 15
+                    // 본문 — intro 있으면 3줄(serif), 없으면 샘플 인용(이탤릭). 14px latte, lh 1.75.
+                    if let intro, !intro.isEmpty {
+                        Text(intro)
+                            .font(.titleSerif(14))
+                            .foregroundStyle(Color.latte)
+                            .lineLimit(3)
+                            .bookLeading(size: 14)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else if !sample.isEmpty {
                         Text("\"\(sample)\(cleaned.count >= 60 ? "⋯" : "")\"")
-                            .font(.titleSerif(13))
+                            .font(.titleSerif(14))
                             .italic()
                             .foregroundStyle(Color.latte)
-                            .bookLeading(size: 13)
+                            .lineLimit(3)
+                            .bookLeading(size: 14)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                discoveryCover(work, width: 90)
+                discoveryCover(work, width: 82)   // PWA cover width 82
             }
-        .padding(20)
+        .padding(.horizontal, 22)   // PWA padding 24px 22px
+        .padding(.vertical, 24)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color.espresso))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte.opacity(0.25), lineWidth: 0.5))
     }
