@@ -29,6 +29,10 @@ data class CardDto(
     @SerialName("excerpt_description_original") val excerptDescriptionOriginal: String? = null,
     @SerialName("significance_original") val significanceOriginal: String? = null,
     @SerialName("keywords_original") val keywordsOriginal: JsonElement? = null,
+    // 본문(script_excerpt) 표시 정렬 — 관리자가 카드별로 좌/중앙/우 저장 (migration 042).
+    // NULL = format 기본 (poem=center, else=left). EN 토글은 _original 우선.
+    @SerialName("text_align") val textAlign: String? = null,
+    @SerialName("text_align_original") val textAlignOriginal: String? = null,
     val works: WorkDto? = null,
 ) {
     fun keywordList(): List<String> = parseKeywords(keywords)

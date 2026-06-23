@@ -1362,7 +1362,7 @@ function loadAllCards() {
     // 카탈로그·추천 등에서 아예 누락되던 문제 수정). PostgREST 기본 최대 행수(1000)도
     // range 페이지네이션으로 우회.
     const PAGE = 1000;
-    const COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url)';
+    const COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, view_count, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, text_align, text_align_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original, cover_url)';
     const all = [];
     for (let offset = 0; ; offset += PAGE) {
       const { data, error } = await sb
@@ -1486,9 +1486,11 @@ async function openSharedPreview(card, bgId, quote) {
   /* 캔버스에 공유자가 만든 카드 그리기 */
   const canvas = modal.querySelector('#shared-preview-canvas');
   try {
+    const { metaKo, metaEn } = shareMetaLinesFromWork(w);
     renderShareCard(canvas, bg, {
       quote, speaker: card.speaker || '',
       work: w.title || '', author: w.author || '',
+      metaKo, metaEn,
     });
   } catch (e) { console.warn('[m] renderShareCard for preview failed:', e); }
   /* 액션 */
@@ -4436,7 +4438,7 @@ function buildMyFeedHighlightRow(h) {
   wrap.innerHTML = `
     <p class="t-label-sm c-walnut" style="margin-bottom:6px;">${escapeHtml(meta)}</p>
     <p class="t-title-lg c-espresso" style="margin-bottom:8px;word-break:keep-all;">${escapeHtml(title)}${subtitle ? '  <span class="t-body-sm c-walnut">'+escapeHtml(subtitle)+'</span>' : ''}</p>
-    <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;">“${escapeHtml(h.selected_text || '')}”</p>
+    <p style="font-family:'Nanum Myeongjo',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);white-space:pre-wrap;word-break:keep-all;">“${renderMarkdownBold(h.selected_text || '')}”</p>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
       <span class="t-label-sm c-sand">${idTag}</span>
       <button class="mfh-delete-btn" data-id="${h.highlight_id}" style="${LINK_BTN_CSS}color:var(--cta);">Delete</button>
@@ -6034,6 +6036,10 @@ function openDetailApproved(card) {
           ? escapeHtml(flowProseScript(card.script_excerpt || ''))
           : boldSpeakerLines(cleanForDisplay(card.script_excerpt || '', w.characters), w.characters);
     detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
+    /* 본문 정렬 — 관리자 편집에서 저장한 text_align 적용. NULL 이면 format 기본값 (poem=center, else=left). */
+    const _fmt = String(w.format || '').toLowerCase();
+    const _defaultAlign = _fmt === 'poem' ? 'center' : 'left';
+    detailScript.style.textAlign = card.text_align || _defaultAlign;
   }
 
   // significance — 네 프롬프트(screen/opera/play/literature) 모두 생성하므로
@@ -6129,6 +6135,11 @@ function applyDetailLang(lang) {
           ? escapeHtml(flowProseScript(scriptSrc || ''))
           : boldSpeakerLines(cleanForDisplay(scriptSrc || '', w.characters), w.characters);
     detailScript.innerHTML = applyMarkdownBoldOnHtml(baseHtml);
+    /* 본문 정렬 — KO/EN 별도 저장된 text_align 적용. NULL 이면 format 기본 (poem=center, else=left). */
+    const _fmt = String(w.format || '').toLowerCase();
+    const _defaultAlign = _fmt === 'poem' ? 'center' : 'left';
+    const _alignSrc = useEn ? (card.text_align_original || card.text_align) : card.text_align;
+    detailScript.style.textAlign = _alignSrc || _defaultAlign;
   }
 
   // 상황 설명 (excerpt_description) + 의의 (significance) 스왑
@@ -7042,7 +7053,7 @@ function openHighlightDetail(highlight) {
     quoteBox.innerHTML = `
       ${coverHTML}
       <div style="height:22px;"></div>
-      <p id="fp-quote" class="t-headline-md c-espresso" style="line-height:1.6;font-family:'Noto Serif KR','Nanum Myeongjo',Georgia,serif;text-align:center;margin:0;">${escapeHtml(highlight.selected_text || '')}</p>
+      <p id="fp-quote" class="t-headline-md c-espresso" style="line-height:1.6;font-family:'Noto Serif KR','Nanum Myeongjo',Georgia,serif;text-align:center;margin:0;">${renderMarkdownBold(highlight.selected_text || '')}</p>
       ${source ? `<div style="height:16px;"></div><p id="fp-source" class="t-label-sm c-walnut" style="letter-spacing:0.1em;text-align:center;margin:0;">— ${escapeHtml(source)}</p>` : '<p id="fp-source" style="display:none;"></p>'}
       <div style="height:24px;"></div>
       <button id="fp-open-card" class="sharp-btn" style="width:100%;">카드 보기</button>
@@ -7937,7 +7948,7 @@ function renderHighlights() {
       </div>
       <div class="hl-quote">
         <span class="open-q">“</span>
-        <p>${escapeHtml(h.selected_text || '')}</p>
+        <p>${renderMarkdownBold(h.selected_text || '')}</p>
         <span class="close-q">”</span>
       </div>
       <p class="hl-card-foot">#${String(h.card_id).padStart(5,'0')}</p>
@@ -8051,6 +8062,7 @@ function setBottomNavCat(srcFile, pos /* 'center' | 'right' | 'right-far' | 'cor
   // right-far 는 .right + .right-far 둘 다 적용 — CSS 가 right-far 로 left override
   cat.classList.toggle('right', pos === 'right' || pos === 'right-far');
   cat.classList.toggle('right-far', pos === 'right-far');
+  cat.classList.toggle('left', pos === 'left');
   cat.classList.toggle('corner', pos === 'corner');
   cat.classList.toggle('large', size === 'large');
   if (cat.style.display === 'none') cat.style.display = '';
@@ -8069,7 +8081,7 @@ function showBottomNavCat() {
   img.src = 'assets/cat/' + f;
 });
 function updateBottomNavCatForView(view) {
-  if (view === 'feed') setBottomNavCat('cat_pen.png', 'right', 'large');             // 피드 — LIBRARY 와 동일 위치 (왼쪽)
+  if (view === 'feed') setBottomNavCat('cat_pen.png', 'left', 'large');              // 피드 — 우측 글쓰기 fab 과 충돌 방지 위해 좌측 배치
   else if (view === 'archive') setBottomNavCat('cat_struck.png', 'right', 'large');   // LIBRARY — 카드 상세 크기와 동일
   else if (view === 'daily' || view === 'settings') setBottomNavCat('cat_empty.png', 'corner'); // daily/MY 동일
   else setBottomNavCat('cat_today.png', 'center');
@@ -8787,16 +8799,40 @@ function normalizeWorkTitle(s) {
     .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
+/* 단어(어절) 단위 줄바꿈 + 의미 묶음(chunk) — 한국어 의존명사·관형사·보조용언이
+   줄 머리·꼬리에 단독으로 떨어지지 않도록 짧은(1~2자) 어절은 다음 어절과 한 chunk
+   로 먼저 묶고, chunk 단위로 wrap. chunk 는 절대 중간에서 끊지 않는다.
+
+   묶음 예시:
+     "그 명을" / "있는 거죠" / "제 몸을" / "두고 싶은" / "늘 곁에" / "말 없는"
+   한 chunk 가 maxWidth 보다 넓으면 overflow (정상 한국어/영문은 거의 그럴 일 없음). */
 function wrapText(ctx, text, maxWidth) {
   const lines = [];
   for (const para of String(text || '').split('\n')) {
     if (!para.trim()) { lines.push(''); continue; }
+    const words = para.split(/\s+/).filter(Boolean);
+    /* 1) 의미 묶음 — 첫 어절이 1~2자(관형사·짧은 부사·의존명사 등)면 다음 어절 1개 흡수.
+       1회만 흡수해서 chunk 가 무한정 길어지는 것 방지. */
+    const chunks = [];
+    let i = 0;
+    while (i < words.length) {
+      let chunk = words[i++];
+      if (chunk.length <= 2 && i < words.length) {
+        chunk += ' ' + words[i++];
+      }
+      chunks.push(chunk);
+    }
+    /* 2) chunk 단위 wrap — 한 줄에 가능한 한 많은 chunk. chunk 사이에서만 끊김. */
     let cur = '';
-    for (const ch of para) {
-      const test = cur + ch;
-      if (ctx.measureText(test).width > maxWidth && cur) {
-        lines.push(cur); cur = ch;
-      } else { cur = test; }
+    for (const ch of chunks) {
+      if (!cur) { cur = ch; continue; }
+      const test = cur + ' ' + ch;
+      if (ctx.measureText(test).width <= maxWidth) {
+        cur = test;
+      } else {
+        lines.push(cur);
+        cur = ch;
+      }
     }
     if (cur) lines.push(cur);
   }
@@ -8837,52 +8873,95 @@ function renderShareCard(canvas, bg, payload) {
   drawShareCardText(ctx, ink, payload, W, H);
 }
 
-/* 명대사/화자/작품 텍스트 — 배경(절차적·이미지) 위에 공통으로 그린다. */
+/* 명대사/화자/작품 텍스트 — 배경(절차적·이미지) 위에 공통으로 그린다.
+   안드 ShareCardRenderer 와 동일 layout — 명조체(Nanum Myeongjo),
+   본문은 0.27h~0.75h 안전 영역에 세로 중앙, 하단에 화자 + metaKo + metaEn 3줄. */
 function drawShareCardText(ctx, ink, payload, W, H) {
-  /* 'Daily Script' — 카드 상단 워터마크 */
-  ctx.fillStyle = ink + '80';
-  ctx.font = `700 22px "Pretendard", "Noto Sans KR", sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('Daily Script', W/2, 110);
+  const s = W / 540;
+  const zoneTop = H * 0.27, zoneBot = H * 0.75;
+  const zoneH = zoneBot - zoneTop;
+  const maxW = W - 260 * s;
+  const SERIF = `"Nanum Myeongjo", "Noto Serif KR", "Apple SD Gothic Neo", "Malgun Gothic", serif`;
 
-  /* 따옴표 — 본문 위, 매우 여린 농도(약 22%) */
-  ctx.fillStyle = ink + '38';
-  ctx.font = '400 48px "Times New Roman", serif';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('“', 90, 270);
-
-  /* 본문 — 영역(290~760) 안에서 자동 줄바꿈 + 크기 점진 축소 */
-  const bodyTop = 290, bodyBot = 760;
-  const bodyMaxH = bodyBot - bodyTop;
-  const bodyMaxW = W - 160;
-  ctx.fillStyle = ink;
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  let bodyFont = 40;
-  let lines = [];
-  for (const fs of [44, 40, 36, 32, 28, 24]) {
-    ctx.font = `600 ${fs}px "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-    lines = wrapText(ctx, payload.quote || '', bodyMaxW);
-    bodyFont = fs;
-    if (lines.length * Math.round(fs * 1.55) <= bodyMaxH) break;
+
+  /* 1) 명대사 — fs 점진 축소(영역 62% 안에 들도록). */
+  let qLines = [];
+  let qLineH = 0;
+  let bodyFs = 40;
+  for (const fs of [40, 36, 32, 28, 24, 20]) {
+    ctx.font = `400 ${fs * s}px ${SERIF}`;
+    qLines = wrapText(ctx, payload.quote || '', maxW);
+    qLineH = fs * s * 1.6;
+    bodyFs = fs;
+    if (qLines.length * qLineH <= zoneH * 0.62) break;
   }
-  ctx.font = `600 ${bodyFont}px "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-  ctx.textAlign = 'center';
-  const lineH = Math.round(bodyFont * 1.55);
-  const totalH = lines.length * lineH;
-  let y = bodyTop + Math.max(0, (bodyMaxH - totalH) / 2);
-  for (const ln of lines) { ctx.fillText(ln, W/2, y); y += lineH; }
 
-  /* speaker — 본문 아래 */
-  ctx.fillStyle = ink + 'CC';
-  ctx.textBaseline = 'top';
-  ctx.textAlign = 'center';
-  ctx.font = `500 24px "Pretendard", "Noto Sans KR", sans-serif`;
-  if (payload.speaker) ctx.fillText(`— ${payload.speaker}`, W/2, 800);
+  const hasSpeaker = !!(payload.speaker && String(payload.speaker).trim());
+  const hasKo = !!(payload.metaKo && String(payload.metaKo).trim());
+  const hasEn = !!(payload.metaEn && String(payload.metaEn).trim());
+  const gapSpeaker = 18 * s;
+  const speakerLineH = 30 * s;
+  const gapMeta = 40 * s;
+  const metaKoLineH = 26 * s;
+  const metaEnLineH = 22 * s;
 
-  /* 작품 · 작가 — 카드 최하단 */
-  ctx.font = `italic 24px "Times New Roman", serif`;
-  const workLine = [payload.work, payload.author].filter(Boolean).join(' · ');
-  if (workLine) ctx.fillText(workLine, W/2, 880);
+  /* 2) 블록 전체 높이 → 안전 영역 세로 중앙. */
+  let blockH = qLines.length * qLineH;
+  if (hasSpeaker) blockH += gapSpeaker + speakerLineH;
+  if (hasKo)      blockH += gapMeta + metaKoLineH;
+  if (hasEn)      blockH += metaEnLineH;
+
+  let y = zoneTop + Math.max(0, (zoneH - blockH) / 2);
+
+  /* 명대사 */
+  ctx.fillStyle = ink;
+  ctx.font = `400 ${bodyFs * s}px ${SERIF}`;
+  for (const ln of qLines) { ctx.fillText(ln, W / 2, y); y += qLineH; }
+
+  /* 화자 */
+  if (hasSpeaker) {
+    y += gapSpeaker;
+    ctx.font = `400 ${22 * s}px ${SERIF}`;
+    ctx.fillStyle = ink + 'CC';
+    ctx.fillText(`— ${payload.speaker}`, W / 2, y);
+    y += speakerLineH;
+  }
+  /* 메타 — 한글 / 영문 2줄 */
+  if (hasKo) {
+    y += gapMeta;
+    ctx.font = `400 ${19 * s}px ${SERIF}`;
+    ctx.fillStyle = ink + '99';
+    ctx.fillText(payload.metaKo, W / 2, y);
+    y += metaKoLineH;
+  }
+  if (hasEn) {
+    ctx.font = `400 ${16 * s}px ${SERIF}`;
+    ctx.fillStyle = ink + '80';
+    ctx.fillText(payload.metaEn, W / 2, y);
+  }
+}
+
+/* 안드 ShareCardPayload.toSharePayload 미러 — metaKo/metaEn 2줄 (영문 원본 없으면 EN 줄 생략). */
+const SHARE_FORMAT_LABEL_KO = { movie: '영화', drama: '드라마', play: '연극', musical: '뮤지컬', opera: '오페라', novel: '소설', poem: '시', essay: '에세이' };
+const SHARE_FORMAT_LABEL_EN = { movie: 'movie', drama: 'drama', play: 'play', musical: 'musical', opera: 'opera', novel: 'novel', poem: 'poem', essay: 'essay' };
+function shareMetaLine(genre, title, author) {
+  const head = [genre, title ? `<${title}>` : ''].filter(Boolean).join(' ');
+  return [head, author].filter(Boolean).join(', ');
+}
+function shareMetaLinesFromWork(w) {
+  if (!w) return { metaKo: '', metaEn: '' };
+  const fmt = String(w.format || '').toLowerCase();
+  const titleKo  = String(w.title || '').trim();
+  const authorKo = String(w.author || '').trim();
+  const titleEn  = String(w.title_original || '').trim();
+  const authorEn = String(w.author_original || '').trim();
+  const metaKo = shareMetaLine(SHARE_FORMAT_LABEL_KO[fmt] || '', titleKo, authorKo);
+  const metaEn = (titleEn || authorEn)
+    ? shareMetaLine(SHARE_FORMAT_LABEL_EN[fmt] || '', titleEn, authorEn)
+    : '';
+  return { metaKo, metaEn };
 }
 
 const shareState = { tab: 'free', bgId: 'beige', payload: null, lastBlob: null };
@@ -9175,6 +9254,7 @@ document.getElementById('share-send-link')?.addEventListener('click', async () =
 function payloadForToday() {
   const c = state.todayCard || {};
   const w = c.works || {};
+  const { metaKo, metaEn } = shareMetaLinesFromWork(w);
   return {
     cardId: c.card_id,
     quote: c.quote || '',
@@ -9182,12 +9262,14 @@ function payloadForToday() {
     work: w.title || '',
     workId: w.work_id ?? null,
     author: w.author || '',
+    metaKo, metaEn,
     coverUrl: w.cover_url || '',
   };
 }
 function payloadForDetail() {
   const c = state.detailCard || {};
   const w = c.works || {};
+  const { metaKo, metaEn } = shareMetaLinesFromWork(w);
   return {
     cardId: c.card_id,
     quote: c.quote || '',
@@ -9195,6 +9277,7 @@ function payloadForDetail() {
     work: w.title || '',
     workId: w.work_id ?? null,
     author: w.author || '',
+    metaKo, metaEn,
     coverUrl: w.cover_url || '',
   };
 }

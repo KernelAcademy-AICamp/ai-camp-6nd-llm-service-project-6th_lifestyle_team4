@@ -24,6 +24,11 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
     let significanceOriginal: String?
     let keywordsOriginal: [String]?
 
+    // 본문(scriptExcerpt) 표시 정렬 — 관리자가 카드별로 좌/중앙/우 저장 (migration 042).
+    // NULL = format 기본 (poem=center, else=left). EN 토글은 _original 우선.
+    let textAlign: String?
+    let textAlignOriginal: String?
+
     var id: Int { cardId }
 
     /// True when this card carries any original-language text the KR/ENG views
@@ -72,6 +77,8 @@ nonisolated struct Card: Decodable, Identifiable, Hashable, Sendable {
         case excerptDescriptionOriginal = "excerpt_description_original"
         case significanceOriginal = "significance_original"
         case keywordsOriginal = "keywords_original"
+        case textAlign = "text_align"
+        case textAlignOriginal = "text_align_original"
     }
 }
 
@@ -100,6 +107,14 @@ extension Card {
     func displayKeywords(original: Bool) -> [String] {
         if original, let k = keywordsOriginal, !k.isEmpty { return k }
         return keywords
+    }
+
+    /// 본문 정렬 — EN 토글 시 _original 우선, 없으면 KO, 그래도 없으면 format 기본 (poem=center, else=left).
+    /// Mirror of PWA m-app.js detail render `_alignSrc`.
+    func displayTextAlign(original: Bool) -> String {
+        let pick = original ? (textAlignOriginal ?? textAlign) : textAlign
+        if let v = pick, v == "left" || v == "center" || v == "right" { return v }
+        return work.format == .poem ? "center" : "left"
     }
 }
 
@@ -139,7 +154,9 @@ extension Card {
         scriptExcerptOriginal: "Jack spreads his arms wide and holds Rose. The wind sweeps through her hair. For the first time she feels truly free. The ship glides across a golden sea.",
         excerptDescriptionOriginal: "The iconic scene at the bow of the Titanic",
         significanceOriginal: nil,
-        keywordsOriginal: ["Freedom", "First love", "Transcendence"]
+        keywordsOriginal: ["Freedom", "First love", "Transcendence"],
+        textAlign: nil,
+        textAlignOriginal: nil
     )
 }
 #endif

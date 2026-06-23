@@ -1,0 +1,344 @@
+{
+  "category": "French Literature",
+  "topic": "french fiction",
+  "works": [
+    {
+      "bookId": 76639,
+      "title": "Eloisa : $b or, A series of original letters",
+      "author": "Rousseau, Jean-Jacques",
+      "authors": [
+        "Rousseau, Jean-Jacques"
+      ],
+      "year": 1778,
+      "downloadCount": 23506,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/76639.txt.utf-8"
+    },
+    {
+      "bookId": 175,
+      "title": "The Phantom of the Opera",
+      "author": "Leroux, Gaston",
+      "authors": [
+        "Leroux, Gaston"
+      ],
+      "year": 1927,
+      "downloadCount": 19556,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/175.txt.utf-8"
+    },
+    {
+      "bookId": 3922,
+      "title": "The Red Lily — Complete",
+      "author": "France, Anatole",
+      "authors": [
+        "France, Anatole"
+      ],
+      "year": 1924,
+      "downloadCount": 19538,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/3922.txt.utf-8"
+    },
+    {
+      "bookId": 18575,
+      "title": "One Hundred Merrie And Delightsome Stories: Right Pleasaunte To Relate In All Goodly Companie By Way Of Joyance And Jollity",
+      "author": "",
+      "authors": [],
+      "year": null,
+      "downloadCount": 14738,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/18575.txt.utf-8"
+    },
+    {
+      "bookId": 48893,
+      "title": "Mademoiselle de Maupin, Volume 1 (of 2)",
+      "author": "Gautier, Théophile",
+      "authors": [
+        "Gautier, Théophile"
+      ],
+      "year": 1872,
+      "downloadCount": 12383,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/48893.txt.utf-8"
+    },
+    {
+      "bookId": 22981,
+      "title": "Letters of Two Brides",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 11073,
+      "plainTextUrl": "https://www.gutenberg.org/files/22981/22981-readme.txt"
+    },
+    {
+      "bookId": 26838,
+      "title": "A History of the French Novel, Vol. 1: From the Beginning to 1800",
+      "author": "Saintsbury, George",
+      "authors": [
+        "Saintsbury, George"
+      ],
+      "year": 1933,
+      "downloadCount": 8573,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/26838.txt.utf-8"
+    },
+    {
+      "bookId": 3090,
+      "title": "Complete Original Short Stories of Guy De Maupassant",
+      "author": "Maupassant, Guy de",
+      "authors": [
+        "Maupassant, Guy de"
+      ],
+      "year": 1893,
+      "downloadCount": 8418,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/3090.txt.utf-8"
+    },
+    {
+      "bookId": 21327,
+      "title": "The Works of Guy de Maupassant, Vol. 1: Boule de Suif and Other Stories",
+      "author": "Maupassant, Guy de",
+      "authors": [
+        "Maupassant, Guy de"
+      ],
+      "year": 1893,
+      "downloadCount": 7515,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/21327.txt.utf-8"
+    },
+    {
+      "bookId": 1680,
+      "title": "At the Sign of the Cat and Racket",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 7252,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1680.txt.utf-8"
+    },
+    {
+      "bookId": 21655,
+      "title": "The works of Guy de Maupassant, Vol. 5: Une Vie and Other Stories",
+      "author": "Maupassant, Guy de",
+      "authors": [
+        "Maupassant, Guy de"
+      ],
+      "year": 1893,
+      "downloadCount": 6427,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/21655.txt.utf-8"
+    },
+    {
+      "bookId": 22069,
+      "title": "The Works of Guy de Maupassant, Volume VIII.",
+      "author": "Maupassant, Guy de",
+      "authors": [
+        "Maupassant, Guy de"
+      ],
+      "year": 1893,
+      "downloadCount": 5681,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/22069.txt.utf-8"
+    },
+    {
+      "bookId": 76493,
+      "title": "The new terror",
+      "author": "Leroux, Gaston",
+      "authors": [
+        "Leroux, Gaston"
+      ],
+      "year": 1927,
+      "downloadCount": 4782,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/76493.txt.utf-8"
+    },
+    {
+      "bookId": 27872,
+      "title": "A History of the French Novel, Vol. 2: To the Close of the 19th Century",
+      "author": "Saintsbury, George",
+      "authors": [
+        "Saintsbury, George"
+      ],
+      "year": 1933,
+      "downloadCount": 3323,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/27872.txt.utf-8"
+    },
+    {
+      "bookId": 1237,
+      "title": "Father Goriot",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 3124,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1237.txt.utf-8"
+    },
+    {
+      "bookId": 12341,
+      "title": "Against the Grain",
+      "author": "Huysmans, J.-K. (Joris-Karl)",
+      "authors": [
+        "Huysmans, J.-K. (Joris-Karl)"
+      ],
+      "year": 1907,
+      "downloadCount": 1815,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/12341.txt.utf-8"
+    },
+    {
+      "bookId": 32338,
+      "title": "Toilers of the sea",
+      "author": "Hugo, Victor",
+      "authors": [
+        "Hugo, Victor"
+      ],
+      "year": 1885,
+      "downloadCount": 1657,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/32338.txt.utf-8"
+    },
+    {
+      "bookId": 1942,
+      "title": "Rise and Fall of Cesar Birotteau",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 1559,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1942.txt.utf-8"
+    },
+    {
+      "bookId": 1968,
+      "title": "The Human Comedy: Introductions and Appendix",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 1515,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1968.txt.utf-8"
+    },
+    {
+      "bookId": 35595,
+      "title": "Voltaire's Romances, Complete in One Volume",
+      "author": "Voltaire",
+      "authors": [
+        "Voltaire"
+      ],
+      "year": 1778,
+      "downloadCount": 1471,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/35595.txt.utf-8"
+    },
+    {
+      "bookId": 1432,
+      "title": "Seraphita",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 1448,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1432.txt.utf-8"
+    },
+    {
+      "bookId": 1715,
+      "title": "Eugenie Grandet",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 1371,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1715.txt.utf-8"
+    },
+    {
+      "bookId": 37285,
+      "title": "The Works of Honoré de Balzac: About Catherine de' Medici, Seraphita, and Other Stories",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 1304,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/37285.txt.utf-8"
+    },
+    {
+      "bookId": 32596,
+      "title": "The Revolt of the Angels",
+      "author": "France, Anatole",
+      "authors": [
+        "France, Anatole"
+      ],
+      "year": 1924,
+      "downloadCount": 1290,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/32596.txt.utf-8"
+    },
+    {
+      "bookId": 20241,
+      "title": "The Palace of Pleasure, Volume 1",
+      "author": "",
+      "authors": [],
+      "year": null,
+      "downloadCount": 1282,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/20241.txt.utf-8"
+    },
+    {
+      "bookId": 1749,
+      "title": "Cousin Betty",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 1271,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1749.txt.utf-8"
+    },
+    {
+      "bookId": 18728,
+      "title": "The Well of Saint Clare",
+      "author": "France, Anatole",
+      "authors": [
+        "France, Anatole"
+      ],
+      "year": 1924,
+      "downloadCount": 1189,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/18728.txt.utf-8"
+    },
+    {
+      "bookId": 1826,
+      "title": "Sarrasine",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 1180,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1826.txt.utf-8"
+    },
+    {
+      "bookId": 1417,
+      "title": "Sons of the Soil",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 1177,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1417.txt.utf-8"
+    },
+    {
+      "bookId": 23060,
+      "title": "The Unknown Masterpiece: 1845",
+      "author": "Balzac, Honoré de",
+      "authors": [
+        "Balzac, Honoré de"
+      ],
+      "year": 1850,
+      "downloadCount": 1173,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/23060.txt.utf-8"
+    },
+    {
+      "bookId": 3942,
+      "title": "The Confession of a Child of the Century — Complete",
+      "author": "Musset, Alfred de",
+      "authors": [
+        "Musset, Alfred de"
+      ],
+      "year": 1857,
+      "downloadCount": 1140,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/3942.txt.utf-8"
+    }
+  ],
+  "fetched_at": "__build__"
+}

@@ -109,7 +109,10 @@ struct HighlightDetailView: View {
             Spacer().frame(height: 22)
             HighlightBookCover(work: highlight.card?.work)
             Spacer().frame(height: 22)
-            Text(highlight.selectedText)
+            // 화자 라벨이 LLM 출력에 `**크레온**` 마크다운으로 들어올 수 있어 그대로 노출되던 문제 fix —
+            // AttributedString(markdown:) 으로 ** 마커를 볼드로 변환. inlineOnlyPreservingWhitespace
+            // 옵션으로 줄바꿈 보존.
+            Text(highlight.selectedText.markdownBold)
                 .font(.titleSerif(17))
                 .foregroundStyle(.espresso)
                 .multilineTextAlignment(.center)

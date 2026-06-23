@@ -1,0 +1,359 @@
+{
+  "category": "British Literature",
+  "topic": "english fiction",
+  "works": [
+    {
+      "bookId": 4499,
+      "title": "Complete Short Works of George Meredith",
+      "author": "Meredith, George",
+      "authors": [
+        "Meredith, George"
+      ],
+      "year": 1909,
+      "downloadCount": 19711,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/4499.txt.utf-8"
+    },
+    {
+      "bookId": 53416,
+      "title": "Only a girl's love",
+      "author": "Garvice, Charles",
+      "authors": [
+        "Garvice, Charles"
+      ],
+      "year": 1920,
+      "downloadCount": 16784,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/53416.txt.utf-8"
+    },
+    {
+      "bookId": 4488,
+      "title": "The Amazing Marriage — Complete",
+      "author": "Meredith, George",
+      "authors": [
+        "Meredith, George"
+      ],
+      "year": 1909,
+      "downloadCount": 15224,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/4488.txt.utf-8"
+    },
+    {
+      "bookId": 33823,
+      "title": "The Gay Adventure: A Romance",
+      "author": "Bird, Richard",
+      "authors": [
+        "Bird, Richard"
+      ],
+      "year": 1965,
+      "downloadCount": 14447,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/33823.txt.utf-8"
+    },
+    {
+      "bookId": 35548,
+      "title": "Doctor Cupid: A Novel",
+      "author": "Broughton, Rhoda",
+      "authors": [
+        "Broughton, Rhoda"
+      ],
+      "year": 1920,
+      "downloadCount": 14404,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/35548.txt.utf-8"
+    },
+    {
+      "bookId": 5700,
+      "title": "Love and Life: An Old Story in Eighteenth Century Costume",
+      "author": "Yonge, Charlotte M. (Charlotte Mary)",
+      "authors": [
+        "Yonge, Charlotte M. (Charlotte Mary)"
+      ],
+      "year": 1901,
+      "downloadCount": 7832,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5700.txt.utf-8"
+    },
+    {
+      "bookId": 78031,
+      "title": "How they loved him, Vol. 1 (of 3) : $b A novel",
+      "author": "Marryat, Florence",
+      "authors": [
+        "Marryat, Florence"
+      ],
+      "year": 1899,
+      "downloadCount": 6584,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/78031.txt.utf-8"
+    },
+    {
+      "bookId": 78029,
+      "title": "The dangerous game",
+      "author": "Le Queux, William",
+      "authors": [
+        "Le Queux, William"
+      ],
+      "year": 1927,
+      "downloadCount": 6565,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/78029.txt.utf-8"
+    },
+    {
+      "bookId": 22203,
+      "title": "My Contemporaries In Fiction",
+      "author": "Murray, David Christie",
+      "authors": [
+        "Murray, David Christie"
+      ],
+      "year": 1907,
+      "downloadCount": 6484,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/22203.txt.utf-8"
+    },
+    {
+      "bookId": 78111,
+      "title": "How they loved him, Vol. 2 (of 3) : $b A novel",
+      "author": "Marryat, Florence",
+      "authors": [
+        "Marryat, Florence"
+      ],
+      "year": 1899,
+      "downloadCount": 6446,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/78111.txt.utf-8"
+    },
+    {
+      "bookId": 21536,
+      "title": "Paul the minstrel, and other stories",
+      "author": "Benson, Arthur Christopher",
+      "authors": [
+        "Benson, Arthur Christopher"
+      ],
+      "year": 1925,
+      "downloadCount": 6437,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/21536.txt.utf-8"
+    },
+    {
+      "bookId": 59931,
+      "title": "The Love-Story of Aliette Brunton",
+      "author": "Frankau, Gilbert",
+      "authors": [
+        "Frankau, Gilbert"
+      ],
+      "year": 1952,
+      "downloadCount": 6363,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/59931.txt.utf-8"
+    },
+    {
+      "bookId": 26235,
+      "title": "The Mistress of Shenstone",
+      "author": "Barclay, Florence L. (Florence Louisa)",
+      "authors": [
+        "Barclay, Florence L. (Florence Louisa)"
+      ],
+      "year": 1921,
+      "downloadCount": 5856,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/26235.txt.utf-8"
+    },
+    {
+      "bookId": 27284,
+      "title": "The Talking Horse, and Other Tales",
+      "author": "Anstey, F.",
+      "authors": [
+        "Anstey, F."
+      ],
+      "year": 1934,
+      "downloadCount": 5639,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/27284.txt.utf-8"
+    },
+    {
+      "bookId": 22961,
+      "title": "Nell, of Shorne Mills : $b or, One heart's burden",
+      "author": "Garvice, Charles",
+      "authors": [
+        "Garvice, Charles"
+      ],
+      "year": 1920,
+      "downloadCount": 5269,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/22961.txt.utf-8"
+    },
+    {
+      "bookId": 76950,
+      "title": "The ghost of Charlotte Cray, and other stories",
+      "author": "Marryat, Florence",
+      "authors": [
+        "Marryat, Florence"
+      ],
+      "year": 1899,
+      "downloadCount": 5101,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/76950.txt.utf-8"
+    },
+    {
+      "bookId": 76764,
+      "title": "Landscape with figures",
+      "author": "Fraser, Ronald",
+      "authors": [
+        "Fraser, Ronald"
+      ],
+      "year": 1974,
+      "downloadCount": 4977,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/76764.txt.utf-8"
+    },
+    {
+      "bookId": 77001,
+      "title": "Moon of madness",
+      "author": "Rohmer, Sax",
+      "authors": [
+        "Rohmer, Sax"
+      ],
+      "year": 1959,
+      "downloadCount": 4951,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/77001.txt.utf-8"
+    },
+    {
+      "bookId": 9774,
+      "title": "Alice, or the Mysteries — Complete",
+      "author": "Lytton, Edward Bulwer Lytton, Baron",
+      "authors": [
+        "Lytton, Edward Bulwer Lytton, Baron"
+      ],
+      "year": 1873,
+      "downloadCount": 4923,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/9774.txt.utf-8"
+    },
+    {
+      "bookId": 28237,
+      "title": "A Vanished Hand",
+      "author": "Doudney, Sarah",
+      "authors": [
+        "Doudney, Sarah"
+      ],
+      "year": 1926,
+      "downloadCount": 3942,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/28237.txt.utf-8"
+    },
+    {
+      "bookId": 70492,
+      "title": "Aspects of the novel",
+      "author": "Forster, E. M. (Edward Morgan)",
+      "authors": [
+        "Forster, E. M. (Edward Morgan)"
+      ],
+      "year": 1970,
+      "downloadCount": 2691,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/70492.txt.utf-8"
+    },
+    {
+      "bookId": 6148,
+      "title": "Narrative and Miscellaneous Papers",
+      "author": "De Quincey, Thomas",
+      "authors": [
+        "De Quincey, Thomas"
+      ],
+      "year": 1859,
+      "downloadCount": 2415,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/6148.txt.utf-8"
+    },
+    {
+      "bookId": 1289,
+      "title": "Three Ghost Stories",
+      "author": "Dickens, Charles",
+      "authors": [
+        "Dickens, Charles"
+      ],
+      "year": 1870,
+      "downloadCount": 1971,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/1289.txt.utf-8"
+    },
+    {
+      "bookId": 2334,
+      "title": "The Works of Rudyard Kipling: One Volume Edition",
+      "author": "Kipling, Rudyard",
+      "authors": [
+        "Kipling, Rudyard"
+      ],
+      "year": 1936,
+      "downloadCount": 1967,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/2334.txt.utf-8"
+    },
+    {
+      "bookId": 31151,
+      "title": "The English Novel in the Time of Shakespeare",
+      "author": "Jusserand, J. J. (Jean Jules)",
+      "authors": [
+        "Jusserand, J. J. (Jean Jules)"
+      ],
+      "year": 1932,
+      "downloadCount": 1962,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/31151.txt.utf-8"
+    },
+    {
+      "bookId": 66638,
+      "title": "Ireland in Fiction: A Guide to Irish Novels, Tales, Romances, and Folk-lore",
+      "author": "Brown, Stephen J. M. (Stephen James Meredith)",
+      "authors": [
+        "Brown, Stephen J. M. (Stephen James Meredith)"
+      ],
+      "year": 1962,
+      "downloadCount": 1932,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/66638.txt.utf-8"
+    },
+    {
+      "bookId": 78503,
+      "title": "A fatal silence, vol. 1 (of 3)",
+      "author": "Marryat, Florence",
+      "authors": [
+        "Marryat, Florence"
+      ],
+      "year": 1899,
+      "downloadCount": 1918,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/78503.txt.utf-8"
+    },
+    {
+      "bookId": 78575,
+      "title": "The lost bride; vol. 1",
+      "author": "Chatterton, Georgiana, Lady",
+      "authors": [
+        "Chatterton, Georgiana, Lady"
+      ],
+      "year": 1876,
+      "downloadCount": 1898,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/78575.txt.utf-8"
+    },
+    {
+      "bookId": 47204,
+      "title": "The Supernatural in Modern English Fiction",
+      "author": "Scarborough, Dorothy",
+      "authors": [
+        "Scarborough, Dorothy"
+      ],
+      "year": 1935,
+      "downloadCount": 1724,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/47204.txt.utf-8"
+    },
+    {
+      "bookId": 78598,
+      "title": "A fatal silence, vol. 3 (of 3)",
+      "author": "Marryat, Florence",
+      "authors": [
+        "Marryat, Florence"
+      ],
+      "year": 1899,
+      "downloadCount": 1583,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/78598.txt.utf-8"
+    },
+    {
+      "bookId": 56665,
+      "title": "Tales and Stories: Now First Collected",
+      "author": "Shelley, Mary Wollstonecraft",
+      "authors": [
+        "Shelley, Mary Wollstonecraft"
+      ],
+      "year": 1851,
+      "downloadCount": 1580,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/56665.txt.utf-8"
+    },
+    {
+      "bookId": 63107,
+      "title": "Mrs Dalloway in Bond Street",
+      "author": "Woolf, Virginia",
+      "authors": [
+        "Woolf, Virginia"
+      ],
+      "year": 1941,
+      "downloadCount": 1532,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/63107.txt.utf-8"
+    }
+  ],
+  "fetched_at": "__build__"
+}

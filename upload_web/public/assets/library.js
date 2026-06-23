@@ -174,7 +174,7 @@ async function loadLibrary() {
     // 카드가 500장을 넘으면 '총 N장' 이 500 에서 멈추던 문제 수정).
     // PostgREST 기본 최대 행수(1000)도 range 페이지네이션으로 우회.
     const PAGE = 1000;
-    const COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original)';
+    const COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, text_align, text_align_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original)';
     const all = [];
     for (let offset = 0; ; offset += PAGE) {
       const { data, error } = await sb
@@ -1321,6 +1321,23 @@ function buildEditNode(card) {
   quoteOrigEl.value   = card.quote_original || '';
   excerptEl.value     = card.script_excerpt || '';
   excerptOrigEl.value = card.script_excerpt_original || '';
+  /* 본문 정렬 — 저장된 text_align 적용. 없으면 format 기본값(poem=center, else=left) */
+  const _fmt = String((card.works || work || {}).format || '').toLowerCase();
+  const _defaultAlign = _fmt === 'poem' ? 'center' : 'left';
+  const _alignKo = card.text_align || _defaultAlign;
+  const _alignEn = card.text_align_original || _defaultAlign;
+  excerptEl.style.textAlign     = _alignKo;
+  excerptOrigEl.style.textAlign = _alignEn;
+  /* 정렬 버튼 active 상태 동기화 (event delegation 핸들러와 같은 class 토글 규칙) */
+  const _markAlignActive = (sel, val) => {
+    document.querySelectorAll(`.lib-align-btn[data-align-for="${CSS.escape(sel)}"]`).forEach((b) => {
+      const on = b.dataset.align === val;
+      b.classList.toggle('text-primary', on);
+      b.classList.toggle('border-primary', on);
+    });
+  };
+  _markAlignActive('.lib-edit-excerpt', _alignKo);
+  _markAlignActive('.lib-edit-excerpt-original', _alignEn);
   descEl.value        = card.excerpt_description || '';
   if (descOrigEl) descOrigEl.value = card.excerpt_description_original || '';
   kwEl.value          = (card.keywords || []).join(', ');
@@ -1333,6 +1350,7 @@ function buildEditNode(card) {
   attachKeywordHint(kwEl);
   // B 버튼 + Ctrl/Cmd+B 단축키로 선택 영역에 **굵게** 마커 토글
   wireBoldButtons(node);
+  wireAlignButtons(node);
   // ↻ KO — 영문 칸의 텍스트를 한국어로 재번역해서 좌측에 채우기
   wireTranslateButtons(node, work);
 
@@ -1381,6 +1399,11 @@ function buildEditNode(card) {
       ? kwOrigEl.value.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean)
       : [];
 
+    /* 본문 정렬 — textarea 의 현재 style.textAlign 을 저장. 비어있거나 'left' 면 NULL (DB 기본) */
+    const _readAlign = (el) => {
+      const v = (el && el.style && el.style.textAlign) || '';
+      return (v === 'center' || v === 'right') ? v : null;
+    };
     // 카드 단위 업데이트
     const cardUpdates = {
       quote: quoteEl.value.trim(),
@@ -1390,6 +1413,8 @@ function buildEditNode(card) {
       significance: (sigEl && sigEl.value.trim()) || null,
       temperature: Math.max(1, Math.min(5, Number(tempEl.value) || 3)),
       intensity: Math.max(1, Math.min(5, Number(intensityEl.value) || 3)),
+      text_align:                    _readAlign(excerptEl),
+      text_align_original:           _readAlign(excerptOrigEl),
       // 이중 언어 — 영문 원본 (NULL 허용)
       quote_original:                (quoteOrigEl.value.trim() || null),
       script_excerpt_original:       (excerptOrigEl.value.trim() || null),
@@ -1607,7 +1632,7 @@ async function backfillAllCards() {
   if (libraryStatus) libraryStatus.textContent = 'DB 카드 목록 조회 중⋯';
 
   // 1) 모든 카드를 페이지네이션으로 가져옴 (한 번에 1000장씩, *_original 컬럼 포함)
-  const SELECT_COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original)';
+  const SELECT_COLS = 'card_id, work_id, quote, script_excerpt, excerpt_description, keywords, temperature, intensity, significance, created_at, quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, text_align, text_align_original, works(work_id, title, subtitle, format, author, release_year, intro, characters, title_original, subtitle_original, author_original)';
   const PAGE = 1000;
   let all = [];
   for (let offset = 0; ; offset += PAGE) {
@@ -2120,6 +2145,28 @@ function wireBoldButtons(root) {
     });
   });
 }
+
+// 정렬 버튼 — textarea 의 text-align 을 좌/중앙/우 로 토글. 현재 단계는 편집 UI 시각화만(저장 X).
+// (no-op — 실제 핸들러는 document.body 의 event delegation. 모달이 dynamic 으로 다시
+//  렌더되더라도 binding 이 살아있다.)
+function wireAlignButtons(_root) { /* event delegation 으로 처리 — 아래 document listener 참고 */ }
+
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest && ev.target.closest('.lib-align-btn');
+  if (!btn) return;
+  ev.preventDefault();
+  const sel = btn.dataset.alignFor;
+  const align = btn.dataset.align;
+  if (!sel || !align) return;
+  const ta = document.querySelector(sel);
+  if (!ta) return;
+  ta.style.textAlign = align;
+  document.querySelectorAll(`.lib-align-btn[data-align-for="${CSS.escape(sel)}"]`).forEach((b) => {
+    const on = b === btn;
+    b.classList.toggle('text-primary', on);
+    b.classList.toggle('border-primary', on);
+  });
+});
 
 // DB에 콜론·em-dash·libretto 스타일 카드도 화면에선 정리해 보여줌
 // 처리하는 패턴:

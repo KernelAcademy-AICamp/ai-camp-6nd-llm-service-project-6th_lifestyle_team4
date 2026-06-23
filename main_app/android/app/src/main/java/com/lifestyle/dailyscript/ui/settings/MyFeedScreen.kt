@@ -54,6 +54,7 @@ import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.formatBookmarkDate
 import com.lifestyle.dailyscript.ui.util.genreLabel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -323,7 +324,12 @@ private fun MyFeedHighlightRow(highlight: Highlight, onDelete: () -> Unit, onOpe
         Text(text = titleLine(w), style = MaterialTheme.typography.titleLarge, color = Espresso)
         Box(modifier = Modifier.height(8.dp))
         Text(
-            text = "“${highlight.selectedText}”",
+            // LLM 출력의 `**화자**` 마커가 raw 로 노출되던 문제 — Markdown.bold 로 볼드 변환.
+            text = buildAnnotatedString {
+                append("“")
+                append(Markdown.bold(highlight.selectedText))
+                append("”")
+            },
             style = TextStyle(fontFamily = EditorialSerif, fontSize = 15.sp, lineHeight = 28.sp),
             color = Espresso,
         )

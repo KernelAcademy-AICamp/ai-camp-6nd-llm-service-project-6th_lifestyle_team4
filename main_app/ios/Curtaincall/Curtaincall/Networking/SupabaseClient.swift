@@ -37,6 +37,7 @@ final class Supa {
     card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
     keywords, temperature, intensity, view_count, comment_count, share_count, \
     quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, \
+    text_align, text_align_original, \
     work:works(title, subtitle, format, author, release_year, characters, cover_url, intro, \
     title_original, subtitle_original, author_original, work_genres(genres(name)))
     """
@@ -46,6 +47,7 @@ final class Supa {
     cards(card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
     keywords, temperature, intensity, view_count, comment_count, \
     quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, \
+    text_align, text_align_original, \
     work:works(title, subtitle, format, author, release_year, characters, cover_url, intro, \
     title_original, subtitle_original, author_original, work_genres(genres(name))))
     """
@@ -54,6 +56,7 @@ final class Supa {
     cards(card_id, work_id, quote, script_excerpt, excerpt_description, significance, \
     keywords, temperature, intensity, view_count, comment_count, \
     quote_original, script_excerpt_original, excerpt_description_original, significance_original, keywords_original, \
+    text_align, text_align_original, \
     work:works(title, subtitle, format, author, release_year, characters, cover_url, intro, \
     title_original, subtitle_original, author_original, work_genres(genres(name))))
     """

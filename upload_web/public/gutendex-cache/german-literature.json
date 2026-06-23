@@ -1,0 +1,352 @@
+{
+  "category": "German Literature",
+  "topic": "german fiction",
+  "works": [
+    {
+      "bookId": 25345,
+      "title": "The Goose Man",
+      "author": "Wassermann, Jakob",
+      "authors": [
+        "Wassermann, Jakob"
+      ],
+      "year": 1934,
+      "downloadCount": 8161,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/25345.txt.utf-8"
+    },
+    {
+      "bookId": 36028,
+      "title": "Royal Highness",
+      "author": "Mann, Thomas",
+      "authors": [
+        "Mann, Thomas"
+      ],
+      "year": 1955,
+      "downloadCount": 7684,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/36028.txt.utf-8"
+    },
+    {
+      "bookId": 77097,
+      "title": "The magic ring, Vol. 1 (of 3)",
+      "author": "La Motte-Fouqué, Friedrich Heinrich Karl, Freiherr de",
+      "authors": [
+        "La Motte-Fouqué, Friedrich Heinrich Karl, Freiherr de"
+      ],
+      "year": 1843,
+      "downloadCount": 5036,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/77097.txt.utf-8"
+    },
+    {
+      "bookId": 77098,
+      "title": "The magic ring, Vol. 2 (of 3)",
+      "author": "La Motte-Fouqué, Friedrich Heinrich Karl, Freiherr de",
+      "authors": [
+        "La Motte-Fouqué, Friedrich Heinrich Karl, Freiherr de"
+      ],
+      "year": 1843,
+      "downloadCount": 4933,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/77098.txt.utf-8"
+    },
+    {
+      "bookId": 77099,
+      "title": "The magic ring, Vol. 3 (of 3)",
+      "author": "La Motte-Fouqué, Friedrich Heinrich Karl, Freiherr de",
+      "authors": [
+        "La Motte-Fouqué, Friedrich Heinrich Karl, Freiherr de"
+      ],
+      "year": 1843,
+      "downloadCount": 4807,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/77099.txt.utf-8"
+    },
+    {
+      "bookId": 36483,
+      "title": "Wilhelm Meister's apprenticeship and travels, vol. 1 (of 2)",
+      "author": "Goethe, Johann Wolfgang von",
+      "authors": [
+        "Goethe, Johann Wolfgang von"
+      ],
+      "year": 1832,
+      "downloadCount": 1994,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/36483.txt.utf-8"
+    },
+    {
+      "bookId": 33858,
+      "title": "The Adventurous Simplicissimus: being the description of the Life of a Strange vagabond named Melchior Sternfels von Fuchshaim",
+      "author": "Grimmelshausen, Hans Jakob Christoph von",
+      "authors": [
+        "Grimmelshausen, Hans Jakob Christoph von"
+      ],
+      "year": 1676,
+      "downloadCount": 1718,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/33858.txt.utf-8"
+    },
+    {
+      "bookId": 32046,
+      "title": "Tales from the German, Comprising specimens from the most celebrated authors",
+      "author": "",
+      "authors": [],
+      "year": null,
+      "downloadCount": 1459,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/32046.txt.utf-8"
+    },
+    {
+      "bookId": 36164,
+      "title": "Flower, Fruit, and Thorn Pieces;: or, the Wedded Life, Death, and Marriage of Firmian Stanislaus Siebenkaes, Parish Advocate in the Burgh of Kuhschnappel.",
+      "author": "Jean Paul",
+      "authors": [
+        "Jean Paul"
+      ],
+      "year": 1825,
+      "downloadCount": 1141,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/36164.txt.utf-8"
+    },
+    {
+      "bookId": 5583,
+      "title": "The Burgomaster's Wife — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 1107,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5583.txt.utf-8"
+    },
+    {
+      "bookId": 34506,
+      "title": "German Fiction",
+      "author": "Goethe, Johann Wolfgang von",
+      "authors": [
+        "Goethe, Johann Wolfgang von",
+        "Fontane, Theodor",
+        "Storm, Theodor",
+        "Keller, Gottfried"
+      ],
+      "year": 1832,
+      "downloadCount": 1063,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/34506.txt.utf-8"
+    },
+    {
+      "bookId": 5600,
+      "title": "The Historical Romances of Georg Ebers",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 1001,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5600.txt.utf-8"
+    },
+    {
+      "bookId": 5460,
+      "title": "An Egyptian Princess — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 958,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5460.txt.utf-8"
+    },
+    {
+      "bookId": 5449,
+      "title": "Uarda : a Romance of Ancient Egypt — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 936,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5449.txt.utf-8"
+    },
+    {
+      "bookId": 34156,
+      "title": "The Undying Past",
+      "author": "Sudermann, Hermann",
+      "authors": [
+        "Sudermann, Hermann"
+      ],
+      "year": 1928,
+      "downloadCount": 905,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/34156.txt.utf-8"
+    },
+    {
+      "bookId": 34791,
+      "title": "The Song of Songs",
+      "author": "Sudermann, Hermann",
+      "authors": [
+        "Sudermann, Hermann"
+      ],
+      "year": 1928,
+      "downloadCount": 895,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/34791.txt.utf-8"
+    },
+    {
+      "bookId": 5542,
+      "title": "A Thorny Path — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 860,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5542.txt.utf-8"
+    },
+    {
+      "bookId": 5493,
+      "title": "The Emperor — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 853,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5493.txt.utf-8"
+    },
+    {
+      "bookId": 38779,
+      "title": "Translations from the German (Vol 3 of 3): Tales by Musæus, Tieck, Richter",
+      "author": "Carlyle, Thomas",
+      "authors": [
+        "Carlyle, Thomas",
+        "Musäus, Johann Karl August",
+        "Tieck, Ludwig",
+        "Jean Paul"
+      ],
+      "year": 1881,
+      "downloadCount": 834,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/38779.txt.utf-8"
+    },
+    {
+      "bookId": 5551,
+      "title": "In the Fire of the Forge: A Romance of Old Nuremberg — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 824,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5551.txt.utf-8"
+    },
+    {
+      "bookId": 5571,
+      "title": "Barbara Blomberg — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 824,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5571.txt.utf-8"
+    },
+    {
+      "bookId": 5516,
+      "title": "Arachne — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 789,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5516.txt.utf-8"
+    },
+    {
+      "bookId": 5529,
+      "title": "The Bride of the Nile — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 760,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5529.txt.utf-8"
+    },
+    {
+      "bookId": 33857,
+      "title": "The Lost Manuscript: A Novel",
+      "author": "Freytag, Gustav",
+      "authors": [
+        "Freytag, Gustav"
+      ],
+      "year": 1895,
+      "downloadCount": 758,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/33857.txt.utf-8"
+    },
+    {
+      "bookId": 5577,
+      "title": "A Word, Only a Word — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 724,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5577.txt.utf-8"
+    },
+    {
+      "bookId": 5507,
+      "title": "Serapis — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 717,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5507.txt.utf-8"
+    },
+    {
+      "bookId": 5560,
+      "title": "Margery (Gred): A Tale Of Old Nuremberg — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 713,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5560.txt.utf-8"
+    },
+    {
+      "bookId": 5482,
+      "title": "Cleopatra — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 712,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5482.txt.utf-8"
+    },
+    {
+      "bookId": 54794,
+      "title": "The World's Illusion, Volume 1 (of 2): Eva",
+      "author": "Wassermann, Jakob",
+      "authors": [
+        "Wassermann, Jakob"
+      ],
+      "year": 1934,
+      "downloadCount": 699,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/54794.txt.utf-8"
+    },
+    {
+      "bookId": 5592,
+      "title": "The Complete Short Works of Georg Ebers",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 686,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5592.txt.utf-8"
+    },
+    {
+      "bookId": 5472,
+      "title": "Joshua — Complete",
+      "author": "Ebers, Georg",
+      "authors": [
+        "Ebers, Georg"
+      ],
+      "year": 1898,
+      "downloadCount": 679,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5472.txt.utf-8"
+    }
+  ],
+  "fetched_at": "__build__"
+}

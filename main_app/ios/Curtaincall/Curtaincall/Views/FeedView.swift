@@ -595,7 +595,8 @@ private struct HighlightFeedCard: View {
                     .foregroundStyle(.sand)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 22)
-                Text(highlight.selectedText)
+                // LLM 출력의 `**화자**` 마커가 그대로 노출되던 문제 — markdownBold 로 볼드 변환.
+                Text(highlight.selectedText.markdownBold)
                     .font(.titleSerif(15))
                     .foregroundStyle(.espresso)
                     .multilineTextAlignment(.center)
