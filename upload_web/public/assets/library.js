@@ -111,6 +111,20 @@ function makeGroupKey(work) {
   return `${series}__${(work.author || '').trim()}`;
 }
 
+// 권수 = 부제(subtitle)까지 구분한 개별 책 권수.
+// 같은 시리즈여도 부제가 다르면 다른 권으로 센다 (예: 셜록홈즈 5편 = 5권).
+// 부제가 없으면 제목으로 구분. 책꽂이 spine 색상 구분(subtitle→title)과 동일한 기준.
+// 같은 작품 그룹 안에서만 부제로 쪼개므로, 다른 작품에 우연히 같은 부제가 있어도 안 섞인다.
+function countDistinctBooks(rows) {
+  const keys = new Set();
+  (rows || []).forEach((card) => {
+    const work = card.works || { work_id: card.work_id, title: `Work #${card.work_id}` };
+    const volume = (work.subtitle || work.title || '').trim();
+    keys.add(`${makeGroupKey(work)}||${volume}`);
+  });
+  return keys.size;
+}
+
 // 표시용 제목 정규화 — DB 원본은 그대로 두고 화면에만 한글 표기 적용
 // 키는 '구분자 제거 + lowercase' 정규화 형태로 매칭해 '아,저,씨' '아·저,씨' 등 모든 변형 처리.
 const TITLE_DISPLAY_ALIASES = {
@@ -618,9 +632,10 @@ function renderLibrary() {
   if (libraryStatus && !/백필 중|채우는 중/.test(libraryStatus.textContent)) {
     const total = state.rows.length;
     const visible = rows.length;
+    const totalBooks = countDistinctBooks(state.rows);
     libraryStatus.textContent = (total === visible)
-      ? `총 ${total}장`
-      : `총 ${total}장 · 현재 ${visible}장 표시`;
+      ? `총 ${total}장 · ${totalBooks}권`
+      : `총 ${total}장 · ${totalBooks}권 · 현재 ${visible}장 표시`;
   }
 
   if (rows.length === 0) {
