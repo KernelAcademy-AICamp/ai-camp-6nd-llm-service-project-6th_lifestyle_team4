@@ -26,9 +26,9 @@ final class YarnStore: ObservableObject {
         case blocked   // 잔액 부족 → 충전 유도, 열람 차단
     }
 
-    /// 구매 티어 [실타래 개수, 원]. PWA `YARN_TIERS` 와 동일.
-    static let tiers: [(count: Int, won: Int)] =
-        [(1, 100), (10, 1000), (21, 2000), (32, 3000), (113, 10000)]
+    // v1: 구매 티어(₩ 가격) 데이터 제거 — 충전 뷰와 함께 릴리스 바이너리에서 삭제해
+    // App Store 2.1/3.1.1 정적분석에 가격/구매 표면이 잡히지 않게 한다(적립 전용).
+    // 적립·차감(grant_yarn·consume_yarn·reward·출석)은 그대로 보존.
 
     /// 카드당 무료 재열람 창 — 3일 (PWA `YARN_UNLOCK_WINDOW_MS`).
     private let unlockWindow: TimeInterval = 3 * 24 * 60 * 60
