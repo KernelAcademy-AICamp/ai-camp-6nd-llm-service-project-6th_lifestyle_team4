@@ -71,13 +71,27 @@ final class Supa {
 
     // MARK: - Cards
 
+    /// 전체 카드를 1000개씩 페이지네이션으로 끝까지 가져온다 (PWA m-app.js:1364-1377 미러).
+    /// 예전 `.limit(500)` 캡 때문에 카드가 500장을 넘으면 카탈로그·작품 상세 등에서
+    /// 일부 카드가 누락되던 문제 수정 — 예: 인형의 집 22장 중 4장만 노출되던 케이스.
+    /// PostgREST 기본 최대 행수(1000)도 range 페이지네이션으로 우회.
+    /// `limit` 파라미터는 호환을 위해 유지하지만 무시 — 항상 전체를 가져옴.
     func fetchCards(limit: Int = 500) async throws -> [Card] {
-        try await client.from("cards")
-            .select(cardColumns)
-            .order("card_id", ascending: false)
-            .limit(limit)
-            .execute()
-            .value
+        let pageSize = 1000
+        var all: [Card] = []
+        var offset = 0
+        while true {
+            let batch: [Card] = try await client.from("cards")
+                .select(cardColumns)
+                .order("card_id", ascending: false)
+                .range(from: offset, to: offset + pageSize - 1)
+                .execute()
+                .value
+            all.append(contentsOf: batch)
+            if batch.count < pageSize { break }
+            offset += pageSize
+        }
+        return all
     }
 
     func fetchCard(id: Int) async throws -> Card? {

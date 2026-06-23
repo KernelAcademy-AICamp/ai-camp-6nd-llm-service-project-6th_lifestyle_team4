@@ -36,14 +36,29 @@ class CardRepository {
         """.trimIndent()
     )
 
-    /** Pull a large page used for seed/taste-based recommendation (mirrors the PWA's 500). */
-    suspend fun fetchAllCards(): List<CardDto> =
-        client.postgrest["cards"]
-            .select(cardSelect) {
-                order("card_id", Order.DESCENDING)
-                limit(500)
-            }
-            .decodeList()
+    /**
+     * 전체 카드를 1000개씩 페이지네이션으로 끝까지 가져온다 (PWA m-app.js:1364-1377 미러).
+     * 예전 `.limit(500)` 캡 때문에 카드가 500장을 넘으면 카탈로그·작품 상세 등에서
+     * 일부 카드가 누락되던 문제 수정 — 예: 인형의 집 22장 중 4장만 노출되던 케이스.
+     * PostgREST 기본 최대 행수(1000)도 range 페이지네이션으로 우회.
+     */
+    suspend fun fetchAllCards(): List<CardDto> {
+        val pageSize = 1000L
+        val all = mutableListOf<CardDto>()
+        var offset = 0L
+        while (true) {
+            val batch = client.postgrest["cards"]
+                .select(cardSelect) {
+                    order("card_id", Order.DESCENDING)
+                    range(offset, offset + pageSize - 1)
+                }
+                .decodeList<CardDto>()
+            all.addAll(batch)
+            if (batch.size < pageSize) break
+            offset += pageSize
+        }
+        return all
+    }
 
     suspend fun fetchCardById(cardId: Long): CardDto? {
         return client.postgrest["cards"]
