@@ -19,11 +19,16 @@ struct AttendanceView: View {
             header
             ScrollView {
                 VStack(spacing: 0) {
-                    if rewarded { rewardBanner; Spacer().frame(height: 18) }
+                    if rewarded {
+                        rewardBanner
+                        Spacer().frame(height: 18)
+                    } else {
+                        Spacer().frame(height: 20)   // 연월 위 여백 — 제목과의 간격 (보상 배너 없을 때)
+                    }
                     Text(monthTitle)
                         .font(.titleSerif(18))
                         .foregroundStyle(.espresso)
-                    Spacer().frame(height: 16)
+                    Spacer().frame(height: 20)        // 연월 아래 여백 — 요일 행과의 간격 (16→20)
                     weekdayHeader
                     Spacer().frame(height: 8)
                     grid
@@ -36,6 +41,7 @@ struct AttendanceView: View {
                 .padding(.horizontal, 20)
             }
         }
+        .padding(.top, 12)   // 그래버 아래 여백 — '출석체크' 제목이 시트 상단/그래버에 붙지 않게
         .background(Color.paper)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
