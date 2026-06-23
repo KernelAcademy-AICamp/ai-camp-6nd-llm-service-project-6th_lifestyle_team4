@@ -8790,29 +8790,26 @@ function normalizeWorkTitle(s) {
     .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
+/* 단어(어절) 단위 줄바꿈 — 띄어쓰기 토큰을 보존하며 split, 토큰 단위로만 줄 끊음.
+   한국어 어절·영문 단어 모두 절대 중간에서 잘리지 않는다. 한 토큰이 maxWidth 보다
+   넓으면 그 줄은 overflow (한국어 정상 어절·영문 단어는 거의 그럴 일 없음). */
 function wrapText(ctx, text, maxWidth) {
   const lines = [];
   for (const para of String(text || '').split('\n')) {
     if (!para.trim()) { lines.push(''); continue; }
+    const tokens = para.split(/(\s+)/).filter((t) => t.length > 0);
     let cur = '';
-    for (const ch of para) {
-      const test = cur + ch;
-      if (ctx.measureText(test).width > maxWidth && cur) {
-        /* 단어 잘림 방지 — 줄 끝이 단어 중간 (cur 끝과 ch 가 모두 non-space) 이면
-           cur 의 마지막 공백까지 되감아 단어 통째로 다음 줄로 넘긴다.
-           공백 없는 한국어는 기존대로 char wrap. */
-        if (/\S/.test(ch) && /\S$/.test(cur)) {
-          const lastSpace = cur.lastIndexOf(' ');
-          if (lastSpace > 0 && lastSpace < cur.length - 1) {
-            lines.push(cur.slice(0, lastSpace));
-            cur = cur.slice(lastSpace + 1) + ch;
-            continue;
-          }
-        }
-        lines.push(cur); cur = ch;
-      } else { cur = test; }
+    for (const tok of tokens) {
+      if (!cur) { cur = tok; continue; }
+      const test = cur + tok;
+      if (ctx.measureText(test).width <= maxWidth) {
+        cur = test;
+      } else {
+        lines.push(cur.replace(/\s+$/, ''));
+        cur = /^\s+$/.test(tok) ? '' : tok;
+      }
     }
-    if (cur) lines.push(cur);
+    if (cur) lines.push(cur.replace(/\s+$/, ''));
   }
   return lines;
 }
