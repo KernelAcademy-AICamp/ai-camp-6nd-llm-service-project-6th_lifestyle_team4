@@ -342,11 +342,11 @@ struct HomeView: View {
         guard !pullRefreshing else { return }
         let pull = max(0, -offsetY)
         // 새로고침 직후: 스크롤이 상단으로 튕겨 돌아오는 동안 잔여 당김값 때문에 실타래가
-        // 깜빡 다시 떴다 사라지는 버그(갱신됨 토스트와 겹쳐 더 도드라짐) 방지 — 완전히
-        // 상단 복귀할 때까지 인디케이터를 숨겨둔다.
+        // 깜빡 다시 떴다 사라지는 버그(갱신됨 토스트와 겹쳐 더 도드라짐) 방지 — 바운스백
+        // 동안 인디케이터를 숨긴다. 해제는 pullRefresh 의 '시간 기반' 타이머가 하므로
+        // 여기서 스크롤 콜백으로 해제하지 않는다(콜백이 더 안 와도 갇히지 않게).
         if pullCooldown {
             pullDistance = 0
-            if pull <= 1 { pullCooldown = false }
             return
         }
         pullDistance = pull
@@ -363,10 +363,14 @@ struct HomeView: View {
         Task {
             pullRefreshing = true
             await reload(deterministic: false)
-            // 끝나는 순간 인디케이터 즉시 숨김 + 상단 복귀까지 재표시 억제(깜빡임 제거).
+            // 끝나는 순간 인디케이터 즉시 숨김 + 바운스백 동안 재표시 억제(깜빡임 제거).
             pullDistance = 0
             pullCooldown = true
             pullRefreshing = false
+            // 쿨다운을 '시간 기반'으로 해제 — 스크롤이 이미 정지해 콜백이 더 안 와도
+            // 갇히지 않아 다음 당김을 먹지 않는다(Codex 리뷰). 바운스백(~0.3s)을 덮는 0.4s.
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            pullCooldown = false
         }
     }
 
