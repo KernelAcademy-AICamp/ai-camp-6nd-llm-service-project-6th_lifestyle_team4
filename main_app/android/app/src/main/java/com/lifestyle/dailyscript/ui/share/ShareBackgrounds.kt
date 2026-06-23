@@ -7,6 +7,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import com.lifestyle.dailyscript.data.model.ShareBackgroundDto
 import java.util.Random
 
 /**
@@ -23,8 +24,12 @@ data class ShareBackground(
     val name: String,
     val tier: ShareTier,
     val price: Int = 0,
-    /** 로컬 이미지 배경(프리미엄/로얄) — assets/ 경로. 절차적 배경이면 null. */
+    /** 로컬 이미지 배경(프리미엄/로얄) — assets/ 경로. 절차적·원격 이미지면 null. 원격 로드 실패 시 폴백. */
     val assetPath: String? = null,
+    /** 원격 이미지 배경(프리미엄/로얄) — share_backgrounds 의 Supabase Storage 공개 URL. */
+    val imageUrl: String? = null,
+    /** 책 제목 우선정렬 타깃(없으면 name 으로 매칭). DB 카드지에서 채워진다. */
+    val workTitle: String? = null,
     /**
      * 이미지 배경 위에 그릴 글자색(ARGB, 명대사·화자·작품). 기본은 어두운 에스프레소.
      * 배경 이미지가 어두우면 밝게(예: 0xFFFAF8F2.toInt())로 바꿔야 글자가 보인다.
@@ -95,7 +100,11 @@ private fun paintParchment(c: Canvas, w: Int, h: Int, seed: Long): Int {
     return ink
 }
 
-/** PWA SHARE_BACKGROUNDS 8종 (전부 free). */
+/**
+ * 무료 8종 (전부 절차적 그림 — 코드에 남는다). PWA SHARE_BACKGROUNDS 와 패리티.
+ * Premium 999🧶 / Royal 2999🧶 는 더 이상 여기 하드코딩하지 않는다 — share_backgrounds 테이블에서
+ * 원격으로 받아(ShareRepository.listBackgrounds → toShareBackground) 이 리스트 뒤에 합쳐진다.
+ */
 val SHARE_BACKGROUNDS: List<ShareBackground> = listOf(
     ShareBackground("beige", "크림 편지지", ShareTier.Free) { c, w, h, _ -> paintLetter(c, w, h, "#F4ECDB", "#E0D5BC", "#3B2A1A") },
     ShareBackground("rose", "로즈 편지지", ShareTier.Free) { c, w, h, _ -> paintLetter(c, w, h, "#FAEAE2", "#E6C9BD", "#4A2A24") },
@@ -105,14 +114,39 @@ val SHARE_BACKGROUNDS: List<ShareBackground> = listOf(
     ShareBackground("kraft", "크라프트", ShareTier.Free) { c, w, h, _ -> paintLetter(c, w, h, "#C8A876", "#A88858", "#1F140A") },
     ShareBackground("midnight", "미드나잇", ShareTier.Free) { c, w, h, _ -> paintLetter(c, w, h, "#1B2436", "#0E1626", "#F4ECDB") },
     ShareBackground("rosegold", "로즈골드", ShareTier.Free) { c, w, h, _ -> paintLetter(c, w, h, "#E8C9B7", "#C9A88E", "#3A1F18") },
-    // Premium 999🧶 / Royal 2999🧶 — 로컬 이미지 배경. 폴더 구조는 PWA 와 동일:
-    //   assets/share-premium/ (999) · assets/share-royal/ (2999).
-    // PWA 규칙: 파일명 = 책 제목, name 도 책 제목 → 공유 카드의 책 제목과 같으면 그 카드지가 그리드 맨 앞
-    //   (ShareCardSheet 의 normalizeWorkTitle 매칭). 아래는 우선 2장씩 슬롯(파일 넣은 뒤 name/ink 조정).
-    //   책별 카드지로 갈 땐 id=슬러그, name=책제목, assetPath="share-premium/<책제목>.png" 로 추가.
-    // 이미지가 어두우면 해당 엔트리에 ink = 0xFFFAF8F2.toInt() (밝게) 추가.
-    ShareBackground("premium_1", "프리미엄 1", ShareTier.Premium, price = 999, assetPath = "share-premium/premium_1.png"),
-    ShareBackground("premium_2", "프리미엄 2", ShareTier.Premium, price = 999, assetPath = "share-premium/premium_2.png"),
-    ShareBackground("royal_1", "로얄 1", ShareTier.Royal, price = 2999, assetPath = "share-royal/royal_1.png"),
-    ShareBackground("royal_2", "로얄 2", ShareTier.Royal, price = 2999, assetPath = "share-royal/royal_2.png"),
+)
+
+/** tier 문자열("premium"/"royal") → 열거형. 알 수 없으면 Free. */
+fun shareTierFromString(s: String): ShareTier = when (s.trim().lowercase()) {
+    "royal" -> ShareTier.Royal
+    "premium" -> ShareTier.Premium
+    else -> ShareTier.Free
+}
+
+/** "#RRGGBB" → 불투명 ARGB Int. 파싱 실패 시 기본 에스프레소(#3B2A1A). */
+fun parseInkHex(hex: String?): Int = runCatching {
+    (0xFF shl 24) or (AndroidColor.parseColor(hex) and 0x00FFFFFF)
+}.getOrDefault(0xFF3B2A1A.toInt())
+
+/**
+ * 시드 4종(premium_1/2·royal_1/2)은 APK 에 번들 PNG 가 있어 원격 로드 실패(오프라인/타임아웃) 시
+ * 폴백으로 쓴다. 그 외 slug 는 번들이 없으므로 null → 원격만 사용.
+ */
+private val BUNDLED_SHARE_ASSETS: Map<String, String> = mapOf(
+    "premium_1" to "share-premium/premium_1.png",
+    "premium_2" to "share-premium/premium_2.png",
+    "royal_1" to "share-royal/royal_1.png",
+    "royal_2" to "share-royal/royal_2.png",
+)
+
+/** DB 행(ShareBackgroundDto) → 런타임 카드지. 원격 이미지 배경이므로 paint=null, imageUrl 채움. */
+fun ShareBackgroundDto.toShareBackground(): ShareBackground = ShareBackground(
+    id = slug,
+    name = name,
+    tier = shareTierFromString(tier),
+    price = price,
+    assetPath = BUNDLED_SHARE_ASSETS[slug],   // 시드 4종은 원격 실패 시 번들 PNG 폴백
+    imageUrl = imageUrl,
+    workTitle = workTitle,
+    ink = parseInkHex(ink),
 )

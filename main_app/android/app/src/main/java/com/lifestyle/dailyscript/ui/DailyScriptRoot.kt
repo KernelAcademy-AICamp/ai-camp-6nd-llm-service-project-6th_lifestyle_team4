@@ -145,10 +145,14 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val yarnVm: YarnViewModel = viewModel()
     val yarnAvailable by yarnVm.available.collectAsState()
     val purchasedShareThemes by yarnVm.purchasedThemes.collectAsState()
+    val shareBackgrounds by yarnVm.shareBackgrounds.collectAsState()
     LaunchedEffect(session.userId, session.yarnBalance) {
         yarnVm.setPurchased(session.yarnBalance)
     }
-    LaunchedEffect(session.userId) { yarnVm.loadPurchasedThemes() }
+    LaunchedEffect(session.userId) {
+        yarnVm.loadPurchasedThemes()
+        yarnVm.loadShareBackgrounds()
+    }
 
     // OZ Pick "취향 알려주기" CTA → 선호도 온보딩 강제 재노출 (이미 완료한 사용자도 다시 설정 가능).
     var forcePrefOverlay by remember { mutableStateOf(false) }
@@ -312,6 +316,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
                         yarnBalance = yarnAvailable,
                         purchasedThemeIds = purchasedShareThemes,
+                        remoteBackgrounds = shareBackgrounds,
                         onBuyTheme = { bg -> yarnVm.buyShareTheme(bg.id, bg.price) },
                     )
                 }
@@ -460,6 +465,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                             myNickname = session.nickname,
                             yarnBalance = yarnAvailable,
                             purchasedThemeIds = purchasedShareThemes,
+                            remoteBackgrounds = shareBackgrounds,
                             onBuyTheme = { bg -> yarnVm.buyShareTheme(bg.id, bg.price) },
                             onBack = { navController.popBackStack() },
                             // 하단바 탭 전환과 같은 패턴 — 방문 순서대로 쌓아 뒤로가기가 직전 화면으로 가게 한다.

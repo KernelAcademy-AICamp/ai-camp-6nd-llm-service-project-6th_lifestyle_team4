@@ -100,6 +100,7 @@ fun ShareCardSheet(
     userId: Long = 0L,
     yarnBalance: Int = 0,
     purchasedIds: Set<String> = emptySet(),
+    remoteBackgrounds: List<ShareBackground> = emptyList(),
     onBuy: suspend (ShareBackground) -> SpendResult = { SpendResult.ERROR },
 ) {
     val context = LocalContext.current
@@ -232,11 +233,12 @@ fun ShareCardSheet(
 
             // 배경 그리드(4열) 또는 빈 상태. Premium/Royal 은 PWA 처럼 카드지 name(=책 제목)이
             // 공유 카드의 책 제목과 같은 것을 맨 앞으로 정렬(normalizeWorkTitle 비교).
-            val items = remember(selectedTier, payload.work) {
-                val base = SHARE_BACKGROUNDS.filter { it.tier == selectedTier }
+            val allBackgrounds = remember(remoteBackgrounds) { SHARE_BACKGROUNDS + remoteBackgrounds }
+            val items = remember(selectedTier, payload.work, allBackgrounds) {
+                val base = allBackgrounds.filter { it.tier == selectedTier }
                 val target = normalizeWorkTitle(payload.work)
                 if (selectedTier == ShareTier.Free || target.isEmpty()) base
-                else base.sortedByDescending { if (normalizeWorkTitle(it.name) == target) 1 else 0 }
+                else base.sortedByDescending { if (normalizeWorkTitle(it.workTitle ?: it.name) == target) 1 else 0 }
             }
             if (items.isEmpty()) {
                 Text(

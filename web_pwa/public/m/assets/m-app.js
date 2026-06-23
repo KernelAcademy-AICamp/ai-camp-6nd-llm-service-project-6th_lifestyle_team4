@@ -1432,12 +1432,12 @@ function maybeOpenSharedCard() {
     safeStorageRemove('ds.pendingShareQuote');
     const previewQuote = qDecoded || card.quote || '';
     setTimeout(() => {
-      try { openSharedPreview(card, bgId, previewQuote); }
-      catch (e) {
+      /* openSharedPreview 는 async — 동기 try/catch 가 못 잡으므로 .catch 로 폴백 */
+      Promise.resolve(openSharedPreview(card, bgId, previewQuote)).catch((e) => {
         console.warn('[m] openSharedPreview failed:', e);
         document.documentElement.classList.remove('share-entry');
         openDetail(card);
-      }
+      });
     }, 80);
     return;
   }
@@ -1447,9 +1447,10 @@ function maybeOpenSharedCard() {
 
 /* 공유자가 만든 카드 미리보기 풀스크린 모달 — 캔버스 + CTA.
    페이지 진입 시 메인 홈화면 대신 이 모달이 먼저 등장. */
-function openSharedPreview(card, bgId, quote) {
+async function openSharedPreview(card, bgId, quote) {
   const w = card.works || {};
-  const bg = SHARE_BACKGROUNDS.find((b) => b.id === bgId) || SHARE_BACKGROUNDS[0];
+  await loadShareBackgrounds();   // 친구가 보낸 카드지가 premium/royal 이면 원격 목록이 있어야 찾힘
+  const bg = allShareBackgrounds().find((b) => b.id === bgId) || SHARE_BACKGROUNDS[0];
   const isAnon = state.isAnonymous;
   /* 1회용 모달 DOM 생성 */
   let modal = document.getElementById('shared-preview-modal');
@@ -8621,9 +8622,115 @@ const SHARE_BACKGROUNDS = [
   { id: 'kraft',     name: '크라프트',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#C8A876', '#A88858', '#1F140A') },
   { id: 'midnight',  name: '미드나잇',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#1B2436', '#0E1626', '#F4ECDB') },
   { id: 'rosegold',  name: '로즈골드',     tier: 'free', paint: (ctx, W, H) => paintLetter(ctx, W, H, '#E8C9B7', '#C9A88E', '#3A1F18') },
-  /* Premium — 999 실타래, 후속 turn 에 이미지 추가 예정 */
-  /* Royal   — 2999 실타래, 후속 turn 에 이미지 추가 예정 */
+  /* Premium 999🧶 / Royal 2999🧶 — 더 이상 코드에 없음. share_backgrounds 테이블에서
+     loadShareBackgrounds() 로 받아 allShareBackgrounds() 가 free 8종 뒤에 합친다. */
 ];
+
+// ===== 원격 카드지(premium/royal) — share_backgrounds 테이블 + 이미지 캐시 + 잠금 해제 =====
+let shareBgRemote = null;
+async function loadShareBackgrounds() {
+  if (shareBgRemote) return shareBgRemote;
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb.from('share_backgrounds')
+      .select('slug,name,tier,price,image_url,ink,work_title,sort_order')
+      .eq('is_active', true).order('sort_order');
+    if (error) throw error;
+    shareBgRemote = (data || []).map((r) => ({
+      id: r.slug, name: r.name, tier: r.tier, price: r.price || 0,
+      imageUrl: r.image_url, ink: r.ink || '#3B2A1A', workTitle: r.work_title || '',
+      /* paint 없음 → 렌더/썸네일 코드가 이미지 배경으로 식별 */
+    }));
+  } catch (e) {
+    console.warn('[m] loadShareBackgrounds failed:', e);
+    return [];   // 캐시 안 함(shareBgRemote=null 유지) → 다음 호출에 재시도
+  }
+  return shareBgRemote;
+}
+/** free 8종 + 원격 premium/royal 합친 리스트(아직 못 받았으면 free 만). */
+function allShareBackgrounds() {
+  return (shareBgRemote && shareBgRemote.length) ? SHARE_BACKGROUNDS.concat(shareBgRemote) : SHARE_BACKGROUNDS;
+}
+
+// 카드지 이미지 캐시 — toBlob 오염(taint) 방지 위해 crossOrigin='anonymous'(공개 버킷 CORS 헤더 제공).
+const shareImgCache = new Map();   // url -> { img, promise }
+function loadShareImage(url) {
+  const cached = shareImgCache.get(url);
+  if (cached) return cached.promise;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';   // ★ src 보다 먼저 — 안 그러면 캔버스가 tainted 되어 toBlob 이 던짐
+  const promise = new Promise((resolve, reject) => {
+    img.onload = () => resolve(img);
+    img.onerror = (e) => { shareImgCache.delete(url); reject(e); };
+  });
+  img.src = url;
+  shareImgCache.set(url, { img, promise });
+  return promise;
+}
+function readyShareImage(url) {
+  const e = shareImgCache.get(url);
+  return (e && e.img && e.img.complete && e.img.naturalWidth > 0) ? e.img : null;
+}
+function drawShareCover(ctx, img, W, H) {
+  const s = Math.max(W / img.width, H / img.height);
+  const dw = img.width * s, dh = img.height * s;
+  ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+
+// 보유 카드지 id(기기 로컬, 안드로이드 SHARE_THEMES_PURCHASED 미러). 실타래 잔액은 서버(spend_yarn).
+const PURCHASED_SHARE_THEMES_KEY = 'ds.purchasedShareThemes';
+function getPurchasedShareThemes() {
+  return new Set(String(safeStorageGet(PURCHASED_SHARE_THEMES_KEY, '') || '')
+    .split(',').map((s) => s.trim()).filter(Boolean));
+}
+function addPurchasedShareTheme(id) {
+  const set = getPurchasedShareThemes();
+  set.add(id);
+  safeStorageSet(PURCHASED_SHARE_THEMES_KEY, Array.from(set).join(','));
+}
+async function spendYarnRpc(amount) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('spend_yarn', { p_amount: amount });
+  if (error) throw error;
+  return typeof data === 'number' ? data : parseInt(data, 10);
+}
+
+// 잠긴 카드지 탭 → 구매 확인 → 실타래 차감(spend_yarn) → 로컬 보유 기록 + 선택. (안드 buyShareTheme 미러)
+function promptUnlockShareBg(b) {
+  openPromptModal({
+    title: `${b.tier === 'royal' ? 'Royal' : 'Premium'} 카드지 잠금 해제`,
+    message: `이 배경을 실타래 ${b.price}개로 잠금 해제할까요?`,
+    subNote: `보유 실타래 ${yarnAvailable()}개`,
+    confirmLabel: '잠금 해제',
+    dismissLabel: '취소',
+    openSigninOnConfirm: false,
+    onConfirm: async () => {
+      try {
+        const balance = await spendYarnRpc(b.price);
+        if (!Number.isFinite(balance) || balance < 0) { showYarnInsufficient(); return; }
+        state.yarnPurchased = balance;
+        addPurchasedShareTheme(b.id);
+        renderYarnChip();
+        shareState.bgId = b.id;
+        renderShareBgList();
+        renderShareCardCurrent();
+        toast(`${b.name} 잠금 해제!`);
+      } catch (e) {
+        console.warn('[m] unlock share bg failed:', e);
+        toast('잠금 해제에 실패했어요. 잠시 후 다시 시도해주세요.');
+      }
+    },
+  });
+}
+
+// 다운로드/공유 직전 — 선택 배경이 이미지면 로드 완료를 보장하고 재렌더(미로드 시 종이톤 폴백, toBlob 오염 방지).
+async function ensureShareCanvasPainted() {
+  const bg = allShareBackgrounds().find((b) => b.id === shareState.bgId);
+  if (bg && bg.imageUrl && !readyShareImage(bg.imageUrl)) {
+    try { await loadShareImage(bg.imageUrl); } catch { /* 실패 → 종이톤 폴백 */ }
+    renderShareCardCurrent();
+  }
+}
 
 function paintLetter(ctx, W, H, bgTop, bgBot, ink) {
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -8686,9 +8793,32 @@ function wrapText(ctx, text, maxWidth) {
 function renderShareCard(canvas, bg, payload) {
   const W = canvas.width, H = canvas.height;
   const ctx = canvas.getContext('2d');
+  /* 비동기 이미지 재렌더가 더 새로운 선택을 덮어쓰지 않게 시퀀스 토큰으로 가드 */
+  const seq = (canvas._shareSeq = (canvas._shareSeq || 0) + 1);
   ctx.clearRect(0, 0, W, H);
-  const ink = bg.paint(ctx, W, H) || '#3B2A1A';
 
+  let ink;
+  if (bg.paint) {
+    ink = bg.paint(ctx, W, H) || '#3B2A1A';                 // 무료 8종 — 절차적
+  } else {
+    ink = bg.ink || '#3B2A1A';                              // 이미지 배경(premium/royal)
+    const img = bg.imageUrl ? readyShareImage(bg.imageUrl) : null;
+    if (img) {
+      drawShareCover(ctx, img, W, H);
+    } else {
+      ctx.fillStyle = '#EDE7DA'; ctx.fillRect(0, 0, W, H);  // 로드 전/실패 종이톤
+      if (bg.imageUrl) {
+        loadShareImage(bg.imageUrl)
+          .then(() => { if (canvas._shareSeq === seq) renderShareCard(canvas, bg, payload); })
+          .catch(() => { /* 로드 실패 → 종이톤 유지(toBlob 안전) */ });
+      }
+    }
+  }
+  drawShareCardText(ctx, ink, payload, W, H);
+}
+
+/* 명대사/화자/작품 텍스트 — 배경(절차적·이미지) 위에 공통으로 그린다. */
+function drawShareCardText(ctx, ink, payload, W, H) {
   /* 'Daily Script' — 카드 상단 워터마크 */
   ctx.fillStyle = ink + '80';
   ctx.font = `700 22px "Pretendard", "Noto Sans KR", sans-serif`;
@@ -8741,15 +8871,16 @@ function renderShareBgList() {
   const list = document.getElementById('share-bg-list');
   if (!list) return;
   list.innerHTML = '';
-  let items = SHARE_BACKGROUNDS.filter((b) => b.tier === shareState.tab);
+  const purchasedSet = getPurchasedShareThemes();
+  let items = allShareBackgrounds().filter((b) => b.tier === shareState.tab);
   /* Premium / Royal — 카드지 name(=책 제목)이 현재 공유 카드의 책 제목과 같은 것을 맨 앞으로.
      예: 프랑켄슈타인 카드 공유 → name:'프랑켄슈타인' 카드지가 그리드 첫번째. */
   if (shareState.tab === 'premium' || shareState.tab === 'royal') {
     const target = normalizeWorkTitle(shareState.payload?.work);
     if (target) {
       items.sort((a, b) => {
-        const am = normalizeWorkTitle(a.name) === target ? 1 : 0;
-        const bm = normalizeWorkTitle(b.name) === target ? 1 : 0;
+        const am = normalizeWorkTitle(a.workTitle || a.name) === target ? 1 : 0;
+        const bm = normalizeWorkTitle(b.workTitle || b.name) === target ? 1 : 0;
         return bm - am;
       });
     }
@@ -8760,7 +8891,7 @@ function renderShareBgList() {
   }
   for (const b of items) {
     const cell = document.createElement('button');
-    const locked = b.tier !== 'free';   /* Free 외엔 잠금 표시 (구매 RPC 는 후속 turn 에서 연결) */
+    const locked = b.tier !== 'free' && !purchasedSet.has(b.id);   /* 보유 안 한 유료 티어만 잠금 */
     cell.type = 'button';
     cell.dataset.bg = b.id;
     const active = shareState.bgId === b.id && !locked;
@@ -8773,18 +8904,24 @@ function renderShareBgList() {
       <span style="font-size:10px;color:var(--espresso);text-align:center;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${b.name}</span>
     `;
     list.appendChild(cell);
-    /* 썸네일 렌더 — 같은 paint 함수, 작은 캔버스 */
+    /* 썸네일 렌더 — 절차적이면 paint, 이미지면 cover(로드 후 교체) */
     const tc = cell.querySelector(`canvas[data-thumb="${b.id}"]`);
     if (tc) {
       const tctx = tc.getContext('2d');
       tctx.clearRect(0, 0, tc.width, tc.height);
-      try { b.paint(tctx, tc.width, tc.height); } catch {}
+      if (b.paint) {
+        try { b.paint(tctx, tc.width, tc.height); } catch {}
+      } else if (b.imageUrl) {
+        const ready = readyShareImage(b.imageUrl);
+        if (ready) { try { drawShareCover(tctx, ready, tc.width, tc.height); } catch {} }
+        else {
+          tctx.fillStyle = '#EDE7DA'; tctx.fillRect(0, 0, tc.width, tc.height);
+          loadShareImage(b.imageUrl).then((img) => { try { drawShareCover(tctx, img, tc.width, tc.height); } catch {} }).catch(() => {});
+        }
+      }
     }
     cell.addEventListener('click', () => {
-      if (locked) {
-        toast(`${b.tier === 'royal' ? 'Royal' : 'Premium'} 배경 — 실타래 ${b.price}개로 잠금 해제 (준비 중)`);
-        return;
-      }
+      if (locked) { promptUnlockShareBg(b); return; }
       shareState.bgId = b.id;
       renderShareBgList();
       renderShareCardCurrent();
@@ -8794,7 +8931,7 @@ function renderShareBgList() {
 
 function renderShareCardCurrent() {
   const canvas = document.getElementById('share-canvas');
-  const bg = SHARE_BACKGROUNDS.find((b) => b.id === shareState.bgId) || SHARE_BACKGROUNDS[0];
+  const bg = allShareBackgrounds().find((b) => b.id === shareState.bgId) || SHARE_BACKGROUNDS[0];
   if (canvas && shareState.payload) renderShareCard(canvas, bg, shareState.payload);
   shareState.lastBlob = null;
 }
@@ -8833,6 +8970,7 @@ function paintShareCounts(cardId, count) {
 async function downloadShareCard() {
   const canvas = document.getElementById('share-canvas');
   if (!canvas) return;
+  await ensureShareCanvasPainted();   // 이미지 배경이면 로드 완료 보장(toBlob 오염 방지)
   const blob = await canvasToBlob(canvas);
   if (!blob) { toast('이미지 생성 실패'); return; }
   const filename = `daily-script-${Date.now()}.png`;
@@ -8892,6 +9030,7 @@ function buildReferralUrl(cardId, opts) {
 /* 이미지 보내기 — 캔버스 PNG 를 Web Share files 로. 카카오톡 포함 모든 메신저가 이미지로 받음. */
 async function shareImage() {
   const canvas = document.getElementById('share-canvas'); if (!canvas) return;
+  await ensureShareCanvasPainted();   // 이미지 배경이면 로드 완료 보장(toBlob 오염 방지)
   const blob = await canvasToBlob(canvas); if (!blob) { toast('이미지 생성 실패'); return; }
   const file = new File([blob], 'daily-script.png', { type: 'image/png' });
   try {
@@ -8964,6 +9103,8 @@ function openShareModal(payload) {
   renderShareBgList();
   renderShareCardCurrent();
   modal.style.display = 'flex';
+  /* 원격 카드지(premium/royal) 비동기 로드 후 그리드 갱신 */
+  loadShareBackgrounds().then(() => { renderShareBgList(); }).catch(() => {});
 }
 function closeShareModal() {
   const modal = document.getElementById('share-modal');

@@ -2,7 +2,9 @@ package com.lifestyle.dailyscript.ui.yarn
 
 import androidx.lifecycle.ViewModel
 import com.lifestyle.dailyscript.data.AppPreferences
+import com.lifestyle.dailyscript.data.repo.ShareRepository
 import com.lifestyle.dailyscript.data.repo.YarnRepository
+import com.lifestyle.dailyscript.ui.share.ShareBackground
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +21,7 @@ import java.time.LocalDate
 class YarnViewModel : ViewModel() {
 
     private val repo = YarnRepository()
+    private val shareRepo = ShareRepository()
 
     private val purchased = MutableStateFlow(0)
 
@@ -31,6 +34,13 @@ class YarnViewModel : ViewModel() {
 
     /** 앱/세션 진입 시 보유 카드지 로드. */
     suspend fun loadPurchasedThemes() { _purchasedThemes.value = AppPreferences.sharePurchasedThemes() }
+
+    // 원격 공유 카드지(premium/royal) — share_backgrounds 테이블. 공유 시트가 무료 8종 뒤에 합쳐 쓴다.
+    private val _shareBackgrounds = MutableStateFlow<List<ShareBackground>>(emptyList())
+    val shareBackgrounds: StateFlow<List<ShareBackground>> = _shareBackgrounds.asStateFlow()
+
+    /** 원격 카드지 목록 로드(공개 읽기). 실패하면 빈 리스트 유지 → 무료 8종만 노출. */
+    suspend fun loadShareBackgrounds() { _shareBackgrounds.value = shareRepo.listBackgrounds() }
 
     /**
      * 공유 카드지 구매 — 이미 보유면 SUCCESS, 아니면 실타래 [price] 차감(서버 spend_yarn) 후 보유 기록.

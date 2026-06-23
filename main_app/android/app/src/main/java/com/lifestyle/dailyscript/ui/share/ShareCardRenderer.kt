@@ -9,6 +9,9 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import androidx.core.content.res.ResourcesCompat
 import com.lifestyle.dailyscript.R
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 
 /**
@@ -21,8 +24,12 @@ class ShareCardRenderer(context: Context) {
     private val appCtx = context.applicationContext
     private val serif: Typeface by lazy { ResourcesCompat.getFont(appCtx, R.font.nanum_myeongjo) ?: Typeface.SERIF }
 
-    /** 이미지 배경 디코드 캐시 — assets/ 경로별 1회만 디코드(썸네일/미리보기/최종이 공유). */
-    private val assetCache = HashMap<String, Bitmap?>()
+    // 디코드 캐시 — 성공만 캐시(일시 실패는 다음 렌더에 재시도). 썸네일 그리드는 셀마다
+    // Dispatchers.Default 로 동시 렌더되어 같은 renderer 의 캐시에 동시 접근하므로 ConcurrentHashMap 필수.
+    /** assets/ 경로별 디코드 캐시. */
+    private val assetCache = ConcurrentHashMap<String, Bitmap>()
+    /** 원격 이미지(Storage URL)별 디코드 캐시. */
+    private val urlCache = ConcurrentHashMap<String, Bitmap>()
 
     /** 배경만 그린 비트맵 — 선택 그리드 썸네일용(텍스트 없음). */
     fun renderBackground(bg: ShareBackground, width: Int, height: Int, seed: Long): Bitmap {
@@ -40,21 +47,45 @@ class ShareCardRenderer(context: Context) {
         return bmp
     }
 
-    /** 배경 그리기 — 절차적이면 paint(), 이미지면 에셋을 cover 로 채운다. 글자 잉크색 반환. */
+    /** 배경 그리기 — 절차적이면 paint(), 이미지면 원격(Storage URL)→번들 에셋 순으로 cover. 글자 잉크색 반환. */
     private fun paintBackground(canvas: Canvas, bg: ShareBackground, w: Int, h: Int, seed: Long): Int {
         bg.paint?.let { return it(canvas, w, h, seed) }
-        val src = bg.assetPath?.let { loadAsset(it) }
+        // 원격 우선 → 실패하면 번들 에셋(구버전/오프라인 호환) → 그래도 없으면 종이톤(빈 칸 방지).
+        val src = bg.imageUrl?.let { loadRemote(it) } ?: bg.assetPath?.let { loadAsset(it) }
         if (src != null) {
             drawCover(canvas, src, w, h)
         } else {
-            // 이미지 미배치/디코드 실패 — 투명 대신 종이톤으로 채워 빈 칸 방지.
             canvas.drawColor(0xFFEDE7DA.toInt())
         }
         return bg.ink
     }
 
-    private fun loadAsset(path: String): Bitmap? = assetCache.getOrPut(path) {
-        runCatching { appCtx.assets.open(path).use { BitmapFactory.decodeStream(it) } }.getOrNull()
+    private fun loadAsset(path: String): Bitmap? {
+        assetCache[path]?.let { return it }
+        val bmp = runCatching { appCtx.assets.open(path).use { BitmapFactory.decodeStream(it) } }.getOrNull()
+        if (bmp != null) assetCache[path] = bmp
+        return bmp
+    }
+
+    /**
+     * 원격 이미지 비트맵 — blocking GET(렌더는 Dispatchers.Default 에서 호출되므로 안전).
+     * 성공만 캐시 → 일시적 네트워크 실패는 다음 렌더에 재시도. 실패하면 null(호출측이 에셋/종이톤 폴백).
+     */
+    private fun loadRemote(url: String): Bitmap? {
+        urlCache[url]?.let { return it }
+        val bmp = runCatching {
+            val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 15_000
+            }
+            try {
+                conn.inputStream.use { BitmapFactory.decodeStream(it) }
+            } finally {
+                conn.disconnect()
+            }
+        }.getOrNull()
+        if (bmp != null) urlCache[url] = bmp
+        return bmp
     }
 
     /** 원본을 9:16 캔버스에 cover(중앙 크롭)로 그린다. */

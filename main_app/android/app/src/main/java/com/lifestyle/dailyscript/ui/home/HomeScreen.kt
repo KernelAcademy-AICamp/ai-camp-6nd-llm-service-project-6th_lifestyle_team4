@@ -92,6 +92,7 @@ fun HomeScreen(
     onOpenCard: (Long) -> Unit,
     yarnBalance: Int,
     purchasedThemeIds: Set<String>,
+    remoteBackgrounds: List<ShareBackground> = emptyList(),
     onBuyTheme: suspend (ShareBackground) -> SpendResult,
 ) {
     val state by vm.state.collectAsState()
@@ -217,6 +218,7 @@ fun HomeScreen(
               userId = userId,
               yarnBalance = yarnBalance,
               purchasedIds = purchasedThemeIds,
+              remoteBackgrounds = remoteBackgrounds,
               onBuy = onBuyTheme,
               onDismiss = { sharePayload = null },
               onShared = { vm.onCardShared(p.cardId) },
