@@ -458,7 +458,8 @@ struct SignInSheet: View {
     @State private var appleNonce = ""   // Apple 요청 시 생성 → 응답 검증에 사용
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            signInHeader
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("아이디와 비밀번호로 로그인하면 다른 기기에서도 북마크가 동기화됩니다.")
@@ -540,21 +541,33 @@ struct SignInSheet: View {
                 }
                 .padding(20)
             }
-            .background(Color.paper)
-            .navigationTitle(signUpMode ? "가입" : "로그인")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("취소") { dismiss() }.foregroundStyle(.walnut)
-                }
-            }
         }
+        .padding(.top, SheetMetrics.grabberTop)   // 그래버 ↔ 헤더 여백(공통 표준)
+        .background(Color.paper)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         // Android SignInDialog: 인증 성공(익명 해제)되면 자동으로 닫힌다.
         .onChange(of: session.isAnonymous) { _, anon in
             if !anon { dismiss() }
         }
+    }
+
+    // 시트 커스텀 헤더 — 출석체크 시트와 동일한 크롬 표준(제목 좌 + 닫기 우, 56pt, 하단
+    // Hairline). 기존 NavigationStack 인라인 타이틀이 그래버에 붙던 문제 해소(SheetMetrics).
+    private var signInHeader: some View {
+        HStack {
+            Text(signUpMode ? "가입" : "로그인")
+                .font(.headlineSerif(20))
+                .foregroundStyle(.espresso)
+            Spacer()
+            Button { dismiss() } label: {
+                Text("취소").font(.bodySans(15)).foregroundStyle(.walnut)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, SheetMetrics.cardPadding)
+        .frame(height: SheetMetrics.headerHeight)
+        .overlay(alignment: .bottom) { Hairline() }
     }
 }
 

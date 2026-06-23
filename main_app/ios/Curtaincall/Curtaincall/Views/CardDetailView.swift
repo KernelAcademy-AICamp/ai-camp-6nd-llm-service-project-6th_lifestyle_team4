@@ -609,19 +609,19 @@ struct CardDetailView: View {
                 Text(title)
                     .font(.headlineSerif(22))
                     .foregroundStyle(.espresso)
-                Spacer().frame(height: 12)
+                Spacer().frame(height: SheetMetrics.titleToBody)
                 Text(message)
                     .font(.bodySans(14))
                     .foregroundStyle(.walnut)
                     .bookLeading(size: 14)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer().frame(height: 24)
+                Spacer().frame(height: SheetMetrics.bodyToButton)
                 if isAnon {
                     Button { showSignIn = true } label: {
                         Text("회원가입 · 로그인")
                     }
                     .buttonStyle(EditorialButtonStyle(.filled))
-                    Spacer().frame(height: 10)
+                    Spacer().frame(height: SheetMetrics.buttonGap)
                     Button { dismiss() } label: {
                         Text("닫기").labelCaps()
                     }
@@ -634,7 +634,7 @@ struct CardDetailView: View {
                     .buttonStyle(EditorialButtonStyle(.filled))
                 }
             }
-            .padding(20)
+            .padding(SheetMetrics.cardPadding)
             .frame(maxWidth: 340)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))

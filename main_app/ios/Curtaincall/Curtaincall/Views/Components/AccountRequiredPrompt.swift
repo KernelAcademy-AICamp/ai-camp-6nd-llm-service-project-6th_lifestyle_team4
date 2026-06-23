@@ -31,29 +31,29 @@ struct AccountRequiredPrompt: View {
                     .accessibilityLabel("닫기")
                 }
 
-                Spacer().frame(height: 20)
+                Spacer().frame(height: SheetMetrics.bodyToButton)   // 아이브로(Members) → 제목
                 Text(title)
                     .font(.titleSerif(20))
                     .foregroundStyle(.espresso)
-                Spacer().frame(height: 8)
+                Spacer().frame(height: SheetMetrics.titleToBody)
                 Text(message)
                     .font(.bodySans(14))
                     .foregroundStyle(.walnut)
                     .bookLeading(size: 14)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Spacer().frame(height: 24)
+                Spacer().frame(height: SheetMetrics.bodyToButton)
                 Button(action: onLogin) {
                     Text("로그인")
                 }
                 .buttonStyle(EditorialButtonStyle(.filled))
-                Spacer().frame(height: 10)
+                Spacer().frame(height: SheetMetrics.buttonGap)
                 Button(action: onRegister ?? onLogin) {
                     Text("회원가입")
                 }
                 .buttonStyle(EditorialButtonStyle(.outlined))
             }
-            .padding(20)
+            .padding(SheetMetrics.cardPadding)
             .frame(maxWidth: 340)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
