@@ -41,7 +41,7 @@ struct AttendanceView: View {
                 .padding(.horizontal, 20)
             }
         }
-        .padding(.top, 12)   // 그래버 아래 여백 — '출석체크' 제목이 시트 상단/그래버에 붙지 않게
+        .padding(.top, SheetMetrics.grabberTop)   // 그래버 ↔ 헤더 여백(공통 표준)
         .background(Color.paper)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -61,9 +61,9 @@ struct AttendanceView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.leading, 20)
+        .padding(.leading, SheetMetrics.cardPadding)
         .padding(.trailing, 8)
-        .frame(height: 56)
+        .frame(height: SheetMetrics.headerHeight)
         .overlay(alignment: .bottom) { Hairline() }
     }
 
