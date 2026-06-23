@@ -78,6 +78,10 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
     /// the BookCover leather fallback. Read-only; no new data collection.
     let coverUrl: String?
 
+    /// 책 소개(works.intro) — Daily '새로 들어온 고전' 카드의 본문(3줄). PWA 는 intro 가
+    /// 있으면 그걸, 없으면 샘플 인용을 보여준다(m-app.js renderTemplate).
+    let intro: String?
+
     init(
         title: String,
         subtitle: String? = nil,
@@ -89,7 +93,8 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         titleOriginal: String? = nil,
         subtitleOriginal: String? = nil,
         authorOriginal: String? = nil,
-        coverUrl: String? = nil
+        coverUrl: String? = nil,
+        intro: String? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -102,6 +107,7 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         self.subtitleOriginal = subtitleOriginal
         self.authorOriginal = authorOriginal
         self.coverUrl = coverUrl
+        self.intro = intro
     }
 
     /// True only when an original-language work field is present.
@@ -127,7 +133,7 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
 
     // Explicit snake_case keys (supabase-swift's decoder does not convert keys).
     enum CodingKeys: String, CodingKey {
-        case title, subtitle, format, author, characters
+        case title, subtitle, format, author, characters, intro
         case releaseYear = "release_year"
         case workGenres = "work_genres"
         case titleOriginal = "title_original"
@@ -158,6 +164,7 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
         self.subtitleOriginal = try c.decodeIfPresent(String.self, forKey: .subtitleOriginal)
         self.authorOriginal = try c.decodeIfPresent(String.self, forKey: .authorOriginal)
         self.coverUrl = try c.decodeIfPresent(String.self, forKey: .coverUrl)
+        self.intro = try c.decodeIfPresent(String.self, forKey: .intro)
     }
 }
 
