@@ -740,7 +740,8 @@ private fun HlQuote(text: String) {
             modifier = Modifier.align(Alignment.TopStart).offset(y = (-6).dp),
         )
         Text(
-            text = text,
+            // LLM 출력의 `**화자**` 마커가 raw 로 노출되던 문제 — Markdown.bold 로 볼드 변환.
+            text = Markdown.bold(text),
             style = TextStyle(fontFamily = EditorialSerif, fontSize = 15.sp, lineHeight = 28.sp),
             color = Espresso,
             textAlign = TextAlign.Center,

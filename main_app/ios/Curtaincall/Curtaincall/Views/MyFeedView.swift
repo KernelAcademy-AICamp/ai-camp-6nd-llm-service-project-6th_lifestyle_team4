@@ -204,7 +204,8 @@ struct MyFeedView: View {
             }
             Button { selectedHighlight = highlight } label: {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("“\(highlight.selectedText)”")
+                    // LLM 출력의 `**화자**` 마커가 그대로 노출되던 문제 — markdownBold 로 볼드 변환.
+                    Text("“") + Text(highlight.selectedText.markdownBold) + Text("”")
                         .font(.bodySans(14))
                         .foregroundStyle(.espresso)
                         .bookLeading(size: 14)

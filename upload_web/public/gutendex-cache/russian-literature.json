@@ -1,0 +1,344 @@
+{
+  "category": "Russian Literature",
+  "topic": "russian fiction",
+  "works": [
+    {
+      "bookId": 36034,
+      "title": "White nights, and other stories",
+      "author": "Dostoyevsky, Fyodor",
+      "authors": [
+        "Dostoyevsky, Fyodor"
+      ],
+      "year": 1881,
+      "downloadCount": 25393,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/36034.txt.utf-8"
+    },
+    {
+      "bookId": 9911,
+      "title": "The Torrents of Spring",
+      "author": "Turgenev, Ivan Sergeevich",
+      "authors": [
+        "Turgenev, Ivan Sergeevich"
+      ],
+      "year": 1883,
+      "downloadCount": 9026,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/9911.txt.utf-8"
+    },
+    {
+      "bookId": 57333,
+      "title": "Project Gutenberg Compilation of Short Stories by Chekhov",
+      "author": "Chekhov, Anton Pavlovich",
+      "authors": [
+        "Chekhov, Anton Pavlovich"
+      ],
+      "year": 1904,
+      "downloadCount": 7420,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/57333.txt.utf-8"
+    },
+    {
+      "bookId": 25771,
+      "title": "A Nobleman's Nest",
+      "author": "Turgenev, Ivan Sergeevich",
+      "authors": [
+        "Turgenev, Ivan Sergeevich"
+      ],
+      "year": 1883,
+      "downloadCount": 5534,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/25771.txt.utf-8"
+    },
+    {
+      "bookId": 61963,
+      "title": "We",
+      "author": "Zamiatin, Evgenii Ivanovich",
+      "authors": [
+        "Zamiatin, Evgenii Ivanovich"
+      ],
+      "year": 1937,
+      "downloadCount": 5151,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/61963.txt.utf-8"
+    },
+    {
+      "bookId": 55024,
+      "title": "The Queen of Spades, and other stories",
+      "author": "Pushkin, Aleksandr Sergeevich",
+      "authors": [
+        "Pushkin, Aleksandr Sergeevich"
+      ],
+      "year": 1837,
+      "downloadCount": 2516,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/55024.txt.utf-8"
+    },
+    {
+      "bookId": 55283,
+      "title": "The Bet, and other stories",
+      "author": "Chekhov, Anton Pavlovich",
+      "authors": [
+        "Chekhov, Anton Pavlovich"
+      ],
+      "year": 1904,
+      "downloadCount": 2139,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/55283.txt.utf-8"
+    },
+    {
+      "bookId": 986,
+      "title": "Master and Man",
+      "author": "Tolstoy, Leo, graf",
+      "authors": [
+        "Tolstoy, Leo, graf"
+      ],
+      "year": 1910,
+      "downloadCount": 1729,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/986.txt.utf-8"
+    },
+    {
+      "bookId": 243,
+      "title": "The forged coupon, and other stories",
+      "author": "Tolstoy, Leo, graf",
+      "authors": [
+        "Tolstoy, Leo, graf"
+      ],
+      "year": 1910,
+      "downloadCount": 1317,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/243.txt.utf-8"
+    },
+    {
+      "bookId": 4706,
+      "title": "Yama [The Pit], a Novel in Three Parts",
+      "author": "Kuprin, A. I. (Aleksandr Ivanovich)",
+      "authors": [
+        "Kuprin, A. I. (Aleksandr Ivanovich)"
+      ],
+      "year": 1938,
+      "downloadCount": 1120,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/4706.txt.utf-8"
+    },
+    {
+      "bookId": 985,
+      "title": "Father Sergius",
+      "author": "Tolstoy, Leo, graf",
+      "authors": [
+        "Tolstoy, Leo, graf"
+      ],
+      "year": 1910,
+      "downloadCount": 1108,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/985.txt.utf-8"
+    },
+    {
+      "bookId": 56878,
+      "title": "First love, and other stories",
+      "author": "Turgenev, Ivan Sergeevich",
+      "authors": [
+        "Turgenev, Ivan Sergeevich"
+      ],
+      "year": 1883,
+      "downloadCount": 905,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/56878.txt.utf-8"
+    },
+    {
+      "bookId": 3783,
+      "title": "Mother",
+      "author": "Gorky, Maksim",
+      "authors": [
+        "Gorky, Maksim"
+      ],
+      "year": 1936,
+      "downloadCount": 882,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/3783.txt.utf-8"
+    },
+    {
+      "bookId": 5779,
+      "title": "The Crushed Flower, and Other Stories",
+      "author": "Andreyev, Leonid",
+      "authors": [
+        "Andreyev, Leonid"
+      ],
+      "year": 1919,
+      "downloadCount": 786,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5779.txt.utf-8"
+    },
+    {
+      "bookId": 68619,
+      "title": "Short story classics (Foreign), Vol. 1, Russian",
+      "author": "",
+      "authors": [],
+      "year": null,
+      "downloadCount": 738,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/68619.txt.utf-8"
+    },
+    {
+      "bookId": 31503,
+      "title": "Contemporary Russian Novelists",
+      "author": "Persky, Serge",
+      "authors": [
+        "Persky, Serge"
+      ],
+      "year": 1938,
+      "downloadCount": 702,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/31503.txt.utf-8"
+    },
+    {
+      "bookId": 5996,
+      "title": "Essays on Russian Novelists",
+      "author": "Phelps, William Lyon",
+      "authors": [
+        "Phelps, William Lyon"
+      ],
+      "year": 1943,
+      "downloadCount": 638,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/5996.txt.utf-8"
+    },
+    {
+      "bookId": 56456,
+      "title": "Three Men: A Novel",
+      "author": "Gorky, Maksim",
+      "authors": [
+        "Gorky, Maksim"
+      ],
+      "year": 1936,
+      "downloadCount": 626,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/56456.txt.utf-8"
+    },
+    {
+      "bookId": 23058,
+      "title": "The Queen Of Spades",
+      "author": "Pushkin, Aleksandr Sergeevich",
+      "authors": [
+        "Pushkin, Aleksandr Sergeevich"
+      ],
+      "year": 1837,
+      "downloadCount": 623,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/23058.txt.utf-8"
+    },
+    {
+      "bookId": 56797,
+      "title": "The Invaders, and Other Stories",
+      "author": "Tolstoy, Leo, graf",
+      "authors": [
+        "Tolstoy, Leo, graf"
+      ],
+      "year": 1910,
+      "downloadCount": 621,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/56797.txt.utf-8"
+    },
+    {
+      "bookId": 48912,
+      "title": "The Little Demon",
+      "author": "Sologub, Fyodor",
+      "authors": [
+        "Sologub, Fyodor"
+      ],
+      "year": 1927,
+      "downloadCount": 604,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/48912.txt.utf-8"
+    },
+    {
+      "bookId": 48452,
+      "title": "The Old House, and Other Tales",
+      "author": "Sologub, Fyodor",
+      "authors": [
+        "Sologub, Fyodor"
+      ],
+      "year": 1927,
+      "downloadCount": 579,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/48452.txt.utf-8"
+    },
+    {
+      "bookId": 56870,
+      "title": "Tales from Gorky",
+      "author": "Gorky, Maksim",
+      "authors": [
+        "Gorky, Maksim"
+      ],
+      "year": 1936,
+      "downloadCount": 577,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/56870.txt.utf-8"
+    },
+    {
+      "bookId": 68357,
+      "title": "Short-story masterpieces, Vol. 4 : $b Russian",
+      "author": "",
+      "authors": [],
+      "year": null,
+      "downloadCount": 538,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/68357.txt.utf-8"
+    },
+    {
+      "bookId": 55828,
+      "title": "The Confession: A Novel",
+      "author": "Gorky, Maksim",
+      "authors": [
+        "Gorky, Maksim"
+      ],
+      "year": 1936,
+      "downloadCount": 537,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/55828.txt.utf-8"
+    },
+    {
+      "bookId": 67224,
+      "title": "The Devil",
+      "author": "Tolstoy, Leo, graf",
+      "authors": [
+        "Tolstoy, Leo, graf"
+      ],
+      "year": 1910,
+      "downloadCount": 520,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/67224.txt.utf-8"
+    },
+    {
+      "bookId": 33444,
+      "title": "Sulamith: A Romance of Antiquity",
+      "author": "Kuprin, A. I. (Aleksandr Ivanovich)",
+      "authors": [
+        "Kuprin, A. I. (Aleksandr Ivanovich)"
+      ],
+      "year": 1938,
+      "downloadCount": 508,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/33444.txt.utf-8"
+    },
+    {
+      "bookId": 55636,
+      "title": "Orlóff and His Wife: Tales of the Barefoot Brigade",
+      "author": "Gorky, Maksim",
+      "authors": [
+        "Gorky, Maksim"
+      ],
+      "year": 1936,
+      "downloadCount": 507,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/55636.txt.utf-8"
+    },
+    {
+      "bookId": 55577,
+      "title": "Tales of Two Countries",
+      "author": "Gorky, Maksim",
+      "authors": [
+        "Gorky, Maksim"
+      ],
+      "year": 1936,
+      "downloadCount": 496,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/55577.txt.utf-8"
+    },
+    {
+      "bookId": 51094,
+      "title": "The Spy: The Story of a Superfluous Man",
+      "author": "Gorky, Maksim",
+      "authors": [
+        "Gorky, Maksim"
+      ],
+      "year": 1936,
+      "downloadCount": 478,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/51094.txt.utf-8"
+    },
+    {
+      "bookId": 42665,
+      "title": "Satan's Diary",
+      "author": "Andreyev, Leonid",
+      "authors": [
+        "Andreyev, Leonid"
+      ],
+      "year": 1919,
+      "downloadCount": 472,
+      "plainTextUrl": "https://www.gutenberg.org/ebooks/42665.txt.utf-8"
+    }
+  ],
+  "fetched_at": "__build__"
+}
