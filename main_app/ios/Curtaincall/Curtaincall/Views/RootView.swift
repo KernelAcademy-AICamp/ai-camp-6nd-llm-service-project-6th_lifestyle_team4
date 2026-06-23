@@ -56,6 +56,8 @@ struct RootView: View {
     @State private var settingsPath = NavigationPath()
     @State private var composerActive = false
     @State private var feedReselect = 0
+    /// TODAY(center) 재탭 시 1씩 증가 → HomeView 가 새 명대사 새로고침(상단 버튼과 동일).
+    @State private var homeReselect = 0
     /// Bumped to re-create FeedView (resetting its private `category` @State to the
     /// default `.today`) after a Card Detail "오늘의 한줄" post routes to Feed.
     @State private var feedResetToken = 0
@@ -214,7 +216,7 @@ struct RootView: View {
             }
             .tag(Tab.feed)
             NavigationStack(path: $homePath) {
-                HomeView(selectedTab: $selectedTab)
+                HomeView(selectedTab: $selectedTab, reselect: homeReselect)
             }
             .tag(Tab.home)
             NavigationStack(path: $archivePath) {
@@ -297,7 +299,9 @@ struct RootView: View {
     private func popToRoot(_ tab: Tab) {
         switch tab {
         case .daily: dailyPath = NavigationPath()
-        case .home: homePath = NavigationPath()
+        case .home:
+            homePath = NavigationPath()
+            homeReselect += 1   // 새 명대사 새로고침 (상단 새로고침 버튼과 동일 동작)
         case .archive: archivePath = NavigationPath()
         case .feed:
             feedPath = NavigationPath()
