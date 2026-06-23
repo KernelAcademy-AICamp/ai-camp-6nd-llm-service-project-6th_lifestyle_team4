@@ -65,7 +65,6 @@ import com.lifestyle.dailyscript.ui.onboarding.GENRES
 import com.lifestyle.dailyscript.ui.onboarding.THEMES
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
-import com.lifestyle.dailyscript.ui.components.YarnIcon
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
@@ -75,7 +74,6 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 @Composable
 fun SettingsScreen(
     session: UserSession,
-    yarn: Int,
     authMessage: String?,
     authInProgress: Boolean,
     idCheck: IdCheckState,
@@ -90,7 +88,6 @@ fun SettingsScreen(
     onOpenMyComments: () -> Unit,
     onOpenMyFeed: () -> Unit,
     onOpenBookmarks: () -> Unit,
-    onOpenYarnPurchase: () -> Unit,
     onOpenNotice: () -> Unit,
     hasUnreadNotice: Boolean = false,
     onOpenGuide: () -> Unit,
@@ -270,30 +267,6 @@ fun SettingsScreen(
             onClick = { showAttendance = true },
             trailingArrow = true,
         )
-        SettingRow(
-            title = stringResource(R.string.yarn_charge),
-            subtitle = stringResource(R.string.yarn_charge_desc),
-            onClick = onOpenYarnPurchase,
-            trailing = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    YarnIcon(modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text(
-                        text = yarn.toString(),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = Espresso,
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
-                        contentDescription = null,
-                        tint = Walnut,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-            },
-        )
-
         // --- 일반 설정 ---
         Box(modifier = Modifier.height(40.dp))
         SectionLabel(text = stringResource(R.string.general_preferences))

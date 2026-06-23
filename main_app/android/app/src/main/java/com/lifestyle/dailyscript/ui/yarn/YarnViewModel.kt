@@ -86,13 +86,6 @@ class YarnViewModel : ViewModel() {
         return true
     }
 
-    /** 충전 — 결제 없이 즉시 서버 잔액에 n개 추가. */
-    suspend fun addYarn(n: Int): Boolean {
-        val newBalance = runCatching { repo.grantYarn(n) }.getOrNull() ?: return false
-        purchased.value = newBalance
-        return true
-    }
-
     /**
      * 구매 차감 — 서버 충전 잔액에서 amount 만큼 원자적 차감(spend_yarn RPC).
      * 성공 시 공유 잔액([available]) 갱신 후 SUCCESS, 잔액 부족이면 INSUFFICIENT, RPC 실패면 ERROR.

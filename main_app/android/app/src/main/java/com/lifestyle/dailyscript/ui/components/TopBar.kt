@@ -173,7 +173,7 @@ fun NotifButton(unread: Int, onClick: () -> Unit) {
 }
 
 /**
- * 로고 우측 실타래 칩 — 아이콘 + 남은 개수. 탭하면 충전 페이지로 이동.
+ * 로고 우측 실타래 칩 — 아이콘 + 남은 개수. 탭하면 실타래 설명 팝업([YarnInfoDialog])이 뜬다(충전 진입 아님).
  * [bounceKey] 가 바뀌면 칩 박스는 그대로 두고 안의 실타래 이미지만 공 튀기듯 bounce(출석 보상 애니).
  * [onPositioned] 로 칩 중심 좌표(window px)를 알려 보상 버스트가 날아올 목표로 쓴다.
  */
@@ -198,6 +198,7 @@ fun YarnChip(
     Row(
         modifier = Modifier
             .onGloballyPositioned { onPositioned(it.boundsInWindow().center) }
+            .clip(shape)
             .background(Sand.copy(alpha = 0.35f), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 9.dp, vertical = 4.dp),

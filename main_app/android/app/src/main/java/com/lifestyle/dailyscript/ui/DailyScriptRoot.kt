@@ -82,7 +82,6 @@ import com.lifestyle.dailyscript.ui.settings.ProfileDialog
 import com.lifestyle.dailyscript.ui.settings.SettingsScreen
 import com.lifestyle.dailyscript.ui.settings.privacyDoc
 import com.lifestyle.dailyscript.ui.settings.termsDoc
-import com.lifestyle.dailyscript.ui.yarn.YarnPurchaseScreen
 import com.lifestyle.dailyscript.ui.yarn.YarnViewModel
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Walnut
@@ -155,6 +154,8 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val notifItems by notifVm.items.collectAsState()
     val notifLoading by notifVm.loading.collectAsState()
     var notifSheetOpen by remember { mutableStateOf(false) }
+    // 실타래 설명 팝업 — 상단바 실타래 칩 탭 시. (충전 페이지 폐지 후 칩의 유일한 동작)
+    var yarnInfoOpen by remember { mutableStateOf(false) }
     var notifDetailPost by remember { mutableStateOf<FeedPost?>(null) }
     var notifDetailHighlight by remember { mutableStateOf<Highlight?>(null) }
     val rootScope = rememberCoroutineScope()
@@ -280,7 +281,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     }
 
     val isDetail = destinationRoute?.startsWith("detail/") == true || destinationRoute == Routes.DETAIL
-    val fullScreenRoutes = setOf(Routes.NOTICE, Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.BOOKMARKS, Routes.TERMS, Routes.PRIVACY, Routes.YARN_PURCHASE)
+    val fullScreenRoutes = setOf(Routes.NOTICE, Routes.FEEDBACK, Routes.MY_COMMENTS, Routes.MY_FEED, Routes.BOOKMARKS, Routes.TERMS, Routes.PRIVACY)
     val isFullScreen = isDetail || currentRoute in fullScreenRoutes
     val showTopBar = !isFullScreen
     // 하단 바는 모든 화면에서 노출 — 메인 탭·상세는 물론 마이 하위 페이지(내 댓글/내 피드/보관함/
@@ -310,8 +311,8 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 Routes.DAILY, Routes.HOME, Routes.ARCHIVE, Routes.FEED -> HomeTopBar(
                     yarn = chipDisplayOverride ?: yarnAvailable,
                     onYarnClick = {
-                        AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
-                        navController.navigate(Routes.YARN_PURCHASE) { launchSingleTop = true }
+                        AppAnalytics.track("yarn_info_open")
+                        yarnInfoOpen = true
                     },
                     yarnBounceKey = chipBounceKey,
                     onYarnChipPositioned = { yarnChipCenter = it },
@@ -394,7 +395,6 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
                         session = session,
-                        yarn = yarnAvailable,
                         authMessage = authMessage,
                         authInProgress = authInProgress,
                         idCheck = idCheck,
@@ -417,10 +417,6 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onOpenBookmarks = {
                             AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.BOOKMARKS))
                             navController.navigate(Routes.BOOKMARKS)
-                        },
-                        onOpenYarnPurchase = {
-                            AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.YARN_PURCHASE))
-                            navController.navigate(Routes.YARN_PURCHASE)
                         },
                         onOpenNotice = {
                             AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.NOTICE))
@@ -479,12 +475,6 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 }
                 composable(Routes.PRIVACY) {
                     LegalScreen(doc = privacyDoc(), onBack = { navController.popBackStack() })
-                }
-                composable(Routes.YARN_PURCHASE) {
-                    YarnPurchaseScreen(
-                        yarnVm = yarnVm,
-                        onBack = { navController.popBackStack() },
-                    )
                 }
                 composable(
                     route = Routes.DETAIL,
@@ -567,6 +557,12 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 },
             )
         }
+
+        // 실타래 설명 팝업 — 상단바 칩 탭 시.
+        if (yarnInfoOpen) {
+            com.lifestyle.dailyscript.ui.yarn.YarnInfoDialog(onDismiss = { yarnInfoOpen = false })
+        }
+
         notifDetailPost?.let { post ->
             FeedPostDetailSheet(
                 post = post,

@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.BringIntoViewResponder
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -505,6 +507,8 @@ fun DetailScreen(
                       ).show()
                   } else {
                       hlScreenText = scriptSelected
+                      // 선택 표시(노란 형광펜)가 NEW HIGHLIGHT 진입/뒤로가기 후에도 남지 않도록 즉시 해제.
+                      scriptTfv = scriptTfv.copy(selection = TextRange(scriptTfv.selection.end))
                       hlScreenVisible = true
                   }
               },
@@ -730,7 +734,9 @@ private fun ScriptBody(
             ),
             visualTransformation = transformation,
             cursorBrush = SolidColor(Cta),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .bringIntoViewResponder(SwallowBringIntoView),
         )
     }
 }
@@ -760,6 +766,14 @@ private val HighlightSelectionColors = TextSelectionColors(
     handleColor = Color(0xFFF4C20D),
     backgroundColor = Color(0x8CF4C20D),
 )
+
+// 본문 BasicTextField의 선택 시 자동 스크롤(부모 verticalScroll로의 bring-into-view)을 삼켜
+// 롱프레스로 본문을 선택할 때 화면이 살짝 점프하는 현상을 제거한다.
+@OptIn(ExperimentalFoundationApi::class)
+private object SwallowBringIntoView : BringIntoViewResponder {
+    override fun calculateRectForParent(localRect: Rect): Rect = localRect
+    override suspend fun bringChildIntoView(localRect: () -> Rect?) { /* swallow */ }
+}
 
 // No-op toolbar → suppress Android's native "Copy / Select all" popup over the script.
 private object NoTextToolbar : TextToolbar {

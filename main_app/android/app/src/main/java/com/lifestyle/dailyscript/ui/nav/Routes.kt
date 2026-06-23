@@ -14,7 +14,6 @@ object Routes {
     const val BOOKMARKS = "bookmarks"
     const val TERMS = "terms"
     const val PRIVACY = "privacy"
-    const val YARN_PURCHASE = "yarn_purchase"
     const val DETAIL = "detail/{cardId}"
     fun archiveWork(workId: Long) = "archive/$workId"
     fun detail(cardId: Long) = "detail/$cardId"

@@ -99,6 +99,9 @@ fun SplashIntro(onFinished: () -> Unit) {
         }
 
         // ── 심볼 레이어 (책등 + 점) ──
+        // 워드마크가 '가운데로 확 모이며' 만들어지는 심볼이므로 메인 이미지인 책등을 화면 정중앙에 둔다.
+        // 점(.)은 "Script." 의 마침표처럼 책등 오른쪽에 붙는 액센트라, 앞쪽에 뒤쪽(Spacer+점)과
+        // 같은 너비의 팬텀 스페이서를 넣어 Row 가 통째로 중앙 정렬돼도 책등이 정중앙에 오게 균형을 맞춘다.
         Row(
             verticalAlignment = Alignment.Bottom,
             modifier = Modifier.graphicsLayer {
@@ -106,6 +109,7 @@ fun SplashIntro(onFinished: () -> Unit) {
                 scaleY = symScaleY
             },
         ) {
+            Spacer(Modifier.width(11.dp + 12.dp))  // 뒤쪽 Spacer(11)+점(12) 과 대칭 → 책등 중앙 정렬
             Spine(width = 26.dp, height = 94.dp)
             Spacer(Modifier.width(11.dp))
             Box(
