@@ -8790,26 +8790,42 @@ function normalizeWorkTitle(s) {
     .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
-/* 단어(어절) 단위 줄바꿈 — 띄어쓰기 토큰을 보존하며 split, 토큰 단위로만 줄 끊음.
-   한국어 어절·영문 단어 모두 절대 중간에서 잘리지 않는다. 한 토큰이 maxWidth 보다
-   넓으면 그 줄은 overflow (한국어 정상 어절·영문 단어는 거의 그럴 일 없음). */
+/* 단어(어절) 단위 줄바꿈 + 의미 묶음(chunk) — 한국어 의존명사·관형사·보조용언이
+   줄 머리·꼬리에 단독으로 떨어지지 않도록 짧은(1~2자) 어절은 다음 어절과 한 chunk
+   로 먼저 묶고, chunk 단위로 wrap. chunk 는 절대 중간에서 끊지 않는다.
+
+   묶음 예시:
+     "그 명을" / "있는 거죠" / "제 몸을" / "두고 싶은" / "늘 곁에" / "말 없는"
+   한 chunk 가 maxWidth 보다 넓으면 overflow (정상 한국어/영문은 거의 그럴 일 없음). */
 function wrapText(ctx, text, maxWidth) {
   const lines = [];
   for (const para of String(text || '').split('\n')) {
     if (!para.trim()) { lines.push(''); continue; }
-    const tokens = para.split(/(\s+)/).filter((t) => t.length > 0);
+    const words = para.split(/\s+/).filter(Boolean);
+    /* 1) 의미 묶음 — 첫 어절이 1~2자(관형사·짧은 부사·의존명사 등)면 다음 어절 1개 흡수.
+       1회만 흡수해서 chunk 가 무한정 길어지는 것 방지. */
+    const chunks = [];
+    let i = 0;
+    while (i < words.length) {
+      let chunk = words[i++];
+      if (chunk.length <= 2 && i < words.length) {
+        chunk += ' ' + words[i++];
+      }
+      chunks.push(chunk);
+    }
+    /* 2) chunk 단위 wrap — 한 줄에 가능한 한 많은 chunk. chunk 사이에서만 끊김. */
     let cur = '';
-    for (const tok of tokens) {
-      if (!cur) { cur = tok; continue; }
-      const test = cur + tok;
+    for (const ch of chunks) {
+      if (!cur) { cur = ch; continue; }
+      const test = cur + ' ' + ch;
       if (ctx.measureText(test).width <= maxWidth) {
         cur = test;
       } else {
-        lines.push(cur.replace(/\s+$/, ''));
-        cur = /^\s+$/.test(tok) ? '' : tok;
+        lines.push(cur);
+        cur = ch;
       }
     }
-    if (cur) lines.push(cur.replace(/\s+$/, ''));
+    if (cur) lines.push(cur);
   }
   return lines;
 }
