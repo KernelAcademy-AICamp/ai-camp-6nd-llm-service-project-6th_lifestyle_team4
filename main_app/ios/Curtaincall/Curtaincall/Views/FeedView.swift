@@ -247,18 +247,27 @@ struct FeedView: View {
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
-        var errors: [String] = []
+        // 새 새로고침이 진행 중인 요청을 대체하면 Task 취소(CancellationError)가 난다 —
+        // 무해하므로 배너로 띄우지 않는다. 실제 오류만 로깅 + 일반 안내(원시 시스템
+        // 문자열은 사용자에게 노출하지 않음).
+        var hadGenuineError = false
         do {
             posts = try await Supa.shared.fetchFeedPosts()
         } catch {
-            errors.append(error.localizedDescription)
+            if !AppLog.isCancellation(error) {
+                AppLog.error("feed posts fetch", error)
+                hadGenuineError = true
+            }
         }
         do {
             highlights = try await Supa.shared.fetchCardHighlights()
         } catch {
-            errors.append(error.localizedDescription)
+            if !AppLog.isCancellation(error) {
+                AppLog.error("feed highlights fetch", error)
+                hadGenuineError = true
+            }
         }
-        errorMessage = errors.isEmpty ? nil : errors.joined(separator: " / ")
+        errorMessage = hadGenuineError ? "피드를 불러오지 못했어요. 잠시 후 다시 시도해주세요." : nil
     }
 
     private func handlePickedCard(_ card: Card) {
