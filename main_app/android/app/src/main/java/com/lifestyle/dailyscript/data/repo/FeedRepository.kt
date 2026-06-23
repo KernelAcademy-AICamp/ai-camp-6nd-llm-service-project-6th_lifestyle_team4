@@ -48,6 +48,24 @@ class FeedRepository {
             }
             .decodeList()
 
+    /** 단건 조회 — 알림(확성기)에서 해당 feed_post 상세로 이동할 때. */
+    suspend fun loadPostById(postId: Long): FeedPost? =
+        client.postgrest["feed_posts"]
+            .select(postSelect) {
+                filter { eq("post_id", postId) }
+                limit(1)
+            }
+            .decodeSingleOrNull()
+
+    /** 단건 조회 — 알림(확성기)에서 해당 highlight 상세로 이동할 때. */
+    suspend fun loadHighlightById(highlightId: Long): Highlight? =
+        client.postgrest["card_highlights"]
+            .select(highlightSelect) {
+                filter { eq("highlight_id", highlightId) }
+                limit(1)
+            }
+            .decodeSingleOrNull()
+
     suspend fun loadMyPosts(userId: Long): List<FeedPost> =
         client.postgrest["feed_posts"]
             .select(postSelect) {

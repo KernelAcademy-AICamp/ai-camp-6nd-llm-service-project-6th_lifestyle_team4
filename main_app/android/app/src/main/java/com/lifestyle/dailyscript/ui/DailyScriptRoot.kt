@@ -27,13 +27,17 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -45,6 +49,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lifestyle.dailyscript.data.AppAnalytics
 import com.lifestyle.dailyscript.data.AppPreferences
+import com.lifestyle.dailyscript.data.model.FeedPost
+import com.lifestyle.dailyscript.data.model.Highlight
 import com.lifestyle.dailyscript.data.repo.UserSession
 import com.lifestyle.dailyscript.ui.archive.ArchiveScreen
 import com.lifestyle.dailyscript.ui.components.BottomNavBar
@@ -53,8 +59,12 @@ import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SettingsTopBar
 import com.lifestyle.dailyscript.ui.daily.DailyScreen
 import com.lifestyle.dailyscript.ui.detail.DetailScreen
+import com.lifestyle.dailyscript.ui.feed.FeedPostDetailSheet
 import com.lifestyle.dailyscript.ui.feed.FeedScreen
+import com.lifestyle.dailyscript.ui.feed.HighlightDetailSheet
 import com.lifestyle.dailyscript.ui.feedback.FeedbackScreen
+import com.lifestyle.dailyscript.ui.notif.NotifSheet
+import com.lifestyle.dailyscript.ui.notif.NotifViewModel
 import com.lifestyle.dailyscript.ui.home.HomeScreen
 import com.lifestyle.dailyscript.ui.home.HomeViewModel
 import com.lifestyle.dailyscript.ui.library.LibraryScreen
@@ -76,6 +86,9 @@ import com.lifestyle.dailyscript.ui.yarn.YarnPurchaseScreen
 import com.lifestyle.dailyscript.ui.yarn.YarnViewModel
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Walnut
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /** Credential Manager는 Activity 컨텍스트가 필요하다 — Compose의 LocalContext에서 풀어낸다. */
 private fun Context.findActivity(): Activity? {
@@ -135,6 +148,31 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
 
     val noticeVm: NoticeViewModel = viewModel()
     val noticeBadge by noticeVm.unread.collectAsState()
+
+    // 알림(확성기) VM — 상단바 배지 + 알림 시트(댓글/대댓글). 액티비티 스코프(루트 호이스팅).
+    val notifVm: NotifViewModel = viewModel()
+    val notifUnread by notifVm.unread.collectAsState()
+    val notifItems by notifVm.items.collectAsState()
+    val notifLoading by notifVm.loading.collectAsState()
+    var notifSheetOpen by remember { mutableStateOf(false) }
+    var notifDetailPost by remember { mutableStateOf<FeedPost?>(null) }
+    var notifDetailHighlight by remember { mutableStateOf<Highlight?>(null) }
+    val rootScope = rememberCoroutineScope()
+    // 미읽음 배지 폴링 — 포그라운드(STARTED)에서만 60초마다 + 복귀 즉시 1회. (PWA setInterval 60s + visibilitychange)
+    //   repeatOnLifecycle 이 백그라운드에선 루프를 멈추고, 포그라운드 복귀 때 재시작하며 즉시 갱신한다. 게스트는 0.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(session.userId, session.isAnonymous) {
+        if (session.isAnonymous) {
+            notifVm.refreshUnread(session.userId, true)
+            return@LaunchedEffect
+        }
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                notifVm.refreshUnread(session.userId, false)
+                delay(60_000)
+            }
+        }
+    }
 
     // 홈 카드 VM — 하단 '홈' 탭 재탭 시 새로고침을 위해 루트에서 호이스팅(액티비티 스코프).
     val homeVm: HomeViewModel = viewModel()
@@ -277,6 +315,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                     },
                     yarnBounceKey = chipBounceKey,
                     onYarnChipPositioned = { yarnChipCenter = it },
+                    notifUnread = notifUnread,
+                    onNotifClick = {
+                        notifVm.open(session.userId, session.isAnonymous)
+                        notifSheetOpen = true
+                    },
                 )
                 Routes.SETTINGS -> SettingsTopBar(onFeedback = {
                     AppAnalytics.track("nav", mapOf("from" to currentRoute, "to" to Routes.FEEDBACK))
@@ -496,6 +539,61 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 onBarTopPositioned = { bottomBarTopPx = it },
             )
         }
+
+        // 알림(확성기) 시트 — 헤더 버튼 클릭 시. 항목 탭 → 해당 피드 글/하이라이트 상세 시트로 이동.
+        if (notifSheetOpen) {
+            NotifSheet(
+                items = notifItems,
+                loading = notifLoading,
+                loginRequired = session.isAnonymous,
+                onDismiss = { notifSheetOpen = false },
+                onOpen = { n ->
+                    // 시트를 먼저 닫고(탭 즉시 반응) 비동기로 대상 조회 → 성공 시 상세, 실패(삭제 등)면 토스트. (PWA closeNotifModal→fetch→'이동 실패')
+                    notifSheetOpen = false
+                    rootScope.launch {
+                        when (n.kind) {
+                            "post_comment", "comment_reply" -> {
+                                val post = n.targetPostId?.let { notifVm.resolvePost(it) }
+                                if (post != null) notifDetailPost = post
+                                else Toast.makeText(context, "이동 실패", Toast.LENGTH_SHORT).show()
+                            }
+                            "highlight_comment", "highlight_comment_reply" -> {
+                                val hl = n.targetHighlightId?.let { notifVm.resolveHighlight(it) }
+                                if (hl != null) notifDetailHighlight = hl
+                                else Toast.makeText(context, "이동 실패", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+            )
+        }
+        notifDetailPost?.let { post ->
+            FeedPostDetailSheet(
+                post = post,
+                userId = session.userId,
+                isAnonymous = session.isAnonymous,
+                myNickname = session.nickname,
+                onDismiss = { notifDetailPost = null },
+                onOpenCard = { cardId ->
+                    notifDetailPost = null
+                    navController.navigate(Routes.detail(cardId))
+                },
+            )
+        }
+        notifDetailHighlight?.let { hl ->
+            HighlightDetailSheet(
+                highlight = hl,
+                userId = session.userId,
+                isAnonymous = session.isAnonymous,
+                myNickname = session.nickname,
+                onDismiss = { notifDetailHighlight = null },
+                onOpenCard = { cardId ->
+                    notifDetailHighlight = null
+                    navController.navigate(Routes.detail(cardId))
+                },
+            )
+        }
+
         CoachTourOverlay(coach)
         // 선호도(장르·주제) 온보딩 — 첫 접속/미선택 사용자에게 앱 진입 즉시 1회, 시작 탭(NOTICE)보다
         // 먼저 전 화면 위에 띄운다 (스플래시가 걷히면 바로 보임). 코치 투어는 prefSelected 후

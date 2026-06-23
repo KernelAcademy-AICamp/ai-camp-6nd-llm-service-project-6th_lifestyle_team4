@@ -103,8 +103,8 @@ val TOUR_STEPS: List<CoachStep> = listOf(
     CoachStep("detail_hl_button", "전문", 5, 5, "하이라이트 추가", "선택하면 오른쪽 아래에 뜨는 이 [하이라이트 추가] 버튼을 누르면 나만의 하이라이트로 저장돼요.", action = "saveHighlight", advanceAfterAction = false),
     // ── 피드 ──
     CoachStep("nav_feed", "피드", 1, 3, "피드에 담겼어요", "저장한 하이라이트는 여기 FEED에 모여요. 다른 독자들의 명장면도 함께 볼 수 있어요."),
-    CoachStep("feed_today_chip", "피드", 2, 3, "오늘의 한줄", "이 ‘오늘의 한줄’ 탭을 눌러보세요. 북마크한 명대사에 짧은 한 줄 감상을 남기는 곳이에요.", action = "setFeedToday"),
-    CoachStep("feed_fab", "피드", 3, 3, "한 줄 남기기", "이제 오른쪽 아래 + 버튼을 눌러보세요. 북마크한 명대사를 골라 오늘의 한줄을 남길 수 있어요.", action = "openFeedComposer", requiresMember = true),
+    CoachStep("feed_today_chip", "피드", 2, 3, "나의 감상평", "이 ‘나의 감상평’ 탭을 눌러보세요. 북마크한 명대사에 짧은 한 줄 감상을 남기는 곳이에요.", action = "setFeedToday"),
+    CoachStep("feed_fab", "피드", 3, 3, "한 줄 남기기", "이제 오른쪽 아래 + 버튼을 눌러보세요. 북마크한 명대사를 골라 나의 감상평을 남길 수 있어요.", action = "openFeedComposer", requiresMember = true),
     // ── 마침 ──
     CoachStep(null, "", 0, 0, "오늘의 명대사", "준비 끝!\n이제 오늘의 고전 명작을 만나러 가볼까요?", final = true, cta = "읽으러 가기"),
 )

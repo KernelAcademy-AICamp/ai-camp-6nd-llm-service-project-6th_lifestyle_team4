@@ -165,21 +165,40 @@ class ShareCardRenderer(context: Context) {
         }
     }
 
-    /** PWA wrapText — \n 분할 후 글자 단위 누적 measureText (한글엔 공백이 없어 char-wrap 필수). */
+    /**
+     * PWA wrapText (m-app.js:8809) 이식 — 어절(공백) 토큰 단위 줄바꿈 + 의미 묶음(chunk).
+     * 한국어 의존명사·관형사·보조용언이 줄 머리/꼬리에 단독으로 떨어지지 않도록, 1~2자 짧은 어절은
+     * 다음 어절 1개를 흡수해 한 chunk 로 묶고("그 명을"·"있는 거죠"·"제 몸을"), chunk 사이에서만 줄을
+     * 끊는다 → 어절 중간이 잘리지 않는다. 한 chunk 가 maxWidth 보다 넓으면 overflow(정상 텍스트엔 거의 없음).
+     */
     private fun wrapText(paint: Paint, text: String, maxWidth: Float): List<String> {
         val out = ArrayList<String>()
         for (para in text.split("\n")) {
             if (para.isBlank()) { out.add(""); continue }
-            val cur = StringBuilder()
-            for (ch in para) {
-                val test = cur.toString() + ch
-                if (paint.measureText(test) > maxWidth && cur.isNotEmpty()) {
-                    out.add(cur.toString()); cur.setLength(0); cur.append(ch)
+            val words = para.split(Regex("\\s+")).filter { it.isNotEmpty() }
+            // 1) 의미 묶음 — 첫 어절이 1~2자면 다음 어절 1개만 흡수(무한정 길어짐 방지).
+            val chunks = ArrayList<String>()
+            var i = 0
+            while (i < words.size) {
+                var chunk = words[i++]
+                if (chunk.length <= 2 && i < words.size) {
+                    chunk += " " + words[i++]
+                }
+                chunks.add(chunk)
+            }
+            // 2) chunk 단위 wrap — 한 줄에 가능한 한 많은 chunk, chunk 사이에서만 끊김.
+            var cur = ""
+            for (ch in chunks) {
+                if (cur.isEmpty()) { cur = ch; continue }
+                val test = "$cur $ch"
+                if (paint.measureText(test) <= maxWidth) {
+                    cur = test
                 } else {
-                    cur.append(ch)
+                    out.add(cur)
+                    cur = ch
                 }
             }
-            if (cur.isNotEmpty()) out.add(cur.toString())
+            if (cur.isNotEmpty()) out.add(cur)
         }
         return out
     }

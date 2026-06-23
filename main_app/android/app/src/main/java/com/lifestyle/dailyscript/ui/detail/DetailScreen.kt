@@ -566,7 +566,7 @@ fun DetailScreen(
                           feedComposeOpen = false
                           android.widget.Toast.makeText(
                               context,
-                              "오늘의 한줄을 피드에 남겼어요.",
+                              "나의 감상평을 피드에 남겼어요.",
                               android.widget.Toast.LENGTH_SHORT,
                           ).show()
                           onGoFeed()

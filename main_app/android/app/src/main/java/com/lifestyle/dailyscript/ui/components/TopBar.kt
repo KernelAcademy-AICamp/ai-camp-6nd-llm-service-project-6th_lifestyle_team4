@@ -12,16 +12,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -43,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
@@ -104,15 +110,65 @@ fun HomeTopBar(
     onYarnClick: () -> Unit,
     yarnBounceKey: Int = 0,
     onYarnChipPositioned: (Offset) -> Unit = {},
+    notifUnread: Int = 0,
+    onNotifClick: () -> Unit = {},
 ) {
     TopBarContainer {
         BrandWordmark()
-        YarnChip(
-            yarn = yarn,
-            onClick = onYarnClick,
-            bounceKey = yarnBounceKey,
-            onPositioned = onYarnChipPositioned,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            YarnChip(
+                yarn = yarn,
+                onClick = onYarnClick,
+                bounceKey = yarnBounceKey,
+                onPositioned = onYarnChipPositioned,
+            )
+            NotifButton(unread = notifUnread, onClick = onNotifClick)
+        }
+    }
+}
+
+/**
+ * 헤더 우측 알림(확성기) 버튼 — 미읽음 [unread] > 0 이면 우상단 빨간 배지(99+ 캡). (PWA #notif-btn / #notif-badge)
+ */
+@Composable
+fun NotifButton(unread: Int, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Campaign,
+            contentDescription = "알림",
+            tint = Espresso,
+            modifier = Modifier.size(22.dp),
         )
+        if (unread > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 2.dp, y = (-1).dp)
+                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                    .clip(CircleShape)
+                    .background(Cta)
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (unread > 99) "99+" else unread.toString(),
+                    color = Paper,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                    ),
+                )
+            }
+        }
     }
 }
 
