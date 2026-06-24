@@ -13,7 +13,7 @@ import UIKit
 ///
 /// `viewControllers.count > 1` 가드로 루트에서는 제스처가 시작되지 않아, 루트 화면을
 /// 스와이프해 빈 스택이 되는 사고를 막는다. 비공개 API 를 쓰지 않아 심사에 안전.
-extension UINavigationController: UIGestureRecognizerDelegate {
+extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     open override func viewDidLoad() {
         super.viewDidLoad()
         interactivePopGestureRecognizer?.delegate = self
