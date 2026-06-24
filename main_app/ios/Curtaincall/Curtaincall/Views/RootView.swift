@@ -238,6 +238,14 @@ struct RootView: View {
             .tag(Tab.settings)
         }
         .toolbar(.hidden, for: .tabBar)
+        // #9: Feed·Library 를 '떠날 때' 그 탭을 루트로 리셋 → 다시 돌아오면 직전에
+        // 열어둔 카드 상세가 아니라 탭의 목록이 보인다. (Feed 상세는 path 가 아닌
+        // selectedCard/selectedHighlight @State 라 popToRoot 가 reselect 로 닫고,
+        // Library 상세는 archivePath 를 비워 pop 한다 — 둘 다 popToRoot 가 처리.)
+        // Home(딥링크·랜덤 카드 푸시 유지)·Daily·Settings(값기반 하위 페이지)는 보존.
+        .onChange(of: selectedTab) { oldTab, _ in
+            if oldTab == .feed || oldTab == .archive { popToRoot(oldTab) }
+        }
         // 로그인 유도(컨텍스트 메뉴 북마크 프롬프트·3회 새로고침 제한·피드 익명 프롬프트 등)
         // → MY 탭 이동 대신 인증 모달(SignInSheet, #97/#99)을 그 자리에서 직접 띄운다.
         .environment(\.requestLogin) { showLoginModal = true }
