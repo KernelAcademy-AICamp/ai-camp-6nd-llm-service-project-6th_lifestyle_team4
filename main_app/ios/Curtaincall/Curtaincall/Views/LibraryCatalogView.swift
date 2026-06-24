@@ -9,6 +9,9 @@ import SwiftUI
 struct LibraryCatalogView: View {
     @Binding var selectedTab: Tab
     @Binding var path: NavigationPath
+    /// RootView 가 Library 재탭/탭 복귀 시 증가시키는 신호 — 펼친 책(selectedWork)을
+    /// 닫아 목록(루트)으로 복귀시킨다(#120 후속, OpenedBookView 오버레이 누락 보완).
+    var reselect: Int = 0
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
 
     @StateObject private var model = LibraryCatalogModel()
@@ -89,6 +92,8 @@ struct LibraryCatalogView: View {
             }
         }
         .task { await model.load() }
+        // 탭을 떠났다 돌아오거나 Library 탭 재탭 시 펼친 책을 닫아 목록으로 복귀.
+        .onChange(of: reselect) { _, _ in selectedWork = nil }
     }
 
     // MARK: - Derived data
