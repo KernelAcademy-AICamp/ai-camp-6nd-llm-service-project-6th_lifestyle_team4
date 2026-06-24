@@ -62,6 +62,10 @@ struct RootView: View {
     /// 피드에서 카드/하이라이트 상세가 열렸는지 — true 면 글쓰기 고양이를 숨긴다.
     @State private var feedDetailPresented = false
     @State private var feedReselect = 0
+    /// Library 재탭/탭 복귀 시 1씩 증가 → LibraryCatalogView 가 펼친 책
+    /// (selectedWork, OpenedBookView 오버레이)을 닫아 목록으로 복귀. archivePath 는
+    /// 카드 상세만 처리하고 이 오버레이는 @State 라 path 리셋으로 안 닫히던 누락 보완.
+    @State private var archiveReselect = 0
     /// TODAY(center) 재탭 시 1씩 증가 → HomeView 가 새 명대사 새로고침(상단 버튼과 동일).
     @State private var homeReselect = 0
     /// Bumped to re-create FeedView (resetting its private `category` @State to the
@@ -242,7 +246,7 @@ struct RootView: View {
             }
             .tag(Tab.home)
             NavigationStack(path: $archivePath) {
-                LibraryCatalogView(selectedTab: $selectedTab, path: $archivePath)
+                LibraryCatalogView(selectedTab: $selectedTab, path: $archivePath, reselect: archiveReselect)
             }
             .tag(Tab.archive)
             NavigationStack(path: $settingsPath) {
@@ -254,7 +258,8 @@ struct RootView: View {
         // #9: Feed·Library 를 '떠날 때' 그 탭을 루트로 리셋 → 다시 돌아오면 직전에
         // 열어둔 카드 상세가 아니라 탭의 목록이 보인다. (Feed 상세는 path 가 아닌
         // selectedCard/selectedHighlight @State 라 popToRoot 가 reselect 로 닫고,
-        // Library 상세는 archivePath 를 비워 pop 한다 — 둘 다 popToRoot 가 처리.)
+        // Library 는 archivePath(카드 상세)와 archiveReselect(펼친 책 OpenedBookView
+        // 오버레이) 둘 다 popToRoot 가 리셋한다.)
         // Home(딥링크·랜덤 카드 푸시 유지)·Daily·Settings(값기반 하위 페이지)는 보존.
         .onChange(of: selectedTab) { oldTab, _ in
             if oldTab == .feed || oldTab == .archive { popToRoot(oldTab) }
@@ -342,7 +347,9 @@ struct RootView: View {
         case .home:
             homePath = NavigationPath()
             homeReselect += 1   // 새 명대사 새로고침 (상단 새로고침 버튼과 동일 동작)
-        case .archive: archivePath = NavigationPath()
+        case .archive:
+            archivePath = NavigationPath()
+            archiveReselect += 1   // 펼친 책(OpenedBookView) 오버레이도 닫아 목록으로
         case .feed:
             feedPath = NavigationPath()
             feedReselect += 1  // scroll Feed to top + refresh
