@@ -166,6 +166,12 @@ private struct NewBookCardHeightKey: PreferenceKey {
     }
 }
 
+/// 책 목록 가로 스크롤이 좌/우로 더 갈 수 있는지 — 화살표 힌트 표시 여부.
+private struct StripEdges: Equatable {
+    let left: Bool
+    let right: Bool
+}
+
 struct DailyNewBooksSection: View {
     let cards: [Card]
     /// 카드 탭 → 책 펼침(Android onOpenWork / OpenedLibraryBook 패리티). 카드 상세가
@@ -183,6 +189,10 @@ struct DailyNewBooksSection: View {
     // 바꾸기 직전에 설정하면 transition 이 이 값을 읽어 Android 와 동일한 방향성 전환.
     @State private var direction = 1
     @State private var maxCardHeight: CGFloat = 0
+    // 아래 책 목록 가로 스크롤 위치 — 좌/우 화살표 힌트 표시 여부(Android coverScroll
+    // canScrollBackward/Forward 미러). 더 넘길 수 있는 방향에만 화살표가 뜬다.
+    @State private var stripCanScrollLeft = false
+    @State private var stripCanScrollRight = false
     // @State 로 한 번만 생성 — View 재초기화마다 새 타이머가 생겨 카운트다운이
     // 리셋되는 것을 막는다(부모 잦은 렌더 시 회전 정지 방지).
     @State private var rotation = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
@@ -191,8 +201,6 @@ struct DailyNewBooksSection: View {
         let books = Array(buildNewBooks(cards).prefix(9))   // PWA sorted.slice(0, 9)
         if !books.isEmpty {
             let safeIdx = min(idx, books.count - 1)
-            // PWA rest = sorted.filter(idx != i) — 현재 메인을 뺀 나머지.
-            let rest = books.enumerated().filter { $0.offset != safeIdx }.map(\.element)
             VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .top) {
                     // 9권 중 최대 높이 측정(숨김) — 박스가 고정 높이여야 전환 시 아래
@@ -244,13 +252,39 @@ struct DailyNewBooksSection: View {
                 if books.count > 1 {
                     newBookDots(count: books.count, active: safeIdx)
                 }
-                if !rest.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .top, spacing: 12) {
-                            ForEach(rest) { restCover($0) }
+                // 아래 책 목록 — 전체 풀(현재 책 포함)을 '고정 순서'로(룰렛 idx 와 무관).
+                // 이전엔 현재 카드(safeIdx)를 filter 로 빼 스와이프마다 목록이 재배열됐다(버그).
+                // Android pool.forEach 와 동일하게 books 그대로 나열한다.
+                if books.count > 1 {
+                    ZStack {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(alignment: .top, spacing: 12) {
+                                ForEach(books) { restCover($0) }
+                            }
+                            .padding(.top, 16)
+                            .padding(.bottom, 8)
                         }
-                        .padding(.top, 16)
-                        .padding(.bottom, 8)
+                        // 가로 스크롤 위치 추적 → 더 넘길 수 있는 방향에만 화살표(Android
+                        // canScrollBackward/Forward). 1pt 여유로 끝단 떨림 방지.
+                        .onScrollGeometryChange(for: StripEdges.self) { geo in
+                            StripEdges(
+                                left: geo.contentOffset.x > 1,
+                                right: geo.contentOffset.x < geo.contentSize.width - geo.containerSize.width - 1
+                            )
+                        } action: { _, edges in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                stripCanScrollLeft = edges.left
+                                stripCanScrollRight = edges.right
+                            }
+                        }
+                    }
+                    // 좌/우 끝 화살표 힌트 — 표지 세로 중앙, 페이퍼→투명 그라데이션 위에
+                    // 셰브론. 인디케이터 전용(Android 와 동일하게 탭 불가). 끝에 닿으면 숨김.
+                    .overlay(alignment: .topLeading) {
+                        stripCaret("chevron.left", [Color.paper, .clear], visible: stripCanScrollLeft)
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        stripCaret("chevron.right", [.clear, Color.paper], visible: stripCanScrollRight)
                     }
                 }
             }
@@ -277,6 +311,21 @@ struct DailyNewBooksSection: View {
                 }
             }
         }
+    }
+
+    /// 책 목록 좌/우 스크롤 화살표 힌트 — 표지 높이만큼 차지해 세로 중앙 정렬, 페이퍼
+    /// 그라데이션 위 셰브론. 더 넘길 수 있을 때만(visible) alpha 0.5, 끝에 닿으면 숨김.
+    /// 인디케이터 전용 — 탭은 안 받는다(Android 와 동일, 스크롤 제스처와 충돌 없음).
+    private func stripCaret(_ systemName: String, _ colors: [Color], visible: Bool) -> some View {
+        let coverH: CGFloat = 188.0 * 82 / 132   // restCover 표지 높이(width 82)
+        return Image(systemName: systemName)
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(.espresso)
+            .frame(width: 34, height: coverH)
+            .background(LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing))
+            .padding(.top, 16)   // 표지 줄 상단 패딩(16)에 맞춰 표지에 세로 정렬
+            .opacity(visible ? 0.5 : 0)
+            .allowsHitTesting(false)
     }
 
     /// PWA `.newbook-dots`: 카드 바로 아래 가운데. 7pt 원, gap 7, 위 14pt. 활성=espresso
