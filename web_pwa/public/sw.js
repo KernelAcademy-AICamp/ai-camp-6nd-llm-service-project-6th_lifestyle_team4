@@ -6,7 +6,7 @@
 //  - API/Supabase/Anthropic → 항상 네트워크 패스스루
 //  - 업데이트는 즉시 활성화 (skipWaiting + clients.claim)
 const CACHE_PREFIX = 'pwa-';
-const CACHE_VERSION = 'pwa-v320-text-align';
+const CACHE_VERSION = 'pwa-v321-onboarding';
 const STATIC_ASSETS = [
   '/m/index.html',
   '/assets/vendor/supabase-js.js',
@@ -14,6 +14,7 @@ const STATIC_ASSETS = [
   '/assets/pwa.js',
   '/assets/analytics.js',
   '/m/assets/m-app.js',
+  '/m/assets/onboarding.js',
   '/m/assets/daily-script-bar.png',
   '/m/icons/icon.svg',
   '/m/icons/icon-book-192-v2.png',
