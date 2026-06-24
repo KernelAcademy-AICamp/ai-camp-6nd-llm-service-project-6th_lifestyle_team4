@@ -168,11 +168,17 @@ private struct NewBookCardHeightKey: PreferenceKey {
 
 struct DailyNewBooksSection: View {
     let cards: [Card]
+    /// 카드 탭 → 책 펼침(Android onOpenWork / OpenedLibraryBook 패리티). 카드 상세가
+    /// 아니라 그 작품의 책 모달을 연다. DailyView 가 OpenedBookView 오버레이로 처리.
+    let onOpenWork: (DiscoveryWork) -> Void
 
     // PWA new-books 룰렛(m-app.js renderDailyNewBooks): 최신 9권을 10초마다 자동
     // 전환 + 좌우 스와이프 + 닷 트래킹. 사용자가 스와이프/닷 탭하면 자동순환 정지.
     @State private var idx = 0
     @State private var userInteracted = false
+    // 자동 전환(타이머)으로 idx 가 바뀌는 순간을 표시 — onChange(of: idx) 에서 사용자
+    // 스와이프/닷 탭과 구분해 '자동순환 정지(userInteracted)'를 자동 전환엔 걸지 않는다.
+    @State private var autoAdvancing = false
     @State private var maxCardHeight: CGFloat = 0
     // @State 로 한 번만 생성 — View 재초기화마다 새 타이머가 생겨 카운트다운이
     // 리셋되는 것을 막는다(부모 잦은 렌더 시 회전 정지 방지).
@@ -184,16 +190,6 @@ struct DailyNewBooksSection: View {
             let safeIdx = min(idx, books.count - 1)
             // PWA rest = sorted.filter(idx != i) — 현재 메인을 뺀 나머지.
             let rest = books.enumerated().filter { $0.offset != safeIdx }.map(\.element)
-            // 스와이프 = TabView 선택 변경. 사용자 스와이프 시에만 set 이 호출되므로 그때만
-            // 자동순환을 멈춘다(PWA stopNewbooksRotation). 자동회전은 idx 를 직접 바꿔(set
-            // 미경유) 멈추지 않는다.
-            let selection = Binding<Int>(
-                get: { min(idx, books.count - 1) },
-                set: { newValue in
-                    if newValue != min(idx, books.count - 1) { userInteracted = true }
-                    idx = newValue
-                }
-            )
             VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .top) {
                     // 9권 중 최대 높이 측정(숨김) — TabView 는 콘텐츠에 맞춰 늘지 않아 고정
@@ -213,7 +209,11 @@ struct DailyNewBooksSection: View {
                     // 죽어(탭만 동작) → 검증된 TabView.page 로 복구. 스와이프 우선 > 커스텀
                     // 슬라이드(둘은 공존 불가). 끝에서 clamp(TabView 기본), 자동회전·닷 탭은
                     // wrap/점프 유지.
-                    TabView(selection: selection) {
+                    // selection 을 @State idx 에 '직접' 바인딩한다. (이전엔 인라인 파생
+                    // Binding 을 매 렌더 새로 만들어 TabView 가 스와이프 정착값을 idx 로
+                    // 되돌려쓰지 못해 닷이 스와이프를 따라가며 어긋났다 — 5b 버그.) 닷은
+                    // idx(=safeIdx)를 그대로 읽으므로 스와이프·자동·닷탭 모두 정확히 추적.
+                    TabView(selection: $idx) {
                         ForEach(Array(books.enumerated()), id: \.offset) { i, b in
                             featured(b).tag(i)
                         }
@@ -237,9 +237,20 @@ struct DailyNewBooksSection: View {
             .onPreferenceChange(NewBookCardHeightKey.self) { h in
                 if h > maxCardHeight { maxCardHeight = h }
             }
+            // idx 변화 출처 구분: 자동 전환이면 플래그만 내리고, 그 외(사용자 스와이프·
+            // 닷 탭)는 자동순환을 멈춘다(PWA stopNewbooksRotation).
+            .onChange(of: idx) { _, _ in
+                if autoAdvancing { autoAdvancing = false }
+                else { userInteracted = true }
+            }
+            // 풀이 줄어드는 재로드 시 idx 가 범위를 벗어나지 않게 클램프(빈 페이지 방지).
+            .onChange(of: books.count) { _, n in
+                if idx > n - 1 { idx = max(0, n - 1) }
+            }
             // 10초 자동 전환 — 사용자가 스와이프/닷 탭하기 전까지(PWA stopNewbooksRotation).
             .onReceive(rotation) { _ in
                 guard books.count > 1, !userInteracted else { return }
+                autoAdvancing = true   // 이 변화는 사용자 조작이 아님 → 정지하지 않음
                 withAnimation(.easeInOut(duration: 0.35)) {
                     idx = (min(idx, books.count - 1) + 1) % books.count
                 }
@@ -365,19 +376,19 @@ struct DailyNewBooksSection: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte.opacity(0.25), lineWidth: 0.5))
     }
 
-    /// 탭하면 상세로(NavigationLink + hero). 페이저 각 페이지가 이 뷰다.
+    /// 탭하면 그 작품의 책을 펼친다(Android: onOpenWork). 페이저 각 페이지가 이 뷰다.
+    /// 책 모달을 열므로 카드 상세로의 hero 모프는 더 이상 적용하지 않는다.
     private func featured(_ book: DiscoveryWork) -> some View {
-        NavigationLink(value: book.representativeCard) {
+        Button { onOpenWork(book) } label: {
             // 표시용 — 측정된 최대 높이로 고정(콘텐츠 세로 중앙). 측정값이 아직 0이면 자연 높이.
             featuredContent(book, fixedHeight: maxCardHeight > 0 ? maxCardHeight : nil)
         }
         .buttonStyle(.plain)
         .cardContextMenu(book.representativeCard)
-        .cardHeroSource(book.representativeCard.cardId, dailyOwner: .newBooks)
     }
 
     private func restCover(_ book: DiscoveryWork) -> some View {
-        NavigationLink(value: book.representativeCard) {
+        Button { onOpenWork(book) } label: {
             VStack(spacing: 0) {
                 discoveryCover(book.work, width: 82)
                 Spacer().frame(height: 8)
@@ -399,7 +410,6 @@ struct DailyNewBooksSection: View {
         }
         .buttonStyle(.plain)
         .cardContextMenu(book.representativeCard)
-        .cardHeroSource(book.representativeCard.cardId, dailyOwner: .newBooks)
     }
 
     /// 표지 — Library 와 동일하게 WorkCover 사용(cover_url 아트워크 로드, 없으면 가죽).

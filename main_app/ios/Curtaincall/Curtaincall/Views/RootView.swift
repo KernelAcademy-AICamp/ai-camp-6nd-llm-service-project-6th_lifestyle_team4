@@ -216,7 +216,7 @@ struct RootView: View {
     private var tabs: some View {
         TabView(selection: $selectedTab) {
             NavigationStack(path: $dailyPath) {
-                DailyView(selectedTab: $selectedTab)
+                DailyView(selectedTab: $selectedTab, path: $dailyPath)
             }
             .tag(Tab.daily)
             NavigationStack(path: $feedPath) {
