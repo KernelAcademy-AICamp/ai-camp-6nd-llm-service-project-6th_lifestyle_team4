@@ -18,6 +18,14 @@ struct HighlightDetailView: View {
     @EnvironmentObject private var session: AuthSession
     @StateObject private var comments: CommentsModel
     @FocusState private var composerFocused: Bool
+    @State private var moderationToast: String?
+
+    private func showModerationToast(_ message: String) {
+        withAnimation { moderationToast = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            withAnimation { if moderationToast == message { moderationToast = nil } }
+        }
+    }
 
     init(highlight: CardHighlight, onOpenCard: @escaping (Card) -> Void) {
         self.highlight = highlight
@@ -65,6 +73,18 @@ struct HighlightDetailView: View {
             }
         }
         .background(Color.paper)
+        .overlay(alignment: .bottom) {
+            if let moderationToast {
+                Text(moderationToast)
+                    .font(.bodySans(13))
+                    .foregroundStyle(Color.paper)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.espresso))
+                    .padding(.bottom, 40)
+                    .transition(.opacity)
+            }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .preference(key: ComposerFocusedPreferenceKey.self, value: composerFocused)
         .onChange(of: comments.replyingTo?.commentId) { _, newValue in
@@ -89,7 +109,18 @@ struct HighlightDetailView: View {
                 .font(.headlineSerif(20))
                 .foregroundStyle(.espresso)
             Spacer()
-            Color.clear.frame(width: 40, height: 40)
+            // 남의 하이라이트면 신고·차단(App Store 1.2). 내 것이면 빈 칸으로 제목 가운데 정렬 유지.
+            if session.userId != highlight.userId {
+                ModerationMenu(
+                    target: .highlight(highlight.highlightId),
+                    authorUserId: highlight.userId,
+                    onToast: showModerationToast,
+                    onBlocked: { dismiss() }   // 차단 후 상세 닫기 — 차단 콘텐츠 잔류 방지
+                )
+                .frame(width: 40, height: 40)
+            } else {
+                Color.clear.frame(width: 40, height: 40)
+            }
         }
         .padding(.horizontal, 12)
         .frame(height: 56)

@@ -20,6 +20,7 @@ struct FeedView: View {
     var writeTrigger: Int = 0
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
+    @EnvironmentObject private var moderation: ModerationStore
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
 
     private static let topID = "feedTop"
@@ -39,10 +40,18 @@ struct FeedView: View {
     @State private var composeError: String?
     @State private var showWritePrompt = false   // 익명 글쓰기 → 로그인 모달
 
+    // 차단한 사용자의 글/하이라이트는 가린다(App Store 1.2 — 차단 후 콘텐츠 비노출).
+    private var visiblePosts: [FeedPost] {
+        posts.filter { !moderation.isBlocked($0.userId) }
+    }
+    private var visibleHighlights: [CardHighlight] {
+        highlights.filter { !moderation.isBlocked($0.userId) }
+    }
+
     private var isEmpty: Bool {
         switch category {
-        case .today: return posts.isEmpty
-        case .highlight: return highlights.isEmpty
+        case .today: return visiblePosts.isEmpty
+        case .highlight: return visibleHighlights.isEmpty
         }
     }
 
@@ -206,12 +215,12 @@ struct FeedView: View {
         VStack(spacing: 12) {
             switch category {
             case .today:
-                ForEach(posts) { post in
-                    FeedPostCard(post: post) { detailPost = post }
+                ForEach(visiblePosts) { post in
+                    FeedPostCard(post: post, onToast: showToast) { detailPost = post }
                 }
             case .highlight:
-                ForEach(highlights) { highlight in
-                    HighlightFeedCard(highlight: highlight) {
+                ForEach(visibleHighlights) { highlight in
+                    HighlightFeedCard(highlight: highlight, onToast: showToast) {
                         selectedHighlight = highlight
                     }
                 }
@@ -444,9 +453,12 @@ private struct FeedPostHeader: View {
 
 private struct FeedPostCard: View {
     let post: FeedPost
+    var onToast: (String) -> Void = { _ in }
     let onTap: () -> Void
+    @EnvironmentObject private var session: AuthSession
 
     var body: some View {
+        ZStack(alignment: .topTrailing) {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
                 FeedPostHeader(
@@ -494,6 +506,18 @@ private struct FeedPostCard: View {
             .shadow(color: Color.black.opacity(0.10), radius: 6, x: 0, y: 3)
         }
         .buttonStyle(.plain)
+
+        // 남의 글에만 신고·차단 메뉴(App Store 1.2). 헤더 우상단 빈 공간에 띄운다.
+        if session.userId != post.userId {
+            ModerationMenu(
+                target: .feedPost(post.postId),
+                authorUserId: post.userId,
+                onToast: onToast
+            )
+            .padding(.top, 8)
+            .padding(.trailing, 6)
+        }
+        }
     }
 }
 
@@ -558,9 +582,12 @@ private struct FeedSampleCard: View {
 
 private struct HighlightFeedCard: View {
     let highlight: CardHighlight
+    var onToast: (String) -> Void = { _ in }
     let onTap: () -> Void
+    @EnvironmentObject private var session: AuthSession
 
     var body: some View {
+        ZStack(alignment: .topTrailing) {
         Button(action: onTap) {
             VStack(alignment: .center, spacing: 0) {
                 Text(highlight.authorNickname?.ifEmpty("익명") ?? "익명")
@@ -623,6 +650,18 @@ private struct HighlightFeedCard: View {
             .overlay(Rectangle().stroke(Color.latte, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
+
+        // 남의 하이라이트에만 신고·차단 메뉴(App Store 1.2).
+        if session.userId != highlight.userId {
+            ModerationMenu(
+                target: .highlight(highlight.highlightId),
+                authorUserId: highlight.userId,
+                onToast: onToast
+            )
+            .padding(.top, 6)
+            .padding(.trailing, 4)
+        }
+        }
     }
 
     private var metaText: String {
@@ -655,6 +694,14 @@ private struct FeedPostDetailSheet: View {
     @EnvironmentObject private var session: AuthSession
     @StateObject private var comments: CommentsModel
     @FocusState private var composerFocused: Bool
+    @State private var moderationToast: String?
+
+    private func showModerationToast(_ message: String) {
+        withAnimation { moderationToast = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            withAnimation { if moderationToast == message { moderationToast = nil } }
+        }
+    }
 
     init(post: FeedPost, onOpenCard: @escaping (Card) -> Void) {
         self.post = post
@@ -671,6 +718,15 @@ private struct FeedPostDetailSheet: View {
                     .tracking(2.2)
                     .foregroundStyle(.walnut)
                 Spacer()
+                // 남의 글이면 신고·차단(App Store 1.2). 댓글 신고는 아래 CommentsSection.
+                if session.userId != post.userId {
+                    ModerationMenu(
+                        target: .feedPost(post.postId),
+                        authorUserId: post.userId,
+                        onToast: showModerationToast,
+                        onBlocked: { dismiss() }   // 차단 후 상세 닫기 — 차단 콘텐츠 잔류 방지
+                    )
+                }
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 16, weight: .regular))
@@ -728,6 +784,18 @@ private struct FeedPostDetailSheet: View {
             }
         }
         .background(Color.paper)
+        .overlay(alignment: .bottom) {
+            if let moderationToast {
+                Text(moderationToast)
+                    .font(.bodySans(13))
+                    .foregroundStyle(Color.paper)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.espresso))
+                    .padding(.bottom, 40)
+                    .transition(.opacity)
+            }
+        }
     }
 
     /// 명대사 카드 — 인용 + 출처 + "명대사 읽어보기"(카드 상세로). Android QuoteCard 미러.

@@ -15,6 +15,8 @@ struct ComposerFocusedPreferenceKey: PreferenceKey {
 /// with no duplication. The `.card` factory calls the exact same `Supa` methods
 /// with the same args as before, so existing CardDetail comments are unchanged.
 struct CommentBackend {
+    /// content_reports.content_type — 어떤 댓글 테이블인지(신고 매핑용).
+    let contentType: String
     let load: () async throws -> [Comment]
     let loadLikes: (_ commentIds: [Int]) async throws -> [CommentLike]
     let add: (_ userId: Int, _ body: String, _ nickname: String?, _ parentId: Int?) async throws -> Comment
@@ -24,6 +26,7 @@ struct CommentBackend {
 
     static func card(_ cardId: Int) -> CommentBackend {
         CommentBackend(
+            contentType: "card_comment",
             load: { try await Supa.shared.loadComments(cardId: cardId) },
             loadLikes: { try await Supa.shared.loadLikes(commentIds: $0) },
             add: { try await Supa.shared.addComment(cardId: cardId, userId: $0, body: $1, authorNickname: $2, parentCommentId: $3) },
@@ -35,6 +38,7 @@ struct CommentBackend {
 
     static func highlight(_ highlightId: Int) -> CommentBackend {
         CommentBackend(
+            contentType: "highlight_comment",
             load: { try await Supa.shared.loadHighlightComments(highlightId: highlightId) },
             loadLikes: { try await Supa.shared.loadHighlightCommentLikes(commentIds: $0) },
             add: { try await Supa.shared.addHighlightComment(highlightId: highlightId, userId: $0, body: $1, authorNickname: $2, parentCommentId: $3) },
@@ -46,6 +50,7 @@ struct CommentBackend {
 
     static func feedPost(_ postId: Int) -> CommentBackend {
         CommentBackend(
+            contentType: "feed_post_comment",
             load: { try await Supa.shared.loadFeedPostComments(postId: postId) },
             loadLikes: { try await Supa.shared.loadFeedPostCommentLikes(commentIds: $0) },
             add: { try await Supa.shared.addFeedPostComment(postId: postId, userId: $0, body: $1, authorNickname: $2, parentCommentId: $3) },
@@ -90,7 +95,12 @@ final class CommentsModel: ObservableObject {
     @Published var editingCommentId: Int?
 
     private let backend: CommentBackend
-    init(backend: CommentBackend) { self.backend = backend }
+    /// 신고 매핑용 content_type (card_comment / highlight_comment / feed_post_comment).
+    let contentType: String
+    init(backend: CommentBackend) {
+        self.backend = backend
+        self.contentType = backend.contentType
+    }
 
     func load() async {
         do {
@@ -189,14 +199,35 @@ struct CommentsSection: View {
     let nickname: String
     var copy: CommentsCopy = .card
 
+    @EnvironmentObject private var moderation: ModerationStore
     @State private var editDraft = ""
+    @State private var moderationToast: String?
+
+    /// 차단한 사용자의 댓글은 숨긴다(App Store 1.2 — 차단 후 콘텐츠 비노출).
+    private var visibleGroups: [(top: Comment, replies: [Comment])] {
+        model.grouped
+            .filter { !moderation.isBlocked($0.top.userId) }
+            .map { (top: $0.top, replies: $0.replies.filter { !moderation.isBlocked($0.userId) }) }
+    }
+
+    /// 차단 제외 후 실제로 보이는 댓글 수(최상위 + 답글). 카운트·빈 상태가 화면과 일치.
+    private var visibleCommentCount: Int {
+        visibleGroups.reduce(0) { $0 + 1 + $1.replies.count }
+    }
+
+    private func showModerationToast(_ message: String) {
+        withAnimation { moderationToast = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            withAnimation { if moderationToast == message { moderationToast = nil } }
+        }
+    }
 
     @ViewBuilder private var header: some View {
         switch copy.header {
         case .readerNotes:
             Text("READER NOTES").labelCaps()
         case .count:
-            Text("댓글 \(model.comments.count)")
+            Text("댓글 \(visibleCommentCount)")
                 .font(.titleSerif(16))
                 .foregroundStyle(.espresso)
         }
@@ -222,19 +253,30 @@ struct CommentsSection: View {
 
             Spacer().frame(height: 20)
 
-            if model.comments.isEmpty {
+            if visibleGroups.isEmpty {
                 Text(copy.emptyText)
                     .font(.bodySans(14))
                     .foregroundStyle(.walnut)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
             } else {
-                ForEach(model.grouped, id: \.top.id) { group in
+                ForEach(visibleGroups, id: \.top.id) { group in
                     commentRow(group.top, isReply: false)
                     ForEach(group.replies) { reply in
                         commentRow(reply, isReply: true)
                     }
                 }
+            }
+        }
+        .overlay(alignment: .top) {
+            if let moderationToast {
+                Text(moderationToast)
+                    .font(.bodySans(13))
+                    .foregroundStyle(Color.paper)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.espresso))
+                    .transition(.opacity)
             }
         }
         .task { await model.load() }
@@ -247,12 +289,20 @@ struct CommentsSection: View {
         let isEditing = model.editingCommentId == c.commentId
 
         return VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: 8) {
                 Text((isReply ? "↳ " : "") + (c.authorNickname ?? "익명"))
                     .font(.titleSerif(15))
                     .foregroundStyle(.espresso)
                 Spacer()
                 Text(Self.relativeTime(c.createdAt)).labelCaps()
+                // 남의 댓글에만 신고·차단 메뉴(App Store 1.2). 내 댓글은 EDIT/DELETE 사용.
+                if !isMine {
+                    ModerationMenu(
+                        target: .comment(contentType: model.contentType, commentId: c.commentId),
+                        authorUserId: c.userId,
+                        onToast: showModerationToast
+                    )
+                }
             }
             if isEditing {
                 editBox
