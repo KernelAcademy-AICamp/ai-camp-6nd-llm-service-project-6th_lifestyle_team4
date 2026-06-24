@@ -37,6 +37,7 @@ struct RootView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
     @EnvironmentObject private var attendance: AttendanceStore
+    @EnvironmentObject private var moderation: ModerationStore
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var selectedTab: Tab = .daily
@@ -95,8 +96,10 @@ struct RootView: View {
         }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
+            Task { await moderation.refresh(userId: newValue) }   // 차단 목록 재로드
             yarn.sync(serverBalance: session.yarnBalance)   // 로그인/로그아웃 시 잔액 재시드
         }
+        .task { await moderation.refresh(userId: session.userId) }   // 앱 진입 시 차단 목록
         // 출석체크 — 회원의 그날 첫 진입 1회 모달 + 첫 출석이면 실타래 +100. 온보딩 이후에 띄운다.
         .task { checkAttendance() }
         .onChange(of: session.ready) { _, _ in checkAttendance() }

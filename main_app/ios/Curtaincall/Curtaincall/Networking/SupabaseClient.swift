@@ -401,6 +401,55 @@ final class Supa {
         try await client.rpc("delete_account").execute()
     }
 
+    // MARK: - Moderation (UGC 신고·차단 — App Store 1.2)
+
+    private struct ReportParams: Encodable, Sendable {
+        let p_content_type: String
+        let p_content_id: Int
+        let p_reason: String
+    }
+    private struct BlockParams: Encodable, Sendable {
+        let p_blocked_user_id: Int
+    }
+
+    /// 부적절한 콘텐츠 신고 — `report_content` RPC(SECURITY DEFINER). 신고자는
+    /// 서버에서 `auth.uid()` 로 해석하고, 같은 콘텐츠 중복 신고는 무시된다.
+    func reportContent(contentType: String, contentId: Int, reason: String) async throws {
+        try await client.rpc(
+            "report_content",
+            params: ReportParams(p_content_type: contentType, p_content_id: contentId, p_reason: reason)
+        ).execute()
+    }
+
+    /// 학대 사용자 차단 — `block_user` RPC. 이후 그 사용자의 글/댓글은 차단자에게서
+    /// 가려진다(클라이언트 필터링 + 목록은 `fetchBlockedUserIds`).
+    func blockUser(blockedUserId: Int) async throws {
+        try await client.rpc(
+            "block_user",
+            params: BlockParams(p_blocked_user_id: blockedUserId)
+        ).execute()
+    }
+
+    func unblockUser(blockedUserId: Int) async throws {
+        try await client.rpc(
+            "unblock_user",
+            params: BlockParams(p_blocked_user_id: blockedUserId)
+        ).execute()
+    }
+
+    /// 차단 목록 — user_blocks WHERE blocker = me (RLS: 본인 행만 SELECT). 피드/댓글
+    /// 필터링에 쓴다.
+    func fetchBlockedUserIds(blockerUserId: Int) async throws -> Set<Int> {
+        struct Row: Decodable { let blockedUserId: Int
+            enum CodingKeys: String, CodingKey { case blockedUserId = "blocked_user_id" } }
+        let rows: [Row] = try await client.from("user_blocks")
+            .select("blocked_user_id")
+            .eq("blocker_user_id", value: blockerUserId)
+            .execute()
+            .value
+        return Set(rows.map { $0.blockedUserId })
+    }
+
     // MARK: - Comments + likes
 
     /// A signed-in member's own comments, newest first, each joined with its
