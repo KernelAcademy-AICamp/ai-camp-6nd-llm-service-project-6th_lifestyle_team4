@@ -133,7 +133,7 @@ struct CardDetailView: View {
                             Text("SCENE")
                                 .labelCaps()
                                 .opacity(0.7)
-                            Text(desc)
+                            Text(desc.markdownBold)   // **…** 볼드 렌더(마커 제거)
                                 .font(.bodySans(16))
                                 .foregroundStyle(.walnut)
                                 .multilineTextAlignment(.leading)
@@ -160,7 +160,7 @@ struct CardDetailView: View {
                         Spacer().frame(height: 24)
                         Text("작품의 의의").labelCaps()
                         Spacer().frame(height: 12)
-                        Text(sig)
+                        Text(sig.markdownBold)   // **…** 볼드 렌더(마커 제거)
                             .font(.bodySans(16))
                             .foregroundStyle(.espresso)
                             .multilineTextAlignment(.center)
@@ -404,8 +404,20 @@ struct CardDetailView: View {
         // 라벨에 따라붙는 마침표/콜론/세미콜론/콤마/느낌·물음표 제거 후 names 매칭 —
         // LLM 출력의 "Romeo.", "노라:", "햄릿;" 같은 형식도 등장인물명으로 인식.
         let trailingPunct = CharacterSet(charactersIn: ".,:;!?！？：")
+        func attrs(bold: Bool) -> [NSAttributedString.Key: Any] {
+            [
+                .font: UIFont.monospacedSystemFont(ofSize: 14, weight: bold ? .bold : .regular),
+                .foregroundColor: Self.espressoUIColor,
+                .paragraphStyle: para,
+                .kern: 0.28,
+            ]
+        }
         for (i, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // **…** 마크다운 볼드 파싱 — 마커 제거 + 안쪽 볼드(LLM 화자 라벨 "**잭**" 등).
+            let segments = Self.boldSegments(line)
+            // 화자 라인 전체 볼드 — 마커 제거된 텍스트로 등장인물명 매칭(마커 없는 "노라:"도 포함).
+            let cleaned = segments.map(\.text).joined()
+            let trimmed = cleaned.trimmingCharacters(in: .whitespaces)
             let namePart = trimmed.components(separatedBy: "(").first?.trimmingCharacters(in: .whitespaces) ?? trimmed
             let trimmedNorm = trimmed.trimmingCharacters(in: trailingPunct).trimmingCharacters(in: .whitespaces)
             let nameNorm = namePart.trimmingCharacters(in: trailingPunct).trimmingCharacters(in: .whitespaces)
@@ -413,16 +425,33 @@ struct CardDetailView: View {
                 names.contains(trimmed) || names.contains(namePart) ||
                 names.contains(trimmedNorm) || names.contains(nameNorm)
             )
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.monospacedSystemFont(ofSize: 14, weight: isSpeaker ? .bold : .regular),
-                .foregroundColor: Self.espressoUIColor,
-                .paragraphStyle: para,
-                .kern: 0.28,
-            ]
-            result.append(NSAttributedString(string: line, attributes: attrs))
-            if i < lines.count - 1 { result.append(NSAttributedString(string: "\n", attributes: attrs)) }
+            for seg in segments {
+                result.append(NSAttributedString(string: seg.text, attributes: attrs(bold: seg.bold || isSpeaker)))
+            }
+            if i < lines.count - 1 { result.append(NSAttributedString(string: "\n", attributes: attrs(bold: false))) }
         }
         return result
+    }
+
+    /// `**…**` 스팬을 (텍스트, 볼드) 런으로 분해하고 `**` 마커는 제거한다. 짝이 맞는
+    /// 쌍만 볼드로 처리하고, 짝 없는 `**`/단일 `*` 는 본문 그대로 둔다(literal).
+    private static let boldRegex = try! NSRegularExpression(pattern: "\\*\\*(.+?)\\*\\*")
+    private static func boldSegments(_ line: String) -> [(text: String, bold: Bool)] {
+        let ns = line as NSString
+        guard ns.length > 0 else { return [(line, false)] }
+        var segs: [(String, Bool)] = []
+        var cursor = 0
+        boldRegex.enumerateMatches(in: line, range: NSRange(location: 0, length: ns.length)) { m, _, _ in
+            guard let m else { return }
+            let full = m.range
+            if full.location > cursor {
+                segs.append((ns.substring(with: NSRange(location: cursor, length: full.location - cursor)), false))
+            }
+            segs.append((ns.substring(with: m.range(at: 1)), true))
+            cursor = full.location + full.length
+        }
+        if cursor < ns.length { segs.append((ns.substring(from: cursor), false)) }
+        return segs.isEmpty ? [(line, false)] : segs
     }
 
     /// Adaptive espresso ink, matching `Color.espresso` (DesignTokens) for UIKit.
