@@ -13,6 +13,8 @@ struct ModerationMenu: View {
     var onToast: (String) -> Void = { _ in }
 
     @EnvironmentObject private var moderation: ModerationStore
+    @EnvironmentObject private var session: AuthSession
+    @Environment(\.requestLogin) private var requestLogin   // 익명 차단 시 로그인 유도
     @State private var showReportReasons = false
     @State private var showBlockConfirm = false
 
@@ -24,7 +26,12 @@ struct ModerationMenu: View {
                 Label("신고", systemImage: "flag")
             }
             Button(role: .destructive) {
-                showBlockConfirm = true
+                // 차단은 회원 전용(RPC도 익명 차단). 익명이면 로그인 유도 모달.
+                if session.isAnonymous {
+                    requestLogin()
+                } else {
+                    showBlockConfirm = true
+                }
             } label: {
                 Label("이 사용자 차단", systemImage: "hand.raised")
             }

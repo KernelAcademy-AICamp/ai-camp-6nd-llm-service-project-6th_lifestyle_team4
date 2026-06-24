@@ -61,6 +61,9 @@ create policy user_blocks_select_self on public.user_blocks
 -- ---- RPCs ------------------------------------------------------------------
 -- 모두 호출자를 auth.uid() 로 해석(클라이언트가 보낸 user_id 를 신뢰하지 않음).
 -- SECURITY DEFINER 로 content_reports/user_blocks 에 직접 쓴다. search_path 고정.
+--   · report_content: 익명(is_anonymous) 세션도 허용 — 누구나 신고 가능(1.2 강화).
+--   · block_user/unblock_user: 회원 전용 — 012/017 댓글·글 작성과 동일하게
+--     is_anonymous = true JWT 차단(익명 차단은 기기별 임시 신원이라 가입 시 유실).
 
 -- 현재 세션의 users.user_id 를 돌려준다. 없으면 예외.
 create or replace function public.report_content(
@@ -102,6 +105,10 @@ as $$
 declare
   v_uid bigint;
 begin
+  -- 회원 전용 — 익명(is_anonymous) 세션 차단 (012/017 댓글·글 작성과 동일 패턴).
+  if coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) then
+    raise exception 'membership required';
+  end if;
   select u.user_id into v_uid
     from public.users u
    where u.anonymous_id = auth.uid();
@@ -127,6 +134,10 @@ as $$
 declare
   v_uid bigint;
 begin
+  -- 회원 전용 — 익명 세션 차단 (block_user 와 대칭).
+  if coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) then
+    raise exception 'membership required';
+  end if;
   select u.user_id into v_uid
     from public.users u
    where u.anonymous_id = auth.uid();
