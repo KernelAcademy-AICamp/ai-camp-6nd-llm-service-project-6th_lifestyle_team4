@@ -45,7 +45,7 @@ struct CurtaincallEntry: TimelineEntry {
 }
 
 struct Provider: TimelineProvider {
-    private static let sample = WidgetCard(cardId: 1, quote: "나 날고 있어!", workTitle: "Titanic")
+    private static let sample = WidgetCard(cardId: 1, quote: "사느냐 죽느냐, 그것이 문제로다.", workTitle: "햄릿")
 
     func placeholder(in context: Context) -> CurtaincallEntry {
         CurtaincallEntry(date: .now, card: Provider.sample)
@@ -219,7 +219,7 @@ struct CurtaincallWidget: Widget {
     }
 }
 
-private let sampleCard = WidgetCard(cardId: 1, quote: "나 날고 있어!", workTitle: "Titanic")
+private let sampleCard = WidgetCard(cardId: 1, quote: "사느냐 죽느냐, 그것이 문제로다.", workTitle: "햄릿")
 
 #Preview(as: .systemMedium) {
     CurtaincallWidget()
