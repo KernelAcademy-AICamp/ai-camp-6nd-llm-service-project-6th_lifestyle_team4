@@ -7,6 +7,8 @@ import SwiftUI
 /// Korean labels verbatim.
 struct DailyView: View {
     @Binding var selectedTab: Tab
+    /// 새 책 펼침 모달에서 카드 상세로 push 하기 위한 스택 경로(RootView 소유 dailyPath).
+    @Binding var path: NavigationPath
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
@@ -20,6 +22,8 @@ struct DailyView: View {
     @State private var notices: [Notice] = []
     @State private var hasLoaded = false
     @State private var fetchFailed = false
+    /// 새 책 룰렛에서 탭한 작품 — OpenedBookView(책 펼침) 오버레이로 표시.
+    @State private var openedWork: DiscoveryWork?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,7 +42,7 @@ struct DailyView: View {
                     if !allCards.isEmpty {
                         // PWA view-daily 순서: 새 책 → Oz 픽 → 트렌딩.
                         // (Contextual 「이럴 땐, 이런 문장」 섹션은 PWA 에서 제거됨 → iOS 도 제거.)
-                        DailyNewBooksSection(cards: allCards)
+                        DailyNewBooksSection(cards: allCards) { openedWork = $0 }
                         // Oz Pick — 개인화 카드 또는 게스트(취향 미설정) CTA. 섹션이 분기.
                         Spacer().frame(height: 36)
                         DailyOzPickSection(
@@ -74,6 +78,21 @@ struct DailyView: View {
         .navigationDestination(for: Card.self) {
             CardDetailView(card: $0) { requestLogin() }   // 댓글 게이트 → 인증 모달 직접 호출
                 .cardHeroDestination($0.cardId, in: heroNS, enabled: !reduceMotion)
+        }
+        // 새 책 펼침 — Library/Archive 와 동일한 OpenedBookView 모달. 그 작품의 카드를
+        // 보여주고, 카드 탭 시 상세로 push(Android OpenedLibraryBook 패리티).
+        .overlay {
+            if let work = openedWork {
+                OpenedBookView(
+                    work: shelfWork(work),
+                    volumeNo: (buildNewBooks(allCards).firstIndex { $0.id == work.id } ?? 0) + 1,
+                    onOpen: { card in
+                        openedWork = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { path.append(card) }
+                    },
+                    onClose: { openedWork = nil }
+                )
+            }
         }
         .task { await load() }
         .task { await bookmarks.load(userId: session.userId) }
@@ -150,6 +169,25 @@ struct DailyView: View {
         } catch {
             fetchFailed = true
         }
+    }
+
+    /// DiscoveryWork → ShelfWork (OpenedBookView 입력). LibraryCatalogModel.groupBooks
+    /// 의 필드 매핑과 동일 — 부제 있으면 title=부제, 아니면 작품명.
+    private func shelfWork(_ dw: DiscoveryWork) -> ShelfWork {
+        let series = dw.work.title
+        let subtitle = dw.work.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasSub = (subtitle?.isEmpty == false)
+        return ShelfWork(
+            id: dw.id,
+            series: series,
+            subtitle: hasSub ? subtitle : nil,
+            title: hasSub ? subtitle! : series,
+            format: dw.work.format,
+            author: dw.work.author,
+            releaseYear: dw.work.releaseYear,
+            work: dw.work,
+            rows: dw.cards.map { ShelfRow(card: $0, createdDate: nil) }
+        )
     }
 
     private func recomputeOz() {
