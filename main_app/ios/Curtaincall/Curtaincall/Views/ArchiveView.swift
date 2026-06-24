@@ -730,23 +730,61 @@ private struct BookPage: View {
     let onOpen: (Card) -> Void
     let onClose: () -> Void
 
+    /// 원제 · 원작자(원어 필드) — 둘 다 비어있으면 nil. 영문 고전이라 보통 영어 제목/작가.
+    private var originalLine: String? {
+        let parts = [work.work?.titleOriginal, work.work?.authorOriginal]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// 작가 · 연도 (대문자) — 둘 다 비어있으면 nil.
+    private var authorYearLine: String? {
+        let parts = [work.author, work.releaseYear.map(String.init)]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ").uppercased()
+    }
+
+    /// 작품 소개(works.intro) — 비어있으면 nil.
+    private var introText: String? {
+        guard let s = work.work?.intro?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !s.isEmpty else { return nil }
+        return s
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(work.subtitle == nil
-                         ? "COLLECTED · VOLUME #\(String(format: "%02d", volumeNo))"
-                         : "\(work.series.uppercased()) · VOLUME #\(String(format: "%02d", volumeNo))")
+                VStack(alignment: .leading, spacing: 8) {
+                    // 장르 · 명대사 N편 (Android LibraryBookHeader 머리말).
+                    Text("\(work.format.displayName) · 명대사 \(work.rows.count)편")
                         .labelCaps(size: 12)
-                    Text(work.title)
+                    Spacer().frame(height: 2)
+                    // 작품명(부제와 분리) — 기존엔 부제가 큰 제목 자리에 오던 것을 정리.
+                    Text(work.series)
                         .font(.displaySerif(26))
                         .foregroundStyle(.espresso)
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text([work.format.displayName.uppercased(), work.author, work.releaseYear.map(String.init)]
-                        .compactMap { $0 }
-                        .joined(separator: " · "))
-                        .labelCaps(size: 12)
+                    if let sub = work.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines), !sub.isEmpty {
+                        Text(sub)
+                            .font(.titleSerif(15))
+                            .foregroundStyle(.walnut)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    // 원제·원작자(원어, title_original/author_original) — 있을 때만.
+                    if let orig = originalLine {
+                        Text(orig)
+                            .font(.titleSerif(13))
+                            .italic()
+                            .foregroundStyle(.walnut)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let meta = authorYearLine {
+                        Spacer().frame(height: 4)
+                        Text(meta).labelCaps(size: 12)
+                    }
                 }
                 Spacer()
                 Button { onClose() } label: {
@@ -768,6 +806,22 @@ private struct BookPage: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    // 작품 소개(works.intro) — 인용 카드와 구별되는 종이톤 메모 박스(Android BookIntroNote).
+                    if let intro = introText {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("작품 소개").labelCaps(size: 11)
+                            Text(intro)
+                                .font(.bodySans(14))
+                                .foregroundStyle(.espresso)
+                                .lineSpacing(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.paper))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.latte, lineWidth: 0.5))
+                    }
                     ForEach(work.rows) { row in
                         let card = row.card
                         Button {
