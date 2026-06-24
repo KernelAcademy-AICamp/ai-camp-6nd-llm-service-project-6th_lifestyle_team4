@@ -117,9 +117,9 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 20)
             }
-            // 당겨서 새로고침 — 표준 기본 인디케이터(Feed 와 동일). 동작은 그대로
-            // (랜덤 새 카드 + '갱신됨' 토스트는 reload 안에서).
-            .refreshable { await reload(deterministic: false) }
+            // 당겨서 새로고침 — 표준 기본 인디케이터(Feed 와 동일). 헤더 버튼과 같은
+            // 익명 3회 제한 게이트를 통과(랜덤 새 카드 + '갱신됨' 토스트는 reload 안에서).
+            .refreshable { await pullToRefresh() }
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
@@ -320,19 +320,32 @@ struct HomeView: View {
         }
     }
 
-    /// TODAY 새로고침 — 비회원은 하루 3번 제한(PWA refreshTodayCard / REFRESH_LIMIT).
-    /// 한도 도달 시 '새로운 명대사는 3번까지' 모달, 아니면 카운트 +1 후 새 카드. 회원은 무제한.
-    private func handleRefreshTap() {
-        if session.isAnonymous {
-            if AnonRefreshLimit.atLimit {
-                promptTitle = "새로운 명대사는 3번까지"
-                promptMessage = "오늘 명대사를 3번 받아보셨어요.\n로그인하면 무제한으로 고전 명대사를 즐길 수 있어요."
-                showAccountPrompt = true
-                return
-            }
-            AnonRefreshLimit.bump()
+    /// 익명 3회 제한 게이트(PWA refreshTodayCard / REFRESH_LIMIT) — 통과하면 true
+    /// (익명이면 카운트 +1 포함), 한도 도달이면 '3번까지' 모달을 띄우고 false. 회원은
+    /// 항상 true. 헤더 버튼·센터 재탭·당겨서 새로고침이 모두 이 게이트를 통과한다.
+    private func passAnonRefreshGate() -> Bool {
+        guard session.isAnonymous else { return true }
+        if AnonRefreshLimit.atLimit {
+            promptTitle = "새로운 명대사는 3번까지"
+            promptMessage = "오늘 명대사를 3번 받아보셨어요.\n로그인하면 무제한으로 고전 명대사를 즐길 수 있어요."
+            showAccountPrompt = true
+            return false
         }
+        AnonRefreshLimit.bump()
+        return true
+    }
+
+    /// TODAY 새로고침(헤더 버튼·센터 재탭) — 익명 게이트 통과 시 새 카드.
+    private func handleRefreshTap() {
+        guard passAnonRefreshGate() else { return }
         Task { await reload(deterministic: false) }
+    }
+
+    /// 당겨서 새로고침 — 헤더 버튼과 동일한 익명 3회 제한을 적용(같은 게이트). 한도면
+    /// 모달만 띄우고 새로고침하지 않으므로 기본 스피너도 즉시 끝난다.
+    private func pullToRefresh() async {
+        guard passAnonRefreshGate() else { return }
+        await reload(deterministic: false)
     }
 
     private func toggleBookmark(cardId: Int) {
