@@ -179,6 +179,9 @@ struct DailyNewBooksSection: View {
     // 자동 전환(타이머)으로 idx 가 바뀌는 순간을 표시 — onChange(of: idx) 에서 사용자
     // 스와이프/닷 탭과 구분해 '자동순환 정지(userInteracted)'를 자동 전환엔 걸지 않는다.
     @State private var autoAdvancing = false
+    // 슬라이드 방향 — 1=다음(왼쪽으로 흘러감), -1=이전. 스와이프/닷/자동회전이 idx 를
+    // 바꾸기 직전에 설정하면 transition 이 이 값을 읽어 Android 와 동일한 방향성 전환.
+    @State private var direction = 1
     @State private var maxCardHeight: CGFloat = 0
     // @State 로 한 번만 생성 — View 재초기화마다 새 타이머가 생겨 카운트다운이
     // 리셋되는 것을 막는다(부모 잦은 렌더 시 회전 정지 방지).
@@ -192,34 +195,51 @@ struct DailyNewBooksSection: View {
             let rest = books.enumerated().filter { $0.offset != safeIdx }.map(\.element)
             VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .top) {
-                    // 9권 중 최대 높이 측정(숨김) — TabView 는 콘텐츠에 맞춰 늘지 않아 고정
-                    // 높이가 필요. 전환 시 아래 닷·표지줄 높이 튐 방지(PWA measureMaxMainHeight).
+                    // 9권 중 최대 높이 측정(숨김) — 박스가 고정 높이여야 전환 시 아래
+                    // 닷·표지줄 높이 튐이 없다(PWA measureMaxMainHeight). 박스 없는 inner 의
+                    // 자연 높이를 잰다.
                     ForEach(books) { b in
-                        featuredContent(b)
+                        featuredInner(b)
                             .fixedSize(horizontal: false, vertical: true)
                             .background(GeometryReader { g in
                                 Color.clear.preference(key: NewBookCardHeightKey.self, value: g.size.height)
                             })
                             .hidden()
                     }
-                    // 좌우 스와이프 페이저 — TabView.page 가 가로 스와이프를 '안정적으로'
-                    // 처리하고(왼쪽=다음·오른쪽=이전) 세로 스크롤·카드 탭(페이지 안의
-                    // NavigationLink 상세)과 공존한다. #84 에서 커스텀 transition + 수동
-                    // simultaneousGesture 로 바꿨다가 NavigationLink 가 드래그를 삼켜 스와이프가
-                    // 죽어(탭만 동작) → 검증된 TabView.page 로 복구. 스와이프 우선 > 커스텀
-                    // 슬라이드(둘은 공존 불가). 끝에서 clamp(TabView 기본), 자동회전·닷 탭은
-                    // wrap/점프 유지.
-                    // selection 을 @State idx 에 '직접' 바인딩한다. (이전엔 인라인 파생
-                    // Binding 을 매 렌더 새로 만들어 TabView 가 스와이프 정착값을 idx 로
-                    // 되돌려쓰지 못해 닷이 스와이프를 따라가며 어긋났다 — 5b 버그.) 닷은
-                    // idx(=safeIdx)를 그대로 읽으므로 스와이프·자동·닷탭 모두 정확히 추적.
-                    TabView(selection: $idx) {
-                        ForEach(Array(books.enumerated()), id: \.offset) { i, b in
-                            featured(b).tag(i)
-                        }
+                    // 고정 검정 박스 + 내부 콘텐츠만 슬라이드(Android DailyNewBooks 방식).
+                    // 박스(배경·둥근모서리·보더·clip)는 '안 움직이고', 안의 inner 만 idx
+                    // 변경 시 방향성 슬라이드+페이드로 전환(.id + .transition, clip 으로
+                    // 박스 안에 갇힘). 두 콘텐츠가 교차 슬라이드 → Android AnimatedContent.
+                    //
+                    // 제스처 공존(#84·#111 에서 두 번 죽은 그 부분) — Button/NavigationLink 를
+                    // 쓰지 않는다(그게 탭을 가로채 드래그를 굶겼던 원인). 대신:
+                    //   · 탭(onTapGesture, 정지) → 책 펼침(onOpenWork)
+                    //   · 가로 드래그(simultaneousGesture, 이동≥12 + 가로 우세) → 카드 전환
+                    //   · 롱프레스(contextMenu) → 북마크/공유
+                    // 셋은 시간/방향이 서로 배타적이라 굶지 않는다. simultaneousGesture 라
+                    // 부모 세로 ScrollView 도 그대로 스크롤된다(가로만 소비).
+                    ZStack {
+                        featuredInner(books[safeIdx])
+                            .id(safeIdx)
+                            .transition(slideFade)
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(maxWidth: .infinity)
                     .frame(height: maxCardHeight > 0 ? maxCardHeight : 280)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.espresso))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte.opacity(0.25), lineWidth: 0.5))
+                    .contentShape(Rectangle())
+                    .onTapGesture { onOpenWork(books[safeIdx]) }
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 12)
+                            .onEnded { v in
+                                let dx = v.translation.width, dy = v.translation.height
+                                // 가로 우세 + 충분한 이동일 때만 카드 전환(세로 스크롤·탭과 분리).
+                                guard abs(dx) > abs(dy), abs(dx) > 40 else { return }
+                                advance(dx < 0 ? 1 : -1, count: books.count)
+                            }
+                    )
+                    .cardContextMenu(books[safeIdx].representativeCard)
                 }
                 if books.count > 1 {
                     newBookDots(count: books.count, active: safeIdx)
@@ -251,7 +271,8 @@ struct DailyNewBooksSection: View {
             .onReceive(rotation) { _ in
                 guard books.count > 1, !userInteracted else { return }
                 autoAdvancing = true   // 이 변화는 사용자 조작이 아님 → 정지하지 않음
-                withAnimation(.easeInOut(duration: 0.35)) {
+                direction = 1          // 자동회전은 항상 다음(앞으로)
+                withAnimation(.easeInOut(duration: 0.4)) {
                     idx = (min(idx, books.count - 1) + 1) % books.count
                 }
             }
@@ -265,8 +286,9 @@ struct DailyNewBooksSection: View {
             ForEach(0..<count, id: \.self) { i in
                 Button {
                     guard i != active else { return }
+                    direction = i > active ? 1 : -1   // 방향성 전환
                     userInteracted = true
-                    withAnimation(.easeInOut(duration: 0.35)) { idx = i }   // TabView 페이지 슬라이드
+                    withAnimation(.easeInOut(duration: 0.4)) { idx = i }
                 } label: {
                     Circle()
                         .fill(i == active ? Color.espresso : Color.sand)
@@ -294,9 +316,9 @@ struct DailyNewBooksSection: View {
             + Text("\(weekday)요일").foregroundColor(.cta)
     }
 
-    /// 카드 시각 본문만 — NavigationLink/hero 없이. 페이저(TabView) 각 페이지와
-    /// 숨김 높이 측정(중복 matchedTransitionSource 방지)에서 공유한다.
-    private func featuredContent(_ book: DiscoveryWork, fixedHeight: CGFloat? = nil) -> some View {
+    /// 카드 '내부 콘텐츠'만(검정 박스 없이) — 텍스트 컬럼 + 표지. 고정 박스 페이저가
+    /// 이걸 슬라이드시키고, 숨김 높이 측정에서도 공유한다(박스는 박스가 그림).
+    private func featuredInner(_ book: DiscoveryWork) -> some View {
         let work = book.work
         let title = work.title.isEmpty ? "—" : work.title
         // PWA: author · {year}년 · GENRE_LABEL[format] (연도 뒤 '년').
@@ -367,24 +389,26 @@ struct DailyNewBooksSection: View {
             }
         .padding(.horizontal, 22)   // PWA padding 24px 22px
         .padding(.vertical, 24)
-        // 고정 높이(측정된 최대) + 콘텐츠 세로 중앙. fixedHeight 는 '표시용' 카드에만
-        // 전달하고 숨김 측정(ForEach)엔 nil → 자연 높이로 최대치를 잰다(순환 방지).
-        // PWA min-height: var(--newbook-main-min-h)=measureMaxMainHeight 미러 — 카드
-        // 배경이 고정 높이를 채워, 길이가 다른 카드로 스와이프해도 리사이즈/점프하지 않음.
-        .frame(maxWidth: .infinity, minHeight: fixedHeight, alignment: .center)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color.espresso))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.latte.opacity(0.25), lineWidth: 0.5))
+        // 박스 너비를 채우고(슬라이드가 박스 폭에서 시작/끝나도록) 박스 안에서 세로 중앙.
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
-    /// 탭하면 그 작품의 책을 펼친다(Android: onOpenWork). 페이저 각 페이지가 이 뷰다.
-    /// 책 모달을 열므로 카드 상세로의 hero 모프는 더 이상 적용하지 않는다.
-    private func featured(_ book: DiscoveryWork) -> some View {
-        Button { onOpenWork(book) } label: {
-            // 표시용 — 측정된 최대 높이로 고정(콘텐츠 세로 중앙). 측정값이 아직 0이면 자연 높이.
-            featuredContent(book, fixedHeight: maxCardHeight > 0 ? maxCardHeight : nil)
-        }
-        .buttonStyle(.plain)
-        .cardContextMenu(book.representativeCard)
+    /// 방향성 슬라이드+페이드 transition(Android slideIn/Out + fade). direction=1(다음)이면
+    /// 새 콘텐츠는 오른쪽(trailing)에서 들어오고 옛 콘텐츠는 왼쪽(leading)으로 나간다.
+    private var slideFade: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: direction >= 0 ? .trailing : .leading).combined(with: .opacity),
+            removal:   .move(edge: direction >= 0 ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
+
+    /// 스와이프로 한 칸 이동 — 끝에서 clamp(#79, wrap 없음). direction 설정 후 idx 변경
+    /// → transition 이 방향을 읽는다. userInteracted 는 onChange(of: idx) 가 세팅.
+    private func advance(_ dir: Int, count: Int) {
+        let next = idx + dir
+        guard next >= 0, next < count else { return }   // 끝에서 clamp
+        direction = dir
+        withAnimation(.easeInOut(duration: 0.4)) { idx = next }
     }
 
     private func restCover(_ book: DiscoveryWork) -> some View {
