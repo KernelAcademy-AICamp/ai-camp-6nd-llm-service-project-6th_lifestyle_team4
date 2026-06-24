@@ -90,6 +90,14 @@ struct RootView: View {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         prefs.savePrefs(genres: genres, themes: themes, any: any)
                     }
+                    // 온보딩 선택도 서버(users.pref_*)에 저장 → 기기 간 지속(프로필 편집과 동일).
+                    if let uid = session.userId {
+                        session.prefGenres = genres
+                        session.prefThemes = themes
+                        session.prefAny = any
+                        session.hasServerPrefs = true
+                        Task { try? await Supa.shared.savePreferences(userId: uid, genres: genres, themes: themes, any: any) }
+                    }
                 }
                 .transition(.opacity)
             }
@@ -98,6 +106,11 @@ struct RootView: View {
             Task { await bookmarks.load(userId: newValue) }
             Task { await moderation.refresh(userId: newValue) }   // 차단 목록 재로드
             yarn.sync(serverBalance: session.yarnBalance)   // 로그인/로그아웃 시 잔액 재시드
+            // 서버 선호도(users.pref_*) → 로컬 동기화(기기 간 지속). 서버에 값이 있을
+            // 때만 — 없으면 로컬 온보딩 값을 보존(PWA syncPrefsFromDb 패턴).
+            if session.hasServerPrefs {
+                prefs.syncFromServer(genres: session.prefGenres, themes: session.prefThemes, any: session.prefAny)
+            }
         }
         .task { await moderation.refresh(userId: session.userId) }   // 앱 진입 시 차단 목록
         // 출석체크 — 회원의 그날 첫 진입 1회 모달 + 첫 출석이면 실타래 +100. 온보딩 이후에 띄운다.

@@ -24,6 +24,11 @@ nonisolated struct UserRow: Decodable, Sendable {
     let ageGroup: String?
     /// 실타래 충전 잔액 (users.yarn_balance). 부트스트랩 시드용 — insert 경로엔 없어 nil.
     let yarnBalance: Int?
+    /// 선호 장르(format 배열)·주제(한글 범주 배열)·"상관없음" 플래그 (migration 033).
+    /// 컬럼이 NULL 이면 nil — "서버에 선호도 없음"을 뜻한다(로컬 온보딩 값 보존).
+    let prefGenres: [String]?
+    let prefThemes: [String]?
+    let prefAny: Bool?
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
@@ -32,6 +37,9 @@ nonisolated struct UserRow: Decodable, Sendable {
         case gender
         case ageGroup = "age_group"
         case yarnBalance = "yarn_balance"
+        case prefGenres = "pref_genres"
+        case prefThemes = "pref_themes"
+        case prefAny = "pref_any"
     }
 }
 

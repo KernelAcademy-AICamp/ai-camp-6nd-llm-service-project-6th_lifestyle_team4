@@ -26,6 +26,13 @@ final class AuthSession: ObservableObject {
     /// 실타래 충전 잔액(users.yarn_balance) — 부트스트랩 시 로드. UI 단일 출처는
     /// `YarnStore`; 이 값은 그쪽으로 시드된다(RootView). 차감/충전은 RPC 반환값으로 갱신.
     @Published var yarnBalance = 0
+    /// 서버에 저장된 선호도(users.pref_*, migration 033) — 부트스트랩 시 로드해
+    /// RootView 가 PrefsStore 로 동기화한다(기기 간 지속). `hasServerPrefs` 가 false 면
+    /// 서버에 값이 없다는 뜻이라 로컬 온보딩 값을 덮어쓰지 않는다.
+    @Published var prefGenres: [String] = []
+    @Published var prefThemes: [String] = []
+    @Published var prefAny = false
+    @Published var hasServerPrefs = false
     @Published var errorMessage: String?
 
     @Published var authInProgress = false
@@ -91,6 +98,11 @@ final class AuthSession: ObservableObject {
                 gender = existing.gender ?? ""
                 ageGroup = existing.ageGroup ?? ""
                 yarnBalance = existing.yarnBalance ?? 0
+                // 서버 선호도 로드 — 컬럼이 모두 NULL 이면 hasServerPrefs=false(로컬 보존).
+                prefGenres = existing.prefGenres ?? []
+                prefThemes = existing.prefThemes ?? []
+                prefAny = existing.prefAny ?? false
+                hasServerPrefs = existing.prefGenres != nil || existing.prefThemes != nil || existing.prefAny != nil
             } else {
                 // 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다. 애플 등
                 // 소셜 최초 인증이 이름을 주면 랜덤 대신 그 이름을 쓴다(24자 컷).
