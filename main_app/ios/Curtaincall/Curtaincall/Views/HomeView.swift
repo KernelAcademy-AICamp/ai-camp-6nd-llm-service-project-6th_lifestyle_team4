@@ -25,21 +25,10 @@ struct HomeView: View {
     @State private var bookmarkCounts: [Int: Int] = [:]
     @State private var shareCard: Card?
     @State private var shareCountOverrides: [Int: Int] = [:]   // cardId → 낙관적 공유 수
-    // 당겨서 새로고침(Android RefreshableBox 미러: 실타래가 위에서 내려와 회전) + 갱신됨 토스트.
-    @State private var pullDistance: CGFloat = 0
-    @State private var pullArmed = false
-    @State private var pullRefreshing = false
-    // 새로고침 직후 인디케이터 재표시 억제 — 스크롤이 실제 rest(pull≈0)로 복귀할 때 해제.
-    @State private var pullCooldown = false
-    // rest 콜백이 전혀 안 와도 게이트가 고착돼 다음 당김을 먹지 않도록 하는 '보장 플로어'
-    // 타이머. 새 쿨다운/해제 시 취소·재설정한다.
-    @State private var cooldownBackstop: Task<Void, Never>?
-    @State private var spinAngle: Double = 0
+    // 새로고침 토스트('갱신됨') — 헤더 새로고침 버튼과 당겨서 새로고침이 공유. 당겨서
+    // 새로고침은 표준 .refreshable 기본 인디케이터를 쓴다(커스텀 실타래 스피너 제거,
+    // Feed 와 일치 — build 6 에서 재검토).
     @State private var refreshToast: String?
-    private let pullThreshold: CGFloat = 90
-    // 인디케이터 표시 데드밴드 — 새로고침 후 reflow/바운스의 작은 잔여 당김(≤8pt)으로는
-    // 실타래가 다시 보이지 않게 한다(rest-gated 쿨다운과 함께 재출현 제거).
-    private let pullReshowDeadband: CGFloat = 8
 
     var body: some View {
         VStack(spacing: 0) {
@@ -128,11 +117,9 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 20)
             }
-            // 당겨서 새로고침 — 스크롤이 위로 당겨진 거리를 추적, 임계 넘겨 놓으면 실행.
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, y in
-                handlePull(offsetY: y)
-            }
-            .overlay(alignment: .top) { yarnPullIndicator }
+            // 당겨서 새로고침 — 표준 기본 인디케이터(Feed 와 동일). 헤더 버튼과 같은
+            // 익명 3회 제한 게이트를 통과(랜덤 새 카드 + '갱신됨' 토스트는 reload 안에서).
+            .refreshable { await pullToRefresh() }
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
@@ -186,20 +173,6 @@ struct HomeView: View {
                     .background(Capsule().fill(Color.espresso))
                     .padding(.bottom, 130)
                     .transition(.opacity)
-            }
-        }
-        // 새로고침 중에만 실타래를 연속 회전(750ms/회전, Android YarnRefreshIndicator).
-        // 새로고침 중엔 실타래를 연속 회전(750ms/회전, Android YarnRefreshIndicator —
-        // refreshing 동안 infiniteRepeatable linear). 센터 탭의 1회 .yarnSpin 과는 별개:
-        // 인디케이터는 reload 가 길어져도 끝까지 돌아야 하므로 continuous 유지.
-        .onChange(of: pullRefreshing) { _, refreshing in
-            if refreshing {
-                spinAngle = 0
-                withAnimation(.linear(duration: 0.75).repeatForever(autoreverses: false)) {
-                    spinAngle = 360
-                }
-            } else {
-                spinAngle = 0
             }
         }
         // 센터(TODAY) 재탭 → 새 명대사 (상단 새로고침 버튼과 동일: 익명 3회 제한·토스트 포함).
@@ -325,84 +298,6 @@ struct HomeView: View {
         }
     }
 
-    /// Android YarnRefreshIndicator 미러 — 당기는 거리만큼 위에서 내려오며 페이드·확대·
-    /// 살짝 감기고(windup), 새로고침 중엔 연속 회전. 실타래 = 하단탭 홈 버튼 아이콘.
-    private var yarnPullIndicator: some View {
-        let size: CGFloat = 50   // 상단 새로고침 실타래 — 네비 센터(54)보다 작게
-        let restY: CGFloat = 16
-        // 데드밴드: 새로고침 중엔 1, 그 외엔 당김이 8pt 넘을 때만 진행도 표시(작은 잔여
-        // 당김으로 재출현하지 않게).
-        let shown: CGFloat = pullRefreshing
-            ? 1
-            : (pullDistance > pullReshowDeadband ? min(1, pullDistance / pullThreshold) : 0)
-        let translateY = -size + shown * (size + restY)
-        let rotation: Double = pullRefreshing ? spinAngle : Double(shown) * 200
-        return Image("daily-script-bar")
-            .resizable()
-            .scaledToFit()
-            .frame(width: size, height: size)
-            .clipShape(Circle())
-            .opacity(Double(shown))
-            .scaleEffect(0.5 + 0.5 * shown)
-            .rotationEffect(.degrees(rotation))
-            .offset(y: translateY)
-            .allowsHitTesting(false)
-    }
-
-    /// 스크롤 당김 추적 — 임계(pullThreshold) 넘기면 arm, 손 떼고 상단 복귀 시 1회 실행.
-    private func handlePull(offsetY: CGFloat) {
-        guard !pullRefreshing else { return }
-        let pull = max(0, -offsetY)
-        // 새로고침 직후: 새 카드 reflow/바운스가 일시적으로 pull>0 콜백을 내보내 실타래가
-        // 깜빡 다시 떴다 사라지는 버그(갱신됨 토스트와 겹쳐 더 도드라짐) 방지. 인디케이터를
-        // 숨긴 채, '스크롤이 실제 rest(pull≈0)로 복귀'할 때만 해제한다(일시적 pull>0 으로는
-        // 해제 X). 다음 당김은 항상 rest 에서 시작하므로 그 순간 해제돼 정상 추적된다.
-        if pullCooldown {
-            pullDistance = 0
-            if pull <= 1 { clearCooldown() }
-            return
-        }
-        pullDistance = pull
-        if pull >= pullThreshold { pullArmed = true }
-        if pullArmed && pull <= 1 {
-            pullArmed = false
-            pullRefresh()
-        }
-    }
-
-    /// 당겨서 새로고침 — 실타래 스피너를 돌리며 reload(랜덤). 토스트는 reload 안에서.
-    /// (헤더 새로고침 버튼은 reload 를 직접 호출 → 같은 토스트, 버튼 라인은 안 건드림.)
-    private func pullRefresh() {
-        Task {
-            pullRefreshing = true
-            await reload(deterministic: false)
-            // 끝나는 순간 인디케이터 즉시 숨김 + rest 복귀까지 재표시 억제(재출현 제거).
-            pullDistance = 0
-            pullRefreshing = false
-            startCooldown()
-        }
-    }
-
-    /// 재표시 억제 시작 — 해제는 handlePull 의 rest(pull≈0) 복귀가 한다. 스크롤 콜백이
-    /// 전혀 안 와도 게이트가 고착되지 않도록 '보장 플로어' 백스톱(어떤 settle 보다 긴
-    /// 1.8s)을 ONE 개만 둔다. 직전 백스톱은 항상 취소 후 재설정(댕글링/중복 방지).
-    private func startCooldown() {
-        pullCooldown = true
-        cooldownBackstop?.cancel()
-        cooldownBackstop = Task {
-            try? await Task.sleep(nanoseconds: 1_800_000_000)
-            guard !Task.isCancelled else { return }
-            clearCooldown()
-        }
-    }
-
-    /// 쿨다운 해제 + 백스톱 취소. rest 복귀(다음 당김 직전 포함)·백스톱 만료에서 호출.
-    private func clearCooldown() {
-        pullCooldown = false
-        cooldownBackstop?.cancel()
-        cooldownBackstop = nil
-    }
-
     private func showRefreshToast(_ msg: String) {
         withAnimation(.easeInOut(duration: 0.2)) { refreshToast = msg }
         Task {
@@ -425,19 +320,32 @@ struct HomeView: View {
         }
     }
 
-    /// TODAY 새로고침 — 비회원은 하루 3번 제한(PWA refreshTodayCard / REFRESH_LIMIT).
-    /// 한도 도달 시 '새로운 명대사는 3번까지' 모달, 아니면 카운트 +1 후 새 카드. 회원은 무제한.
-    private func handleRefreshTap() {
-        if session.isAnonymous {
-            if AnonRefreshLimit.atLimit {
-                promptTitle = "새로운 명대사는 3번까지"
-                promptMessage = "오늘 명대사를 3번 받아보셨어요.\n로그인하면 무제한으로 고전 명대사를 즐길 수 있어요."
-                showAccountPrompt = true
-                return
-            }
-            AnonRefreshLimit.bump()
+    /// 익명 3회 제한 게이트(PWA refreshTodayCard / REFRESH_LIMIT) — 통과하면 true
+    /// (익명이면 카운트 +1 포함), 한도 도달이면 '3번까지' 모달을 띄우고 false. 회원은
+    /// 항상 true. 헤더 버튼·센터 재탭·당겨서 새로고침이 모두 이 게이트를 통과한다.
+    private func passAnonRefreshGate() -> Bool {
+        guard session.isAnonymous else { return true }
+        if AnonRefreshLimit.atLimit {
+            promptTitle = "새로운 명대사는 3번까지"
+            promptMessage = "오늘 명대사를 3번 받아보셨어요.\n로그인하면 무제한으로 고전 명대사를 즐길 수 있어요."
+            showAccountPrompt = true
+            return false
         }
+        AnonRefreshLimit.bump()
+        return true
+    }
+
+    /// TODAY 새로고침(헤더 버튼·센터 재탭) — 익명 게이트 통과 시 새 카드.
+    private func handleRefreshTap() {
+        guard passAnonRefreshGate() else { return }
         Task { await reload(deterministic: false) }
+    }
+
+    /// 당겨서 새로고침 — 헤더 버튼과 동일한 익명 3회 제한을 적용(같은 게이트). 한도면
+    /// 모달만 띄우고 새로고침하지 않으므로 기본 스피너도 즉시 끝난다.
+    private func pullToRefresh() async {
+        guard passAnonRefreshGate() else { return }
+        await reload(deterministic: false)
     }
 
     private func toggleBookmark(cardId: Int) {
