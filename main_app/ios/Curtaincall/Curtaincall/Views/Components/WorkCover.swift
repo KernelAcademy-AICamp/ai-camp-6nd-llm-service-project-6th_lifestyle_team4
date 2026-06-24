@@ -33,9 +33,15 @@ struct WorkCover: View {
 
     var body: some View {
         let radius: CGFloat = compact ? 3 : 4
+        // 캐시 히트면 첫 프레임부터 동기로 즉시 표시 — `.task` 비동기 지연(+loadCover 의
+        // `loadedImage=nil` 리셋)으로 가죽이 잠깐 보였다가 이미지가 '제자리에서' 뜨던
+        // 문제 제거. (데일리 룰렛 슬라이드 시 새 카드 표지가 텍스트와 함께 안 미끄러지고
+        // 정착 후 제자리에서 바뀌어 보이던 원인. 표지는 숨김 측정 ForEach 가 선로딩해
+        // 슬라이드 시점엔 보통 캐시 워밍됨.) loadedImage 우선, 없으면 동기 캐시 조회.
+        let image = loadedImage ?? coverURL.flatMap { WorkCoverCache.shared.object(forKey: $0 as NSURL) }
         Group {
-            if let loadedImage {
-                Image(uiImage: loadedImage).resizable().scaledToFill()
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
             } else {
                 leather   // 로딩 중·표지 없음 — 빈 깜빡임 없이 가죽 표시
             }
