@@ -194,8 +194,15 @@ struct MyPageView: View {
                 initialPrefs: prefs.userPrefs,
                 showPreferences: true,
                 onSavePreferences: { genres, themes, any in
-                    // 로컬 저장(온보딩과 동일 경로). users.pref_* DB 동기화는 백엔드 대기.
+                    // 로컬 즉시 반영(온보딩과 동일 경로) + 서버(users.pref_*) 저장(migration 033).
                     prefs.savePrefs(genres: genres, themes: themes, any: any)
+                    if let uid = session.userId {
+                        session.prefGenres = genres
+                        session.prefThemes = themes
+                        session.prefAny = any
+                        session.hasServerPrefs = true
+                        Task { try? await Supa.shared.savePreferences(userId: uid, genres: genres, themes: themes, any: any) }
+                    }
                 }
             ) { name, g, a in
                 Task { await session.updateProfile(name, gender: g, ageGroup: a) }

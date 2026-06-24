@@ -253,12 +253,35 @@ final class Supa {
 
     func findUser(anonymousId: String) async throws -> UserRow? {
         let rows: [UserRow] = try await client.from("users")
-            .select("user_id, nickname, login_id, gender, age_group, yarn_balance")
+            .select("user_id, nickname, login_id, gender, age_group, yarn_balance, pref_genres, pref_themes, pref_any")
             .eq("anonymous_id", value: anonymousId)
             .limit(1)
             .execute()
             .value
         return rows.first
+    }
+
+    private struct PrefUpdate: Encodable, Sendable {
+        let pref_genres: [String]
+        let pref_themes: [String]
+        let pref_any: Bool
+        let pref_updated_at: String
+    }
+
+    /// 선호 장르·주제를 users 행에 저장(migration 033 컬럼). 기존 users self-update RLS
+    /// 사용. PWA `savePreferencesToDb` 와 동일 — pref_updated_at 갱신. 회원만(익명은
+    /// userId 없거나 RLS 로 무시).
+    func savePreferences(userId: Int, genres: [String], themes: [String], any: Bool) async throws {
+        let iso = ISO8601DateFormatter()
+        try await client.from("users")
+            .update(PrefUpdate(
+                pref_genres: genres,
+                pref_themes: themes,
+                pref_any: any,
+                pref_updated_at: iso.string(from: Date())
+            ))
+            .eq("user_id", value: userId)
+            .execute()
     }
 
     // MARK: - Yarn (실타래) — 06_yarn.sql RPCs. Balance lives in users.yarn_balance,

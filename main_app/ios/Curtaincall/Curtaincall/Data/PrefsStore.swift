@@ -59,9 +59,19 @@ final class PrefsStore: ObservableObject {
     }
 
     /// Persist the onboarding picks locally and mark onboarding done. No
-    /// `users.pref_*` DB write yet — those columns aren't confirmed live (이창훈);
-    /// DB sync is a follow-up once they're deployed.
+    /// 온보딩/프로필 편집의 로컬 저장. DB(users.pref_*) 쓰기는 호출부가 별도로
+    /// `Supa.savePreferences` 로 수행한다(migration 033 배포 완료).
     func savePrefs(genres: [String], themes: [String], any: Bool) {
+        d.set(genres, forKey: Key.prefGenres)
+        d.set(themes, forKey: Key.prefThemes)
+        d.set(any, forKey: Key.prefAny)
+        prefSelected = true
+    }
+
+    /// 서버(users.pref_*)에 저장된 선호도를 로컬로 동기화 — 기기 간 지속·온보딩 재노출
+    /// 방지(PWA `syncPrefsFromDb` 미러). 호출부(RootView)는 서버에 값이 있을 때만
+    /// 부른다. prefSelected 를 true 로 해 온보딩이 다시 뜨지 않게 한다.
+    func syncFromServer(genres: [String], themes: [String], any: Bool) {
         d.set(genres, forKey: Key.prefGenres)
         d.set(themes, forKey: Key.prefThemes)
         d.set(any, forKey: Key.prefAny)
