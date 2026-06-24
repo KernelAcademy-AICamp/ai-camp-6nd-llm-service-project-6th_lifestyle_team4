@@ -214,6 +214,18 @@ struct CardDetailView: View {
                         nickname: session.nickname
                     )
 
+                    // 장식용 '책 읽는 고양이'(library-cat-2, Daily 오즈픽과 동일 에셋/처치) —
+                    // 본문 맨 아래 여백에 가운데 배치. 본문·CTA·댓글·도킹 컴포저와 겹치지
+                    // 않는 끝맺음 브랜드 플로리시. 비상호작용(터치 통과·접근성 숨김).
+                    Image("library-cat-2")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 116)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 28)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+
                     Spacer().frame(height: 24)
                 }
                 .padding(.horizontal, 20)
