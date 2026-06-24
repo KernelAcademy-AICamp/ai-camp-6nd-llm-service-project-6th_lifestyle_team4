@@ -210,6 +210,11 @@ struct CommentsSection: View {
             .map { (top: $0.top, replies: $0.replies.filter { !moderation.isBlocked($0.userId) }) }
     }
 
+    /// 차단 제외 후 실제로 보이는 댓글 수(최상위 + 답글). 카운트·빈 상태가 화면과 일치.
+    private var visibleCommentCount: Int {
+        visibleGroups.reduce(0) { $0 + 1 + $1.replies.count }
+    }
+
     private func showModerationToast(_ message: String) {
         withAnimation { moderationToast = message }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
@@ -222,7 +227,7 @@ struct CommentsSection: View {
         case .readerNotes:
             Text("READER NOTES").labelCaps()
         case .count:
-            Text("댓글 \(model.comments.count)")
+            Text("댓글 \(visibleCommentCount)")
                 .font(.titleSerif(16))
                 .foregroundStyle(.espresso)
         }
@@ -248,7 +253,7 @@ struct CommentsSection: View {
 
             Spacer().frame(height: 20)
 
-            if model.comments.isEmpty {
+            if visibleGroups.isEmpty {
                 Text(copy.emptyText)
                     .font(.bodySans(14))
                     .foregroundStyle(.walnut)

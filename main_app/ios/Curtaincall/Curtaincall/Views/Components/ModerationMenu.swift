@@ -11,6 +11,9 @@ struct ModerationMenu: View {
     let authorUserId: Int
     /// 결과 안내 토스트를 띄울 호출부 핸들러.
     var onToast: (String) -> Void = { _ in }
+    /// 차단 성공 시 호출 — 상세 화면이면 dismiss 해서 차단된 콘텐츠를 화면에 남기지 않는다.
+    /// nil 이면(목록 카드 등) 토스트만 띄우고 목록이 즉시 재필터된다.
+    var onBlocked: (() -> Void)? = nil
 
     @EnvironmentObject private var moderation: ModerationStore
     @EnvironmentObject private var session: AuthSession
@@ -72,7 +75,11 @@ struct ModerationMenu: View {
         Task {
             do {
                 try await moderation.block(userId: authorUserId)
-                onToast("차단했어요. 이 사용자의 콘텐츠가 가려집니다.")
+                if let onBlocked {
+                    onBlocked()   // 상세 화면 dismiss — 차단된 콘텐츠를 화면에 남기지 않음
+                } else {
+                    onToast("차단했어요. 이 사용자의 콘텐츠가 가려집니다.")
+                }
             } catch {
                 onToast("차단 처리에 실패했어요")
             }

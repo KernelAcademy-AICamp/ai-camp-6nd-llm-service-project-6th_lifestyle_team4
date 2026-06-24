@@ -723,7 +723,8 @@ private struct FeedPostDetailSheet: View {
                     ModerationMenu(
                         target: .feedPost(post.postId),
                         authorUserId: post.userId,
-                        onToast: showModerationToast
+                        onToast: showModerationToast,
+                        onBlocked: { dismiss() }   // 차단 후 상세 닫기 — 차단 콘텐츠 잔류 방지
                     )
                 }
                 Button { dismiss() } label: {
