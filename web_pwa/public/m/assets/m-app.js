@@ -9095,7 +9095,7 @@ function renderShareBgList() {
     cell.type = 'button';
     cell.dataset.bg = b.id;
     const active = shareState.bgId === b.id && !locked;
-    cell.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:none;cursor:pointer;padding:0;width:100%;`;
+    cell.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:none;cursor:pointer;padding:0;width:100%;-webkit-tap-highlight-color:transparent;outline:none;`;
     cell.innerHTML = `
       <div style="position:relative;width:100%;aspect-ratio:9/16;border-radius:6px;overflow:hidden;border:2px solid ${active ? 'var(--cta)' : 'transparent'};box-shadow:0 2px 5px rgba(0,0,0,.12);">
         <canvas data-thumb="${b.id}" width="144" height="256" style="width:100%;height:100%;display:block;"></canvas>
