@@ -1606,7 +1606,9 @@ function makeFoldHTML(rawText) {
   if (!needFold) return `<div class="fold-wrap"><div class="fold-text expanded">${safeHtml}</div></div>`;
   return `<div class="fold-wrap"><div class="fold-text">${safeHtml}</div><button type="button" class="fold-btn visible">더 보기</button></div>`;
 }
-/* 글로벌 위임 — fold-btn 토글 + like-btn 토글. 새로 그려진 DOM 도 자동 대응. */
+/* 글로벌 위임 — fold-btn 토글 + like-btn 토글. 새로 그려진 DOM 도 자동 대응.
+   capture: true — 카드 wrapper 의 click 핸들러(상세 열기)가 발화하기 전에 가로채서
+   stopPropagation 으로 차단. (bubbling 단계 등록 시엔 카드 핸들러가 먼저 실행돼 상세가 열림) */
 document.addEventListener('click', async (e) => {
   const foldBtn = e.target.closest && e.target.closest('.fold-btn');
   if (foldBtn) {
@@ -1644,7 +1646,7 @@ document.addEventListener('click', async (e) => {
       });
     } catch (err) { console.warn('[m] toggle like failed:', err); try { toast('좋아요 실패'); } catch {} }
   }
-});
+}, true);
 
 // ---------- Today's card / 추천 ----------
 
@@ -6833,7 +6835,11 @@ function buildFeedItem(post) {
     </div>
   `;
   // 카드 탭 → 피드 글 상세(명대사 + 본문 + 댓글) — FeedPostDetailSheet 미러
-  wrap.addEventListener('click', () => openFeedPostDetail(post));
+  // 좋아요/접기 버튼 클릭은 상세 열기에서 제외 (capture 가드와 이중 안전망)
+  wrap.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('.like-btn, .fold-btn')) return;
+    openFeedPostDetail(post);
+  });
   return wrap;
 }
 
@@ -8045,7 +8051,10 @@ function renderHighlights() {
       <p class="hl-card-foot">#${String(h.card_id).padStart(5,'0')}</p>
     `;
     item.style.cursor = 'pointer';
-    item.addEventListener('click', () => openHighlightDetail(h));
+    item.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('.like-btn, .fold-btn')) return;
+      openHighlightDetail(h);
+    });
     highlightsList.appendChild(item);
   }
 }
