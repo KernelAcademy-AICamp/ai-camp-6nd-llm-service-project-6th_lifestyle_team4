@@ -8015,7 +8015,9 @@ function renderHighlights() {
     const cover = w.cover_url || '';
     const item = document.createElement('div');
     item.className = 'hl-card';
+    item.style.position = 'relative';   /* 좋아요 버튼 absolute 기준 — 카드 우상단 고정 */
     item.innerHTML = `
+      ${makeLikeHTML('highlight', h.highlight_id)}
       <div class="hl-card-head">
         <p class="nickname">${escapeHtml(nickname)}</p>
         ${metaLine ? `<p class="meta">${escapeHtml(metaLine)}</p>` : ''}
@@ -8034,8 +8036,7 @@ function renderHighlights() {
         <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);font-weight:600;line-height:1.3;">${escapeHtml(title)}</p>
         ${author ? `<p style="margin:3px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(author)}${year ? ' · ' + escapeHtml(String(year)) : ''}</p>` : ''}
       </div>
-      <div class="hl-quote" style="position:relative;">
-        ${makeLikeHTML('highlight', h.highlight_id)}
+      <div class="hl-quote">
         <span class="open-q">“</span>
         ${makeFoldHTML(h.selected_text || '')}
         <span class="close-q">”</span>
