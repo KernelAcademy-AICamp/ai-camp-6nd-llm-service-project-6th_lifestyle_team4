@@ -3581,9 +3581,8 @@ function renderDailyTrending() {
   if (scored.length === 0) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
   sec.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+    <div style="margin-bottom:8px;">
       <h2 class="t-headline-md c-espresso" style="font-weight:700;">이번 주 인기 대사</h2>
-      <button id="daily-trending-all" class="t-label-sm c-walnut" style="background:transparent;border:none;cursor:pointer;">전체 ›</button>
     </div>
     ${scored.map(({ c, bm, cm, vw }, i) => `
       <button type="button" data-card-id="${c.card_id}"
@@ -3608,7 +3607,6 @@ function renderDailyTrending() {
       if (card) { track('daily_trending_clicked', { card_id: cardId }); openDetail(card); }
     });
   });
-  sec.querySelector('#daily-trending-all')?.addEventListener('click', () => setView('archive'));
 }
 
 // 섹션 5: 오즈 추천
