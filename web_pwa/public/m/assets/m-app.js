@@ -1594,9 +1594,9 @@ function getLikeState(type, id) {
 }
 function makeLikeHTML(type, id) {
   const { count, liked } = getLikeState(type, id);
-  const heart = liked ? '❤️' : '🤍';
   const countPart = count > 0 ? `<span class="like-count">${count}</span>` : '';
-  return `<button type="button" class="like-btn ${liked ? 'liked' : ''}" data-like-type="${type}" data-like-id="${id}" aria-label="좋아요"><span class="like-icon">${heart}</span>${countPart}</button>`;
+  /* 댓글 하트와 동일 — material-symbols favorite + FILL 0/1 토글 */
+  return `<button type="button" class="like-btn ${liked ? 'liked' : ''}" data-like-type="${type}" data-like-id="${id}" aria-label="좋아요"><span class="material-symbols-outlined like-icon" style="font-size:18px;font-variation-settings:'FILL' ${liked ? 1 : 0};">favorite</span>${countPart}</button>`;
 }
 /* 본문 텍스트를 4줄 clamp + '더 보기' 토글 가능한 div 로. 짧으면 fold-btn 자체가 숨겨짐. */
 function makeFoldHTML(rawText) {
@@ -1634,7 +1634,8 @@ document.addEventListener('click', async (e) => {
       state.likes[type]?.set(id, { count: Number(data.count) || 0, liked: !!data.liked });
       document.querySelectorAll(`.like-btn[data-like-type="${type}"][data-like-id="${id}"]`).forEach((b) => {
         b.classList.toggle('liked', data.liked);
-        const icon = b.querySelector('.like-icon'); if (icon) icon.textContent = data.liked ? '❤️' : '🤍';
+        const icon = b.querySelector('.like-icon');
+        if (icon) icon.style.fontVariationSettings = `'FILL' ${data.liked ? 1 : 0}`;
         let cnt = b.querySelector('.like-count');
         if (data.count > 0) {
           if (!cnt) { cnt = document.createElement('span'); cnt.className = 'like-count'; b.appendChild(cnt); }
