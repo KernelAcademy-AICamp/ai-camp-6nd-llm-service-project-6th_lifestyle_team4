@@ -1356,9 +1356,18 @@
     display: -webkit-box;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    /* \n 줄바꿈·들여쓰기·공백 보존 — 원본 문단 형식 유지 */
+    white-space: pre-wrap;
+    word-break: keep-all;
   }
   .fold-text:not(.expanded) { -webkit-line-clamp: 4; }
   .fold-text.expanded { -webkit-line-clamp: unset; display: block; }
+  /* hl-quote 안의 fold-text 는 기존 .hl-quote p 와 동일 폰트(명조체)로 — div 로 대체되며 잃어버린 스타일 복원 */
+  .hl-quote .fold-text {
+    font-family: 'Nanum Myeongjo', Georgia, serif;
+    font-size: 15px; line-height: 28px;
+    color: var(--espresso);
+  }
   .fold-btn {
     display: none; background: transparent; border: none;
     color: var(--walnut); font-size: 12px; padding: 4px 0;
