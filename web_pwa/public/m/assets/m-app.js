@@ -729,7 +729,7 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
       userPk: state.userId != null ? String(state.userId) : null,
     });
     paintAuthIdentity();
-    await Promise.all([loadAllCards(), loadBookmarks(), loadBookmarkCounts(), loadCommentCounts()]);
+    await Promise.all([loadAllCards(), loadBookmarks(), loadBookmarkCounts(), loadCommentCounts(), loadContentLikes()]);
     paintTasteProfile();
     renderHome();
     // 초기 setView — history에 중복 entry 안 쌓이게 suppress 후 replaceState로 마무리
@@ -1559,6 +1559,91 @@ async function loadCommentCounts() {
     console.warn('[m] loadCommentCounts error:', e);
   }
 }
+
+/* ===== 피드/하이라이트 좋아요 (migration 043 content_likes) =====
+   state.likes.{feed_post|highlight} = Map<target_id, { count, liked }>.
+   loadContentLikes() — 전체 카운트 1회 + 내 좋아요 1회. paint 위치에서 makeLikeHTML 호출. */
+state.likes = { feed_post: new Map(), highlight: new Map() };
+async function loadContentLikes() {
+  state.likes.feed_post.clear();
+  state.likes.highlight.clear();
+  try {
+    const sb = await getSupabase();
+    const { data: counts } = await sb.from('content_like_counts').select('target_type, target_id, like_count');
+    for (const r of counts || []) {
+      const m = state.likes[r.target_type];
+      if (m) m.set(Number(r.target_id), { count: Number(r.like_count) || 0, liked: false });
+    }
+    if (state.userId) {
+      const { data: mine } = await sb.from('content_likes')
+        .select('target_type, target_id')
+        .eq('user_id', state.userId);
+      for (const r of mine || []) {
+        const m = state.likes[r.target_type];
+        if (!m) continue;
+        const id = Number(r.target_id);
+        const cur = m.get(id) || { count: 0, liked: false };
+        cur.liked = true;
+        m.set(id, cur);
+      }
+    }
+  } catch (e) { console.warn('[m] loadContentLikes failed:', e); }
+}
+function getLikeState(type, id) {
+  return state.likes[type]?.get(Number(id)) || { count: 0, liked: false };
+}
+function makeLikeHTML(type, id) {
+  const { count, liked } = getLikeState(type, id);
+  const heart = liked ? '❤️' : '🤍';
+  const countPart = count > 0 ? `<span class="like-count">${count}</span>` : '';
+  return `<button type="button" class="like-btn ${liked ? 'liked' : ''}" data-like-type="${type}" data-like-id="${id}" aria-label="좋아요"><span class="like-icon">${heart}</span>${countPart}</button>`;
+}
+/* 본문 텍스트를 4줄 clamp + '더 보기' 토글 가능한 div 로. 짧으면 fold-btn 자체가 숨겨짐. */
+function makeFoldHTML(rawText) {
+  const text = String(rawText || '');
+  const needFold = text.length > 100 || (text.match(/\n/g) || []).length >= 3;
+  const safeHtml = renderMarkdownBold(text);
+  if (!needFold) return `<div class="fold-wrap"><div class="fold-text expanded">${safeHtml}</div></div>`;
+  return `<div class="fold-wrap"><div class="fold-text">${safeHtml}</div><button type="button" class="fold-btn visible">더 보기</button></div>`;
+}
+/* 글로벌 위임 — fold-btn 토글 + like-btn 토글. 새로 그려진 DOM 도 자동 대응. */
+document.addEventListener('click', async (e) => {
+  const foldBtn = e.target.closest && e.target.closest('.fold-btn');
+  if (foldBtn) {
+    e.stopPropagation();
+    const text = foldBtn.parentElement.querySelector('.fold-text');
+    if (text) {
+      const expanded = text.classList.toggle('expanded');
+      foldBtn.textContent = expanded ? '접기' : '더 보기';
+    }
+    return;
+  }
+  const likeBtn = e.target.closest && e.target.closest('.like-btn');
+  if (likeBtn) {
+    e.stopPropagation(); e.preventDefault();
+    const type = likeBtn.dataset.likeType;
+    const id = Number(likeBtn.dataset.likeId);
+    if (!type || !id) return;
+    if (!state.userId) { try { openSigninModal(); } catch {} return; }
+    try {
+      const sb = await getSupabase();
+      const { data, error } = await sb.rpc('toggle_content_like', {
+        p_user_id: state.userId, p_target_type: type, p_target_id: id,
+      });
+      if (error) throw error;
+      state.likes[type]?.set(id, { count: Number(data.count) || 0, liked: !!data.liked });
+      document.querySelectorAll(`.like-btn[data-like-type="${type}"][data-like-id="${id}"]`).forEach((b) => {
+        b.classList.toggle('liked', data.liked);
+        const icon = b.querySelector('.like-icon'); if (icon) icon.textContent = data.liked ? '❤️' : '🤍';
+        let cnt = b.querySelector('.like-count');
+        if (data.count > 0) {
+          if (!cnt) { cnt = document.createElement('span'); cnt.className = 'like-count'; b.appendChild(cnt); }
+          cnt.textContent = data.count;
+        } else if (cnt) { cnt.remove(); }
+      });
+    } catch (err) { console.warn('[m] toggle like failed:', err); try { toast('좋아요 실패'); } catch {} }
+  }
+});
 
 // ---------- Today's card / 추천 ----------
 
@@ -6736,7 +6821,10 @@ function buildFeedItem(post) {
         <p class="feed-time">한 줄 리뷰 · ${escapeHtml(formatRelativeTime(post.created_at))}</p>
       </div>
     </div>
-    <div class="feed-quote-panel">${escapeHtml(post.body || '')}</div>
+    <div class="feed-quote-panel" style="position:relative;">
+      ${makeLikeHTML('feed_post', post.post_id)}
+      ${makeFoldHTML(post.body || '')}
+    </div>
     <div class="feed-book-line">
       <p class="fb-title">${escapeHtml(title)}</p>
       ${author ? `<p class="fb-author">${escapeHtml(author)}</p>` : ''}
@@ -7946,9 +8034,10 @@ function renderHighlights() {
         <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:14px;color:var(--espresso);font-weight:600;line-height:1.3;">${escapeHtml(title)}</p>
         ${author ? `<p style="margin:3px 0 0;font-size:11px;color:var(--walnut);">${escapeHtml(author)}${year ? ' · ' + escapeHtml(String(year)) : ''}</p>` : ''}
       </div>
-      <div class="hl-quote">
+      <div class="hl-quote" style="position:relative;">
+        ${makeLikeHTML('highlight', h.highlight_id)}
         <span class="open-q">“</span>
-        <p>${renderMarkdownBold(h.selected_text || '')}</p>
+        ${makeFoldHTML(h.selected_text || '')}
         <span class="close-q">”</span>
       </div>
       <p class="hl-card-foot">#${String(h.card_id).padStart(5,'0')}</p>

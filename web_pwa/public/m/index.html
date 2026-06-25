@@ -1350,6 +1350,32 @@
     text-transform: uppercase; color: var(--sand);
   }
 
+  /* ===== Fold (접기/펴기) + Like (하트) — 피드/하이라이트 공통 ===== */
+  .fold-wrap { position: relative; }
+  .fold-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .fold-text:not(.expanded) { -webkit-line-clamp: 4; }
+  .fold-text.expanded { -webkit-line-clamp: unset; display: block; }
+  .fold-btn {
+    display: none; background: transparent; border: none;
+    color: var(--walnut); font-size: 12px; padding: 4px 0;
+    cursor: pointer; margin-top: 4px;
+  }
+  .fold-btn.visible { display: inline-block; }
+  .like-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: transparent; border: none; padding: 6px 8px;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+    color: var(--walnut); font-size: 12px; line-height: 1;
+    z-index: 2;
+  }
+  .like-btn:hover { color: #d24a4a; }
+  .like-btn.liked { color: #e23a3a; }
+  .like-btn .like-icon { font-size: 16px; }
+
   /* ===== Feed (오늘의 한줄) — 소셜 리뷰 카드 (Android FeedPostCard 미러) ===== */
   /* 카드: 헤더(원형 아바타 + 닉네임 + "한 줄 리뷰·시간") → 명조 인용 패널 → 책 제목·저자 */
   .feed-item {
