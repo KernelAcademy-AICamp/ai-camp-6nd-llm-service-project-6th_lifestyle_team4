@@ -59,5 +59,14 @@ This app prioritizes **cross-platform brand/visual parity** with the Android and
 - Flag any new dependency before adding it.
 - Backend contracts may have drifted (web/Android/Supabase) — verify against the live schema rather than assuming.
 
+## Commit / PR conventions
+Per-brief boilerplate, captured here so briefs needn't restate it.
+- **Language:** English conventional-commit prefix (`feat` / `fix` / `chore` / `docs` / …); **Korean** summary + body.
+- **Base branch:** branch off the **current B7 integration branch** (presently `release/1.0-b7`) and set the **PR base to that same integration branch — NEVER `main`**. The integration-branch name changes per build cycle; confirm the current one rather than hardcoding it.
+- **Pre-commit guard:** run `git branch --show-current` before committing; never commit to `main` (or directly to the integration branch).
+- **Review tier:**
+  - *Self-review eligible* — trivial docs, dead-code deletions, version bumps, project-setting one-liners.
+  - *Gated (Codex build/screenshot; + on-device QA when interaction is involved)* — gestures, navigation, animation, auth/RLS, layout, report/block.
+
 ## Privacy / submission
 Out of scope for the builder — reserved for separate handling.
