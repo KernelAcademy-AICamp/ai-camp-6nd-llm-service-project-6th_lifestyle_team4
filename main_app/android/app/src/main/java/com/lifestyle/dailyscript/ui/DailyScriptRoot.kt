@@ -342,13 +342,6 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         loginId = session.loginId,
                         onOpenNotice = { navController.navigate(Routes.NOTICE) { launchSingleTop = true } },
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
-                        onOpenLibraryWork = { workId ->
-                            if (workId > 0L) {
-                                navController.navigate(Routes.archiveWork(workId)) { launchSingleTop = true }
-                            } else {
-                                navController.navigate(Routes.ARCHIVE) { launchSingleTop = true }
-                            }
-                        },
                         // OZ Pick CTA — 게스트/무선호 사용자가 선호도 온보딩을 다시 열도록.
                         onRequestPreferences = { forcePrefOverlay = true },
                     )

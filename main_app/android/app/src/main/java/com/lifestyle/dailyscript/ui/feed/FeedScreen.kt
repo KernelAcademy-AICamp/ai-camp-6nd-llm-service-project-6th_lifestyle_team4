@@ -22,7 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -55,6 +58,9 @@ import coil3.compose.AsyncImage
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.FeedPost
 import com.lifestyle.dailyscript.data.model.Highlight
+import com.lifestyle.dailyscript.data.model.LIKE_FEED_POST
+import com.lifestyle.dailyscript.data.model.LIKE_HIGHLIGHT
+import com.lifestyle.dailyscript.data.model.LikeUi
 import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.RefreshableBox
@@ -87,7 +93,14 @@ fun FeedScreen(
     val state by vm.state.collectAsState()
     val coach = LocalCoachController.current
     val context = LocalContext.current
-    LaunchedEffect(userId) { vm.load(userId) }
+    LaunchedEffect(userId) { vm.load(userId, isAnonymous) }
+
+    // 좋아요 — 게스트는 토글 대신 안내 토스트(앱 공통 패턴; PWA 로그인 모달 대체).
+    val onLikeBlocked: () -> Unit = {
+        android.widget.Toast.makeText(
+            context, "로그인 후 좋아요를 누를 수 있어요.", android.widget.Toast.LENGTH_SHORT,
+        ).show()
+    }
 
     // Tapping a "오늘의 한줄" card opens its detail in a bottom sheet.
     var detailPost by remember { mutableStateOf<FeedPost?>(null) }
@@ -166,7 +179,7 @@ fun FeedScreen(
             val empty = if (state.category == FEED_TODAY) state.posts.isEmpty() else state.highlights.isEmpty()
             RefreshableBox(
                 refreshing = state.refreshing,
-                onRefresh = { vm.refresh(userId) },
+                onRefresh = { vm.refresh(userId, isAnonymous) },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when {
@@ -190,12 +203,28 @@ fun FeedScreen(
                                 // Type-prefixed keys so a highlight_id never collides with a post_id
                                 // (a raw-id collision made the LazyColumn jump to the wrong card on tab switch).
                                 items(state.posts, key = { "post-${it.postId}" }) { post ->
-                                    FeedPostCard(post, onClick = { detailPost = post })
+                                    FeedPostCard(
+                                        post = post,
+                                        like = state.postLikes[post.postId] ?: LikeUi(),
+                                        onLike = {
+                                            if (isAnonymous) onLikeBlocked()
+                                            else vm.toggleLike(userId, LIKE_FEED_POST, post.postId)
+                                        },
+                                        onClick = { detailPost = post },
+                                    )
                                 }
                             }
                         } else {
                             items(state.highlights, key = { "hl-${it.highlightId}" }) { hl ->
-                                HighlightCard(hl, onClick = { detailHighlight = hl })
+                                HighlightCard(
+                                    hl = hl,
+                                    like = state.highlightLikes[hl.highlightId] ?: LikeUi(),
+                                    onLike = {
+                                        if (isAnonymous) onLikeBlocked()
+                                        else vm.toggleLike(userId, LIKE_HIGHLIGHT, hl.highlightId)
+                                    },
+                                    onClick = { detailHighlight = hl },
+                                )
                             }
                         }
                         item(key = "tail-spacer") { Box(modifier = Modifier.height(72.dp)) }
@@ -470,13 +499,14 @@ private fun FeedSampleCard(sample: FeedSample) {
     }
 }
 
-/** "오늘의 한줄" — a social review card: header → pastel quote → book line. */
+/** "오늘의 한줄" — a social review card: header → pastel quote → book line. 우상단에 좋아요(❤️). */
 @Composable
-private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
+private fun FeedPostCard(post: FeedPost, like: LikeUi, onLike: () -> Unit, onClick: () -> Unit) {
     val w = post.cards?.works
     val shape = RoundedCornerShape(16.dp)
     val nick = post.authorNickname?.ifBlank { null } ?: "익명"
 
+    Box(modifier = Modifier.fillMaxWidth()) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -532,8 +562,9 @@ private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
                 .padding(horizontal = 28.dp, vertical = 40.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = post.body,
+            // 본문 — 100자/3줄 이상이면 4줄 클램프 + "더 보기"(PWA makeFoldHTML). 줄바꿈은 기본 보존.
+            FoldableText(
+                text = AnnotatedString(post.body),
                 style = TextStyle(
                     fontFamily = EditorialSerif,
                     fontWeight = FontWeight.Bold,
@@ -593,6 +624,15 @@ private fun FeedPostCard(post: FeedPost, onClick: () -> Unit) {
             }
         }
     }
+        // 좋아요 — 카드 우상단 오버레이. 자식 clickable 이 탭을 소비하므로 카드 상세는 안 열린다.
+        LikeButton(
+            like = like,
+            onClick = onLike,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 8.dp, end = 8.dp),
+        )
+    }
 }
 
 /** 책 줄 우측의 실제 초판 표지 (works.cover_url). 로드 실패 시 표시하지 않음 (PWA onerror→remove). */
@@ -613,10 +653,11 @@ private fun FeedBookCover(url: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** "하이라이트" — matches the PWA .hl-card: head(닉네임·장르·날짜) → 책표지 → 발췌 → 일련번호. 탭하면 상세(댓글) 시트. */
+/** "하이라이트" — matches the PWA .hl-card: head(닉네임·장르·날짜) → 책표지 → 발췌 → 일련번호. 탭하면 상세(댓글) 시트. 우상단에 좋아요(❤️). */
 @Composable
-private fun HighlightCard(hl: Highlight, onClick: () -> Unit) {
+private fun HighlightCard(hl: Highlight, like: LikeUi, onLike: () -> Unit, onClick: () -> Unit) {
     val w = hl.cards?.works
+    Box(modifier = Modifier.fillMaxWidth()) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -682,6 +723,15 @@ private fun HighlightCard(hl: Highlight, onClick: () -> Unit) {
             color = Sand,
         )
     }
+        // 좋아요 — 카드 우상단 오버레이. 콘텐츠는 가로 중앙정렬이라 우상단과 안 겹친다.
+        LikeButton(
+            like = like,
+            onClick = onLike,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 8.dp, end = 8.dp),
+        )
+    }
 }
 
 /** Solid leather cover with an inset white-line rectangle + a left spine line (PWA .hl-bookcover). */
@@ -700,11 +750,15 @@ private fun HlQuote(text: String) {
             color = Sand,
             modifier = Modifier.align(Alignment.TopStart).offset(y = (-6).dp),
         )
-        Text(
-            // LLM 출력의 `**화자**` 마커가 raw 로 노출되던 문제 — Markdown.bold 로 볼드 변환.
+        // LLM 출력의 `**화자**` 마커 볼드 변환 + 100자/3줄 이상이면 4줄 클램프 + "더 보기"(명조체 유지).
+        FoldableText(
             text = Markdown.bold(text),
-            style = TextStyle(fontFamily = EditorialSerif, fontSize = 15.sp, lineHeight = 28.sp),
-            color = Espresso,
+            style = TextStyle(
+                fontFamily = EditorialSerif,
+                fontSize = 15.sp,
+                lineHeight = 28.sp,
+                color = Espresso,
+            ),
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
@@ -716,6 +770,76 @@ private fun HlQuote(text: String) {
             color = Sand,
             modifier = Modifier.align(Alignment.BottomEnd).offset(y = 12.dp),
         )
+    }
+}
+
+/**
+ * 좋아요 버튼 — 댓글 하트(FeedCommentRow)와 동일한 아이콘/색(채워진 favorite + Cta).
+ * 카드 위 오버레이로 쓰며, 자식 clickable 이라 탭이 카드 상세로 전파되지 않는다.
+ */
+@Composable
+private fun LikeButton(like: LikeUi, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (like.liked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+            contentDescription = "좋아요",
+            tint = if (like.liked) Cta else Walnut,
+            modifier = Modifier.size(18.dp),
+        )
+        if (like.count > 0) {
+            Text(
+                text = " ${like.count}",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (like.liked) Cta else Walnut,
+            )
+        }
+    }
+}
+
+/**
+ * 접기/펴기 텍스트 — PWA makeFoldHTML 미러: 100자 초과 또는 줄바꿈 3개 이상이면
+ * 4줄로 클램프하고 아래에 "더 보기"/"접기" 토글을 둔다. 줄바꿈/공백은 기본 보존(pre-wrap),
+ * 폰트는 호출측 style(명조체) 그대로. "더 보기" 탭은 자식 clickable 이라 카드 상세로 전파 안 됨.
+ */
+@Composable
+private fun FoldableText(
+    text: AnnotatedString,
+    style: TextStyle,
+    textAlign: TextAlign,
+    modifier: Modifier = Modifier,
+) {
+    val plain = text.text
+    val needFold = remember(plain) { plain.length > 100 || plain.count { it == '\n' } >= 3 }
+    var expanded by remember(plain) { mutableStateOf(false) }
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = text,
+            style = style,
+            textAlign = textAlign,
+            maxLines = if (!needFold || expanded) Int.MAX_VALUE else 4,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (needFold) {
+            Box(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (expanded) "접기" else "더 보기",
+                style = MaterialTheme.typography.labelSmall,
+                color = Walnut,
+                modifier = Modifier
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 2.dp),
+            )
+        }
     }
 }
 

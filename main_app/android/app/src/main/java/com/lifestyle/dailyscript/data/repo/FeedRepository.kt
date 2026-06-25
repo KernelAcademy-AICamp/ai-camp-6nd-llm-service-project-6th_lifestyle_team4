@@ -1,6 +1,7 @@
 package com.lifestyle.dailyscript.data.repo
 
 import com.lifestyle.dailyscript.data.SupabaseProvider
+import com.lifestyle.dailyscript.data.model.ContentLikeCountRow
 import com.lifestyle.dailyscript.data.model.FeedComment
 import com.lifestyle.dailyscript.data.model.FeedCommentInsert
 import com.lifestyle.dailyscript.data.model.FeedCommentLikeRow
@@ -10,9 +11,13 @@ import com.lifestyle.dailyscript.data.model.Highlight
 import com.lifestyle.dailyscript.data.model.HighlightComment
 import com.lifestyle.dailyscript.data.model.HighlightCommentInsert
 import com.lifestyle.dailyscript.data.model.HighlightInsert
+import com.lifestyle.dailyscript.data.model.MyContentLikeRow
+import com.lifestyle.dailyscript.data.model.ToggleLikeResult
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class FeedRepository {
 
@@ -217,6 +222,34 @@ class FeedRepository {
 
     suspend fun setHighlightCommentLike(commentId: Long, userId: Long, liked: Boolean) =
         setLike("card_highlight_comment_likes", commentId, userId, liked)
+
+    // ---- content_likes — 피드 글 / 하이라이트 좋아요 (migration 043, web/native 공용) ----
+    // 읽기는 RLS SELECT 허용(USING true), 쓰기는 SECURITY DEFINER RPC. PWA loadContentLikes 미러.
+
+    /** content_like_counts 뷰 — target 별 좋아요 총 개수 1회 fetch. */
+    suspend fun loadLikeCounts(): List<ContentLikeCountRow> =
+        client.postgrest["content_like_counts"]
+            .select(Columns.raw("target_type, target_id, like_count"))
+            .decodeList()
+
+    /** 현재 사용자가 누른 좋아요 — content_likes where user_id = me. */
+    suspend fun loadMyLikes(userId: Long): List<MyContentLikeRow> =
+        client.postgrest["content_likes"]
+            .select(Columns.raw("target_type, target_id")) {
+                filter { eq("user_id", userId) }
+            }
+            .decodeList()
+
+    /** 좋아요 토글 — 있으면 취소, 없으면 추가. 반환 {liked, count}. (toggle_content_like RPC) */
+    suspend fun toggleContentLike(userId: Long, targetType: String, targetId: Long): ToggleLikeResult =
+        client.postgrest.rpc(
+            function = "toggle_content_like",
+            parameters = buildJsonObject {
+                put("p_user_id", userId)
+                put("p_target_type", targetType)
+                put("p_target_id", targetId)
+            },
+        ).decodeAs<ToggleLikeResult>()
 
     // ---- 좋아요 공용 헬퍼 (두 like 테이블의 컬럼이 comment_id/user_id로 동일) ----
 

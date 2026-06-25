@@ -111,7 +111,6 @@ fun DailyScreen(
     loginId: String?,
     onOpenNotice: () -> Unit,
     onOpenCard: (Long) -> Unit,
-    onOpenLibraryWork: (Long) -> Unit,
     onRequestPreferences: () -> Unit,
     vm: DailyViewModel = viewModel(),
 ) {
@@ -197,7 +196,6 @@ fun DailyScreen(
                     AppAnalytics.track("daily_trending_clicked", mapOf("card_id" to card.cardId))
                     onOpenCard(card.cardId)
                 },
-                onOpenAll = { onOpenLibraryWork(-1L) },
             )
 
             Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
@@ -688,7 +686,6 @@ private fun DailyTrending(
     bookmarkCounts: Map<Long, Int>,
     commentCounts: Map<Long, Int>,
     onOpenCard: (CardDto) -> Unit,
-    onOpenAll: () -> Unit,
 ) {
     val scored = remember(cards, bookmarkCounts, commentCounts) {
         cards
@@ -706,19 +703,7 @@ private fun DailyTrending(
     }
     if (scored.isEmpty()) return
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(text = "이번 주 인기 대사", style = MaterialTheme.typography.headlineMedium, color = Espresso)
-        Text(
-            text = "전체 ›",
-            style = MaterialTheme.typography.labelSmall,
-            color = Walnut,
-            modifier = Modifier.clickable(onClick = onOpenAll),
-        )
-    }
+    Text(text = "이번 주 인기 대사", style = MaterialTheme.typography.headlineMedium, color = Espresso)
     Box(modifier = Modifier.height(14.dp))
     scored.forEachIndexed { i, item ->
         Row(
