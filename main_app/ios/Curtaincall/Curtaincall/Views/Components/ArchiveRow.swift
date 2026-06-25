@@ -43,14 +43,3 @@ struct ArchiveRow: View {
         return format.isEmpty ? datePart : "\(datePart)  —  \(format)"
     }
 }
-
-#if DEBUG
-#Preview {
-    VStack(spacing: 0) {
-        ArchiveRow(card: .sample, date: .now)
-        ArchiveRow(card: .sample)
-    }
-    .padding(.horizontal, 20)
-    .background(Color.paper)
-}
-#endif

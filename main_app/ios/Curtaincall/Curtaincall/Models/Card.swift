@@ -127,36 +127,3 @@ private extension Optional where Wrapped == String {
         return s
     }
 }
-
-#if DEBUG
-extension Card {
-    static let sample = Card(
-        cardId: 1,
-        quote: "나 날고 있어!",
-        scriptExcerpt: "잭이 두 팔을 벌리고 로즈를 안는다. 바람이 그녀의 머리카락을 휘날린다. 그녀는 처음으로 자유롭다는 감각을 느낀다. 배는 황금빛 바다 위를 미끄러지듯 달려간다.",
-        excerptDescription: "타이타닉 뱃머리에서의 상징적 장면",
-        significance: nil,
-        keywords: ["자유의 경험", "첫사랑", "초월성"],
-        temperature: 5,
-        intensity: 4,
-        viewCount: 12,
-        commentCount: 3,
-        shareCount: 2,
-        work: Work(
-            title: "타이타닉",
-            format: .movie,
-            author: "제임스 카메론",
-            releaseYear: 1997,
-            titleOriginal: "Titanic",
-            authorOriginal: "James Cameron"
-        ),
-        quoteOriginal: "I'm flying!",
-        scriptExcerptOriginal: "Jack spreads his arms wide and holds Rose. The wind sweeps through her hair. For the first time she feels truly free. The ship glides across a golden sea.",
-        excerptDescriptionOriginal: "The iconic scene at the bow of the Titanic",
-        significanceOriginal: nil,
-        keywordsOriginal: ["Freedom", "First love", "Transcendence"],
-        textAlign: nil,
-        textAlignOriginal: nil
-    )
-}
-#endif
