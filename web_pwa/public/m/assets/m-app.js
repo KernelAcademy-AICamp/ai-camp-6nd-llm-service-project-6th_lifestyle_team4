@@ -7620,7 +7620,11 @@ function openCardFromFeedPost() {
 
 if (feedFab) feedFab.addEventListener('click', openFeedPicker);
 if (archiveFab) archiveFab.addEventListener('click', () => {
-  /* 라이브러리 우측 fab — 내 북마크 책꽂이로 이동 (비로그인은 openBookmarksScreen 안에서 토스트) */
+  /* (구) 라이브러리 우측 fab — 사용자 요청으로 제거. element 없으면 이 listener 도 안 등록. */
+  try { openBookmarksScreen(); } catch (e) { console.warn('[m] openBookmarksScreen failed:', e); }
+});
+/* top-bar 의 북마크 버튼 — 모든 view 에서 노출, 내 북마크 책꽂이로 바로 이동. */
+document.getElementById('top-bookmark-btn')?.addEventListener('click', () => {
   try { openBookmarksScreen(); } catch (e) { console.warn('[m] openBookmarksScreen failed:', e); }
 });
 
