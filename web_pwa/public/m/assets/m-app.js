@@ -3770,7 +3770,7 @@ function renderDailyOzPick() {
           <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:15px;color:var(--espresso);font-weight:700;line-height:1.3;">${escapeHtml(work.title || '')}</p>
           <p style="margin:4px 0 0;font-size:12px;color:var(--walnut);">${escapeHtml(work.author || '')}${work.release_year ? ' · ' + work.release_year : ''}</p>
         </div>
-        <span class="oz-rec-cta" style="font-size:11px;color:var(--cta);letter-spacing:0.04em;font-weight:600;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:2px;">책장 펼치기<span style="font-size:13px;line-height:1;">›</span></span>
+        <span class="oz-rec-cta" style="font-size:11px;color:var(--cta);letter-spacing:0.04em;font-weight:600;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:2px;">책 펼치기<span style="font-size:13px;line-height:1;">›</span></span>
       </div>
     </article>
     <div style="height:36px;"></div>
