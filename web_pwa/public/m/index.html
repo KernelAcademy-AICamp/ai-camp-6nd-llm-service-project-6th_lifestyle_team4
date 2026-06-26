@@ -2745,6 +2745,15 @@
       <button id="nickname-randomize" type="button" class="sharp-btn outline" style="flex:0 0 auto;width:auto;white-space:nowrap;padding:0 14px;font-size:12px;letter-spacing:0;">랜덤</button>
     </div>
 
+    <!-- 이메일 — 로컬(ID/비번) 회원만. 비밀번호 변경 시 이 이메일로 재설정 링크 발송. -->
+    <div id="profile-email-row" style="display:none;">
+      <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">이메일 (비밀번호 변경용)</label>
+      <input id="profile-email" type="email" maxlength="100" autocomplete="email"
+             placeholder="example@email.com"
+             style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;" />
+      <p class="t-body-sm c-walnut" style="margin-top:6px;font-size:11px;line-height:1.5;opacity:0.8;">저장 시 확인 메일이 발송될 수 있어요. 메일을 열어 인증하면 적용됩니다.</p>
+    </div>
+
     <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">성별</label>
     <select id="profile-gender"
             style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">

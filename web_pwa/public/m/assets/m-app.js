@@ -3783,13 +3783,26 @@ function renderDailyOzPick() {
       spawnRandomCat();
     });
   }
-  // 추천 책 클릭 → 추천 카드를 홈 '오늘의 명대사'로 띄우고 이동 (카드 전체의 고양이 spawn 은 막음).
+  // 추천 책 클릭 → 해당 도서의 collected volume(모든 카드) 책 펼침 모달로 이동.
+  // (예전엔 today 카드로 띄웠는데 사용자 명세로 도서 전체 카드 보기로 변경)
   const recBook = sec.querySelector('.oz-rec-book');
   if (recBook) {
     const openRec = (e) => {
       e.stopPropagation();
       track('daily_oz_recommend_open', { card_id: pick.card_id });
-      openRecommendedCard(pick);
+      try {
+        const allWorks = groupAllCardsByWork();
+        const targetWork = allWorks.find((w) => (w.cards || []).some((c) => c.card_id === pick.card_id));
+        if (targetWork && typeof openBookModal === 'function') {
+          openBookModal(targetWork, allWorks);
+        } else {
+          // fallback — 책 못 찾으면 옛 흐름(추천 카드 띄움)
+          openRecommendedCard(pick);
+        }
+      } catch (err) {
+        console.warn('[m] open recommended work failed:', err);
+        openRecommendedCard(pick);
+      }
     };
     recBook.addEventListener('click', openRec);
     recBook.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') openRec(e); });
@@ -4728,6 +4741,16 @@ function openNicknameModal() {
   if (profileAge) profileAge.value = state.userAgeGroup || '';
   profileGender?._syncCustom?.();
   profileAge?._syncCustom?.();
+  /* 이메일 칸 — 로컬(ID/비번) 회원만. 소셜 사용자는 provider 가 관리 → 숨김. */
+  const emailRow = document.getElementById('profile-email-row');
+  const emailInput = document.getElementById('profile-email');
+  const isSocial = state.authProvider === 'google' || state.authProvider === 'kakao';
+  if (emailRow) emailRow.style.display = (state.isAnonymous || isSocial) ? 'none' : 'block';
+  if (emailInput) {
+    /* 합성 이메일(@user.local) 이면 빈 placeholder, 진짜 이메일이면 채움 */
+    const cur = String(state.authEmail || '');
+    emailInput.value = cur.endsWith('@user.local') ? '' : cur;
+  }
   nicknameModal.style.display = 'flex';
   setTimeout(() => nicknameInput.focus(), 50);
 }
@@ -4741,6 +4764,12 @@ async function saveNickname() {
   if (!state.userId) { toast('사용자 정보 없음'); return; }
   const gender = profileGender?.value || null;
   const ageGroup = profileAge?.value || null;
+  /* 이메일 변경 — 로컬 회원만. updateUser({ email }) 호출 시 Supabase 가 새 이메일로
+     확인 메일 발송, 사용자가 클릭해야 실제 auth.users.email 갱신. */
+  const emailInput = document.getElementById('profile-email');
+  const newEmail = (emailInput?.value || '').trim();
+  const isSocial = state.authProvider === 'google' || state.authProvider === 'kakao';
+  const canSetEmail = !state.isAnonymous && !isSocial;
   try {
     const sb = await getSupabase();
     const { error } = await sb.from('users')
@@ -4752,9 +4781,21 @@ async function saveNickname() {
     state.userAgeGroup = ageGroup || '';
     // 변경된 성별·나이대를 Amplitude에 반영
     setUserProps({ accountType: 'member', gender: state.userGender, ageGroup: state.userAgeGroup });
+    /* 이메일 변경 시도 — 형식 OK 이고 현재와 다르면 updateUser. */
+    if (canSetEmail && newEmail && newEmail !== state.authEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      try {
+        const { error: emErr } = await sb.auth.updateUser({ email: newEmail });
+        if (emErr) throw emErr;
+        toast(`프로필 저장됨 · ${newEmail} 로 확인 메일 발송`);
+      } catch (e) {
+        console.warn('[m] email update failed:', e);
+        toast(`프로필은 저장됐으나 이메일 변경 실패: ${e.message || e}`);
+      }
+    } else {
+      toast('프로필이 저장됐어요');
+    }
     paintAuthIdentity();
     closeNicknameModal();
-    toast('프로필이 저장됐어요');
   } catch (err) {
     console.error('[m] save profile failed:', err);
     toast(`저장 실패: ${err.message || err}`);
@@ -7680,23 +7721,32 @@ document.getElementById('signin-forgot-btn')?.addEventListener('click', async ()
   }
 });
 
-/* 비밀번호 변경 — MY 페이지의 '비밀번호 변경' 클릭. 새 비번 입력받아 sb.auth.updateUser 호출. */
+/* 비밀번호 변경 — 로컬 회원 전용. 본인 인증 위해 로그인 ID 입력 → state.userLoginId 와
+   일치 확인 → 등록된 이메일로 reset 링크 발송 (resetPasswordForEmail). */
 document.getElementById('change-password-btn')?.addEventListener('click', async () => {
   if (state.isAnonymous || !state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
-  const newPw = prompt('새 비밀번호를 입력하세요 (8자 이상)');
-  if (!newPw) return;
-  if (newPw.length < 8) { toast('비밀번호는 8자 이상이어야 해요'); return; }
-  const confirmPw = prompt('한 번 더 입력해주세요');
-  if (newPw !== confirmPw) { toast('두 비밀번호가 일치하지 않아요'); return; }
+  const isSocial = state.authProvider === 'google' || state.authProvider === 'kakao';
+  if (isSocial) { toast('소셜 로그인은 해당 서비스에서 비밀번호를 관리해주세요'); return; }
+  const inputId = prompt('본인 확인을 위해 로그인 아이디를 입력해주세요');
+  if (!inputId) return;
+  if (inputId.trim() !== (state.userLoginId || '')) { toast('아이디가 일치하지 않습니다'); return; }
   try {
     const sb = await getSupabase();
-    const { error } = await sb.auth.updateUser({ password: newPw });
+    const { data: email, error } = await sb.rpc('find_email_by_login_id', { p_login_id: inputId.trim() });
     if (error) throw error;
-    toast('비밀번호가 변경되었어요');
-    clearRememberedCreds();
+    if (!email) { toast('이메일 정보를 찾을 수 없어요'); return; }
+    if (String(email).endsWith('@user.local')) {
+      toast('등록된 이메일이 없어요. 프로필 편집에서 이메일을 먼저 등록해주세요');
+      return;
+    }
+    const { error: resetError } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: `${location.origin}/m/`,
+    });
+    if (resetError) throw resetError;
+    toast(`${email} 로 비밀번호 재설정 링크를 보냈어요`);
   } catch (e) {
-    console.warn('[m] change password failed:', e);
-    toast('변경 실패: ' + (e.message || e));
+    console.warn('[m] change password (reset email) failed:', e);
+    toast('전송 실패: ' + (e.message || e));
   }
 });
 /* top-bar 의 북마크 버튼 — 모든 view 에서 노출, 내 북마크 책꽂이로 바로 이동. */
