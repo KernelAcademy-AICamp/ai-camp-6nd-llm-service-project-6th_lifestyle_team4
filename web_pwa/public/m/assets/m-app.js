@@ -5418,34 +5418,18 @@ async function playAttendanceRewardAnim(amount, finalBalance) {
   document.body.appendChild(bd);
   document.body.appendChild(burst);
   document.body.classList.add('ar-active');
-  /* chip 위치 계산 — viewport 기준 center */
-  const rect = yarnChip.getBoundingClientRect();
-  const chipCx = rect.left + rect.width / 2;
-  const chipCy = rect.top + rect.height / 2;
-  /* 시퀀스 */
+  /* 시퀀스 — 중앙에 띄웠다가 2초 뒤 자연스럽게 fade out. chip 으로 fly 안 함 (사용자 명세). */
   await sleep(20);
   bd.classList.add('show');
   burst.classList.add('show');
-  await sleep(1000);
-  burst.style.left = chipCx + 'px';
-  burst.style.top  = chipCy + 'px';
-  burst.classList.add('fly');
-  await sleep(1100);
-  yarnChip.classList.add('ar-bounce');   /* 이미지만 튀김 */
-  /* 잔액 카운팅 (현재 표시값 → finalBalance) */
-  const label = yarnChip.querySelector('.yarn-chip-count');
-  const startN = label ? (parseInt(String(label.textContent).replace(/[^0-9]/g, ''), 10) || 0) : (state.yarnPurchased || 0);
-  countYarnTo(startN, finalBalance, 700);
-  /* state 는 카운팅 완료 시점에 set (renderYarnChip 이 덮어쓰지 않도록 잠시 보류) */
-  await sleep(300);
-  burst.classList.add('fade');
-  await sleep(620);   /* bounce 0.9s 완료 대기 */
+  /* 잔액은 보상 액션 시작과 동시에 chip 에 카운트 업 (chip 이 MY 페이지에 있어도 정합성 유지) */
   state.yarnPurchased = finalBalance;
   renderYarnChip();
-  /* 정리 */
+  /* 중앙 burst 2초 유지 */
+  await sleep(2000);
+  burst.classList.add('fade');
   bd.classList.remove('show');
-  yarnChip.classList.remove('ar-bounce');
-  await sleep(180);
+  await sleep(260);
   bd.remove(); burst.remove();
   document.body.classList.remove('ar-active');
 }
