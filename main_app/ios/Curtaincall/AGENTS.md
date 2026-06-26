@@ -22,7 +22,7 @@ Curtaincall is an iOS app: a curated, card-based reader for movies, plays, liter
 ## Design & visual polish (the aesthetic bar)
 North star: a **super-sophisticated, minimalist "literature-elite" app** — typography-led, generous whitespace, calm deliberate motion, monochrome editorial palette. **Restraint is the aesthetic: polish means fewer, better details, not more decoration.**
 
-**iOS is its own north star — better than Android/PWA, NOT chasing parity.** Layout, spacing, and component structure lead on iOS; we do not chase pixel parity with the other clients. The one exception is brand character — see the cross-platform carve-out below, which still wins for the cat / yarn / Oz House / skeuomorphic elements. **For design tokens and shared components, see [`DESIGN.md`](./DESIGN.md)** (the iOS design source of truth) — reference its spacing/color/type tokens and components instead of re-deriving or hardcoding.
+**iOS is its own north star — better than Android/PWA, NOT chasing parity.** Layout, spacing, and component structure lead on iOS; we do not chase pixel parity with the other clients. The one exception is the **named brand characters** — see the cross-platform carve-out below, which wins **only** for those named elements (the cat / yarn-ball / Oz House), not skeuomorphism in general. **For design tokens and shared components, see [`DESIGN.md`](./DESIGN.md)** (the iOS design source of truth) — reference its spacing/color/type tokens and components instead of re-deriving or hardcoding.
 
 Tokens (authoritative — do not deviate without sign-off):
 - **Paper `#FAF8F2`**, **Espresso `#0E0C0A`**. Monochrome base; at most one restrained accent. No gradients or textures unless whisper-subtle and approved.
@@ -40,19 +40,19 @@ Don'ts:
 - No skeuomorphic texture soup — the wood/leather Archive is the cautionary example; reconcile toward refined editorial.
 - Keep view trees sane (avoid deeply nested unbounded stacks that tank layout performance).
 
-### Cross-platform brand/visual parity (carve-out)
-This app prioritizes **cross-platform brand/visual parity** with the Android and PWA clients. Where Android/PWA use character or decorative elements that are **core to the product's identity** — e.g. the bottom-nav cat with per-tab poses, the yarn (실타래) graphics, the Oz House room — iOS **matches them** rather than reducing them to editorial-minimalism. The minimalist / anti-skeuomorphic guidance above still applies as the **default for net-new, non-parity UI**, but **parity with Android/PWA wins when the two conflict**.
+### Cross-platform brand/visual parity (carve-out — scoped under the north star)
+**This carve-out sits UNDER the iOS north star above, not beside it.** Layout, screens, spacing, and interaction follow the **iOS north star** and do **NOT** chase Android/PWA parity (see "iOS is its own north star" above). The single exception is **named brand-character elements** — the bottom-nav cat with per-tab poses, the yarn-ball (실타래) graphics, the Oz House room — which are core to the product's identity across clients. For **those named characters only**, iOS defers to **cross-platform brand consistency** and **matches** Android/PWA rather than reducing them to editorial-minimalism; when minimalist/anti-skeuomorphic guidance conflicts with one of these named brand characters, brand consistency wins. Everywhere else — all net-new and non-character UI — the minimalist editorial north star governs.
 
 **Reviewer (Codex) should flag:** off-token colors/fonts, decoration that fights the editorial calm, inconsistent spacing/type, non-calm motion, and accessibility regressions.
 
 ## Build & verify (local toolchain; author/reviewer split)
 - Scheme: **Curtaincall** (app). Widget is a separate target.
 - **CCC (author)** works in the main checkout: verify with an **incremental** `xcodebuild build` (never `clean` — it discards warm DerivedData and slows the next iteration). Use SwiftUI Previews for quick visual iteration. Do NOT run the simulator or capture screenshots — that is the reviewer's step. Commit + open PR.
-- **Codex (reviewer)** works in a SEPARATE git worktree (`git worktree add ../curtaincall-review origin/main`) so its clean builds never wipe CCC's warm cache or collide on branches: clean build from origin, install/launch via `xcrun simctl`, screenshot, review the diff + screenshot via `gh`.
+- **Codex (reviewer)** works in a SEPARATE git worktree off the **current integration branch** (presently `git worktree add ../curtaincall-review origin/release/1.1-b7` — PRs target the integration branch, not `main`; confirm the live name rather than hardcoding it) so its clean builds never wipe CCC's warm cache or collide on branches: clean build from that integration branch, install/launch via `xcrun simctl`, screenshot, review the diff + screenshot via `gh`.
 - **Judge visual work on a real device, not just the simulator.**
 
 ## Workflow
-- **CCC authors, Codex reviews.** CCC writes on a feature branch and opens the PR; Codex builds/runs/screenshots and reviews. Never merge before Codex review.
+- **CCC authors, Codex reviews and merges (by default).** CCC writes on a feature branch and opens the PR; Codex builds/runs/screenshots, reviews, and merges. CCC does **not** merge by default. The one exception — self-merge of self-review-eligible PRs — is spelled out under **Merge authority** in the Commit / PR conventions below.
 - **Never commit to `main`.** One task = one feature branch + PR.
 - Auth/data/RLS changes are **gated** — investigate and propose first; report findings. Read-only UI gets a lighter pass.
 - Keep changes additive and scoped; after editing, build (incremental) and report.
@@ -62,11 +62,15 @@ This app prioritizes **cross-platform brand/visual parity** with the Android and
 ## Commit / PR conventions
 Per-brief boilerplate, captured here so briefs needn't restate it.
 - **Language:** English conventional-commit prefix (`feat` / `fix` / `chore` / `docs` / …); **Korean** summary + body.
-- **Base branch:** branch off the **current B7 integration branch** (presently `release/1.0-b7`) and set the **PR base to that same integration branch — NEVER `main`**. The integration-branch name changes per build cycle; confirm the current one rather than hardcoding it.
+- **Base branch:** branch off the **current B7 integration branch** (presently `release/1.1-b7`) and set the **PR base to that same integration branch — NEVER `main`**. The integration-branch name changes per build cycle; confirm the current one rather than hardcoding it.
 - **Pre-commit guard:** run `git branch --show-current` before committing; never commit to `main` (or directly to the integration branch).
 - **Review tier:**
   - *Self-review eligible* — trivial docs, dead-code deletions, version bumps, project-setting one-liners.
   - *Gated (Codex build/screenshot; + on-device QA when interaction is involved)* — gestures, navigation, animation, auth/RLS, layout, report/block.
+- **Merge authority:**
+  - **Default:** Codex reviews and merges. CCC authors and opens the PR; CCC does **not** merge by default.
+  - **Self-merge exception:** CCC **MAY** self-merge a PR **without** Codex review **only if** it falls in the **self-review-eligible** tier above (trivial docs, dead-code deletions, version bumps, project-setting one-liners). This holds **whether or not Codex is available** — it's a routine time-saver, not just a Codex-outage fallback. The trivial tier is the **only** thing that authorizes self-merge.
+  - **Hard boundary (never self-merge):** anything **gated** — auth / data / RLS, gestures, navigation, animation feel, layout / visual regressions, report/block — **always** requires Codex review + (where interaction is involved) on-device QA before merge, **regardless of how small the change looks**. "Looks simple" does **not** move a gated change into the trivial tier.
 
 ## Privacy / submission
 Out of scope for the builder — reserved for separate handling.
