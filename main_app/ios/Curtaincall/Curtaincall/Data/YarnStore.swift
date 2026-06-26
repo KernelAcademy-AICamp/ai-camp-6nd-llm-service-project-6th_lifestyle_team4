@@ -81,14 +81,23 @@ final class YarnStore: ObservableObject {
     /// 재지급되지 않는다. 로컬 `ds.yarnRewarded` 는 같은 세션의 불필요한 RPC 재호출을
     /// 막는 빠른 캐시일 뿐(userId:cardId 로 키), 진실은 서버다. 익명도 `userId` 가
     /// 있으면 보상받는다(PWA 동일).
-    func rewardFirstOpen(cardId: Int, userId: Int?) async {
-        guard let userId else { return }
-        guard !isCardRewarded(cardId: cardId, userId: userId) else { return }   // 로컬 빠른 차단(계정별)
+    /// 반환값 = 이번 열람에서 **실제 적립된 실타래 양(델타)**. 이미 받은 카드/익명 미식별/
+    /// 네트워크 오류로 적립이 없으면 0. 적립 로직(서버 `reward_yarn_first_view` RPC·dedup·
+    /// 잔액 갱신)은 그대로이며, 기존에 버리던 결과(적립량)를 보상 애니메이션 표시용으로
+    /// 노출만 한다 — Android `YarnViewModel.rewardFirstView(): Int` 와 동일한 계약. 금액(서버
+    /// 권위값, 현재 +300 / migration 038)·지급 로직은 변경하지 않는다.
+    @discardableResult
+    func rewardFirstOpen(cardId: Int, userId: Int?) async -> Int {
+        guard let userId else { return 0 }
+        guard !isCardRewarded(cardId: cardId, userId: userId) else { return 0 }   // 로컬 빠른 차단(계정별)
         do {
+            let before = balance
             balance = try await Supa.shared.rewardFirstView(userId: userId, cardId: cardId)
             markCardRewarded(cardId: cardId, userId: userId)   // 성공 후 기록(서버가 진짜 dedup). 실패 시 다음 열람에 재시도.
+            return max(0, balance - before)
         } catch {
             // 네트워크 오류 — 기록하지 않음 → 다음 열람에 재시도(서버 dedup 이 중복 적립 방지).
+            return 0
         }
     }
 

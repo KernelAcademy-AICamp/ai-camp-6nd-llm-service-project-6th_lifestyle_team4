@@ -34,6 +34,12 @@ struct CardDetailView: View {
     @State private var showHighlightLogin = false
     @State private var highlightSaving = false
     @State private var highlightToast: String?
+    // 완독 보상 fly — 이번 열람에서 적립된 실타래(델타, 보통 +300)를 본문을 끝까지
+    // 읽었을 때 1회 띄운다(Android DetailScreen readComplete → YarnRewardFly 미러).
+    @State private var readRewardAmount = 0
+    @State private var readComplete = false
+    @State private var showRewardFly = false
+    @State private var rewardFlyShown = false   // 카드 1회 가드 — 재스크롤로 반복 표시 방지
 
     init(card: Card, onLoginRequested: (() -> Void)? = nil) {
         self.card = card
@@ -245,6 +251,17 @@ struct CardDetailView: View {
                     withAnimation(.easeInOut(duration: 0.15)) { scrolledPast = past }
                 }
             }
+            // 완독 감지 — 본문을 95% 이상 스크롤하면(짧아서 스크롤이 없으면 즉시) 완독으로 보고,
+            // 이번 열람에 적립된 실타래가 있을 때 보상 fly 를 1회 띄운다(Android readComplete 미러).
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                let maxY = geo.contentSize.height - geo.containerSize.height
+                return maxY <= 1 || geo.contentOffset.y >= maxY * 0.95
+            } action: { _, complete in
+                if complete && !readComplete {
+                    readComplete = true
+                    maybeFireRewardFly()
+                }
+            }
             // Docked composer: solid bar, scroll content inset by its height
             // (nothing hides behind it), flush above the tab bar when unfocused,
             // dropping into the safe area above the keyboard when focused.
@@ -297,6 +314,13 @@ struct CardDetailView: View {
                 } onClose: {
                     showAccountPrompt = false
                 }
+            }
+        }
+        // 완독 보상 fly — 화면 중앙, 탭 불가(읽기/스크롤 방해 X). 1회만 띄운다.
+        .overlay(alignment: .center) {
+            if showRewardFly {
+                YarnRewardFly(amount: readRewardAmount) { showRewardFly = false }
+                    .allowsHitTesting(false)
             }
         }
         // Floating coral pill — appears while a non-blank script range is
@@ -583,12 +607,23 @@ struct CardDetailView: View {
     /// 차단 확정되면 `.locked` 오버레이로 덮는다.
     enum GateState { case checking, open, locked }
 
+    /// 완독 + 적립이 모두 성립할 때 보상 fly 를 1회 띄운다. 호출 순서(완독 먼저 vs 적립
+    /// await 먼저)에 무관하도록 양쪽(runOpenFlow·스크롤 액션)에서 호출 — 마지막에 조건이
+    /// 충족되는 쪽이 발사한다. 적립이 0(이미 받음/익명 미식별/오류)이면 띄우지 않는다.
+    private func maybeFireRewardFly() {
+        guard !rewardFlyShown, readComplete, readRewardAmount > 0 else { return }
+        rewardFlyShown = true
+        showRewardFly = true
+    }
+
     /// 카드 열람 흐름 — PWA `openDetail` 순서 미러: 첫 열람 보상(+1) 먼저, 그다음 게이트.
     ///  보상이 먼저라 새 카드의 첫 열람은 +1 로 자가 충전된다(신규 사용자 잠금 방지).
     ///  게이트: 3일 언락/투어면 무료, 아니면 consume_yarn 1 차감. 부족하면 잠금.
     private func runOpenFlow() async {
         // 보상은 그대로 유지 (PWA 는 reward + gate 둘 다 한다).
-        await yarn.rewardFirstOpen(cardId: card.cardId, userId: session.userId)
+        // 적립량(델타)을 받아 두었다가 완독 시 fly 로 표시 — 지급 로직/금액은 불변.
+        readRewardAmount = await yarn.rewardFirstOpen(cardId: card.cardId, userId: session.userId)
+        maybeFireRewardFly()   // 짧은 카드(스크롤 불가)는 이미 readComplete=true 일 수 있어 즉시 평가
         // TODO(coach): iOS 코치 투어 도입 시 tourActive 를 실제 상태로 연결 (현재 스텁 false).
         let decision = await yarn.gateOpen(cardId: card.cardId, userId: session.userId, tourActive: false)
         switch decision {
