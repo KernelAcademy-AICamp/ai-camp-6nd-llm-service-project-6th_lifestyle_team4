@@ -2872,13 +2872,17 @@ function renderArchive() {
 
   // 페이지 버튼 — 그리드 바로 아래 한 줄. 4개 페이지씩 윈도우 표시 (‹ 1 2 3 4 ›).
   // ›/‹ 는 한 페이지씩 이동 — 4에서 › 누르면 5로 가고 윈도우가 5 6 7 8 로 자동 전환.
-  // margin-bottom 96px 추가 — 우측 북마크 fab(bottom 96~110px)과 시각적 겹침 회피.
+  // 페이지 버튼은 center, 우측 북마크 fab 는 fixed right — 가로 정렬상 겹치지 않으므로
+  // bottom margin 은 자연스러운 그리드 호흡 정도(20px)만.
   let pagesEl = document.getElementById('archive-pages');
   if (!pagesEl) {
     pagesEl = document.createElement('div');
     pagesEl.id = 'archive-pages';
-    pagesEl.style.cssText = 'display:flex;justify-content:center;gap:8px;margin:16px 0 96px;flex-wrap:wrap;';
+    pagesEl.style.cssText = 'display:flex;justify-content:center;gap:8px;margin:16px 0 20px;flex-wrap:wrap;';
     gridEl.parentNode.insertBefore(pagesEl, gridEl.nextSibling);
+  } else {
+    /* 이전에 큰 margin 으로 만들어진 요소도 새 값으로 동기화 */
+    pagesEl.style.margin = '16px 0 20px';
   }
   if (totalPages <= 1) {
     pagesEl.style.display = 'none';
