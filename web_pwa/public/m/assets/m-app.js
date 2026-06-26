@@ -4810,6 +4810,38 @@ signOutBtn.addEventListener('click', async () => {
   location.reload();
 });
 
+/* 계정 삭제 — 이중 확인 후 public.users row 삭제(FK CASCADE 로 관련 데이터 같이) + signOut.
+   GDPR / 앱스토어 1.1.x Account Deletion 요건 충족. auth.users 삭제는 서버 RPC 후속 작업. */
+document.getElementById('delete-account-btn')?.addEventListener('click', async () => {
+  if (state.isAnonymous || !state.userId) { toast('로그인 사용자만 삭제할 수 있어요'); return; }
+  if (!(await appConfirm({
+    title: '계정 삭제',
+    message: '모든 북마크·하이라이트·감상평·실타래가 영구 삭제됩니다.\n이 작업은 되돌릴 수 없어요.',
+    confirmLabel: '계속',
+    dismissLabel: '취소',
+  }))) return;
+  if (!(await appConfirm({
+    title: '한 번 더 확인',
+    message: '정말 계정을 영구 삭제할까요?',
+    confirmLabel: '영구 삭제',
+    dismissLabel: '취소',
+  }))) return;
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.from('users').delete().eq('user_id', state.userId);
+    if (error) throw error;
+    await sb.auth.signOut();
+    resetUser();
+    safeStorageRemove('ds.prevAnonUserId');
+    safeStorageRemove(SESSION_KEY);
+    toast('계정이 삭제되었어요');
+    setTimeout(() => location.reload(), 1200);
+  } catch (e) {
+    console.warn('[m] delete account failed:', e);
+    toast('삭제 실패. 관리자에게 문의해주세요. (1ckdgns24@gmail.com)');
+  }
+});
+
 // ---------- Social Login ----------
 async function startOAuth(provider) {
   try {
@@ -6045,6 +6077,10 @@ function paintAuthIdentity() {
 
   // bio 영역에 provider 뱃지 / 이메일
   // 익명일 때만 SIGN IN 섹션 (ID + 비밀번호 모달 열기) 노출
+  /* 계정 삭제 버튼 — 로그인 사용자만 노출 (익명은 의미 없음). */
+  const deleteAccBtn = document.getElementById('delete-account-btn');
+  if (deleteAccBtn) deleteAccBtn.style.display = state.isAnonymous ? 'none' : 'inline-block';
+
   if (state.isAnonymous) {
     settingsBio.style.display = 'none';
     if (signinBlock) signinBlock.style.display = 'block';
