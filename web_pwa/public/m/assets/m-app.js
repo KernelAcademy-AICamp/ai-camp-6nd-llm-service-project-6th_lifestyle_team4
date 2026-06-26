@@ -7306,10 +7306,18 @@ function openHighlightDetail(highlight) {
       : `<div style="width:120px;height:170px;margin:0 auto;background:${leatherColorFor(title)};display:flex;align-items:center;justify-content:center;padding:10px;box-shadow:0 4px 14px rgba(60,40,20,0.3);border-radius:2px;">
           <span style="font-family:'Noto Serif KR',serif;color:#FAF8F2;font-weight:600;font-size:14px;text-align:center;line-height:1.3;text-shadow:0 1px 2px rgba(0,0,0,0.45);">${escapeHtml(title)}</span>
         </div>`;
+    /* 발췌 텍스트 — 100자 / 3줄 이상이면 접기·펴기. 글로벌 .fold-btn delegation 가 토글 처리. */
+    const selText = String(highlight.selected_text || '');
+    const safeQuote = renderMarkdownBold(selText);
+    const needFold = selText.length > 100 || (selText.match(/\n/g) || []).length >= 3;
+    const quoteStyle = `line-height:1.6;font-family:'Noto Serif KR','Nanum Myeongjo',Georgia,serif;text-align:center;margin:0;white-space:pre-wrap;word-break:keep-all;`;
+    const quoteHTML = needFold
+      ? `<div class="fold-wrap"><p id="fp-quote" class="fold-text t-headline-md c-espresso" style="${quoteStyle}">${safeQuote}</p><button type="button" class="fold-btn visible" style="display:block;margin:8px auto 0;">더 보기</button></div>`
+      : `<p id="fp-quote" class="t-headline-md c-espresso" style="${quoteStyle}">${safeQuote}</p>`;
     quoteBox.innerHTML = `
       ${coverHTML}
       <div style="height:22px;"></div>
-      <p id="fp-quote" class="t-headline-md c-espresso" style="line-height:1.6;font-family:'Noto Serif KR','Nanum Myeongjo',Georgia,serif;text-align:center;margin:0;">${renderMarkdownBold(highlight.selected_text || '')}</p>
+      ${quoteHTML}
       ${source ? `<div style="height:16px;"></div><p id="fp-source" class="t-label-sm c-walnut" style="letter-spacing:0.1em;text-align:center;margin:0;">— ${escapeHtml(source)}</p>` : '<p id="fp-source" style="display:none;"></p>'}
       <div style="height:24px;"></div>
       <button id="fp-open-card" class="sharp-btn" style="width:100%;">카드 읽어보기</button>
