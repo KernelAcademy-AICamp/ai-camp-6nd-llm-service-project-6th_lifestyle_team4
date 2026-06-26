@@ -5060,11 +5060,15 @@ async function purchaseOzThemeRpc(themeId, price) {
 window.purchaseOzThemeRpc = purchaseOzThemeRpc;
 
 // 카드 첫 열람 보상 — 카드당 1회 +1 실타래 (중복 지급 없음).
-//   로컬 키 ds.yarnRewarded 에 카드ID 기록 → optimistic 차단 후 RPC 호출.
+//   로컬 키 ds.yarnRewarded.<userId> 에 카드ID 기록 → optimistic 차단 후 RPC 호출.
+//   ⚠️ user-scope 필수 — 옛 가입 때 받은 카드를 새 가입 사용자에게 'already received' 로 잘못 차단하던 문제 fix.
 const YARN_REWARDED_KEY = 'ds.yarnRewarded';
+function rewardedKey() {
+  return state.userId ? `${YARN_REWARDED_KEY}.${state.userId}` : YARN_REWARDED_KEY;
+}
 function getRewardedMap() {
   try {
-    const raw = JSON.parse(safeStorageGet(YARN_REWARDED_KEY, 'null') || 'null');
+    const raw = JSON.parse(safeStorageGet(rewardedKey(), 'null') || 'null');
     if (raw && typeof raw === 'object') return raw;
   } catch {}
   return {};
@@ -5075,7 +5079,7 @@ function isCardRewarded(cardId) {
 function markCardRewarded(cardId) {
   const map = getRewardedMap();
   map[String(cardId)] = Date.now();
-  safeStorageSet(YARN_REWARDED_KEY, JSON.stringify(map));
+  safeStorageSet(rewardedKey(), JSON.stringify(map));
 }
 async function rewardYarnForFirstView(cardId) {
   if (!cardId) return;
