@@ -5300,9 +5300,9 @@ function playYarnRewardFly(amount) {
       document.body.classList.remove('ar-active');
     }, 950);
   }
-  /* 화면 정중앙. 배경 없음. 잉크 색 텍스트. 하단바와 안 겹침. */
+  /* 화면 정중앙. 페이퍼 박스 + 그림자 — 본문 텍스트와 시각 분리. */
   const pop = document.createElement('div');
-  pop.style.cssText = `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:160;display:inline-flex;align-items:center;gap:10px;pointer-events:none;opacity:0;transition:opacity .35s ease;`;
+  pop.style.cssText = `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:160;display:inline-flex;align-items:center;gap:12px;pointer-events:none;opacity:0;transition:opacity .35s ease;background:var(--paper);border:0.5px solid var(--latte);border-radius:999px;padding:14px 24px;box-shadow:0 18px 48px rgba(60,38,18,.28), 0 0 0 1px rgba(60,38,18,.06);`;
   pop.innerHTML = `
     <img src="/m/assets/daily-script-bar.png" alt=""
          style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:block;filter:drop-shadow(0 4px 10px rgba(60,38,18,.35));animation:reward-yarn-bounce 1.4s cubic-bezier(.34,1.56,.64,1) infinite;" />
