@@ -503,7 +503,7 @@
   @media (display-mode: browser) {
     .bottom-nav { bottom: calc(48px + env(safe-area-inset-bottom)) !important; }
     main { padding-bottom: calc(66px + env(safe-area-inset-bottom)) !important; }
-    #feed-fab { bottom: calc(110px + env(safe-area-inset-bottom)) !important; }
+    #feed-fab, #archive-fab { bottom: calc(110px + env(safe-area-inset-bottom)) !important; }
   }
 
   /* Bookmark row spacing */
@@ -1477,11 +1477,10 @@
   }
   /* 피드 글쓰기 — 말풍선 모양, cat_pen 머리 위에서 말하는 것처럼 (사용자 명세).
      cat은 하단바 LIBRARY-MY 사이(좌측 80%)에 있으므로 fab 도 같은 80% 에 중앙 정렬. */
-  #feed-fab {
-    /* fab 우측 정렬 + nowrap — left% 로 두면 viewport 끝과 충돌해 '글쓰기' 가 세로로 끊김 */
+  /* feed-fab(글쓰기) + archive-fab(북마크) — 같은 시각·위치, view 별로 하나만 표시 */
+  #feed-fab, #archive-fab {
     position: fixed; right: 16px; left: auto;
     white-space: nowrap;
-    /* 우측은 cat 와 겹치지 않으므로 bottom-nav 바로 위까지 내려놓음 */
     bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 53;
     background: var(--cta);
     color: #FFFDF7;
@@ -1494,8 +1493,9 @@
     box-shadow: 0 4px 14px rgba(216,90,48,0.38);
     transition: transform 120ms;
   }
-  #feed-fab .material-symbols-outlined { font-size: 24px; line-height: 1; }
-  #feed-fab:active { transform: scale(0.94); }
+  #feed-fab .material-symbols-outlined,
+  #archive-fab .material-symbols-outlined { font-size: 24px; line-height: 1; }
+  #feed-fab:active, #archive-fab:active { transform: scale(0.94); }
   /* Feed overlays (picker + compose) — modal pattern */
   .feed-sheet {
     background: var(--paper); width: 100%; max-width: 460px;
@@ -1955,6 +1955,7 @@
 
   <!-- Feed 글쓰기 — 원형 연필 FAB -->
   <button id="feed-fab" aria-label="글쓰기"><span class="material-symbols-outlined">edit</span></button>
+  <button id="archive-fab" aria-label="북마크"><span class="material-symbols-outlined">bookmark</span></button>
 
   <!-- ===== Notice view (공지사항) ===== -->
   <section id="view-notice" style="display:none;">

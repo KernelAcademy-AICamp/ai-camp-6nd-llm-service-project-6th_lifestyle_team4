@@ -289,6 +289,7 @@ const detailReplyCancel = $('#detail-reply-cancel');
 
 const feedList = $('#feed-list');
 const feedFab = $('#feed-fab');
+const archiveFab = $('#archive-fab');
 const feedPickerModal = $('#feed-picker-modal');
 const feedPickerList = $('#feed-picker-list');
 const feedPickerClose = $('#feed-picker-close');
@@ -307,15 +308,21 @@ const fqSource = $('#fq-source');
 // 피드 글 상세 + 댓글 (FeedPostDetailSheet 미러)
 const feedpostScreen = $('#feedpost-screen');
 
-// 글쓰기 펜 fab — 피드 메인에서만. 어떤 오버레이(카드 상세 / 피드 글 / 하이라이트 작성) 라도 열려있으면 hide.
+// 글쓰기 펜 fab (feed) + 북마크 fab (archive) — 각자 main view 에서만, 오버레이 열려있으면 hide.
 // 모든 show/hide 시점에서 이 함수만 호출하면 일관 처리.
 function syncFeedFab() {
-  if (!feedFab) return;
-  const onFeedMain = state.currentView === 'feed'
-    && !(detailScreen && detailScreen.classList.contains('open'))
-    && !(feedpostScreen && feedpostScreen.classList.contains('open'))
-    && !(hlComposeScreen && hlComposeScreen.classList.contains('open'));
-  feedFab.style.display = onFeedMain ? 'inline-flex' : 'none';
+  const overlayOpen = (detailScreen && detailScreen.classList.contains('open'))
+    || (feedpostScreen && feedpostScreen.classList.contains('open'))
+    || (hlComposeScreen && hlComposeScreen.classList.contains('open'));
+  if (feedFab) {
+    const onFeedMain = state.currentView === 'feed' && !overlayOpen;
+    feedFab.style.display = onFeedMain ? 'inline-flex' : 'none';
+  }
+  if (archiveFab) {
+    const bmOpen = bookmarksScreen && bookmarksScreen.classList.contains('open');
+    const onArchiveMain = state.currentView === 'archive' && !overlayOpen && !bmOpen;
+    archiveFab.style.display = onArchiveMain ? 'inline-flex' : 'none';
+  }
 }
 const feedpostBody = $('#feedpost-body');
 const feedpostBack = $('#feedpost-back');
@@ -7522,6 +7529,10 @@ function openCardFromFeedPost() {
 }
 
 if (feedFab) feedFab.addEventListener('click', openFeedPicker);
+if (archiveFab) archiveFab.addEventListener('click', () => {
+  /* 라이브러리 우측 fab — 내 북마크 책꽂이로 이동 (비로그인은 openBookmarksScreen 안에서 토스트) */
+  try { openBookmarksScreen(); } catch (e) { console.warn('[m] openBookmarksScreen failed:', e); }
+});
 
 // 안드 DetailScreen 하단 두 버튼 — 북마크하고 오늘의 한줄 작성 / 라이브러리 진입
 $('#detail-post-oneliner')?.addEventListener('click', async () => {
@@ -8225,7 +8236,7 @@ function showBottomNavCat() {
 });
 function updateBottomNavCatForView(view) {
   if (view === 'feed') setBottomNavCat('cat_pen.png', 'left', 'large');              // 피드 — 우측 글쓰기 fab 과 충돌 방지 위해 좌측 배치
-  else if (view === 'archive') setBottomNavCat('cat_struck.png', 'right', 'large');   // LIBRARY — 카드 상세 크기와 동일
+  else if (view === 'archive') setBottomNavCat('cat_struck.png', 'left', 'large');    // LIBRARY — 우측 북마크 fab 과 충돌 방지 위해 좌측 배치
   else if (view === 'daily' || view === 'settings') setBottomNavCat('cat_empty.png', 'corner'); // daily/MY 동일
   else setBottomNavCat('cat_today.png', 'center');
 }
@@ -8263,6 +8274,7 @@ function setView(view) {
   if (viewNotice) viewNotice.style.display = (view === 'notice') ? 'block' : 'none';
   viewSettings.style.display = (view === 'settings') ? 'block' : 'none';
   if (feedFab) feedFab.style.display = (view === 'feed') ? 'inline-flex' : 'none';
+  if (archiveFab) archiveFab.style.display = (view === 'archive') ? 'inline-flex' : 'none';
 
   // Top bar — Settings has its own
   topBarHome.style.display = (view === 'settings') ? 'none' : 'flex';
