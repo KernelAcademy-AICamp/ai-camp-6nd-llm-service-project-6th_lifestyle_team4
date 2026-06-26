@@ -6110,9 +6110,11 @@ function paintAuthIdentity() {
   /* 계정 삭제 버튼 — 로그인 사용자만 노출 (익명은 의미 없음). */
   const deleteAccBtn = document.getElementById('delete-account-btn');
   if (deleteAccBtn) deleteAccBtn.style.display = state.isAnonymous ? 'none' : 'inline-block';
-  /* 비밀번호 변경 — 로그인 사용자만. (소셜 로그인 사용자도 새 비번 설정 가능) */
+  /* 비밀번호 변경 — 로컬(ID/비번) 로그인 사용자만. 구글·카카오 등 소셜 로그인은 숨김.
+     소셜 사용자는 비번이 없거나 provider 측에서 관리 → 변경 의미 없음. */
   const changePwBtn = document.getElementById('change-password-btn');
-  if (changePwBtn) changePwBtn.style.display = state.isAnonymous ? 'none' : 'inline-block';
+  const isSocialLogin = state.authProvider === 'google' || state.authProvider === 'kakao';
+  if (changePwBtn) changePwBtn.style.display = (state.isAnonymous || isSocialLogin) ? 'none' : 'inline-block';
 
   if (state.isAnonymous) {
     settingsBio.style.display = 'none';
@@ -7286,8 +7288,10 @@ function openHighlightDetail(highlight) {
   state.currentFeedPost = null;
   hideBottomNavCat();   // 하이라이트 상세에서도 하단바 cat 숨김 (feedFab 은 아래에서 hide)
   // 명대사 박스(card-warm 배경)를 안드 HighlightContentCard 구조로 재구성:
-  //   책표지(120x170 cover_url 또는 가죽색 폴백) + selected_text(큰 serif) + 출처 + '카드 보기' 버튼
-  const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
+  //   책표지(120x170 cover_url 또는 가죽색 폴백) + selected_text(큰 serif) + 출처 + '카드 읽어보기' 버튼
+  // ⚠️ fresh query — 모듈 상단 fpQuote 변수가 stale 될 수 있어(openFeedPostDetail 이
+  // quoteBox.innerHTML 으로 교체) 매번 #feedpost-body 첫 자식을 새로 찾는다.
+  const quoteBox = document.querySelector('#feedpost-body > div:first-child');
   if (quoteBox) {
     quoteBox.style.display = '';
     const title = displayTitle(w.title || '');
@@ -7308,7 +7312,7 @@ function openHighlightDetail(highlight) {
       <p id="fp-quote" class="t-headline-md c-espresso" style="line-height:1.6;font-family:'Noto Serif KR','Nanum Myeongjo',Georgia,serif;text-align:center;margin:0;">${renderMarkdownBold(highlight.selected_text || '')}</p>
       ${source ? `<div style="height:16px;"></div><p id="fp-source" class="t-label-sm c-walnut" style="letter-spacing:0.1em;text-align:center;margin:0;">— ${escapeHtml(source)}</p>` : '<p id="fp-source" style="display:none;"></p>'}
       <div style="height:24px;"></div>
-      <button id="fp-open-card" class="sharp-btn" style="width:100%;">카드 보기</button>
+      <button id="fp-open-card" class="sharp-btn" style="width:100%;">카드 읽어보기</button>
     `;
     // 클릭 핸들러는 #feedpost-screen 의 위임 리스너가 일괄 처리 → 여기선 등록 X
     //  (quoteBox.innerHTML 재설정으로 element 가 자주 교체돼도 안정적으로 동작)
