@@ -22,7 +22,7 @@ Curtaincall is an iOS app: a curated, card-based reader for movies, plays, liter
 ## Design & visual polish (the aesthetic bar)
 North star: a **super-sophisticated, minimalist "literature-elite" app** — typography-led, generous whitespace, calm deliberate motion, monochrome editorial palette. **Restraint is the aesthetic: polish means fewer, better details, not more decoration.**
 
-**iOS is its own north star — better than Android/PWA, NOT chasing parity.** Layout, spacing, and component structure lead on iOS; we do not chase pixel parity with the other clients. The one exception is brand character — see the cross-platform carve-out below, which still wins for the cat / yarn / Oz House / skeuomorphic elements. **For design tokens and shared components, see [`DESIGN.md`](./DESIGN.md)** (the iOS design source of truth) — reference its spacing/color/type tokens and components instead of re-deriving or hardcoding.
+**iOS is its own north star — better than Android/PWA, NOT chasing parity.** Layout, spacing, and component structure lead on iOS; we do not chase pixel parity with the other clients. The one exception is the **named brand characters** — see the cross-platform carve-out below, which wins **only** for those named elements (the cat / yarn-ball / Oz House), not skeuomorphism in general. **For design tokens and shared components, see [`DESIGN.md`](./DESIGN.md)** (the iOS design source of truth) — reference its spacing/color/type tokens and components instead of re-deriving or hardcoding.
 
 Tokens (authoritative — do not deviate without sign-off):
 - **Paper `#FAF8F2`**, **Espresso `#0E0C0A`**. Monochrome base; at most one restrained accent. No gradients or textures unless whisper-subtle and approved.
