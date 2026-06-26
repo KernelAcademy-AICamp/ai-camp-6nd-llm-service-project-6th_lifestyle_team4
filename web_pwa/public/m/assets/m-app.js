@@ -5126,9 +5126,9 @@ function showFirstShareGuideModal(cardId, amount) {
   if (document.getElementById('first-share-guide-modal')) return;
   const modal = document.createElement('div');
   modal.id = 'first-share-guide-modal';
-  modal.style.cssText = `position:fixed;inset:0;background:rgba(14,12,10,0.65);display:flex;align-items:center;justify-content:center;z-index:170;padding:24px;opacity:0;transition:opacity .25s ease;`;
+  modal.style.cssText = `position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(14,12,10,0.65);display:flex;align-items:center;justify-content:center;z-index:170;padding:24px;padding-top:max(24px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom));opacity:0;transition:opacity .25s ease;`;
   modal.innerHTML = `
-    <div style="background:var(--paper);border-radius:16px;padding:32px 26px 22px;max-width:340px;width:100%;text-align:center;box-shadow:0 24px 56px rgba(0,0,0,.28);border:0.5px solid var(--latte);">
+    <div style="background:var(--paper);border-radius:16px;padding:32px 26px 22px;max-width:340px;width:100%;max-height:90vh;overflow-y:auto;text-align:center;box-shadow:0 24px 56px rgba(0,0,0,.28);border:0.5px solid var(--latte);margin:auto;">
       <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(216,128,80,.12);color:var(--cta);font-size:11px;font-weight:700;letter-spacing:.16em;padding:6px 14px;border-radius:999px;margin-bottom:18px;">
         <img src="/m/assets/daily-script-bar.png" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;display:block;" />
         FIRST READ +${amount || 300}
