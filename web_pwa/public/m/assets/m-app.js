@@ -5073,11 +5073,14 @@ async function rewardYarnForFirstView(cardId) {
   }
 }
 
-/* 첫 카드 읽고 실타래 받은 직후 1회 — 공유 기능 안내 + CTA. 보상 fly 가 사라진 후 ~2.5s 뒤에 띄움. */
+/* 첫 카드 읽고 실타래 받은 직후 1회 — 공유 기능 안내 + CTA. 보상 fly 가 사라진 후 ~2.5s 뒤에 띄움.
+   사용자 명세: "비로그인 카드 read 는 카운트 X, 첫 로그인 후 첫 카드 read 가 새 시작". 그래서
+   user_id 별로 flag 분리. 다른 계정 로그인 시 다시 처음부터 가이드 표시. */
 function maybeShowFirstShareGuide(cardId, amount) {
-  if (!state.userId) return;                                    // 로그인 사용자만
-  if (safeStorageGet('ds.firstShareGuideShown') === '1') return;  // 1회용
-  safeStorageSet('ds.firstShareGuideShown', '1');
+  if (!state.userId) return;
+  const key = `ds.firstShareGuideShown.${state.userId}`;
+  if (safeStorageGet(key) === '1') return;
+  safeStorageSet(key, '1');
   setTimeout(() => { try { showFirstShareGuideModal(cardId, amount); } catch {} }, 2500);
 }
 function showFirstShareGuideModal(cardId, amount) {
@@ -5106,10 +5109,26 @@ function showFirstShareGuideModal(cardId, amount) {
   const close = () => { modal.style.opacity = '0'; setTimeout(() => modal.remove(), 250); };
   modal.querySelector('#first-share-now')?.addEventListener('click', () => {
     close();
-    /* 현재 detail 카드 공유 — detail 화면의 공유 버튼 시뮬레이션. detail 닫혀있으면 그냥 닫기. */
+    /* cardId 로 카드 찾아 공유 모달 직접 열기. (detail-share 같은 버튼이 없어서
+       click 시뮬레이션은 안 됨.) */
     setTimeout(() => {
-      const btn = document.getElementById('detail-share');
-      if (btn && document.getElementById('detail-screen')?.classList.contains('open')) btn.click();
+      try {
+        const card = state.detailCard
+          || (state.allCards || []).find((c) => c && Number(c.card_id) === Number(cardId));
+        if (!card) { toast('카드를 찾을 수 없어요'); return; }
+        const w = card.works || {};
+        const meta = (typeof shareMetaLinesFromWork === 'function') ? shareMetaLinesFromWork(w) : { metaKo: '', metaEn: '' };
+        openShareModal({
+          cardId: card.card_id,
+          quote: card.quote || '',
+          speaker: card.speaker || '',
+          work: w.title || '',
+          workId: w.work_id ?? null,
+          author: w.author || '',
+          metaKo: meta.metaKo, metaEn: meta.metaEn,
+          coverUrl: w.cover_url || '',
+        });
+      } catch (e) { console.warn('[m] first share open failed:', e); toast('공유 화면을 열 수 없어요'); }
     }, 280);
   });
   modal.querySelector('#first-share-later')?.addEventListener('click', close);
