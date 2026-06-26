@@ -5057,11 +5057,56 @@ async function rewardYarnForFirstView(cardId) {
       /* 잔액이 실제로 늘었을 때만 액션 — chip 옆 floating '+N' + chip img bounce */
       if (newBalance > prev) {
         try { playYarnRewardFly(newBalance - prev); } catch (e) { console.warn('[m] reward fly failed:', e); }
+        /* 첫 보상 직후 1회 — 공유 유도 안내 (회원가입 직후 첫 카드 read 케이스) */
+        try { maybeShowFirstShareGuide(cardId, newBalance - prev); } catch (e) { console.warn('[m] first share guide failed:', e); }
       }
     }
   } catch (e) {
     console.warn('[m] rewardYarnForFirstView failed:', e);
   }
+}
+
+/* 첫 카드 읽고 실타래 받은 직후 1회 — 공유 기능 안내 + CTA. 보상 fly 가 사라진 후 ~2.5s 뒤에 띄움. */
+function maybeShowFirstShareGuide(cardId, amount) {
+  if (!state.userId) return;                                    // 로그인 사용자만
+  if (safeStorageGet('ds.firstShareGuideShown') === '1') return;  // 1회용
+  safeStorageSet('ds.firstShareGuideShown', '1');
+  setTimeout(() => { try { showFirstShareGuideModal(cardId, amount); } catch {} }, 2500);
+}
+function showFirstShareGuideModal(cardId, amount) {
+  if (document.getElementById('first-share-guide-modal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'first-share-guide-modal';
+  modal.style.cssText = `position:fixed;inset:0;background:rgba(14,12,10,0.65);display:flex;align-items:center;justify-content:center;z-index:170;padding:24px;opacity:0;transition:opacity .25s ease;`;
+  modal.innerHTML = `
+    <div style="background:var(--paper);border-radius:16px;padding:32px 26px 22px;max-width:340px;width:100%;text-align:center;box-shadow:0 24px 56px rgba(0,0,0,.28);border:0.5px solid var(--latte);">
+      <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(216,128,80,.12);color:var(--cta);font-size:11px;font-weight:700;letter-spacing:.16em;padding:6px 14px;border-radius:999px;margin-bottom:18px;">
+        <img src="/m/assets/daily-script-bar.png" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;display:block;" />
+        FIRST READ +${amount || 300}
+      </div>
+      <h3 style="font-family:'Nanum Myeongjo','Noto Serif KR',serif;font-size:20px;color:var(--espresso);margin:0 0 10px;font-weight:700;line-height:1.4;">첫 명대사를 다 읽었어요</h3>
+      <p style="font-size:13px;color:var(--walnut);line-height:1.7;margin:0 0 22px;">
+        마음을 흔드는 문장이라면<br/>
+        <span style="color:var(--espresso);font-weight:600;">아름다운 카드지로 꾸며</span> 친구에게 공유해보세요.<br/>
+        <span style="color:var(--walnut);font-size:11px;letter-spacing:.04em;">공유한 친구가 가입하면 둘 다 600 실타래!</span>
+      </p>
+      <button id="first-share-now" type="button" style="width:100%;background:var(--cta);color:#fff;border:none;border-radius:8px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;">지금 공유해보기</button>
+      <button id="first-share-later" type="button" style="background:transparent;border:none;color:var(--walnut);font-size:12px;padding:10px;cursor:pointer;width:100%;">나중에 할게요</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  requestAnimationFrame(() => { modal.style.opacity = '1'; });
+  const close = () => { modal.style.opacity = '0'; setTimeout(() => modal.remove(), 250); };
+  modal.querySelector('#first-share-now')?.addEventListener('click', () => {
+    close();
+    /* 현재 detail 카드 공유 — detail 화면의 공유 버튼 시뮬레이션. detail 닫혀있으면 그냥 닫기. */
+    setTimeout(() => {
+      const btn = document.getElementById('detail-share');
+      if (btn && document.getElementById('detail-screen')?.classList.contains('open')) btn.click();
+    }, 280);
+  });
+  modal.querySelector('#first-share-later')?.addEventListener('click', close);
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 }
 
 // 차감 — 카드 열람 게이트 제거됐으나 호출 시그니처는 호환 유지(현재 사용처 없음).
