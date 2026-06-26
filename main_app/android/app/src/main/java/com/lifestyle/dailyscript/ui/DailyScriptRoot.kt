@@ -184,6 +184,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     val yarnAvailable by yarnVm.available.collectAsState()
     val purchasedShareThemes by yarnVm.purchasedThemes.collectAsState()
     val shareBackgrounds by yarnVm.shareBackgrounds.collectAsState()
+    val attendanceHistory by yarnVm.attendanceHistory.collectAsState()
     LaunchedEffect(session.userId, session.yarnBalance) {
         yarnVm.setPurchased(session.yarnBalance)
     }
@@ -213,6 +214,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         AppPreferences.markAttendanceShown(today)
         val start = yarnVm.available.value
         attendanceRewarded = yarnVm.rewardAttendance()
+        yarnVm.loadAttendanceHistory()       // 서버 출석 기록(오늘 포함) → 달력 렌더용
         val finalBal = yarnVm.available.value
         if (attendanceRewarded && finalBal > start) {
             chipDisplayOverride = start          // 카운트업 전까지 칩을 시작값에 고정
@@ -226,6 +228,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     if (attendanceVisible) {
         com.lifestyle.dailyscript.ui.yarn.AttendanceDialog(
             rewardedToday = attendanceRewarded,
+            history = attendanceHistory,
             onDismiss = { attendanceVisible = false },
         )
     }

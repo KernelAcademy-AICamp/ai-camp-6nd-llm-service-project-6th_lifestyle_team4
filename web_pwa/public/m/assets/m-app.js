@@ -5219,27 +5219,33 @@ async function spendYarn(cardId) {
 // 사용자 명세: 00시 기준 그날 처음 앱을 열면 한 달 달력 팝업 1회 + 실타래 5개 지급.
 //   ds.attendance.history = 출석한 날짜 배열(YYYY-MM-DD)
 //   ds.attendance.lastShown = 오늘 모달을 띄웠는지(매일 1회로 제한)
-const ATTENDANCE_HISTORY_KEY = 'ds.attendance.history';
+// 출석 날짜는 서버 권위(attendance 테이블, 045_attendance.sql). 달력은 캐시에서 즉시
+// 렌더하고, 모달을 열기 전 fetchAttendanceHistory() 로 서버에서 채운다. lastShown 만 로컬
+// (모달 1일 1회 게이트 — 보상 dedup 은 서버가 (user_id, date) UNIQUE 로 보장).
 const ATTENDANCE_LAST_SHOWN_KEY = 'ds.attendance.lastShown';
 const ATTENDANCE_REWARD = 100;
 
-function getAttendanceHistory() {
+let attendanceHistoryCache = [];
+function getAttendanceHistory() { return attendanceHistoryCache; }
+
+/* 서버에서 출석한 날짜(YYYY-MM-DD) 로드. 익명/비로그인은 빈 배열. */
+async function fetchAttendanceHistory() {
+  if (state.isAnonymous || !state.userId) { attendanceHistoryCache = []; return attendanceHistoryCache; }
   try {
-    const raw = JSON.parse(safeStorageGet(ATTENDANCE_HISTORY_KEY, 'null') || 'null');
-    if (Array.isArray(raw)) return raw;
-  } catch {}
-  return [];
+    const sb = await getSupabase();
+    const { data, error } = await sb.from('attendance').select('attended_date');
+    if (error) throw error;
+    attendanceHistoryCache = (data || []).map((r) => r.attended_date);
+  } catch (e) { console.warn('[m] attendance history fetch failed:', e); }
+  return attendanceHistoryCache;
 }
-function hasAttendanceToday() {
-  return getAttendanceHistory().includes(todayStr());
-}
-function markAttendanceToday() {
-  const t = todayStr();
-  const h = getAttendanceHistory();
-  if (h.includes(t)) return false;
-  h.push(t);
-  safeStorageSet(ATTENDANCE_HISTORY_KEY, JSON.stringify(h));
-  return true;
+
+/* 오늘(KST) 첫 출석이면 서버가 기록 + 보상(+100)을 원자적으로. 반환 { rewarded, balance, today }. */
+async function checkInAttendanceRpc(reward) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('check_in_attendance', { p_reward: reward });
+  if (error) throw error;
+  return data;
 }
 
 function buildAttendanceCalendarHTML() {
@@ -5277,9 +5283,10 @@ function buildAttendanceCalendarHTML() {
 }
 
 // 출석현황 보기 — MY 진입용. 보상 지급 없이 달력만 띄움.
-function openAttendanceModal() {
+async function openAttendanceModal() {
   const modal = document.getElementById('attendance-modal');
   if (!modal) return;
+  await fetchAttendanceHistory();   // 서버 출석 기록 → 달력
   const grid = modal.querySelector('#attendance-grid');
   const reward = modal.querySelector('#attendance-reward-msg');
   if (grid) grid.innerHTML = buildAttendanceCalendarHTML();
@@ -5299,15 +5306,15 @@ async function maybeShowAttendance() {
   const today = todayStr();
   if (safeStorageGet(ATTENDANCE_LAST_SHOWN_KEY) === today) return;
   safeStorageSet(ATTENDANCE_LAST_SHOWN_KEY, today);
-  const newAttendance = markAttendanceToday();  // true = 오늘 출석 첫 기록 → 보상 지급
-  let newBalance = null;
+  let result = null;
+  try { result = await checkInAttendanceRpc(ATTENDANCE_REWARD); }
+  catch (e) { console.warn('[m] attendance check-in failed:', e); }
+  const newAttendance = !!(result && result.rewarded);  // 서버가 오늘 첫 출석으로 판정 → 보상 지급됨
+  const newBalance = (result && Number.isFinite(result.balance)) ? result.balance : null;
   if (newAttendance) {
-    try {
-      newBalance = await grantYarnRpc(ATTENDANCE_REWARD);
-      /* chip 갱신은 애니메이션 도착 시점에 — 여기서는 state 만 미리 적용 X */
-    } catch (e) { console.warn('[m] attendance grant failed:', e); }
     try { track('attendance_check', { date: today }); } catch {}
   }
+  await fetchAttendanceHistory();   // 오늘 포함 출석 기록 → 달력
   /* 첫 출석이고 보상이 잡혔으면 → 보상 애니메이션 (burst → chip) 끝나고 달력 노출 */
   if (newAttendance && Number.isFinite(newBalance) && newBalance >= 0) {
     try { await playAttendanceRewardAnim(ATTENDANCE_REWARD, newBalance); }
@@ -8961,16 +8968,29 @@ function drawShareCover(ctx, img, W, H) {
   ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
 }
 
-// 보유 카드지 id(기기 로컬, 안드로이드 SHARE_THEMES_PURCHASED 미러). 실타래 잔액은 서버(spend_yarn).
-const PURCHASED_SHARE_THEMES_KEY = 'ds.purchasedShareThemes';
-function getPurchasedShareThemes() {
-  return new Set(String(safeStorageGet(PURCHASED_SHARE_THEMES_KEY, '') || '')
-    .split(',').map((s) => s.trim()).filter(Boolean));
+// 보유 카드지 id — 서버 권위(share_theme_unlocks, 046_share_theme_unlocks.sql). 그리드를 즉시
+// 렌더하려고 캐시에 보관하고, 공유 시트 열 때 fetchPurchasedShareThemes() 로 서버에서 채운다.
+let purchasedShareThemesCache = new Set();
+function getPurchasedShareThemes() { return purchasedShareThemesCache; }
+
+/* 서버에서 보유 카드지 id 로드. 비로그인은 빈 집합. */
+async function fetchPurchasedShareThemes() {
+  if (!state.userId) { purchasedShareThemesCache = new Set(); return purchasedShareThemesCache; }
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb.from('share_theme_unlocks').select('theme_id');
+    if (error) throw error;
+    purchasedShareThemesCache = new Set((data || []).map((r) => r.theme_id));
+  } catch (e) { console.warn('[m] share themes fetch failed:', e); }
+  return purchasedShareThemesCache;
 }
-function addPurchasedShareTheme(id) {
-  const set = getPurchasedShareThemes();
-  set.add(id);
-  safeStorageSet(PURCHASED_SHARE_THEMES_KEY, Array.from(set).join(','));
+
+/* 카드지 구매 — 서버에서 실타래 차감 + 소유 등록을 원자적으로. 반환: >=0 차감 후 잔액 / -2 부족 / -1·-3 오류. */
+async function purchaseShareThemeRpc(themeId, price) {
+  const sb = await getSupabase();
+  const { data, error } = await sb.rpc('purchase_share_theme', { p_theme_id: themeId, p_price: price });
+  if (error) throw error;
+  return typeof data === 'number' ? data : parseInt(data, 10);
 }
 async function spendYarnRpc(amount) {
   const sb = await getSupabase();
@@ -8990,10 +9010,10 @@ function promptUnlockShareBg(b) {
     openSigninOnConfirm: false,
     onConfirm: async () => {
       try {
-        const balance = await spendYarnRpc(b.price);
+        const balance = await purchaseShareThemeRpc(b.id, b.price);
         if (!Number.isFinite(balance) || balance < 0) { showYarnInsufficient(); return; }
         state.yarnPurchased = balance;
-        addPurchasedShareTheme(b.id);
+        purchasedShareThemesCache.add(b.id);
         renderYarnChip();
         shareState.bgId = b.id;
         renderShareBgList();
@@ -9459,6 +9479,8 @@ function openShareModal(payload) {
   renderShareBgList();
   renderShareCardCurrent();
   modal.style.display = 'flex';
+  /* 보유 카드지(서버 share_theme_unlocks) 로드 후 그리드 갱신 — 잠금 표시 정확화 */
+  fetchPurchasedShareThemes().then(() => { renderShareBgList(); }).catch(() => {});
   /* 원격 카드지(premium/royal) 비동기 로드 후 그리드 갱신 */
   loadShareBackgrounds().then(() => { renderShareBgList(); }).catch(() => {});
 }

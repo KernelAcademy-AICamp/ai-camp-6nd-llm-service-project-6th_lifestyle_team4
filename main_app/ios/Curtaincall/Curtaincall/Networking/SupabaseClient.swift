@@ -6,6 +6,17 @@ import Supabase
 /// reject locally rather than round-tripping to a guaranteed DB failure.
 enum HighlightError: Error { case emptySelectedText }
 
+/// `check_in_attendance` RPC 반환 json (045_attendance.sql).
+struct AttendanceCheckIn: Decodable {
+    let rewarded: Bool
+    let balance: Int
+    let today: String
+}
+
+private struct AttendanceDateRow: Decodable {
+    let attended_date: String
+}
+
 /// Single Supabase entry point for the app, built on supabase-swift.
 ///
 /// Replaces the previous hand-rolled URLSession client. Auth, reads and writes
@@ -316,6 +327,26 @@ final class Supa {
             "reward_yarn_first_view",
             params: ["p_user_id": userId, "p_card_id": cardId]
         ).execute().value
+    }
+
+    // MARK: - Attendance (045_attendance.sql)
+
+    /// 오늘(KST) 첫 출석이면 attendance 기록 + 보상(+reward) 을 서버에서 원자적으로.
+    /// 반환 [AttendanceCheckIn] — rewarded=false 면 이미 오늘 출석(보상 없음). 서버가
+    /// (user_id, attended_date) UNIQUE 로 dedup → 재설치/로컬삭제로도 중복 수령 불가.
+    func checkInAttendance(reward: Int) async throws -> AttendanceCheckIn {
+        try await client.rpc("check_in_attendance", params: ["p_reward": reward])
+            .execute()
+            .value
+    }
+
+    /// 출석한 날짜 목록(yyyy-MM-dd). RLS 가 본인 행만 노출. 달력 렌더용.
+    func attendanceHistory() async throws -> [String] {
+        let rows: [AttendanceDateRow] = try await client.from("attendance")
+            .select("attended_date")
+            .execute()
+            .value
+        return rows.map { $0.attended_date }
     }
 
     func insertUser(anonymousId: String, nickname: String) async throws -> UserRow {

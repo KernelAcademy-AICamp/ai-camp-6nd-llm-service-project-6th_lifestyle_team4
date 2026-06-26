@@ -328,10 +328,15 @@ struct RootView: View {
         attendanceChecked = true
         guard attendance.shouldAutoShowToday() else { return }
         attendance.markAutoShown()
-        let isNew = attendance.registerToday()
-        attendanceRewarded = isNew
-        if isNew { Task { await yarn.grant(AttendanceStore.reward) } }
-        showAttendance = true
+        // 출석 기록·보상은 서버가 원자적으로(check_in_attendance). rewarded=true 면 오늘 첫
+        // 출석 → 잔액 갱신. 달력은 서버 기록(오늘 포함)을 다시 로드해 채운다.
+        Task { @MainActor in
+            let result = await attendance.checkIn()
+            attendanceRewarded = result?.rewarded ?? false
+            if let result, result.rewarded { yarn.sync(serverBalance: result.balance) }
+            await attendance.loadHistory()
+            showAttendance = true
+        }
     }
 
     /// Unread notice → dot on the MY tab (Notice is no longer its own tab).

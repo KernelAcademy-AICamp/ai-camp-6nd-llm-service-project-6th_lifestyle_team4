@@ -110,16 +110,21 @@ fun SettingsScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm2 by remember { mutableStateOf(false) } // 이중 확인 2단계 (PWA appConfirm 2회)
     var showAttendance by remember { mutableStateOf(false) }
-    // 설정에서 수동으로 열 땐 오늘 출석(+5)을 이미 받았는지 실제 상태로 배너를 띄운다(앱 진입 시 자동 지급됨).
+    // 설정에서 수동으로 열 땐 오늘 출석(+100)을 이미 받았는지 서버 기록으로 배너를 띄운다(앱 진입 시 자동 지급됨).
     var attendanceRewardedToday by remember { mutableStateOf(false) }
+    var attendanceHistory by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val yarnRepo = remember { com.lifestyle.dailyscript.data.repo.YarnRepository() }
     LaunchedEffect(showAttendance) {
         if (showAttendance) {
-            attendanceRewardedToday = AppPreferences.hasAttendanceToday(java.time.LocalDate.now().toString())
+            val hist = runCatching { yarnRepo.attendanceHistory() }.getOrDefault(emptyList()).toSet()
+            attendanceHistory = hist
+            attendanceRewardedToday = hist.contains(java.time.LocalDate.now().toString())
         }
     }
     if (showAttendance) {
         com.lifestyle.dailyscript.ui.yarn.AttendanceDialog(
             rewardedToday = attendanceRewardedToday,
+            history = attendanceHistory,
             onDismiss = { showAttendance = false },
         )
     }

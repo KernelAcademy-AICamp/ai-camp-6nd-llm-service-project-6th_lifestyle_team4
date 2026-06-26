@@ -45,6 +45,7 @@ struct AttendanceView: View {
         .background(Color.paper)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .task { await attendance.loadHistory() }   // 열 때마다 서버 출석 기록으로 달력 갱신
     }
 
     private var header: some View {

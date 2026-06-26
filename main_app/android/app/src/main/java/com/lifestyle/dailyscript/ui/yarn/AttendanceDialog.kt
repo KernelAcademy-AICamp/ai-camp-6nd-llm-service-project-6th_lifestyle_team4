@@ -23,11 +23,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,7 +37,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lifestyle.dailyscript.R
-import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.ui.components.YarnIcon
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
@@ -61,11 +55,9 @@ import java.time.YearMonth
 @Composable
 fun AttendanceDialog(
     rewardedToday: Boolean,
+    history: Set<String>,
     onDismiss: () -> Unit,
 ) {
-    var history by remember { mutableStateOf<Set<String>>(emptySet()) }
-    LaunchedEffect(Unit) { history = AppPreferences.attendanceHistory() }
-
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),

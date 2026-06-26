@@ -8,7 +8,6 @@ import com.lifestyle.dailyscript.ui.share.ShareBackground
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.time.LocalDate
 
 /**
  * 실타래 잔액 + 보상을 한곳에서 관리. 상단바 칩이 [available] 을 구독한다.
@@ -17,6 +16,8 @@ import java.time.LocalDate
  *  - 카드 열람 게이트 제거 → spend 사용처 없음. 첫 열람 시 +300 보상([rewardFirstView]).
  *  - 매일 5개 무료분 폐지 → 잔액 = 서버 충전분(users.yarn_balance) 만.
  *  - 출석체크: 그날 첫 진입이면 +100 ([rewardAttendance]). (PWA d10cfd3: 출석 +100 / 첫열람 +300)
+ *  - 출석 날짜·카드지 소유권은 서버 권위(11_attendance / 12_share_theme_unlocks) —
+ *    재설치/기기변경에도 유지되고 같은 날 중복 보상은 서버가 dedup.
  */
 class YarnViewModel : ViewModel() {
 
@@ -28,12 +29,23 @@ class YarnViewModel : ViewModel() {
     /** 사용 가능한 실타래 = 서버 충전분 전부. */
     val available: StateFlow<Int> = purchased.asStateFlow()
 
-    // 구매한 공유 카드지 id 집합(기기 로컬). 공유 시트가 잠금 해제 표시에 구독.
+    // 구매한 공유 카드지 id 집합(서버 share_theme_unlocks). 공유 시트가 잠금 해제 표시에 구독.
     private val _purchasedThemes = MutableStateFlow<Set<String>>(emptySet())
     val purchasedThemes: StateFlow<Set<String>> = _purchasedThemes.asStateFlow()
 
-    /** 앱/세션 진입 시 보유 카드지 로드. */
-    suspend fun loadPurchasedThemes() { _purchasedThemes.value = AppPreferences.sharePurchasedThemes() }
+    /** 앱/세션 진입 시 보유 카드지 로드(서버). 실패하면 빈 집합. */
+    suspend fun loadPurchasedThemes() {
+        _purchasedThemes.value = runCatching { repo.ownedShareThemes() }.getOrDefault(emptySet())
+    }
+
+    // 출석한 날짜 집합(서버 attendance). 출석 다이얼로그 달력이 구독.
+    private val _attendanceHistory = MutableStateFlow<Set<String>>(emptySet())
+    val attendanceHistory: StateFlow<Set<String>> = _attendanceHistory.asStateFlow()
+
+    /** 출석 달력용 — 서버에서 출석 날짜 로드. 실패하면 빈 집합. */
+    suspend fun loadAttendanceHistory() {
+        _attendanceHistory.value = runCatching { repo.attendanceHistory() }.getOrDefault(emptyList()).toSet()
+    }
 
     // 원격 공유 카드지(premium/royal) — share_backgrounds 테이블. 공유 시트가 무료 8종 뒤에 합쳐 쓴다.
     private val _shareBackgrounds = MutableStateFlow<List<ShareBackground>>(emptyList())
@@ -43,20 +55,18 @@ class YarnViewModel : ViewModel() {
     suspend fun loadShareBackgrounds() { _shareBackgrounds.value = shareRepo.listBackgrounds() }
 
     /**
-     * 공유 카드지 구매 — 이미 보유면 SUCCESS, 아니면 실타래 [price] 차감(서버 spend_yarn) 후 보유 기록.
-     * 잔액 부족이면 INSUFFICIENT, RPC 실패면 ERROR(차감/기록 없음).
+     * 공유 카드지 구매 — 이미 보유면 SUCCESS, 아니면 서버에서 실타래 [price] 차감 +
+     * 소유 등록(purchase_share_theme RPC, 원자적). 잔액 부족이면 INSUFFICIENT, 실패면 ERROR.
      */
     suspend fun buyShareTheme(id: String, price: Int): SpendResult {
         if (_purchasedThemes.value.contains(id)) return SpendResult.SUCCESS
-        val result = spend(price)
-        if (result == SpendResult.SUCCESS) {
-            AppPreferences.addSharePurchasedTheme(id)
-            _purchasedThemes.value = _purchasedThemes.value + id
-        }
-        return result
+        val newBalance = runCatching { repo.purchaseShareTheme(id, price) }.getOrNull() ?: return SpendResult.ERROR
+        if (newBalance == -2) return SpendResult.INSUFFICIENT
+        if (newBalance < 0) return SpendResult.ERROR
+        purchased.value = newBalance
+        _purchasedThemes.value = _purchasedThemes.value + id
+        return SpendResult.SUCCESS
     }
-
-    private fun today() = LocalDate.now().toString()
 
     /** 세션의 서버 잔액으로 시드(재bootstrap 동기화). */
     fun setPurchased(balance: Int) { purchased.value = balance }
@@ -75,16 +85,13 @@ class YarnViewModel : ViewModel() {
     }
 
     /**
-     * 출석체크 — 00시 기준 그날 첫 진입이면 +100 지급 후 true.
-     * 이미 지급됐거나 RPC 실패면 false.
+     * 출석체크 — 오늘(KST) 첫 진입이면 서버 기록 + 보상(+100) 후 true.
+     * 이미 출석했거나 RPC 실패면 false. 중복 방지는 서버가 (user_id, date) UNIQUE 로 보장.
      */
     suspend fun rewardAttendance(): Boolean {
-        val today = today()
-        if (AppPreferences.hasAttendanceToday(today)) return false
-        AppPreferences.markAttendance(today)
-        val newBalance = runCatching { repo.grantYarn(ATTENDANCE_REWARD) }.getOrNull() ?: return false
-        purchased.value = newBalance
-        return true
+        val result = runCatching { repo.checkInAttendance(ATTENDANCE_REWARD) }.getOrNull() ?: return false
+        purchased.value = result.balance
+        return result.rewarded
     }
 
     /**
