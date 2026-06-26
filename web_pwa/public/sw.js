@@ -6,7 +6,7 @@
 //  - API/Supabase/Anthropic → 항상 네트워크 패스스루
 //  - 업데이트는 즉시 활성화 (skipWaiting + clients.claim)
 const CACHE_PREFIX = 'pwa-';
-const CACHE_VERSION = 'pwa-v340-share-guide-center';
+const CACHE_VERSION = 'pwa-v341-kakao-login';
 const STATIC_ASSETS = [
   '/m/index.html',
   '/assets/vendor/supabase-js.js',

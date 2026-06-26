@@ -4866,9 +4866,9 @@ async function startOAuth(provider) {
 }
 
 signinGoogle?.addEventListener('click', () => startOAuth('google'));
-// 카카오: Supabase가 account_email 스코프를 강제 → 카카오 "비즈니스 앱" 필요. 그 전까진 "준비 중" 안내.
-// 비즈앱 전환 후 동의항목(account_email/profile_image) 켜지면 아래 한 줄을 startOAuth('kakao')로 되돌리면 됨.
-signinKakao?.addEventListener('click', () => toast('카카오 로그인은 준비 중입니다.'));
+// 카카오: 카카오 비즈니스 앱 전환 + account_email/profile_image 동의항목 ON +
+// Supabase Dashboard 의 Kakao provider 활성화(REST API 키·Client Secret·Redirect URI) 필요.
+signinKakao?.addEventListener('click', () => startOAuth('kakao'));
 
 // ---------- ID + Password 로그인 ----------
 const openSigninModalBtn = $('#open-signin-modal');
