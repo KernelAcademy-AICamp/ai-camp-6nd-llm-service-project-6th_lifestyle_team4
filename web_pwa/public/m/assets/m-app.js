@@ -5413,7 +5413,7 @@ async function playAttendanceRewardAnim(amount, finalBalance) {
   burst.innerHTML = `
     <div class="ar-label">ATTENDANCE</div>
     <div class="ar-yarn"></div>
-    <div class="ar-times"><span class="x">×</span>${amount}</div>
+    <div class="ar-times"><span class="x">+</span>${amount}</div>
   `;
   document.body.appendChild(bd);
   document.body.appendChild(burst);
