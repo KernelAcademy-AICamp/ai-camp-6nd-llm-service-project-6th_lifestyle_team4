@@ -22,6 +22,8 @@ Curtaincall is an iOS app: a curated, card-based reader for movies, plays, liter
 ## Design & visual polish (the aesthetic bar)
 North star: a **super-sophisticated, minimalist "literature-elite" app** — typography-led, generous whitespace, calm deliberate motion, monochrome editorial palette. **Restraint is the aesthetic: polish means fewer, better details, not more decoration.**
 
+**iOS is its own north star — better than Android/PWA, NOT chasing parity.** Layout, spacing, and component structure lead on iOS; we do not chase pixel parity with the other clients. The one exception is brand character — see the cross-platform carve-out below, which still wins for the cat / yarn / Oz House / skeuomorphic elements. **For design tokens and shared components, see [`DESIGN.md`](./DESIGN.md)** (the iOS design source of truth) — reference its spacing/color/type tokens and components instead of re-deriving or hardcoding.
+
 Tokens (authoritative — do not deviate without sign-off):
 - **Paper `#FAF8F2`**, **Espresso `#0E0C0A`**. Monochrome base; at most one restrained accent. No gradients or textures unless whisper-subtle and approved.
 - **NanumMyeongjo (serif)** for literary content; a clean system sans (SF Pro) only for UI chrome/labels.
@@ -56,6 +58,15 @@ This app prioritizes **cross-platform brand/visual parity** with the Android and
 - Keep changes additive and scoped; after editing, build (incremental) and report.
 - Flag any new dependency before adding it.
 - Backend contracts may have drifted (web/Android/Supabase) — verify against the live schema rather than assuming.
+
+## Commit / PR conventions
+Per-brief boilerplate, captured here so briefs needn't restate it.
+- **Language:** English conventional-commit prefix (`feat` / `fix` / `chore` / `docs` / …); **Korean** summary + body.
+- **Base branch:** branch off the **current B7 integration branch** (presently `release/1.0-b7`) and set the **PR base to that same integration branch — NEVER `main`**. The integration-branch name changes per build cycle; confirm the current one rather than hardcoding it.
+- **Pre-commit guard:** run `git branch --show-current` before committing; never commit to `main` (or directly to the integration branch).
+- **Review tier:**
+  - *Self-review eligible* — trivial docs, dead-code deletions, version bumps, project-setting one-liners.
+  - *Gated (Codex build/screenshot; + on-device QA when interaction is involved)* — gestures, navigation, animation, auth/RLS, layout, report/block.
 
 ## Privacy / submission
 Out of scope for the builder — reserved for separate handling.
