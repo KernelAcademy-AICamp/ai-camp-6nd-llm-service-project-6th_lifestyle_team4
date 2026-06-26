@@ -4828,7 +4828,10 @@ document.getElementById('delete-account-btn')?.addEventListener('click', async (
   }))) return;
   try {
     const sb = await getSupabase();
-    const { error } = await sb.from('users').delete().eq('user_id', state.userId);
+    /* delete_my_account RPC — public.users + auth.users 둘 다 삭제 (migration 044).
+       기존 sb.from('users').delete() 만 호출하면 auth.users 남아서 같은 email 재가입 시
+       'already registered' 에러. */
+    const { error } = await sb.rpc('delete_my_account', { p_user_id: state.userId });
     if (error) throw error;
     await sb.auth.signOut();
     resetUser();
