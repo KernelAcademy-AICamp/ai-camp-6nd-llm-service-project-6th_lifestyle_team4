@@ -5095,12 +5095,18 @@ function showFirstShareGuideModal(cardId, amount) {
         FIRST READ +${amount || 300}
       </div>
       <h3 style="font-family:'Nanum Myeongjo','Noto Serif KR',serif;font-size:20px;color:var(--espresso);margin:0 0 10px;font-weight:700;line-height:1.4;">첫 명대사를 다 읽었어요</h3>
-      <p style="font-size:13px;color:var(--walnut);line-height:1.7;margin:0 0 22px;">
+      <p style="font-size:13px;color:var(--walnut);line-height:1.7;margin:0 0 20px;">
         마음을 흔드는 문장이라면<br/>
         <span style="color:var(--espresso);font-weight:600;">아름다운 카드지로 꾸며</span> 친구에게 공유해보세요.<br/>
         <span style="color:var(--walnut);font-size:11px;letter-spacing:.04em;">공유한 친구가 가입하면 둘 다 600 실타래!</span>
       </p>
+      <p style="font-size:11px;color:var(--walnut);line-height:1.6;margin:0 0 18px;padding:10px 12px;background:rgba(216,128,80,.06);border-radius:8px;text-align:left;">
+        <span style="color:var(--cta);font-weight:600;">💡 길라잡기</span><br/>
+        앱이 처음이라면 <strong style="color:var(--espresso);">앱 사용법 둘러보기</strong> 로<br/>
+        홈·카드 상세·피드까지 한 바퀴 살펴볼 수 있어요.
+      </p>
       <button id="first-share-now" type="button" style="width:100%;background:var(--cta);color:#fff;border:none;border-radius:8px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;">지금 공유해보기</button>
+      <button id="first-share-tour" type="button" style="width:100%;background:transparent;border:1px solid var(--latte);color:var(--espresso);border-radius:8px;padding:13px;font-size:13px;font-weight:500;cursor:pointer;margin-bottom:8px;display:inline-flex;align-items:center;justify-content:center;gap:6px;"><span class="material-symbols-outlined" style="font-size:16px;">tour</span>앱 사용법 둘러보기</button>
       <button id="first-share-later" type="button" style="background:transparent;border:none;color:var(--walnut);font-size:12px;padding:10px;cursor:pointer;width:100%;">나중에 할게요</button>
     </div>
   `;
@@ -5129,6 +5135,17 @@ function showFirstShareGuideModal(cardId, amount) {
           coverUrl: w.cover_url || '',
         });
       } catch (e) { console.warn('[m] first share open failed:', e); toast('공유 화면을 열 수 없어요'); }
+    }, 280);
+  });
+  modal.querySelector('#first-share-tour')?.addEventListener('click', () => {
+    close();
+    /* 기존 onboarding 코치마크 투어 — 홈 → 전문 → 피드 단계별 버튼 위치 안내. detail 열려있으면 닫고 홈으로. */
+    setTimeout(() => {
+      try {
+        if (detailScreen && detailScreen.classList.contains('open')) closeDetailInternal();
+        setView('home');
+        setTimeout(() => { try { launchTour(); } catch (e) { console.warn('[m] launchTour failed:', e); } }, 400);
+      } catch (e) { console.warn('[m] tour start failed:', e); }
     }, 280);
   });
   modal.querySelector('#first-share-later')?.addEventListener('click', close);
@@ -5349,6 +5366,8 @@ function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
    2초 지속 후 fade out. chip 안의 img 도 동시에 bounce. */
 function playYarnRewardFly(amount) {
   if (!amount) return;
+  /* 비로그인 사용자에게는 보상 fly 자체를 띄우지 않음 — 사용자 명세 "비로그인은 실타래 지급 X" */
+  if (!state.userId) return;
   /* keyframes 1회 inject */
   if (!document.getElementById('reward-yarn-bounce-css')) {
     const css = document.createElement('style');
