@@ -220,18 +220,9 @@ struct CardDetailView: View {
                         nickname: session.nickname
                     )
 
-                    // 장식용 '책 읽는 고양이'(library-cat-2, Daily 오즈픽과 동일 에셋/처치) —
-                    // 본문 맨 아래 여백에 가운데 배치. 본문·CTA·댓글·도킹 컴포저와 겹치지
-                    // 않는 끝맺음 브랜드 플로리시. 비상호작용(터치 통과·접근성 숨김).
-                    Image("library-cat-2")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 116)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 28)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-
+                    // '책 읽는 고양이'는 더 이상 스크롤 본문 맨 아래에 두지 않는다(스크롤
+                    // 끝까지 가야만 보였고, 키보드에 독립적으로 끌려 위로 떠버림). 하단 도킹
+                    // 컴포저 위에 데코 오버레이로 걸터앉힌다 — dockedBottomBar / commentBarCat 참조.
                     Spacer().frame(height: 24)
                 }
                 .padding(.horizontal, 20)
@@ -265,6 +256,11 @@ struct CardDetailView: View {
             // Docked composer: solid bar, scroll content inset by its height
             // (nothing hides behind it), flush above the tab bar when unfocused,
             // dropping into the safe area above the keyboard when focused.
+            //
+            // '책 읽는 고양이'는 별도 바/행/패널이 아니라 컴포저 위에 걸터앉은 **데코 오버레이**
+            // (Daily/Feed 고양이와 동일 처치 — 투명 배경, 카드 본문이 뒤로 비침, 비상호작용).
+            // 컴포저(safeAreaInset) 안의 overlay 라 키보드가 떠도 바와 한 덩어리로 움직이고
+            // (위로 안 떠버림), 읽기 영역을 줄이는 추가 행을 만들지 않는다.
             .dockedBottomBar(isActive: !session.isAnonymous, clearTabBar: !composerFocused) {
                 CommentComposer(
                     model: comments,
@@ -272,6 +268,7 @@ struct CardDetailView: View {
                     nickname: session.nickname,
                     focused: $composerFocused
                 )
+                .overlay(alignment: .topTrailing) { commentBarCat }
             }
             // 상단 이동 FAB — 하이라이트 핀과 겹치지 않게 선택 중엔 숨김.
             .overlay(alignment: .bottomTrailing) {
@@ -590,6 +587,22 @@ struct CardDetailView: View {
             .font(.system(size: 18, weight: .regular))
             .foregroundStyle(.walnut)
             .frame(width: 40, height: 40)
+    }
+
+    /// 감상평 도킹 바 우측('남기기' 버튼 영역) 위에 걸터앉는 '책 읽는 고양이'
+    /// (library-cat-2 — Daily 고양이와 동일 에셋/크기 140pt, 축소 X). Daily/Feed 고양이처럼
+    /// **투명 배경 데코 오버레이**라 카드 본문이 뒤로 비친다. **비상호작용**
+    /// (`allowsHitTesting(false)`) — '남기기' 버튼/텍스트필드 탭을 절대 가로채지 않는다.
+    /// 컴포저(safeAreaInset)의 overlay 라 키보드와 한 덩어리로 고정.
+    /// (perch 오프셋은 시뮬레이터로 검증 불가 — 실기기 QA 에서 미세조정.)
+    private var commentBarCat: some View {
+        Image("library-cat-2")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 140)
+            .offset(x: -8, y: -56)   // 우측 남기기 버튼 위로 걸터앉게(위로). QA 조정 가능.
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private func toggleBookmark() {
