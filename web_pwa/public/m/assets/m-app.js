@@ -5073,11 +5073,14 @@ async function rewardYarnForFirstView(cardId) {
   }
 }
 
-/* 첫 카드 읽고 실타래 받은 직후 1회 — 공유 기능 안내 + CTA. 보상 fly 가 사라진 후 ~2.5s 뒤에 띄움. */
+/* 첫 카드 읽고 실타래 받은 직후 1회 — 공유 기능 안내 + CTA. 보상 fly 가 사라진 후 ~2.5s 뒤에 띄움.
+   사용자 명세: "비로그인 카드 read 는 카운트 X, 첫 로그인 후 첫 카드 read 가 새 시작". 그래서
+   user_id 별로 flag 분리. 다른 계정 로그인 시 다시 처음부터 가이드 표시. */
 function maybeShowFirstShareGuide(cardId, amount) {
-  if (!state.userId) return;                                    // 로그인 사용자만
-  if (safeStorageGet('ds.firstShareGuideShown') === '1') return;  // 1회용
-  safeStorageSet('ds.firstShareGuideShown', '1');
+  if (!state.userId) return;
+  const key = `ds.firstShareGuideShown.${state.userId}`;
+  if (safeStorageGet(key) === '1') return;
+  safeStorageSet(key, '1');
   setTimeout(() => { try { showFirstShareGuideModal(cardId, amount); } catch {} }, 2500);
 }
 function showFirstShareGuideModal(cardId, amount) {
