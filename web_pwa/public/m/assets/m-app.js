@@ -5873,10 +5873,15 @@ function setSigninMode(mode) {
     signinSubmitBtn.textContent = '로그인';
     signinToggleModeBtn.textContent = '계정이 없으신가요? 회원가입';
   }
-  // 회원가입 전용 UI(중복확인 버튼·성별·나이대) 토글 + 중복확인 상태 초기화
+  // 회원가입 전용 UI(중복확인 버튼·성별·나이대·이메일) 토글 + 중복확인 상태 초기화
   const isSignup = (mode === 'signup');
   if (signupIdCheckBtn) signupIdCheckBtn.style.display = isSignup ? '' : 'none';
   if (signupExtra) signupExtra.style.display = isSignup ? 'block' : 'none';
+  const signupEmailRow = document.getElementById('signup-email-row');
+  if (signupEmailRow) signupEmailRow.style.display = isSignup ? 'block' : 'none';
+  /* 비번 찾기 링크 — 로그인 모드에서만 노출 */
+  const forgotBtn = document.getElementById('signin-forgot-btn');
+  if (forgotBtn) forgotBtn.style.display = isSignup ? 'none' : 'inline-block';
   signupIdAvailable = false;
   if (signupIdCheckResult) signupIdCheckResult.style.display = 'none';
   signinErrorEl.style.display = 'none';
@@ -5969,17 +5974,19 @@ function idToEmail(id) {
 async function submitSignin() {
   const id = (signinIdInput.value || '').trim();
   const password = signinPasswordInput.value || '';
-  const email = idToEmail(id);
-  if (!email) {
-    showSigninError('아이디를 입력해주세요.');
-    return;
-  }
-  if (!password) {
-    showSigninError('비밀번호를 입력해주세요.');
-    return;
-  }
+  /* 회원가입 모드 — 사용자가 입력한 진짜 이메일 사용. 합성 이메일(@user.local) 폐기.
+     기존 사용자(합성) 로그인은 ID → find_email_by_login_id RPC 로 email 조회 후 로그인. */
+  const signupEmailEl = document.getElementById('signup-email');
+  const signupRealEmail = (signupEmailEl?.value || '').trim();
+  const fallbackEmail = idToEmail(id);
+  if (!id) { showSigninError('아이디를 입력해주세요.'); return; }
+  if (!password) { showSigninError('비밀번호를 입력해주세요.'); return; }
   if (signinMode === 'signup' && !signupIdAvailable) {
     showSigninError('아이디 중복확인을 해주세요.');
+    return;
+  }
+  if (signinMode === 'signup' && (!signupRealEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupRealEmail))) {
+    showSigninError('이메일을 정확히 입력해주세요. (비밀번호 찾기에 사용)');
     return;
   }
   signinErrorEl.style.display = 'none';
@@ -5991,12 +5998,11 @@ async function submitSignin() {
     if (state.userId) safeStorageSet('ds.prevAnonUserId', String(state.userId));
 
     if (signinMode === 'signup') {
-      const { data: signUpData, error: signUpError } = await sb.auth.signUp({ email, password });
+      /* 진짜 이메일로 가입 — 추후 resetPasswordForEmail 가능 */
+      const { data: signUpData, error: signUpError } = await sb.auth.signUp({ email: signupRealEmail, password });
       if (signUpError) throw signUpError;
-      // 이메일 확인 비활성이면 signUp이 session도 반환. 활성이면 session=null.
-      // 어느 경우든 즉시 signInWithPassword 시도해 자동 로그인.
       if (!signUpData?.session) {
-        const { error: autoSignInError } = await sb.auth.signInWithPassword({ email, password });
+        const { error: autoSignInError } = await sb.auth.signInWithPassword({ email: signupRealEmail, password });
         if (autoSignInError) {
           throw new Error('가입은 됐으나 자동 로그인 실패. 다시 로그인 모드로 시도해주세요.');
         }
@@ -6008,7 +6014,15 @@ async function submitSignin() {
         age_group: signupAge?.value || null,
       }));
     } else {
-      const { error } = await sb.auth.signInWithPassword({ email, password });
+      /* 로그인 — 신규(진짜 이메일) 가입자는 ID → find_email_by_login_id RPC 로 email 조회.
+         실패하거나 결과 없으면 옛 합성 이메일 시도 (기존 사용자 호환). */
+      let loginEmail = null;
+      try {
+        const { data: foundEmail } = await sb.rpc('find_email_by_login_id', { p_login_id: id });
+        if (foundEmail && typeof foundEmail === 'string') loginEmail = foundEmail;
+      } catch { /* RPC 없으면 합성 이메일로 폴백 */ }
+      if (!loginEmail) loginEmail = fallbackEmail;
+      const { error } = await sb.auth.signInWithPassword({ email: loginEmail, password });
       if (error) throw error;
     }
     // 기억하기 옵션 처리
@@ -6096,6 +6110,9 @@ function paintAuthIdentity() {
   /* 계정 삭제 버튼 — 로그인 사용자만 노출 (익명은 의미 없음). */
   const deleteAccBtn = document.getElementById('delete-account-btn');
   if (deleteAccBtn) deleteAccBtn.style.display = state.isAnonymous ? 'none' : 'inline-block';
+  /* 비밀번호 변경 — 로그인 사용자만. (소셜 로그인 사용자도 새 비번 설정 가능) */
+  const changePwBtn = document.getElementById('change-password-btn');
+  if (changePwBtn) changePwBtn.style.display = state.isAnonymous ? 'none' : 'inline-block';
 
   if (state.isAnonymous) {
     settingsBio.style.display = 'none';
@@ -7622,6 +7639,51 @@ if (feedFab) feedFab.addEventListener('click', openFeedPicker);
 if (archiveFab) archiveFab.addEventListener('click', () => {
   /* (구) 라이브러리 우측 fab — 사용자 요청으로 제거. element 없으면 이 listener 도 안 등록. */
   try { openBookmarksScreen(); } catch (e) { console.warn('[m] openBookmarksScreen failed:', e); }
+});
+
+/* 비밀번호 찾기 — 로그인 모달의 '비밀번호를 잊으셨나요' 클릭. ID 입력받아 RPC 로
+   해당 사용자의 auth.users.email 조회 후 resetPasswordForEmail 발송. */
+document.getElementById('signin-forgot-btn')?.addEventListener('click', async () => {
+  const id = (signinIdInput?.value || '').trim() || prompt('가입했던 아이디를 입력해주세요');
+  if (!id) return;
+  try {
+    const sb = await getSupabase();
+    const { data: email, error } = await sb.rpc('find_email_by_login_id', { p_login_id: id });
+    if (error) throw error;
+    if (!email) { toast('해당 아이디로 가입된 계정이 없어요'); return; }
+    if (String(email).endsWith('@user.local')) {
+      toast('이메일 정보가 없어 비밀번호 재설정이 불가합니다. 관리자에게 문의해주세요.');
+      return;
+    }
+    const { error: resetError } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: `${location.origin}/m/`,
+    });
+    if (resetError) throw resetError;
+    toast(`${email} 로 재설정 링크를 보냈어요. 이메일을 확인해주세요.`);
+  } catch (e) {
+    console.warn('[m] reset password failed:', e);
+    toast('전송 실패: ' + (e.message || e));
+  }
+});
+
+/* 비밀번호 변경 — MY 페이지의 '비밀번호 변경' 클릭. 새 비번 입력받아 sb.auth.updateUser 호출. */
+document.getElementById('change-password-btn')?.addEventListener('click', async () => {
+  if (state.isAnonymous || !state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
+  const newPw = prompt('새 비밀번호를 입력하세요 (8자 이상)');
+  if (!newPw) return;
+  if (newPw.length < 8) { toast('비밀번호는 8자 이상이어야 해요'); return; }
+  const confirmPw = prompt('한 번 더 입력해주세요');
+  if (newPw !== confirmPw) { toast('두 비밀번호가 일치하지 않아요'); return; }
+  try {
+    const sb = await getSupabase();
+    const { error } = await sb.auth.updateUser({ password: newPw });
+    if (error) throw error;
+    toast('비밀번호가 변경되었어요');
+    clearRememberedCreds();
+  } catch (e) {
+    console.warn('[m] change password failed:', e);
+    toast('변경 실패: ' + (e.message || e));
+  }
 });
 /* top-bar 의 북마크 버튼 — 모든 view 에서 노출, 내 북마크 책꽂이로 바로 이동. */
 document.getElementById('top-bookmark-btn')?.addEventListener('click', () => {

@@ -2173,6 +2173,7 @@
 
     <div style="height:20px;"></div>
     <div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="change-password-btn" style="background:none;border:none;padding:6px 12px;font-family:inherit;font-size:10px;color:var(--walnut);text-decoration:underline;cursor:pointer;letter-spacing:0.02em;display:none;">비밀번호 변경</button>
       <button id="sign-out-btn" style="background:none;border:none;padding:6px 12px;font-family:inherit;font-size:10px;color:var(--walnut);text-decoration:underline;cursor:pointer;letter-spacing:0.02em;">로그아웃</button>
       <button id="delete-account-btn" style="background:none;border:none;padding:6px 12px;font-family:inherit;font-size:10px;color:#b94a3a;text-decoration:underline;cursor:pointer;letter-spacing:0.02em;display:none;">계정 삭제</button>
     </div>
@@ -2842,6 +2843,15 @@
            placeholder="비밀번호"
            style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;" />
 
+    <!-- 이메일 — 회원가입 모드에서만 노출. 비밀번호 찾기 시 이 이메일로 재설정 링크 발송. -->
+    <div id="signup-email-row" style="display:none;">
+      <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">이메일</label>
+      <input id="signup-email" type="email" maxlength="100" autocomplete="email"
+             placeholder="example@email.com"
+             style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;" />
+      <p class="t-body-sm c-walnut" style="margin-top:6px;font-size:11px;line-height:1.5;opacity:0.8;">비밀번호 찾기 시 이 이메일로 재설정 링크가 발송됩니다.</p>
+    </div>
+
     <div id="signup-extra" style="display:none;">
       <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">성별 · 선택</label>
       <select id="signup-gender"
@@ -2882,6 +2892,10 @@
     <button id="signin-submit" class="sharp-btn" style="width:100%;margin-top:18px;">로그인</button>
     <button id="signin-toggle-mode" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
       계정이 없으신가요? 회원가입
+    </button>
+    <!-- 비밀번호 찾기 링크 — 로그인 모드에서만 노출 -->
+    <button id="signin-forgot-btn" type="button" style="width:100%;background:transparent;border:none;margin-top:6px;cursor:pointer;font-size:11px;color:var(--walnut);text-decoration:underline;letter-spacing:0.02em;">
+      비밀번호를 잊으셨나요?
     </button>
 
     <!-- 소셜 로그인 — 공식 브랜드 버튼(로고+브랜드색). -->
