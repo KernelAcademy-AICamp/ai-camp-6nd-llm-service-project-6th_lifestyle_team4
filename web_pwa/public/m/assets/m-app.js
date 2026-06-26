@@ -2870,22 +2870,26 @@ function renderArchive() {
     gridEl.appendChild(btn);
   }
 
-  // 페이지 버튼 — 그리드 바로 아래 한 줄
+  // 페이지 버튼 — 그리드 바로 아래 한 줄. 4개 페이지씩 윈도우 표시 (‹ 1 2 3 4 ›).
+  // ›/‹ 는 한 페이지씩 이동 — 4에서 › 누르면 5로 가고 윈도우가 5 6 7 8 로 자동 전환.
+  // margin-bottom 96px 추가 — 우측 북마크 fab(bottom 96~110px)과 시각적 겹침 회피.
   let pagesEl = document.getElementById('archive-pages');
   if (!pagesEl) {
     pagesEl = document.createElement('div');
     pagesEl.id = 'archive-pages';
-    // main padding(30 + safe-area)이 nav 회피 — pages 자체 margin 최소화
-    pagesEl.style.cssText = 'display:flex;justify-content:center;gap:8px;margin:16px 0 0;flex-wrap:wrap;';
+    pagesEl.style.cssText = 'display:flex;justify-content:center;gap:8px;margin:16px 0 96px;flex-wrap:wrap;';
     gridEl.parentNode.insertBefore(pagesEl, gridEl.nextSibling);
   }
   if (totalPages <= 1) {
     pagesEl.style.display = 'none';
   } else {
     pagesEl.style.display = 'flex';
+    const WINDOW = 4;
+    const winStart = Math.floor((safePage - 1) / WINDOW) * WINDOW + 1;
+    const winEnd = Math.min(winStart + WINDOW - 1, totalPages);
     const btns = [];
     if (safePage > 1) btns.push(`<button data-page="${safePage - 1}" class="lib-page-btn">‹</button>`);
-    for (let p = 1; p <= totalPages; p++) {
+    for (let p = winStart; p <= winEnd; p++) {
       btns.push(`<button data-page="${p}" class="lib-page-btn${p === safePage ? ' active' : ''}">${p}</button>`);
     }
     if (safePage < totalPages) btns.push(`<button data-page="${safePage + 1}" class="lib-page-btn">›</button>`);
