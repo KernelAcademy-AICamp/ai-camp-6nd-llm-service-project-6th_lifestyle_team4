@@ -540,6 +540,24 @@ struct SignInSheet: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(session.authInProgress)
+                    Spacer().frame(height: 10)
+                    // 카카오 — 공식 브랜드 버튼(노란 #FEE500 배경 + 검정 말풍선 심볼/라벨).
+                    // 색상은 카카오 브랜드 가이드를 따른다(애플=공식 흑/백, 구글=공식 흰색과 동일한
+                    // "제공자 공식 트리트먼트" 패턴). 크기/모서리는 애플·구글과 동일(높이≈44, radius 10).
+                    // 핸들러는 기존 OAuth 배선 그대로 — .kakao 는 구글과 같은 signInWithOAuth 경로.
+                    Button {
+                        Task { await session.signInWithOAuth(.kakao) }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image("KakaoLogo").resizable().renderingMode(.original).frame(width: 18, height: 18)
+                            Text("카카오 로그인").font(.bodySans(15)).foregroundStyle(Color.black.opacity(0.85))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(Color(red: 0.996, green: 0.898, blue: 0.0), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(session.authInProgress)
                     Spacer().frame(height: 14)
                     Text("소셜 로그인은 회원 식별 및 로그인 목적으로만 사용되며, 소셜 계정의 프로필 정보는 사용하지 않습니다.")
                         .font(.bodySans(12))
