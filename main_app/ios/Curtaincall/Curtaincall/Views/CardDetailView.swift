@@ -220,18 +220,9 @@ struct CardDetailView: View {
                         nickname: session.nickname
                     )
 
-                    // 장식용 '책 읽는 고양이'(library-cat-2, Daily 오즈픽과 동일 에셋/처치) —
-                    // 본문 맨 아래 여백에 가운데 배치. 본문·CTA·댓글·도킹 컴포저와 겹치지
-                    // 않는 끝맺음 브랜드 플로리시. 비상호작용(터치 통과·접근성 숨김).
-                    Image("library-cat-2")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 116)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 28)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-
+                    // '책 읽는 고양이' 브랜드 플로리시는 더 이상 스크롤 본문 맨 아래에 두지
+                    // 않는다(스크롤 끝까지 가야만 보였고, 키보드에 독립적으로 끌려 위로 떠버림).
+                    // 하단 도킹 컴포저 바로 위에 고정 — dockedBottomBar 밴드 참조.
                     Spacer().frame(height: 24)
                 }
                 .padding(.horizontal, 20)
@@ -265,13 +256,24 @@ struct CardDetailView: View {
             // Docked composer: solid bar, scroll content inset by its height
             // (nothing hides behind it), flush above the tab bar when unfocused,
             // dropping into the safe area above the keyboard when focused.
-            .dockedBottomBar(isActive: !session.isAnonymous, clearTabBar: !composerFocused) {
-                CommentComposer(
-                    model: comments,
-                    userId: session.userId,
-                    nickname: session.nickname,
-                    focused: $composerFocused
-                )
+            //
+            // 하단 도킹 밴드 = '책 읽는 고양이'(항상) + 감상평 컴포저(회원만)를 **한 덩어리**로
+            // 묶는다. 같은 safeAreaInset(.bottom) 안에 있어 키보드가 떠도 둘이 함께 올라간다
+            // (예전엔 고양이가 스크롤 본문 맨 아래라 키보드 회피에 독립적으로 끌려 위로 떠버림).
+            // isActive 를 항상 true 로 둬 익명 사용자도 바 위 고양이를 본다(컴포저는 회원 전용).
+            .dockedBottomBar(isActive: true, clearTabBar: !composerFocused) {
+                VStack(spacing: 0) {
+                    commentBarCat
+                    if !session.isAnonymous {
+                        Hairline()
+                        CommentComposer(
+                            model: comments,
+                            userId: session.userId,
+                            nickname: session.nickname,
+                            focused: $composerFocused
+                        )
+                    }
+                }
             }
             // 상단 이동 FAB — 하이라이트 핀과 겹치지 않게 선택 중엔 숨김.
             .overlay(alignment: .bottomTrailing) {
@@ -590,6 +592,21 @@ struct CardDetailView: View {
             .font(.system(size: 18, weight: .regular))
             .foregroundStyle(.walnut)
             .frame(width: 40, height: 40)
+    }
+
+    /// 하단 컴포저 바 위에 고정되는 '책 읽는 고양이' 브랜드 플로리시(library-cat-2,
+    /// Daily 오즈픽과 동일 에셋). 도킹 밴드의 일부라 키보드와 한 덩어리로 움직인다.
+    /// 비상호작용(터치 통과·접근성 숨김) — 명명된 브랜드 carve-out(AGENTS.md).
+    private var commentBarCat: some View {
+        Image("library-cat-2")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 96)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private func toggleBookmark() {
