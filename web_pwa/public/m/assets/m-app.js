@@ -5106,10 +5106,26 @@ function showFirstShareGuideModal(cardId, amount) {
   const close = () => { modal.style.opacity = '0'; setTimeout(() => modal.remove(), 250); };
   modal.querySelector('#first-share-now')?.addEventListener('click', () => {
     close();
-    /* 현재 detail 카드 공유 — detail 화면의 공유 버튼 시뮬레이션. detail 닫혀있으면 그냥 닫기. */
+    /* cardId 로 카드 찾아 공유 모달 직접 열기. (detail-share 같은 버튼이 없어서
+       click 시뮬레이션은 안 됨.) */
     setTimeout(() => {
-      const btn = document.getElementById('detail-share');
-      if (btn && document.getElementById('detail-screen')?.classList.contains('open')) btn.click();
+      try {
+        const card = state.detailCard
+          || (state.allCards || []).find((c) => c && Number(c.card_id) === Number(cardId));
+        if (!card) { toast('카드를 찾을 수 없어요'); return; }
+        const w = card.works || {};
+        const meta = (typeof shareMetaLinesFromWork === 'function') ? shareMetaLinesFromWork(w) : { metaKo: '', metaEn: '' };
+        openShareModal({
+          cardId: card.card_id,
+          quote: card.quote || '',
+          speaker: card.speaker || '',
+          work: w.title || '',
+          workId: w.work_id ?? null,
+          author: w.author || '',
+          metaKo: meta.metaKo, metaEn: meta.metaEn,
+          coverUrl: w.cover_url || '',
+        });
+      } catch (e) { console.warn('[m] first share open failed:', e); toast('공유 화면을 열 수 없어요'); }
     }, 280);
   });
   modal.querySelector('#first-share-later')?.addEventListener('click', close);
