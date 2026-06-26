@@ -1195,12 +1195,13 @@ async function bootstrapAuth() {
 }
 
 /**
- * users.session_id 비교로 다른 기기에서 동일 ID 로그인이 발생했는지 감지.
- *  - localStorage의 sessionId가 비어있다 → 방금 로그인됨 → 새 sessionId 발급해 DB+local 양쪽 저장
- *  - 두 값 일치 → OK
- *  - 두 값 불일치 → 다른 기기에서 새 로그인이 발생 → 강제 로그아웃 + 안내
+ * (비활성화 — 다중 기기 동시 로그인 허용)
+ * 사용자 명세: PWA·Android·iOS 가 같은 계정으로 동시 로그인 가능해야 함.
+ * 기존엔 새 로그인 시 server session_id 가 바뀌어 옛 기기가 자동 로그아웃됐음.
+ * 함수 본체는 안 건드리고 시작에 early return 만 추가 — 호출처 영향 X.
  */
 async function enforceSingleSession(sb) {
+  return;   // ← single-session 정책 비활성화 (다중 기기 동시 로그인 허용)
   if (state.isAnonymous || !state.userId) return;
   const localSid = safeStorageGet(SESSION_KEY);
   try {
