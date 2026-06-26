@@ -40,7 +40,6 @@ import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Walnut
-import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.displayTitle
 
 /**
@@ -184,17 +183,9 @@ private fun HighlightContentCard(highlight: Highlight, onOpenCard: () -> Unit) {
     ) {
         BookCover(work = w, modifier = Modifier.size(width = 120.dp, height = 170.dp))
         Box(modifier = Modifier.height(22.dp))
-        // 화자 라벨이 LLM 출력에 `**크레온**` 마크다운으로 들어올 수 있어 그대로 노출되던 문제 fix —
-        // Markdown.bold 로 ** 마커를 볼드 span 으로 변환해 시각화.
-        Text(
-            text = Markdown.bold(highlight.selectedText),
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontFamily = EditorialSerif,
-                lineHeight = 32.sp,
-            ),
-            color = Espresso,
-            textAlign = TextAlign.Center,
-        )
+        // 발췌 — 피드 목록과 동일 형식으로 통일(HlQuote 재사용): 명조 15/28, 인용부호,
+        // 100자/3줄 이상이면 접기·펴기(FoldableText). (PWA 7f8f46a/d2ace6c)
+        HlQuote(highlight.selectedText)
         if (source.isNotBlank()) {
             Box(modifier = Modifier.height(16.dp))
             Text(
@@ -208,7 +199,7 @@ private fun HighlightContentCard(highlight: Highlight, onOpenCard: () -> Unit) {
         }
         Box(modifier = Modifier.height(24.dp))
         SharpButton(
-            label = "카드 보기",
+            label = "카드 읽어보기",
             onClick = onOpenCard,
             modifier = Modifier.fillMaxWidth(),
         )

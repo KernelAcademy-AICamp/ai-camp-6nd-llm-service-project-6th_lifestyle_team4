@@ -79,12 +79,27 @@ final class AuthSession: ObservableObject {
             if let session = auth.currentSession, session.isExpired {
                 _ = try? await auth.refreshSession()
             }
-            if auth.currentSession == nil {
-                _ = try await auth.signInAnonymously()
-            }
+            // 익명 자동 로그인 폐지: 세션이 없으면 비로그인 게스트로 둔다(읽기 전용 둘러보기).
+            // 예전엔 여기서 signInAnonymously() 로 매일 유령 익명 유저를 양산했다(분석/users 오염).
+            // 로그인(Google/Kakao/Apple/ID·PW) 시에만 세션과 users 행이 생긴다. 게스트는
+            // userId=nil, isAnonymous=true 로 기존 가드(로그인 유도)를 그대로 재사용한다.
+            // 기존 세션(예전에 만들어진 익명 세션 포함)은 아래 경로로 그대로 동작한다.
             guard let user = auth.currentUser else {
-                throw NSError(domain: "auth", code: 0,
-                              userInfo: [NSLocalizedDescriptionKey: "세션을 만들 수 없습니다."])
+                userId = nil
+                isAnonymous = true
+                nickname = ""
+                loginId = ""
+                gender = ""
+                ageGroup = ""
+                yarnBalance = 0
+                prefGenres = []
+                prefThemes = []
+                prefAny = false
+                hasServerPrefs = false
+                errorMessage = nil
+                bootstrapStatus = .ready
+                ready = true
+                return
             }
             let anon = user.isAnonymous
             let anonId = user.id.uuidString

@@ -723,10 +723,14 @@ const RECENT_STORAGE_KEY = 'ds.recentlyShownIds';
     loadRecentlyShownFromStorage();
     await bootstrapAuth();
     // Amplitude 사용자 ID: 회원이면 실제 아이디(login_id), 없으면(익명·구계정) 내부 숫자 user_id
-    const amplitudeUserId = (!state.isAnonymous && state.userLoginId)
-      ? state.userLoginId
-      : String(state.userId);
-    identify(amplitudeUserId);
+    // 비로그인 게스트(userId 없음)는 Amplitude user_id 를 설정하지 않는다 →
+    // Amplitude 자체 디바이스ID 로 "방문자"로만 집계되어 유령 user 가 생기지 않는다.
+    if (state.userId != null) {
+      const amplitudeUserId = (!state.isAnonymous && state.userLoginId)
+        ? state.userLoginId
+        : String(state.userId);
+      identify(amplitudeUserId);
+    }
     // 회원/익명 구분 + (회원이면) 성별·나이대를 Amplitude User Property로 전송 (타겟층 분석용)
     // user_pk: login_id로 식별해도 DB 내부 user_id로 역추적할 수 있게 보존
     setUserProps({
@@ -1109,18 +1113,39 @@ function scheduleRealtimeRefresh(kind) {
 })();
 
 // ---------- Auth ----------
+/**
+ * 봇·크롤러·헤드리스(검색 인덱서, 링크 미리보기, 성능 스캐너, 자동화) 판별.
+ * 이런 클라이언트가 로드 즉시 signInAnonymously() 로 "유령 익명 유저"를 매일
+ * 양산해 Amplitude 지표와 public.users 수를 오염시켰다 → 이들에겐 익명 계정을
+ * 만들지 않는다. 실제 브라우저(Chrome/Safari/Firefox/Edge/Samsung/카카오·네이버
+ * 인앱)는 아래 토큰을 UA 에 담지 않으므로 false positive 가 없다(=실유저 영향 0).
+ */
+function isLikelyBot() {
+  try {
+    if (navigator.webdriver === true) return true;           // Selenium/Puppeteer/Playwright 등
+    const ua = (navigator.userAgent || '').toLowerCase();
+    if (!ua) return true;                                     // UA 없는 비정상 클라이언트
+    return /bot|crawler|crawl|spider|slurp|mediapartners|facebookexternalhit|kakaotalk-scrap|yeti|daumoa|twitterbot|slackbot|discordbot|telegrambot|whatsapp|skypeuripreview|embedly|redditbot|applebot|bingpreview|googlebot|baiduspider|yandexbot|headless|lighthouse|pagespeed|gtmetrix|pingdom|uptimerobot|phantomjs|puppeteer|playwright|selenium|prerender|python-requests|axios|curl|wget|go-http|java\/|okhttp/i.test(ua);
+  } catch { return false; }
+}
+
 async function bootstrapAuth() {
   const sb = await getSupabase();
   const { data: { session: existing } } = await sb.auth.getSession();
-  let session = existing;
-  if (!session) {
-    const { data, error } = await sb.auth.signInAnonymously();
-    if (error) throw new Error(`익명 로그인 실패: ${error.message}`);
-    session = data?.session ?? null;
-  }
-  const user = session?.user;
+  const user = existing?.user;
   state.authUid = user?.id ?? null;
-  if (!state.authUid) throw new Error('auth uid 없음');
+
+  // 세션 없음 = 비로그인 게스트. 익명 계정을 만들지 않고 카탈로그/피드를 읽기 전용으로 둘러본다.
+  // (예전엔 여기서 signInAnonymously() 로 매일 유령 익명 유저를 양산했다 → 분석/users 오염.)
+  // 로그인(Google/Kakao/ID·PW)할 때만 세션과 users 행이 생긴다. 게스트는 isAnonymous=true 로
+  // 두어 기존 "로그인 필요" 가드(북마크·댓글·출석 등)를 그대로 재사용하고, userId 는 null 이다.
+  // 기존 세션(예전에 만들어진 익명 세션 포함)은 아래 경로로 그대로 동작한다.
+  if (!state.authUid) {
+    state.isAnonymous = true;
+    state.userId = null;
+    state.isBot = isLikelyBot();   // 봇 표시(분석 제외용) — 동작은 게스트와 동일
+    return;
+  }
 
   // 소셜 로그인은 "인증 수단"으로만 사용한다 — provider(로그인 방법)만 기록하고
   // 제공자의 이름·프로필 사진 등 개인정보는 받지/쓰지 않는다. (닉네임은 항상 랜덤 부여)

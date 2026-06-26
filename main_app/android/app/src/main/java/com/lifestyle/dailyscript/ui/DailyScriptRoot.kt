@@ -31,7 +31,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
@@ -199,13 +198,8 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     // 출석체크 — 00시 기준 그날 첫 진입이면 1회 보상 애니(+100) → 다이얼로그.
     var attendanceVisible by remember { mutableStateOf(false) }
     var attendanceRewarded by remember { mutableStateOf(false) }
-    // 출석 보상 애니메이션 상태 — 버스트→실타래 칩으로 이동→칩 bounce→잔액 카운트업.
+    // 출석 보상 애니메이션 — 중앙 버스트만 2초 표시(우측 chip fly/카운트업 제거, PWA f11b175).
     var rewardAnimAmount by remember { mutableStateOf<Int?>(null) }  // >0 이면 애니 재생 중
-    var rewardAnimStart by remember { mutableStateOf(0) }
-    var rewardAnimFinal by remember { mutableStateOf(0) }
-    var yarnChipCenter by remember { mutableStateOf(Offset.Zero) }   // 칩 중심 window px (버스트 목표)
-    var chipDisplayOverride by remember { mutableStateOf<Int?>(null) } // 카운트업 동안 칩 표시값 덮어쓰기
-    var chipBounceKey by remember { mutableStateOf(0) }               // ++ 하면 칩 실타래 이미지 bounce
     var bottomBarTopPx by remember { mutableStateOf(0f) }             // 하단 바 카드 top(window px) — 상세 '본문 끝 통과' 보상 판정
     LaunchedEffect(session.userId, session.isAnonymous) {
         if (session.isAnonymous) return@LaunchedEffect
@@ -217,9 +211,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         yarnVm.loadAttendanceHistory()       // 서버 출석 기록(오늘 포함) → 달력 렌더용
         val finalBal = yarnVm.available.value
         if (attendanceRewarded && finalBal > start) {
-            chipDisplayOverride = start          // 카운트업 전까지 칩을 시작값에 고정
-            rewardAnimStart = start
-            rewardAnimFinal = finalBal
+            // 잔액은 rewardAttendance 가 이미 chip(yarnAvailable)에 반영 → 중앙 버스트만 재생.
             rewardAnimAmount = finalBal - start  // 애니 재생 트리거 (끝나면 달력 표시)
         } else {
             attendanceVisible = true             // 보상 없으면 달력만
@@ -235,13 +227,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
     rewardAnimAmount?.takeIf { it > 0 }?.let { amt ->
         com.lifestyle.dailyscript.ui.yarn.YarnRewardAnimation(
             amount = amt,
-            startBalance = rewardAnimStart,
-            finalBalance = rewardAnimFinal,
-            chipCenter = { yarnChipCenter },
-            onCountTo = { chipDisplayOverride = it },
-            onBounce = { chipBounceKey++ },
             onFinished = {
-                chipDisplayOverride = null
                 rewardAnimAmount = null
                 attendanceVisible = true
             },
@@ -312,13 +298,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         if (showTopBar) {
             when (currentRoute) {
                 Routes.DAILY, Routes.HOME, Routes.ARCHIVE, Routes.FEED -> HomeTopBar(
-                    yarn = chipDisplayOverride ?: yarnAvailable,
-                    onYarnClick = {
-                        AppAnalytics.track("yarn_info_open")
-                        yarnInfoOpen = true
+                    // 우측 실타래 칩 → 북마크 버튼 (실타래는 MY 페이지로 이동, PWA f4e9d86).
+                    onBookmarkClick = {
+                        AppAnalytics.track("nav", mapOf("from" to (currentRoute ?: ""), "to" to Routes.BOOKMARKS))
+                        navController.navigate(Routes.BOOKMARKS)
                     },
-                    yarnBounceKey = chipBounceKey,
-                    onYarnChipPositioned = { yarnChipCenter = it },
                     notifUnread = notifUnread,
                     onNotifClick = {
                         notifVm.open(session.userId, session.isAnonymous)
@@ -364,7 +348,6 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                     LibraryScreen(
                         userId = session.userId,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
-                        onOpenBookmarks = { navController.navigate(Routes.BOOKMARKS) },
                     )
                 }
                 composable(
@@ -376,7 +359,6 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         userId = session.userId,
                         initialOpenWorkId = workId,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
-                        onOpenBookmarks = { navController.navigate(Routes.BOOKMARKS) },
                     )
                 }
                 composable(Routes.FEED) {
@@ -393,6 +375,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
                         session = session,
+                        yarn = yarnAvailable,
+                        onYarnClick = {
+                            AppAnalytics.track("yarn_info_open")
+                            yarnInfoOpen = true
+                        },
                         authMessage = authMessage,
                         authInProgress = authInProgress,
                         idCheck = idCheck,

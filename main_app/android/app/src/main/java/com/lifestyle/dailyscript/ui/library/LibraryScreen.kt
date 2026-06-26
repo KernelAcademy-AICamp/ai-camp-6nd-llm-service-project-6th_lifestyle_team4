@@ -28,7 +28,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -51,9 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -113,8 +110,6 @@ fun LibraryScreen(
     userId: Long,
     onOpenCard: (Long) -> Unit,
     initialOpenWorkId: Long? = null,
-    // 우측 하단 북마크 FAB → 내 북마크 책꽂이(Routes.BOOKMARKS) 이동 (PWA archive-fab).
-    onOpenBookmarks: () -> Unit = {},
 ) {
     val vm: LibraryViewModel = viewModel()
     val state by vm.state.collectAsState()
@@ -290,40 +285,7 @@ fun LibraryScreen(
                 onClose = { openWorkId = null },
             )
         }
-
-        // 우측 하단 북마크 FAB — 피드 글쓰기 FAB 과 동일 패턴(PWA archive-fab). 책 펼침 팝업 중엔 숨김.
-        if (opened == null) {
-            BookmarkFab(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = BottomBarContentInset + 16.dp),
-                onClick = {
-                    AppAnalytics.track("nav", mapOf("from" to "archive", "to" to "bookmarks"))
-                    onOpenBookmarks()
-                },
-            )
-        }
-    }
-}
-
-/** 라이브러리 우측 하단 북마크 FAB — 내 북마크 책꽂이로 이동 (피드 FAB / DetailScreen HlAddFab 패턴). */
-@Composable
-private fun BookmarkFab(modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .size(56.dp)
-            .shadow(8.dp, CircleShape)
-            .clip(CircleShape)
-            .background(Cta)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Bookmark,
-            contentDescription = "내 북마크",
-            tint = Paper,
-            modifier = Modifier.size(24.dp),
-        )
+        // 우측 하단 북마크 FAB 제거 — 북마크 진입은 top-bar 북마크 버튼으로 이동 (PWA f4e9d86).
     }
 }
 

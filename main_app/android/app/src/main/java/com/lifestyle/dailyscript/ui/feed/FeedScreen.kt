@@ -740,9 +740,10 @@ private fun HlBookCover(w: com.lifestyle.dailyscript.data.model.WorkDto?) {
     BookCover(work = w, modifier = Modifier.size(width = 132.dp, height = 188.dp))
 }
 
-/** Centered excerpt with wide serif quote marks at the corners (PWA .hl-quote). */
+/** Centered excerpt with wide serif quote marks at the corners (PWA .hl-quote).
+ *  하이라이트 상세(HighlightDetailSheet)에서도 동일 형식으로 재사용하므로 internal. */
 @Composable
-private fun HlQuote(text: String) {
+internal fun HlQuote(text: String) {
     Box(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "“",

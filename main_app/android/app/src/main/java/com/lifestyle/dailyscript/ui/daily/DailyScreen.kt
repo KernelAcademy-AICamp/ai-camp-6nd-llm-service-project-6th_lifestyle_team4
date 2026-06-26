@@ -179,9 +179,12 @@ fun DailyScreen(
                 isAnonymous = isAnonymous,
                 nickname = nickname,
                 loginId = loginId,
-                onOpenCard = { card ->
-                    AppAnalytics.track("daily_oz_clicked", mapOf("card_id" to card.cardId))
-                    onOpenCard(card.cardId)
+                onOpenVolume = { card ->
+                    AppAnalytics.track("daily_oz_recommend_open", mapOf("card_id" to card.cardId))
+                    // 추천 책 → 그 카드를 품은 work 의 모든 카드 책 펼침 모달(NEW BOOKS 와 동일 openWorkId 경로).
+                    // work 못 찾으면 옛 흐름(카드 상세)으로 폴백 (PWA 5bcd4b6).
+                    val w = state.books.firstOrNull { b -> b.cards.any { it.cardId == card.cardId } }
+                    if (w != null) openWorkId = w.workId else onOpenCard(card.cardId)
                 },
                 onRequestPreferences = {
                     AppAnalytics.track("daily_oz_pref_cta")
@@ -748,7 +751,8 @@ private fun DailyOzPick(
     isAnonymous: Boolean,
     nickname: String,
     loginId: String?,
-    onOpenCard: (CardDto) -> Unit,
+    // 추천 책 클릭 → 해당 도서의 모든 카드(collected volume) 책 펼침 모달 (PWA 5bcd4b6). today 이동 X.
+    onOpenVolume: (CardDto) -> Unit,
     onRequestPreferences: () -> Unit,
 ) {
     // 익명 + 활성 선호 없음 → 카드 대신 개인화 유도 CTA (PWA renderDailyOzPick 게스트 분기).
@@ -812,7 +816,7 @@ private fun DailyOzPick(
         modifier = Modifier
             .fillMaxWidth()
             .dailyCard()
-            .clickable { onOpenCard(card) }
+            .clickable { onOpenVolume(card) }
             .padding(20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -859,6 +863,13 @@ private fun DailyOzPick(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            // 클릭 시 책 펼침(collected volume) 안내 라벨 (PWA oz-rec-cta, cta 색).
+            Text(
+                text = "책 펼치기 ›",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = Cta,
+                maxLines = 1,
+            )
         }
     }
     SectionGap()

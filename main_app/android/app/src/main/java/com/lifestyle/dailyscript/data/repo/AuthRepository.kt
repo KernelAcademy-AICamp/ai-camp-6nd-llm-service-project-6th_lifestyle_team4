@@ -74,11 +74,12 @@ class AuthRepository {
             auth.sessionStatus.first { it !is SessionStatus.Initializing }
         }
 
-        if (auth.currentUserOrNull() == null) {
-            auth.signInAnonymously()
-        }
-        val user = auth.currentUserOrNull()
-            ?: throw IllegalStateException("Could not establish a session.")
+        // 익명 자동 로그인 폐지: 세션이 없으면 비로그인 게스트로 둔다(읽기 전용 둘러보기).
+        // 예전엔 여기서 signInAnonymously() 로 매일 유령 익명 유저를 양산했다(분석/users 오염).
+        // 로그인(Google/Kakao/ID·PW) 시에만 세션과 users 행이 생긴다. 게스트는 isAnonymous=true,
+        // userId=0L 로 표현돼 기존 `isAnonymous || userId <= 0L` 가드가 그대로 막아준다.
+        // 기존 세션(예전에 만들어진 익명 세션 포함)은 아래 경로로 그대로 동작한다.
+        val user = auth.currentUserOrNull() ?: return GUEST_SESSION
         val authedUserId = user.id
         // 익명 사용자는 연결된 identity가 없다. 이메일 유무로 판별하면 "이메일 미동의 카카오
         // 로그인"이 익명으로 잘못 분류되므로 identities로 판별한다. (iOS/PWA의 is_anonymous와 동일 의미)
@@ -395,6 +396,13 @@ class AuthRepository {
 
     companion object {
         private const val SESSION_RESTORE_TIMEOUT_MS = 10_000L
+
+        /**
+         * 비로그인 게스트 세션 — 세션도 users 행도 없다. userId=0L 은 절대 유효한 DB user_id 가
+         * 아니며(시퀀스는 1부터), 기존 `isAnonymous || userId <= 0L` 가드와 호환된다. 게스트는
+         * 카탈로그/피드를 anon 키로 읽기만 하고, 개인 행동은 isAnonymous 가드가 로그인으로 유도한다.
+         */
+        private val GUEST_SESSION = UserSession(userId = 0L, isAnonymous = true, nickname = "")
 
         private val NICKNAME_ADJECTIVES = listOf(
             "서점에 간", "책 좋아하는", "연극에 빠진", "희곡에 매료된", "책 읽는",

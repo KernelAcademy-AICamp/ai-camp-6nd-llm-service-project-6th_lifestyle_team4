@@ -65,6 +65,7 @@ import com.lifestyle.dailyscript.ui.onboarding.GENRES
 import com.lifestyle.dailyscript.ui.onboarding.THEMES
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
+import com.lifestyle.dailyscript.ui.components.YarnChip
 import com.lifestyle.dailyscript.ui.theme.Cta
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
@@ -74,6 +75,8 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 @Composable
 fun SettingsScreen(
     session: UserSession,
+    yarn: Int,
+    onYarnClick: () -> Unit,
     authMessage: String?,
     authInProgress: Boolean,
     idCheck: IdCheckState,
@@ -146,13 +149,14 @@ fun SettingsScreen(
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(
-                text = session.nickname.ifBlank { stringResource(R.string.anonymous_user) },
-                style = MaterialTheme.typography.displayMedium,
-                color = Espresso,
-                modifier = Modifier.weight(1f),
-            )
+            // 로그인 사용자만 닉네임 + 프로필 편집 노출 — 비로그인 시 'Anonymous' 문구 제거(사용자 요청).
             if (!session.isAnonymous) {
+                Text(
+                    text = session.nickname.ifBlank { stringResource(R.string.anonymous_user) },
+                    style = MaterialTheme.typography.displayMedium,
+                    color = Espresso,
+                    modifier = Modifier.weight(1f),
+                )
                 Box(
                     modifier = Modifier
                         .padding(top = 8.dp, start = 12.dp)
@@ -168,6 +172,9 @@ fun SettingsScreen(
                 }
             }
         }
+        Box(modifier = Modifier.height(10.dp))
+        // 보유 실타래 — 닉네임 아래 (PWA f4e9d86: top-bar 실타래 칩이 여기로 이동, '실타래' 라벨 포함).
+        YarnChip(yarn = yarn, onClick = onYarnClick, label = "실타래")
         Box(modifier = Modifier.height(10.dp))
         Text(
             text = stringResource(R.string.profile_bio),
@@ -196,6 +203,32 @@ fun SettingsScreen(
         Box(modifier = Modifier.height(16.dp))
         Hairline()
 
+        // 익명 사용자 — 신원(닉네임/소개) 바로 아래 로그인 CTA (PWA signin-block: 공지·내 활동 위).
+        if (session.isAnonymous) {
+            Box(modifier = Modifier.height(20.dp))
+            SectionLabel(text = stringResource(R.string.account))
+            Text(
+                text = stringResource(R.string.account_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = Walnut,
+            )
+            Box(modifier = Modifier.height(14.dp))
+            SharpButton(
+                label = stringResource(R.string.login_or_signup),
+                onClick = { showSignInDialog = true },
+                variant = SharpButtonVariant.Outline,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Box(modifier = Modifier.height(14.dp))
+            Text(
+                text = stringResource(R.string.signup_migrate_note),
+                style = MaterialTheme.typography.labelSmall,
+                color = Walnut,
+            )
+            Box(modifier = Modifier.height(16.dp))
+            Hairline()
+        }
+
         // --- 공지사항 (내 활동 위, 익명·로그인 모두 노출) — PWA eed7f22 동일 ---
         Box(modifier = Modifier.height(20.dp))
         SectionLabel(text = "공지")
@@ -219,32 +252,8 @@ fun SettingsScreen(
             },
         )
 
-        // 익명 사용자 — '내 활동' 위에 로그인 CTA 먼저 (PWA: ACCOUNT 블록).
-        if (session.isAnonymous) {
-            Box(modifier = Modifier.height(20.dp))
-            SectionLabel(text = stringResource(R.string.account))
-            Text(
-                text = stringResource(R.string.account_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = Walnut,
-            )
-            Box(modifier = Modifier.height(14.dp))
-            SharpButton(
-                label = stringResource(R.string.login_or_signup),
-                onClick = { showSignInDialog = true },
-                variant = SharpButtonVariant.Outline,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Box(modifier = Modifier.height(14.dp))
-            Text(
-                text = stringResource(R.string.signup_migrate_note),
-                style = MaterialTheme.typography.labelSmall,
-                color = Walnut,
-            )
-        }
-
         // --- 내 활동 — 내 댓글·내 피드·북마크·출석체크·실타래 구매를 한 섹션으로 (PWA MY 탭). ---
-        Box(modifier = Modifier.height(if (session.isAnonymous) 40.dp else 20.dp))
+        Box(modifier = Modifier.height(20.dp))
         SectionLabel(text = stringResource(R.string.my_activity))
         if (!session.isAnonymous) {
             // 내 댓글·내 피드는 로그인 사용자만.

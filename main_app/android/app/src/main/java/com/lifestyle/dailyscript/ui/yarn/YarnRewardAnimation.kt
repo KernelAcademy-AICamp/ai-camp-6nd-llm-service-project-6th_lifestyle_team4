@@ -2,7 +2,6 @@ package com.lifestyle.dailyscript.ui.yarn
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -13,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,10 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,47 +47,25 @@ import com.lifestyle.dailyscript.ui.theme.WordmarkSerif
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /**
- * 출석 보상 애니메이션 (PWA playAttendanceRewardAnim 이식).
- * 시퀀스: 어두운 백드롭 + 중앙 버스트(실타래 ×N, 통통 bounce) → 우상단 실타래 칩으로 축소·이동
- *        → 도착 시 칩 안 실타래 이미지 bounce([onBounce]) + 잔액 카운트업([onCountTo]) → 정리([onFinished]).
- *
- * 전체화면 [Popup] 으로 띄워 좌표계를 window 절대값으로 맞춘다([chipCenter] = 칩 중심 window px).
- * 칩 위치를 아직 못 받았으면(Offset.Zero) 우상단 근처로 폴백.
+ * 출석 보상 애니메이션 (PWA playAttendanceRewardAnim 이식, f11b175 이후).
+ * 시퀀스: 어두운 백드롭 + 중앙 버스트(실타래 +N, 통통 bounce) → 2초 유지 → fade out → 정리([onFinished]).
+ * 우측 실타래 칩으로 fly/카운트업 하지 않는다(중앙에서만). 잔액은 호출측이 이미 finalBalance 로 반영.
  */
 @Composable
 fun YarnRewardAnimation(
     amount: Int,
-    startBalance: Int,
-    finalBalance: Int,
-    chipCenter: () -> Offset,
-    onCountTo: (Int) -> Unit,
-    onBounce: () -> Unit,
     onFinished: () -> Unit,
 ) {
     Popup(alignment = Alignment.TopStart, properties = PopupProperties(focusable = false)) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val density = LocalDensity.current
-            val wPx = with(density) { maxWidth.toPx() }
-            val hPx = with(density) { maxHeight.toPx() }
-            val centerX = wPx / 2f
-            val centerY = hPx / 2f
-            val fallbackTarget = Offset(
-                x = wPx - with(density) { 56.dp.toPx() },
-                y = with(density) { 96.dp.toPx() },
-            )
-
+        Box(modifier = Modifier.fillMaxSize()) {
             val backdropAlpha = remember { Animatable(0f) }
-            val burstScale = remember { Animatable(1f) }
             val burstAlpha = remember { Animatable(0f) }
-            val offX = remember { Animatable(0f) }
-            val offY = remember { Animatable(0f) }
             val yarnBob = remember { Animatable(0f) }
 
             LaunchedEffect(Unit) {
-                // 1) 페이드 인 + 실타래 통통 bounce(hold).
+                // 페이드 인 + 실타래 통통 bounce — 중앙에서만(우측 chip fly 없음, PWA f11b175).
                 launch { backdropAlpha.animateTo(1f, tween(300)) }
                 launch { burstAlpha.animateTo(1f, tween(300)) }
                 val bob = launch {
@@ -100,26 +74,11 @@ fun YarnRewardAnimation(
                         yarnBob.animateTo(0f, tween(560, easing = FastOutLinearInEasing))
                     }
                 }
-                delay(1000)
+                // 2초 유지 후 자연스럽게 fade out → 달력 표시.
+                delay(2000)
                 bob.cancel()
-                yarnBob.snapTo(0f)
-
-                // 2) 칩으로 축소·이동.
-                val target = chipCenter().takeIf { it != Offset.Zero } ?: fallbackTarget
-                launch { burstScale.animateTo(0.16f, tween(1100, easing = FastOutSlowInEasing)) }
-                launch { offX.animateTo(target.x - centerX, tween(1100, easing = FastOutSlowInEasing)) }
-                offY.animateTo(target.y - centerY, tween(1100, easing = FastOutSlowInEasing))
-
-                // 3) 도착 — 칩 bounce + 잔액 카운트업 + 백드롭/버스트 페이드아웃.
-                onBounce()
-                launch { burstAlpha.animateTo(0f, tween(280)) }
-                launch { backdropAlpha.animateTo(0f, tween(420)) }
-                val counter = Animatable(startBalance.toFloat())
-                counter.animateTo(finalBalance.toFloat(), tween(700, easing = FastOutSlowInEasing)) {
-                    onCountTo(value.roundToInt())
-                }
-                onCountTo(finalBalance)
-                delay(90)
+                launch { backdropAlpha.animateTo(0f, tween(300)) }
+                burstAlpha.animateTo(0f, tween(260))
                 onFinished()
             }
 
@@ -131,18 +90,12 @@ fun YarnRewardAnimation(
                     .background(Color.Black.copy(alpha = 0.42f)),
             )
 
-            // 버스트 — 중앙 정렬 후 graphicsLayer 로 이동/축소.
+            // 버스트 — 화면 중앙.
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.graphicsLayer {
-                        translationX = offX.value
-                        translationY = offY.value
-                        scaleX = burstScale.value
-                        scaleY = burstScale.value
-                        alpha = burstAlpha.value
-                    },
+                    modifier = Modifier.graphicsLayer { alpha = burstAlpha.value },
                 ) {
                     Text(
                         text = "ATTENDANCE",
@@ -157,7 +110,7 @@ fun YarnRewardAnimation(
                             .shadow(16.dp, CircleShape),
                     )
                     Text(
-                        text = "×$amount",
+                        text = "+$amount",
                         style = TextStyle(
                             fontFamily = WordmarkSerif,
                             fontSize = 64.sp,

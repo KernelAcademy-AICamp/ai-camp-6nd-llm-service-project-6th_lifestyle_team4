@@ -106,10 +106,8 @@ fun BrandWordmark() {
 
 @Composable
 fun HomeTopBar(
-    yarn: Int,
-    onYarnClick: () -> Unit,
-    yarnBounceKey: Int = 0,
-    onYarnChipPositioned: (Offset) -> Unit = {},
+    // top-bar 우측 실타래 칩 → 북마크 버튼으로 교체 (PWA f4e9d86). 실타래 칩은 MY 페이지 닉네임 아래로.
+    onBookmarkClick: () -> Unit = {},
     notifUnread: Int = 0,
     onNotifClick: () -> Unit = {},
 ) {
@@ -119,14 +117,27 @@ fun HomeTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            YarnChip(
-                yarn = yarn,
-                onClick = onYarnClick,
-                bounceKey = yarnBounceKey,
-                onPositioned = onYarnChipPositioned,
-            )
+            TopBookmarkButton(onClick = onBookmarkClick)
             NotifButton(unread = notifUnread, onClick = onNotifClick)
         }
+    }
+}
+
+/** 헤더 우측 북마크 버튼 — 내 북마크 책꽂이로 이동 (PWA top-bookmark-btn). */
+@Composable
+fun TopBookmarkButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.BookmarkBorder,
+            contentDescription = "북마크",
+            tint = Espresso,
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 
@@ -183,6 +194,8 @@ fun YarnChip(
     onClick: () -> Unit,
     bounceKey: Int = 0,
     onPositioned: (Offset) -> Unit = {},
+    // MY 페이지용 — 칩 안에 '실타래' 라벨을 함께 표시(PWA MY yarn-chip). top-bar 에선 null.
+    label: String? = null,
 ) {
     val shape = RoundedCornerShape(50)
     val iconScale = remember { Animatable(1f) }
@@ -219,6 +232,17 @@ fun YarnChip(
             ),
             color = Espresso,
         )
+        if (label != null) {
+            Spacer(Modifier.width(5.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                ),
+                color = Walnut,
+            )
+        }
     }
 }
 
