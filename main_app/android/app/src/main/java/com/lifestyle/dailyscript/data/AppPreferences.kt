@@ -49,7 +49,7 @@ object AppPreferences {
     private val YARN_DAILY_DATE = stringPreferencesKey("yarn_daily_date") // yyyy-MM-dd of daily grant
     private val YARN_DAILY_USED = intPreferencesKey("yarn_daily_used")    // daily yarns spent on YARN_DAILY_DATE
     private val UNLOCKED = stringPreferencesKey("unlocked_card_ids")      // CSV of "cardId:epochMillis" (3일 무료 재열람)
-    private val REWARDED = stringPreferencesKey("rewarded_card_ids")      // CSV of cardIds — 카드당 1회 첫 열람 +300 실타래 보상
+    // 첫 열람 +300 보상 dedup 은 user-scope 동적 키(rewardedKey)로 분리 — 아래 isRewarded/markRewarded 참고.
     private val ATTENDANCE_HISTORY = stringPreferencesKey("attendance_history")   // CSV of yyyy-MM-dd
     private val ATTENDANCE_LAST_SHOWN = stringPreferencesKey("attendance_last_shown") // 오늘 모달 띄움 표시
     private val OZ_DAILY_DATE = stringPreferencesKey("oz_daily_date")     // yyyy-MM-dd for Daily Oz pick
@@ -147,19 +147,49 @@ object AppPreferences {
         }
     }
 
-    // 카드 첫 열람 +300 실타래 보상 — 카드당 1회만(중복 지급 없음). PWA ds.yarnRewarded 와 동일 정책.
-    suspend fun isRewarded(cardId: Long): Boolean {
-        val raw = store.data.first()[REWARDED] ?: return false
+    // 카드 첫 열람 +300 실타래 보상 — 카드당 1회만(중복 지급 없음). PWA ds.yarnRewarded.<userId> 와 동일 정책.
+    //   ⚠️ user-scope 필수(PWA d2c2c0a) — 옛 가입 때 받은 카드를 새 가입 사용자에게 'already received'
+    //   로 잘못 차단하던 문제 fix. 동적 키 "rewarded_card_ids_<userId>" 로 분리한다.
+    private fun rewardedKey(userId: Long) = stringPreferencesKey("rewarded_card_ids_$userId")
+
+    suspend fun isRewarded(userId: Long, cardId: Long): Boolean {
+        val raw = store.data.first()[rewardedKey(userId)] ?: return false
         return raw.split(",").any { it.trim().toLongOrNull() == cardId }
     }
 
-    suspend fun markRewarded(cardId: Long) {
+    suspend fun markRewarded(userId: Long, cardId: Long) {
+        val key = rewardedKey(userId)
         store.edit { p ->
-            val current = (p[REWARDED] ?: "").split(",").mapNotNull { it.trim().toLongOrNull() }.toMutableSet()
+            val current = (p[key] ?: "").split(",").mapNotNull { it.trim().toLongOrNull() }.toMutableSet()
             current.add(cardId)
-            p[REWARDED] = current.joinToString(",")
+            p[key] = current.joinToString(",")
         }
     }
+
+    // 첫 보상 직후 1회 공유 유도 안내 — user_id 별 1회 표시(PWA ds.firstShareGuideShown.<userId>).
+    //   다른 계정 로그인/재가입 시 다시 처음부터 안내가 뜨도록 동적 키로 분리한다.
+    private fun firstShareGuideKey(userId: Long) = booleanPreferencesKey("first_share_guide_shown_$userId")
+
+    suspend fun hasShownFirstShareGuide(userId: Long): Boolean =
+        store.data.first()[firstShareGuideKey(userId)] ?: false
+
+    suspend fun markFirstShareGuideShown(userId: Long) {
+        store.edit { it[firstShareGuideKey(userId)] = true }
+    }
+
+    // 외부 브라우저 OAuth(카카오) 의 익명 user_id stash — 프로세스가 브라우저 왕복 중 죽어도 복귀 후
+    // 익명 북마크를 새 계정으로 옮길 수 있게 영속화한다(PWA ds.prevAnonUserId). 메모리 in-memory 필드만
+    // 쓰면 프로세스 사망 시 마이그레이션이 유실된다. 0/미존재 = 없음.
+    private val PENDING_MIGRATION_UID = longPreferencesKey("pending_migration_user_id")
+    suspend fun pendingMigrationUserId(): Long? =
+        store.data.first()[PENDING_MIGRATION_UID]?.takeIf { it > 0L }
+    suspend fun setPendingMigrationUserId(userId: Long?) {
+        store.edit {
+            if (userId != null && userId > 0L) it[PENDING_MIGRATION_UID] = userId
+            else it.remove(PENDING_MIGRATION_UID)
+        }
+    }
+    suspend fun clearPendingMigrationUserId() { store.edit { it.remove(PENDING_MIGRATION_UID) } }
 
     // 출석체크 — 00시 기준 그날 첫 진입 시 한 달 달력 모달 + 실타래 +5.
     suspend fun attendanceHistory(): Set<String> {

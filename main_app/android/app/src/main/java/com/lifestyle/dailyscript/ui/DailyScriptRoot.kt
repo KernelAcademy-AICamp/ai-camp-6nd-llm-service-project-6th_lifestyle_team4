@@ -361,6 +361,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                     LibraryScreen(
                         userId = session.userId,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                        onOpenBookmarks = { navController.navigate(Routes.BOOKMARKS) },
                     )
                 }
                 composable(
@@ -372,6 +373,7 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         userId = session.userId,
                         initialOpenWorkId = workId,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                        onOpenBookmarks = { navController.navigate(Routes.BOOKMARKS) },
                     )
                 }
                 composable(Routes.FEED) {
@@ -485,14 +487,19 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onBuyTheme = { bg -> yarnVm.buyShareTheme(bg.id, bg.price) },
                         // 본문을 스크롤로 끝까지 읽으면 첫 열람 보상(+300) 지급 — 지급량 반환(보상 애니 트리거).
                         // 게스트(익명)는 출석 보상과 동일하게 제외 (PWA: !state.userId 시 보상 없음).
-                        onContentRead = { if (session.isAnonymous) 0 else yarnVm.rewardFirstView(cardId) },
+                        // dedup 은 user-scope — session.userId 로 분리(재가입 시 재보상, PWA d2c2c0a).
+                        onContentRead = { if (session.isAnonymous) 0 else yarnVm.rewardFirstView(session.userId, cardId) },
                         // 본문 끝(에디션 표기)이 떠 있는 하단 탭 카드 top 을 통과하는 순간 보상 판정.
                         bottomBarTopPx = bottomBarTopPx,
                         onBack = { navController.popBackStack() },
-                        // 하단바 탭 전환과 같은 패턴 — 방문 순서대로 쌓아 뒤로가기가 직전 화면으로 가게 한다.
-                        onGoLibrary = {
-                            AppAnalytics.track("nav", mapOf("from" to Routes.DETAIL, "to" to Routes.ARCHIVE))
-                            navController.navigate(Routes.ARCHIVE) { launchSingleTop = true }
+                        // 첫 공유 안내 모달의 '앱 사용법 둘러보기' — 코치 투어 시작(홈으로 이동 후, 설정의 onOpenGuide 와 동일).
+                        onLaunchTour = {
+                            AppAnalytics.track("onboarding_requested")
+                            coach.requestStart()
+                            navController.navigate(Routes.HOME) {
+                                popUpTo(Routes.DAILY) { inclusive = false }
+                                launchSingleTop = true
+                            }
                         },
                         onGoFeed = {
                             navController.navigate(Routes.FEED) { launchSingleTop = true }

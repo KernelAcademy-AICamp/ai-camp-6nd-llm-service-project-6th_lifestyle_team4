@@ -108,6 +108,7 @@ fun SettingsScreen(
     var showProfileDialog by remember { mutableStateOf(false) }
     var showSignInDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirm2 by remember { mutableStateOf(false) } // 이중 확인 2단계 (PWA appConfirm 2회)
     var showAttendance by remember { mutableStateOf(false) }
     // 설정에서 수동으로 열 땐 오늘 출석(+5)을 이미 받았는지 실제 상태로 배너를 띄운다(앱 진입 시 자동 지급됨).
     var attendanceRewardedToday by remember { mutableStateOf(false) }
@@ -356,12 +357,13 @@ fun SettingsScreen(
         )
     }
 
+    // 계정 삭제 — 이중 확인 (PWA: '계속' → '영구 삭제' 2단계). 1차 통과 후에만 2차를 띄운다.
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             confirmButton = {
-                TextButton(onClick = { showDeleteDialog = false; onDeleteAccount() }) {
-                    Text(stringResource(R.string.delete_account_confirm), color = Cta)
+                TextButton(onClick = { showDeleteDialog = false; showDeleteConfirm2 = true }) {
+                    Text("계속", color = Cta)
                 }
             },
             dismissButton = {
@@ -371,6 +373,29 @@ fun SettingsScreen(
             text = {
                 Text(
                     text = stringResource(R.string.delete_account_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Walnut,
+                )
+            },
+            containerColor = Paper,
+        )
+    }
+
+    if (showDeleteConfirm2) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm2 = false },
+            confirmButton = {
+                TextButton(onClick = { showDeleteConfirm2 = false; onDeleteAccount() }) {
+                    Text("영구 삭제", color = Cta)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm2 = false }) { Text("취소", color = Walnut) }
+            },
+            title = { Text("한 번 더 확인", color = Espresso) },
+            text = {
+                Text(
+                    text = "정말 계정을 영구 삭제할까요? 이 작업은 되돌릴 수 없어요.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Walnut,
                 )
@@ -518,6 +543,15 @@ private fun SignInDialog(
                     contentColor = Color(0xFF1F1F1F),
                     borderColor = Color(0xFFDADCE0),
                     onClick = { onSocialSignIn(SocialProvider.GOOGLE) },
+                )
+                Box(modifier = Modifier.height(8.dp))
+                // 카카오 — 공식 노랑(#FEE500) + 검정 말풍선 로고. (PWA 284769c/1458fa3: '준비 중' 해제)
+                SocialLoginButton(
+                    text = "카카오로 로그인",
+                    iconRes = R.drawable.ic_kakao_logo,
+                    background = Color(0xFFFEE500),
+                    contentColor = Color(0xFF000000),
+                    onClick = { onSocialSignIn(SocialProvider.KAKAO) },
                 )
                 Box(modifier = Modifier.height(14.dp))
                 Text(

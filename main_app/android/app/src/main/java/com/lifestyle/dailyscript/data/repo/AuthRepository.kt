@@ -18,6 +18,7 @@ import com.lifestyle.dailyscript.data.model.UserRow
 import io.github.jan.supabase.auth.SignOutScope
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
+import io.github.jan.supabase.auth.providers.Kakao
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -82,6 +83,15 @@ class AuthRepository {
         // 익명 사용자는 연결된 identity가 없다. 이메일 유무로 판별하면 "이메일 미동의 카카오
         // 로그인"이 익명으로 잘못 분류되므로 identities로 판별한다. (iOS/PWA의 is_anonymous와 동일 의미)
         val isAnonymous = user.identities.isNullOrEmpty()
+
+        // 카카오(외부 브라우저 OAuth) 복귀 — 프로세스가 죽었다 살아나 in-memory stash 가 비었으면
+        // 영속 stash 에서 마이그레이션 대상(이전 익명 user_id)을 복원한다. 로그인 1회 소비 후 정리.
+        if (!isAnonymous) {
+            if (pendingMigrationUserId == null) {
+                pendingMigrationUserId = AppPreferences.pendingMigrationUserId()
+            }
+            AppPreferences.clearPendingMigrationUserId()
+        }
 
         val existing: UserRow? = client.postgrest["users"]
             .select {
@@ -246,6 +256,24 @@ class AuthRepository {
             this.provider = Google
             this.nonce = rawNonce
         }
+    }
+
+    /**
+     * 카카오 로그인 — 외부 브라우저(Custom Tab) 리다이렉트 OAuth. 구글(네이티브 Credential Manager)과
+     * 달리 동의 화면이 브라우저에서 뜨고, 완료되면 deeplink(com.lifestyle.dailyscript://login-callback)로
+     * 복귀한다. 세션 적용은 비동기라 [AppSessionViewModel.observeAuthChanges] 가 sessionStatus 변화를
+     * 감지해 재bootstrap 한다(익명 북마크 마이그레이션 포함). 그래서 여기선 호출 직전에 마이그레이션
+     * 대상(현재 익명 user_id)만 stash 해 둔다.
+     *
+     * ⚠️ 백엔드 선행조건: Supabase Kakao provider 활성화 + 카카오 비즈니스 앱(account_email 동의) +
+     *   Redirect URL 에 위 deeplink 등록. 미설정 시 동의 후 'provider is not enabled' 등으로 실패.
+     */
+    suspend fun signInWithKakao(currentUserId: Long?) {
+        pendingMigrationUserId = currentUserId
+        pendingLoginId = null
+        // 브라우저 왕복 중 프로세스가 죽어도 마이그레이션이 유지되도록 영속 stash (PWA ds.prevAnonUserId).
+        AppPreferences.setPendingMigrationUserId(currentUserId)
+        auth.signInWith(Kakao)
     }
 
     suspend fun signOut() {

@@ -79,6 +79,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.data.AppAnalytics
@@ -138,9 +140,10 @@ fun DetailScreen(
     // 떠 있는 하단 탭 카드의 top(window px) — 본문 끝이 이 선을 통과하면 '다 읽음'으로 판정. 0이면 미측정.
     bottomBarTopPx: Float = 0f,
     onBack: () -> Unit,
-    onGoLibrary: () -> Unit,
     onGoFeed: () -> Unit,
     onOpenFeedback: () -> Unit,
+    // 첫 공유 안내 모달의 '앱 사용법 둘러보기' — 홈으로 이동 후 코치 투어 시작(루트에서 배선).
+    onLaunchTour: () -> Unit = {},
 ) {
     val vm: DetailViewModel = viewModel()
     val state by vm.state.collectAsState()
@@ -153,6 +156,11 @@ fun DetailScreen(
     val onContentReadState by rememberUpdatedState(onContentRead)
     var rewardFlyAmount by remember(cardId) { mutableStateOf<Int?>(null) }
     var rewardFired by remember(cardId) { mutableStateOf(false) }
+    // 첫 보상 직후 1회 공유 유도 안내 — 보상 fly 가 사라진 뒤(~2.5s) 뜬다. fly(rewardFlyAmount)는 애니가
+    // 끝나며 null 로 리셋되지만, 이 트리거는 따로 둬서 그 리셋에 delay 가 취소되지 않게 한다.
+    // (단, 화면을 떠나거나 회전하면 LaunchedEffect 자체가 취소된다 → 아래에서 마킹을 delay 뒤로 미룬다.)
+    var firstRewardAmount by remember(cardId) { mutableStateOf<Int?>(null) }
+    var showFirstShareGuide by remember(cardId) { mutableStateOf(false) }
     // 본문 끝 앵커(에디션 표기) top(window px) — 모든 포맷에서 렌더되며 댓글 바로 위에 위치. 의의 블록(opera/play 한정)에 묶지 않는다.
     var contentEndTopPx by remember(cardId) { mutableStateOf<Float?>(null) }
     val readComplete by remember(cardId) {
@@ -170,7 +178,7 @@ fun DetailScreen(
         if (!rewardFired) {
             rewardFired = true
             val granted = onContentReadState()
-            if (granted > 0) rewardFlyAmount = granted
+            if (granted > 0) { rewardFlyAmount = granted; firstRewardAmount = granted }
         }
     }
     // 스크롤이 아예 없는 짧은 카드 — 레이아웃 안정 뒤 그대로 지급(콘텐츠를 한눈에 다 봄).
@@ -180,8 +188,21 @@ fun DetailScreen(
         if (!rewardFired && scrollState.maxValue <= 0) {
             rewardFired = true
             val granted = onContentReadState()
-            if (granted > 0) rewardFlyAmount = granted
+            if (granted > 0) { rewardFlyAmount = granted; firstRewardAmount = granted }
         }
+    }
+    // 첫 보상 후 user 별 1회 공유 안내. 보상이 비익명에게만 들어오므로(루트 onContentRead) 여기 도달 =
+    // 로그인 사용자. PWA 처럼 표시 전에 먼저 '봤음' 으로 마킹하고 2.5s 뒤 모달을 띄운다.
+    LaunchedEffect(firstRewardAmount) {
+        if (firstRewardAmount == null) return@LaunchedEffect
+        if (isAnonymous || userId <= 0L) return@LaunchedEffect
+        if (AppPreferences.hasShownFirstShareGuide(userId)) return@LaunchedEffect
+        // '봤음' 마킹은 delay 뒤(=실제 표시 직전)에 한다. delay 중 화면을 떠나면(뒤로/회전) 이 코루틴이
+        // 취소되는데, 미리 마킹하면 모달을 한 번도 못 보고 영영 다시 안 뜬다. PWA setTimeout 은 화면
+        // 생명주기와 무관해 항상 발화 → 마킹을 미뤄 '한 번은 반드시 보여줌' 효과를 맞춘다.
+        delay(2500)
+        AppPreferences.markFirstShareGuideShown(userId)
+        showFirstShareGuide = true
     }
 
     LaunchedEffect(cardId, userId) { vm.load(cardId, userId) }
@@ -433,8 +454,12 @@ fun DetailScreen(
                 )
                 Box(modifier = Modifier.height(10.dp))
                 SharpButton(
-                    label = stringResource(R.string.detail_go_library),
-                    onClick = onGoLibrary,
+                    label = stringResource(R.string.detail_share_quote),
+                    onClick = {
+                        // 라이브러리 이동 → 오늘의 명대사 공유로 변경 (PWA 8004edb). 상세 카드 페이로드로 공유 시트.
+                        AppAnalytics.track("detail_share_click", mapOf("card_id" to card.cardId))
+                        sharePayload = card.toSharePayload(english, speaker = "")
+                    },
                     variant = SharpButtonVariant.Outline,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -629,6 +654,117 @@ fun DetailScreen(
               onFinished = { rewardFlyAmount = null },
           )
       }
+
+      // 첫 보상 직후 1회 — 공유 유도 안내 (PWA showFirstShareGuideModal).
+      if (showFirstShareGuide) {
+          FirstShareGuideModal(
+              amount = firstRewardAmount ?: 300,
+              onShareNow = {
+                  showFirstShareGuide = false
+                  state.card?.let { sharePayload = it.toSharePayload(english, speaker = "") }
+              },
+              onLaunchTour = {
+                  showFirstShareGuide = false
+                  onLaunchTour()
+              },
+              onLater = { showFirstShareGuide = false },
+          )
+      }
+    }
+}
+
+/**
+ * 첫 카드를 끝까지 읽고 실타래를 받은 직후 1회 뜨는 공유 유도 안내 (PWA showFirstShareGuideModal 이식).
+ * 중앙 다이얼로그 — FIRST READ +N 칩 + 제목 + 안내 + 길라잡기 박스 + [지금 공유 / 둘러보기 / 나중에].
+ */
+@Composable
+private fun FirstShareGuideModal(
+    amount: Int,
+    onShareNow: () -> Unit,
+    onLaunchTour: () -> Unit,
+    onLater: () -> Unit,
+) {
+    val cardShape = RoundedCornerShape(16.dp)
+    Dialog(onDismissRequest = onLater) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(cardShape)
+                .background(Paper)
+                .border(0.5.dp, Latte, cardShape)
+                .padding(horizontal = 26.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Cta.copy(alpha = 0.12f))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = "FIRST READ +$amount",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.16.em,
+                    ),
+                    color = Cta,
+                )
+            }
+            Box(modifier = Modifier.height(18.dp))
+            Text(
+                text = "첫 명대사를 다 읽었어요",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontFamily = EditorialSerif,
+                    fontWeight = FontWeight.Bold,
+                ),
+                color = Espresso,
+                textAlign = TextAlign.Center,
+            )
+            Box(modifier = Modifier.height(10.dp))
+            Text(
+                text = "마음을 흔드는 문장이라면 아름다운 카드지로 꾸며 친구에게 공유해보세요.",
+                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                color = Walnut,
+                textAlign = TextAlign.Center,
+            )
+            Box(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Cta.copy(alpha = 0.06f))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    text = "💡 앱이 처음이라면 ‘앱 사용법 둘러보기’로 홈·카드 상세·피드까지 한 바퀴 살펴볼 수 있어요.",
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    color = Walnut,
+                )
+            }
+            Box(modifier = Modifier.height(20.dp))
+            SharpButton(
+                label = "지금 공유해보기",
+                onClick = onShareNow,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Box(modifier = Modifier.height(8.dp))
+            SharpButton(
+                label = "앱 사용법 둘러보기",
+                onClick = onLaunchTour,
+                variant = SharpButtonVariant.Outline,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Box(modifier = Modifier.height(6.dp))
+            Text(
+                text = "나중에 할게요",
+                style = MaterialTheme.typography.labelMedium,
+                color = Walnut,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onLater)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
     }
 }
 

@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -50,7 +51,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -110,6 +113,8 @@ fun LibraryScreen(
     userId: Long,
     onOpenCard: (Long) -> Unit,
     initialOpenWorkId: Long? = null,
+    // 우측 하단 북마크 FAB → 내 북마크 책꽂이(Routes.BOOKMARKS) 이동 (PWA archive-fab).
+    onOpenBookmarks: () -> Unit = {},
 ) {
     val vm: LibraryViewModel = viewModel()
     val state by vm.state.collectAsState()
@@ -285,6 +290,40 @@ fun LibraryScreen(
                 onClose = { openWorkId = null },
             )
         }
+
+        // 우측 하단 북마크 FAB — 피드 글쓰기 FAB 과 동일 패턴(PWA archive-fab). 책 펼침 팝업 중엔 숨김.
+        if (opened == null) {
+            BookmarkFab(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = BottomBarContentInset + 16.dp),
+                onClick = {
+                    AppAnalytics.track("nav", mapOf("from" to "archive", "to" to "bookmarks"))
+                    onOpenBookmarks()
+                },
+            )
+        }
+    }
+}
+
+/** 라이브러리 우측 하단 북마크 FAB — 내 북마크 책꽂이로 이동 (피드 FAB / DetailScreen HlAddFab 패턴). */
+@Composable
+private fun BookmarkFab(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .size(56.dp)
+            .shadow(8.dp, CircleShape)
+            .clip(CircleShape)
+            .background(Cta)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Bookmark,
+            contentDescription = "내 북마크",
+            tint = Paper,
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 
@@ -364,7 +403,7 @@ private fun BookTitle(text: String) {
     }
 }
 
-/** 페이지 이동 바 — ◀ 1 2 3 ▶. 페이지가 많으면 현재 페이지 주변 5개만 보여준다. */
+/** 페이지 이동 바 — ◀ 1 2 3 4 ▶. 4개 고정 윈도우([1-4],[5-8]…)로 표시하고 ◀/▶ 는 한 페이지씩 이동. */
 @Composable
 private fun PageBar(page: Int, pageCount: Int, onSelect: (Int) -> Unit) {
     Row(
@@ -383,11 +422,15 @@ private fun PageBar(page: Int, pageCount: Int, onSelect: (Int) -> Unit) {
     }
 }
 
-/** 페이지 번호 노출 범위 — 최대 [max]개, 현재 페이지를 가운데 두고 양 끝에서 클램프. */
-private fun pageWindow(page: Int, pageCount: Int, max: Int = 5): IntRange {
-    if (pageCount <= max) return 0 until pageCount
-    val start = (page - max / 2).coerceIn(0, pageCount - max)
-    return start until start + max
+/**
+ * 페이지 번호 노출 범위 — PWA(renderArchive WINDOW=4)와 동일하게 [window]개 고정 묶음([1-4],[5-8]…).
+ * 현재 페이지가 속한 묶음만 보여주고, ◀/▶ 로 경계를 넘으면(4→5) 묶음이 자동으로 다음(5 6 7 8)으로 전환된다.
+ * page 는 0-base — 묶음 시작은 (page / window) * window.
+ */
+private fun pageWindow(page: Int, pageCount: Int, window: Int = 4): IntRange {
+    val winStart = (page / window) * window
+    val winEnd = minOf(winStart + window, pageCount)
+    return winStart until winEnd
 }
 
 @Composable

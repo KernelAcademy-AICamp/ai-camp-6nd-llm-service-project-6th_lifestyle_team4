@@ -1,0 +1,10 @@
+<!-- 카카오톡 말풍선 로고 (검정). 노랑 #FEE500 배경 버튼 위에 올린다. PWA index.html signin-kakao SVG 대응. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="18dp"
+    android:height="18dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:fillColor="#000000"
+        android:pathData="M128,36C70.562,36 24,72.713 24,118c0,29.279 19.466,54.97 48.748,69.477c-1.593,5.494 -10.237,35.344 -10.581,37.689c0,0 -0.207,1.762 0.934,2.434s2.483,0.15 2.483,0.15c3.272,-0.457 37.943,-24.811 43.937,-28.984c5.736,0.793 11.626,1.234 17.479,1.234c57.438,0 104,-36.713 104,-82s-46.562,-82 -104,-82z" />
+</vector>

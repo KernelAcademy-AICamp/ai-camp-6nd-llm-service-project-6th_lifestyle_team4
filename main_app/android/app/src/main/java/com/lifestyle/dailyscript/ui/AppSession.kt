@@ -30,6 +30,11 @@ class AppSessionViewModel : ViewModel() {
     // 비동기로 완료되므로, sessionStatus를 관찰해 uid가 바뀌면 재bootstrap한다.
     private var lastAuthUid: String? = null
 
+    // 외부 브라우저 OAuth(카카오) 의 'login' 애널리틱스는 브라우저를 띄운 시점이 아니라 실제 세션이
+    // 생긴 뒤(딥링크 복귀 → 재bootstrap)에 1회 보낸다. 그 사이 이 값에 method 를 stash 해 둔다.
+    // (구글 네이티브는 동기 완료라 onSuccess 에서 직접 트래킹 → 여기 쓰지 않는다.)
+    private var pendingSocialMethod: String? = null
+
     private val _state = MutableStateFlow<SessionState>(SessionState.Loading)
     val state: StateFlow<SessionState> = _state.asStateFlow()
 
@@ -111,6 +116,7 @@ class AppSessionViewModel : ViewModel() {
     ) {
         if (_authInProgress.value) return
         val current = (_state.value as? SessionState.Ready)?.session
+        pendingSocialMethod = null // ID/PW 로그인은 동기 트래킹 → 소셜 stash 가 끼지 않게 초기화.
         _authInProgress.value = true
         _authMessage.value = null
         viewModelScope.launch {
@@ -153,18 +159,35 @@ class AppSessionViewModel : ViewModel() {
      * 호출부에서 [activity]를 넘겨준다. 네이티브 로그인은 동기 완료라 성공 즉시 재bootstrap한다.
      */
     fun signInWithProvider(provider: SocialProvider, activity: Activity?) {
-        // 카카오는 Supabase가 account_email 스코프를 강제 → 카카오 비즈니스 앱 전환 전까지 "준비 중".
-        // 비즈앱 전환 + 동의항목(account_email/profile_image) 활성화 후엔 이 가드만 제거하면 켜진다.
+        if (_authInProgress.value) return
+        val current = (_state.value as? SessionState.Ready)?.session
+        // 이전에 시작했다 중단된 소셜 시도의 stash 가 다른 경로 로그인에 잘못 붙지 않도록 초기화.
+        pendingSocialMethod = null
+
+        // 카카오 — 외부 브라우저(Custom Tab) 리다이렉트 OAuth. 세션 적용은 딥링크 복귀 후 비동기로
+        // observeAuthChanges 가 처리(재bootstrap). Custom Tab 띄운 직후 진행 플래그를 풀어 UI 잠김 방지.
+        // 'login' 트래킹은 브라우저 왕복 성공 여부를 알 수 없는 여기가 아니라, 실제 세션이 생긴
+        // bootstrapIntoState 에서 보낸다(취소/이탈 시 거짓 성공 이벤트 방지).
         if (provider == SocialProvider.KAKAO) {
-            _authMessage.value = "카카오 로그인은 준비 중입니다."
+            pendingSocialMethod = "kakao"
+            _authInProgress.value = true
+            _authMessage.value = null
+            viewModelScope.launch {
+                runCatching { authRepo.signInWithKakao(current?.userId) }
+                    .onFailure { e ->
+                        pendingSocialMethod = null
+                        _authMessage.value = friendlyAuthError(e.message.orEmpty())
+                    }
+                _authInProgress.value = false
+            }
             return
         }
-        if (_authInProgress.value) return
+
+        // 구글 — 네이티브 Credential Manager 시트(브라우저 없음), 동기 완료라 성공 즉시 재bootstrap.
         if (activity == null) {
             _authMessage.value = "로그인을 시작할 수 없습니다. 다시 시도해주세요."
             return
         }
-        val current = (_state.value as? SessionState.Ready)?.session
         _authInProgress.value = true
         _authMessage.value = null
         viewModelScope.launch {
@@ -267,6 +290,14 @@ class AppSessionViewModel : ViewModel() {
         _state.value = result
             .map(SessionState::Ready)
             .getOrElse { SessionState.Error(it.messageOr("Sign-in failed")) }
+        // 카카오(외부 브라우저 OAuth) 가 실제로 완료돼 비익명 세션이 생긴 경우에만 1회 'login' 트래킹.
+        // (브라우저 launch 시점이 아니라 여기서 보내 취소/이탈의 거짓 성공 이벤트를 막는다.)
+        val ready = result.getOrNull()
+        val socialMethod = pendingSocialMethod
+        if (ready != null && !ready.isAnonymous && socialMethod != null) {
+            AppAnalytics.track("login", mapOf("method" to socialMethod))
+            pendingSocialMethod = null
+        }
         // 소셜 첫 가입이면 직후 1회 성별·나이 입력 프롬프트.
         if (result.getOrNull()?.needsProfileSetup == true) _profilePromptVisible.value = true
     }

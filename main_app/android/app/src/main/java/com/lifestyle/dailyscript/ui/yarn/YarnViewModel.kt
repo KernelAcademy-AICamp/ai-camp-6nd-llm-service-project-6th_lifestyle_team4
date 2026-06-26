@@ -64,10 +64,11 @@ class YarnViewModel : ViewModel() {
     /**
      * 카드 첫 열람 보상 — 카드당 1회 +300. 실제 지급한 양을 돌려준다(없으면 0).
      * 호출부(상세 화면)가 반환값 > 0 일 때만 보상 애니메이션을 띄운다.
+     * dedup 은 user-scope(PWA d2c2c0a) — 재가입(새 user_id) 시 다시 보상 가능.
      */
-    suspend fun rewardFirstView(cardId: Long): Int {
-        if (AppPreferences.isRewarded(cardId)) return 0
-        AppPreferences.markRewarded(cardId)
+    suspend fun rewardFirstView(userId: Long, cardId: Long): Int {
+        if (AppPreferences.isRewarded(userId, cardId)) return 0
+        AppPreferences.markRewarded(userId, cardId)
         val newBalance = runCatching { repo.grantYarn(FIRST_VIEW_REWARD) }.getOrNull() ?: return 0
         purchased.value = newBalance
         return FIRST_VIEW_REWARD
