@@ -7631,15 +7631,22 @@ $('#detail-post-oneliner')?.addEventListener('click', async () => {
 $('#detail-go-library')?.addEventListener('click', () => {
   const card = state.detailCard;
   if (!card) return;
-  track('detail_go_library', { card_id: card.card_id });
-  // 라이브러리(archive) 로 이동 + 해당 작품 책 펼침 모달
-  const allWorks = groupAllCardsByWork();
-  const targetWork = allWorks.find((w) => (w.cards || []).some((c) => c.card_id === card.card_id));
-  closeDetail();
-  setTimeout(() => {
-    setView('archive');
-    setTimeout(() => { if (targetWork && typeof openBookModal === 'function') openBookModal(targetWork, allWorks); }, 80);
-  }, 260);
+  track('detail_share_click', { card_id: card.card_id });
+  /* 카드 상세에서 바로 공유 모달 열기 — detail-share 버튼이 없어 payload 직접 구성 후 openShareModal. */
+  try {
+    const w = card.works || {};
+    const meta = (typeof shareMetaLinesFromWork === 'function') ? shareMetaLinesFromWork(w) : { metaKo: '', metaEn: '' };
+    openShareModal({
+      cardId: card.card_id,
+      quote: card.quote || '',
+      speaker: card.speaker || '',
+      work: w.title || '',
+      workId: w.work_id ?? null,
+      author: w.author || '',
+      metaKo: meta.metaKo, metaEn: meta.metaEn,
+      coverUrl: w.cover_url || '',
+    });
+  } catch (e) { console.warn('[m] open share from detail failed:', e); toast('공유 화면을 열 수 없어요'); }
 });
 if (feedPickerClose) feedPickerClose.addEventListener('click', closeFeedPicker);
 if (feedComposeClose) feedComposeClose.addEventListener('click', closeFeedCompose);
