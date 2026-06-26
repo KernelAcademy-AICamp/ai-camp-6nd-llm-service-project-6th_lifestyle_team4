@@ -1749,10 +1749,9 @@
     <span class="brand-logo" role="button" tabindex="0" aria-label="홈으로 이동"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
   </div>
   <div style="display:flex;align-items:center;gap:12px;">
-    <button id="yarn-chip" aria-label="남은 실타래" title="남은 실타래"
-            style="display:inline-flex;align-items:center;gap:5px;background:transparent;border:0.5px solid var(--latte);border-radius:999px;padding:3px 10px 3px 4px;cursor:pointer;color:var(--walnut);">
-      <img src="assets/daily-script-bar.png" alt="실타래" style="width:22px;height:22px;display:block;object-fit:cover;border-radius:50%;pointer-events:none;" />
-      <span class="yarn-chip-count t-label-sm" style="font-weight:700;">5</span>
+    <button id="top-bookmark-btn" aria-label="북마크" title="북마크"
+            style="display:inline-flex;align-items:center;justify-content:center;background:transparent;border:none;padding:4px;cursor:pointer;color:var(--espresso);">
+      <span class="material-symbols-outlined" style="font-size:24px;line-height:1;">bookmark</span>
     </button>
     <!-- 알림(확성기) — 댓글/대댓글 알림 미리보기. 미읽음 N개 빨간 badge. -->
     <button id="notif-btn" aria-label="알림" title="알림"
@@ -1955,7 +1954,7 @@
 
   <!-- Feed 글쓰기 — 원형 연필 FAB -->
   <button id="feed-fab" aria-label="글쓰기"><span class="material-symbols-outlined">edit</span></button>
-  <button id="archive-fab" aria-label="북마크"><span class="material-symbols-outlined">bookmark</span></button>
+  <!-- archive-fab 제거 (요청에 따라) — top-bar 의 #top-bookmark-btn 으로 대체. -->
 
   <!-- ===== Notice view (공지사항) ===== -->
   <section id="view-notice" style="display:none;">
@@ -1987,6 +1986,13 @@
       </button>
     </div>
     <div id="settings-identity-spacer" style="height:10px;"></div>
+    <!-- 보유 실타래 — 닉네임 아래. top-bar 의 yarn-chip 자리가 북마크로 바뀌어 여기로 이동. -->
+    <button id="yarn-chip" aria-label="남은 실타래" title="남은 실타래"
+            style="display:inline-flex;align-items:center;gap:6px;background:transparent;border:0.5px solid var(--latte);border-radius:999px;padding:5px 14px 5px 6px;cursor:pointer;color:var(--walnut);margin-bottom:10px;">
+      <img src="assets/daily-script-bar.png" alt="실타래" style="width:22px;height:22px;display:block;object-fit:cover;border-radius:50%;pointer-events:none;" />
+      <span class="yarn-chip-count t-label-sm" style="font-weight:700;">0</span>
+      <span class="t-label-sm" style="color:var(--walnut);font-weight:500;letter-spacing:.04em;">실타래</span>
+    </button>
     <p id="settings-bio" class="t-body-sm c-walnut" style="opacity:0.4;font-size:12px;">매일 한 장의 명대사로 하루를 시작합니다.</p>
     <div style="height:16px;"></div>
     <div class="hairline"></div>
@@ -2167,6 +2173,7 @@
 
     <div style="height:20px;"></div>
     <div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <button id="change-password-btn" style="background:none;border:none;padding:6px 12px;font-family:inherit;font-size:10px;color:var(--walnut);text-decoration:underline;cursor:pointer;letter-spacing:0.02em;display:none;">비밀번호 변경</button>
       <button id="sign-out-btn" style="background:none;border:none;padding:6px 12px;font-family:inherit;font-size:10px;color:var(--walnut);text-decoration:underline;cursor:pointer;letter-spacing:0.02em;">로그아웃</button>
       <button id="delete-account-btn" style="background:none;border:none;padding:6px 12px;font-family:inherit;font-size:10px;color:#b94a3a;text-decoration:underline;cursor:pointer;letter-spacing:0.02em;display:none;">계정 삭제</button>
     </div>
@@ -2738,6 +2745,15 @@
       <button id="nickname-randomize" type="button" class="sharp-btn outline" style="flex:0 0 auto;width:auto;white-space:nowrap;padding:0 14px;font-size:12px;letter-spacing:0;">랜덤</button>
     </div>
 
+    <!-- 이메일 — 로컬(ID/비번) 회원만. 비밀번호 변경 시 이 이메일로 재설정 링크 발송. -->
+    <div id="profile-email-row" style="display:none;">
+      <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">이메일 (비밀번호 변경용)</label>
+      <input id="profile-email" type="email" maxlength="100" autocomplete="email"
+             placeholder="example@email.com"
+             style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;" />
+      <p class="t-body-sm c-walnut" style="margin-top:6px;font-size:11px;line-height:1.5;opacity:0.8;">저장 시 확인 메일이 발송될 수 있어요. 메일을 열어 인증하면 적용됩니다.</p>
+    </div>
+
     <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">성별</label>
     <select id="profile-gender"
             style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;">
@@ -2836,6 +2852,15 @@
            placeholder="비밀번호"
            style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;" />
 
+    <!-- 이메일 — 회원가입 모드에서만 노출. 비밀번호 찾기 시 이 이메일로 재설정 링크 발송. -->
+    <div id="signup-email-row" style="display:none;">
+      <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">이메일</label>
+      <input id="signup-email" type="email" maxlength="100" autocomplete="email"
+             placeholder="example@email.com"
+             style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-size:14px;outline:none;" />
+      <p class="t-body-sm c-walnut" style="margin-top:6px;font-size:11px;line-height:1.5;opacity:0.8;">비밀번호 찾기 시 이 이메일로 재설정 링크가 발송됩니다.</p>
+    </div>
+
     <div id="signup-extra" style="display:none;">
       <label class="t-label-sm c-walnut" style="display:block;margin-top:14px;margin-bottom:6px;">성별 · 선택</label>
       <select id="signup-gender"
@@ -2876,6 +2901,10 @@
     <button id="signin-submit" class="sharp-btn" style="width:100%;margin-top:18px;">로그인</button>
     <button id="signin-toggle-mode" style="width:100%;background:transparent;border:none;margin-top:12px;cursor:pointer;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--walnut);font-weight:500;">
       계정이 없으신가요? 회원가입
+    </button>
+    <!-- 비밀번호 찾기 링크 — 로그인 모드에서만 노출 -->
+    <button id="signin-forgot-btn" type="button" style="width:100%;background:transparent;border:none;margin-top:6px;cursor:pointer;font-size:11px;color:var(--walnut);text-decoration:underline;letter-spacing:0.02em;">
+      비밀번호를 잊으셨나요?
     </button>
 
     <!-- 소셜 로그인 — 공식 브랜드 버튼(로고+브랜드색). -->

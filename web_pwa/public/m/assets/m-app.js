@@ -3763,13 +3763,14 @@ function renderDailyOzPick() {
       <div style="background:var(--latte);border:0.5px solid var(--sand);padding:14px 16px;margin-bottom:14px;border-radius:8px;">
         <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.6;">${reasonHtml}</p>
       </div>
-      <!-- 추천 책 — 클릭 시 오늘의 명대사 카드(추천 카드)로 이동 -->
+      <!-- 추천 책 — 클릭 시 해당 도서의 모든 카드(collected volume) 책 펼침 모달 -->
       <div class="oz-rec-book" role="button" tabindex="0" style="display:flex;align-items:center;gap:12px;cursor:pointer;">
         ${dailyBookCoverHTML(work, { width: 56 })}
         <div style="flex:1;min-width:0;">
           <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:15px;color:var(--espresso);font-weight:700;line-height:1.3;">${escapeHtml(work.title || '')}</p>
           <p style="margin:4px 0 0;font-size:12px;color:var(--walnut);">${escapeHtml(work.author || '')}${work.release_year ? ' · ' + work.release_year : ''}</p>
         </div>
+        <span class="oz-rec-cta" style="font-size:11px;color:var(--cta);letter-spacing:0.04em;font-weight:600;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:2px;">책 펼치기<span style="font-size:13px;line-height:1;">›</span></span>
       </div>
     </article>
     <div style="height:36px;"></div>
@@ -3783,13 +3784,26 @@ function renderDailyOzPick() {
       spawnRandomCat();
     });
   }
-  // 추천 책 클릭 → 추천 카드를 홈 '오늘의 명대사'로 띄우고 이동 (카드 전체의 고양이 spawn 은 막음).
+  // 추천 책 클릭 → 해당 도서의 collected volume(모든 카드) 책 펼침 모달로 이동.
+  // (예전엔 today 카드로 띄웠는데 사용자 명세로 도서 전체 카드 보기로 변경)
   const recBook = sec.querySelector('.oz-rec-book');
   if (recBook) {
     const openRec = (e) => {
       e.stopPropagation();
       track('daily_oz_recommend_open', { card_id: pick.card_id });
-      openRecommendedCard(pick);
+      try {
+        const allWorks = groupAllCardsByWork();
+        const targetWork = allWorks.find((w) => (w.cards || []).some((c) => c.card_id === pick.card_id));
+        if (targetWork && typeof openBookModal === 'function') {
+          openBookModal(targetWork, allWorks);
+        } else {
+          // fallback — 책 못 찾으면 옛 흐름(추천 카드 띄움)
+          openRecommendedCard(pick);
+        }
+      } catch (err) {
+        console.warn('[m] open recommended work failed:', err);
+        openRecommendedCard(pick);
+      }
     };
     recBook.addEventListener('click', openRec);
     recBook.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') openRec(e); });
@@ -4728,6 +4742,16 @@ function openNicknameModal() {
   if (profileAge) profileAge.value = state.userAgeGroup || '';
   profileGender?._syncCustom?.();
   profileAge?._syncCustom?.();
+  /* 이메일 칸 — 로컬(ID/비번) 회원만. 소셜 사용자는 provider 가 관리 → 숨김. */
+  const emailRow = document.getElementById('profile-email-row');
+  const emailInput = document.getElementById('profile-email');
+  const isSocial = state.authProvider === 'google' || state.authProvider === 'kakao';
+  if (emailRow) emailRow.style.display = (state.isAnonymous || isSocial) ? 'none' : 'block';
+  if (emailInput) {
+    /* 합성 이메일(@user.local) 이면 빈 placeholder, 진짜 이메일이면 채움 */
+    const cur = String(state.authEmail || '');
+    emailInput.value = cur.endsWith('@user.local') ? '' : cur;
+  }
   nicknameModal.style.display = 'flex';
   setTimeout(() => nicknameInput.focus(), 50);
 }
@@ -4741,6 +4765,12 @@ async function saveNickname() {
   if (!state.userId) { toast('사용자 정보 없음'); return; }
   const gender = profileGender?.value || null;
   const ageGroup = profileAge?.value || null;
+  /* 이메일 변경 — 로컬 회원만. updateUser({ email }) 호출 시 Supabase 가 새 이메일로
+     확인 메일 발송, 사용자가 클릭해야 실제 auth.users.email 갱신. */
+  const emailInput = document.getElementById('profile-email');
+  const newEmail = (emailInput?.value || '').trim();
+  const isSocial = state.authProvider === 'google' || state.authProvider === 'kakao';
+  const canSetEmail = !state.isAnonymous && !isSocial;
   try {
     const sb = await getSupabase();
     const { error } = await sb.from('users')
@@ -4752,9 +4782,21 @@ async function saveNickname() {
     state.userAgeGroup = ageGroup || '';
     // 변경된 성별·나이대를 Amplitude에 반영
     setUserProps({ accountType: 'member', gender: state.userGender, ageGroup: state.userAgeGroup });
+    /* 이메일 변경 시도 — 형식 OK 이고 현재와 다르면 updateUser. */
+    if (canSetEmail && newEmail && newEmail !== state.authEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      try {
+        const { error: emErr } = await sb.auth.updateUser({ email: newEmail });
+        if (emErr) throw emErr;
+        toast(`프로필 저장됨 · ${newEmail} 로 확인 메일 발송`);
+      } catch (e) {
+        console.warn('[m] email update failed:', e);
+        toast(`프로필은 저장됐으나 이메일 변경 실패: ${e.message || e}`);
+      }
+    } else {
+      toast('프로필이 저장됐어요');
+    }
     paintAuthIdentity();
     closeNicknameModal();
-    toast('프로필이 저장됐어요');
   } catch (err) {
     console.error('[m] save profile failed:', err);
     toast(`저장 실패: ${err.message || err}`);
@@ -5378,39 +5420,23 @@ async function playAttendanceRewardAnim(amount, finalBalance) {
   burst.innerHTML = `
     <div class="ar-label">ATTENDANCE</div>
     <div class="ar-yarn"></div>
-    <div class="ar-times"><span class="x">×</span>${amount}</div>
+    <div class="ar-times"><span class="x">+</span>${amount}</div>
   `;
   document.body.appendChild(bd);
   document.body.appendChild(burst);
   document.body.classList.add('ar-active');
-  /* chip 위치 계산 — viewport 기준 center */
-  const rect = yarnChip.getBoundingClientRect();
-  const chipCx = rect.left + rect.width / 2;
-  const chipCy = rect.top + rect.height / 2;
-  /* 시퀀스 */
+  /* 시퀀스 — 중앙에 띄웠다가 2초 뒤 자연스럽게 fade out. chip 으로 fly 안 함 (사용자 명세). */
   await sleep(20);
   bd.classList.add('show');
   burst.classList.add('show');
-  await sleep(1000);
-  burst.style.left = chipCx + 'px';
-  burst.style.top  = chipCy + 'px';
-  burst.classList.add('fly');
-  await sleep(1100);
-  yarnChip.classList.add('ar-bounce');   /* 이미지만 튀김 */
-  /* 잔액 카운팅 (현재 표시값 → finalBalance) */
-  const label = yarnChip.querySelector('.yarn-chip-count');
-  const startN = label ? (parseInt(String(label.textContent).replace(/[^0-9]/g, ''), 10) || 0) : (state.yarnPurchased || 0);
-  countYarnTo(startN, finalBalance, 700);
-  /* state 는 카운팅 완료 시점에 set (renderYarnChip 이 덮어쓰지 않도록 잠시 보류) */
-  await sleep(300);
-  burst.classList.add('fade');
-  await sleep(620);   /* bounce 0.9s 완료 대기 */
+  /* 잔액은 보상 액션 시작과 동시에 chip 에 카운트 업 (chip 이 MY 페이지에 있어도 정합성 유지) */
   state.yarnPurchased = finalBalance;
   renderYarnChip();
-  /* 정리 */
+  /* 중앙 burst 2초 유지 */
+  await sleep(2000);
+  burst.classList.add('fade');
   bd.classList.remove('show');
-  yarnChip.classList.remove('ar-bounce');
-  await sleep(180);
+  await sleep(260);
   bd.remove(); burst.remove();
   document.body.classList.remove('ar-active');
 }
@@ -5880,10 +5906,15 @@ function setSigninMode(mode) {
     signinSubmitBtn.textContent = '로그인';
     signinToggleModeBtn.textContent = '계정이 없으신가요? 회원가입';
   }
-  // 회원가입 전용 UI(중복확인 버튼·성별·나이대) 토글 + 중복확인 상태 초기화
+  // 회원가입 전용 UI(중복확인 버튼·성별·나이대·이메일) 토글 + 중복확인 상태 초기화
   const isSignup = (mode === 'signup');
   if (signupIdCheckBtn) signupIdCheckBtn.style.display = isSignup ? '' : 'none';
   if (signupExtra) signupExtra.style.display = isSignup ? 'block' : 'none';
+  const signupEmailRow = document.getElementById('signup-email-row');
+  if (signupEmailRow) signupEmailRow.style.display = isSignup ? 'block' : 'none';
+  /* 비번 찾기 링크 — 로그인 모드에서만 노출 */
+  const forgotBtn = document.getElementById('signin-forgot-btn');
+  if (forgotBtn) forgotBtn.style.display = isSignup ? 'none' : 'inline-block';
   signupIdAvailable = false;
   if (signupIdCheckResult) signupIdCheckResult.style.display = 'none';
   signinErrorEl.style.display = 'none';
@@ -5976,17 +6007,19 @@ function idToEmail(id) {
 async function submitSignin() {
   const id = (signinIdInput.value || '').trim();
   const password = signinPasswordInput.value || '';
-  const email = idToEmail(id);
-  if (!email) {
-    showSigninError('아이디를 입력해주세요.');
-    return;
-  }
-  if (!password) {
-    showSigninError('비밀번호를 입력해주세요.');
-    return;
-  }
+  /* 회원가입 모드 — 사용자가 입력한 진짜 이메일 사용. 합성 이메일(@user.local) 폐기.
+     기존 사용자(합성) 로그인은 ID → find_email_by_login_id RPC 로 email 조회 후 로그인. */
+  const signupEmailEl = document.getElementById('signup-email');
+  const signupRealEmail = (signupEmailEl?.value || '').trim();
+  const fallbackEmail = idToEmail(id);
+  if (!id) { showSigninError('아이디를 입력해주세요.'); return; }
+  if (!password) { showSigninError('비밀번호를 입력해주세요.'); return; }
   if (signinMode === 'signup' && !signupIdAvailable) {
     showSigninError('아이디 중복확인을 해주세요.');
+    return;
+  }
+  if (signinMode === 'signup' && (!signupRealEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupRealEmail))) {
+    showSigninError('이메일을 정확히 입력해주세요. (비밀번호 찾기에 사용)');
     return;
   }
   signinErrorEl.style.display = 'none';
@@ -5998,12 +6031,11 @@ async function submitSignin() {
     if (state.userId) safeStorageSet('ds.prevAnonUserId', String(state.userId));
 
     if (signinMode === 'signup') {
-      const { data: signUpData, error: signUpError } = await sb.auth.signUp({ email, password });
+      /* 진짜 이메일로 가입 — 추후 resetPasswordForEmail 가능 */
+      const { data: signUpData, error: signUpError } = await sb.auth.signUp({ email: signupRealEmail, password });
       if (signUpError) throw signUpError;
-      // 이메일 확인 비활성이면 signUp이 session도 반환. 활성이면 session=null.
-      // 어느 경우든 즉시 signInWithPassword 시도해 자동 로그인.
       if (!signUpData?.session) {
-        const { error: autoSignInError } = await sb.auth.signInWithPassword({ email, password });
+        const { error: autoSignInError } = await sb.auth.signInWithPassword({ email: signupRealEmail, password });
         if (autoSignInError) {
           throw new Error('가입은 됐으나 자동 로그인 실패. 다시 로그인 모드로 시도해주세요.');
         }
@@ -6015,7 +6047,15 @@ async function submitSignin() {
         age_group: signupAge?.value || null,
       }));
     } else {
-      const { error } = await sb.auth.signInWithPassword({ email, password });
+      /* 로그인 — 신규(진짜 이메일) 가입자는 ID → find_email_by_login_id RPC 로 email 조회.
+         실패하거나 결과 없으면 옛 합성 이메일 시도 (기존 사용자 호환). */
+      let loginEmail = null;
+      try {
+        const { data: foundEmail } = await sb.rpc('find_email_by_login_id', { p_login_id: id });
+        if (foundEmail && typeof foundEmail === 'string') loginEmail = foundEmail;
+      } catch { /* RPC 없으면 합성 이메일로 폴백 */ }
+      if (!loginEmail) loginEmail = fallbackEmail;
+      const { error } = await sb.auth.signInWithPassword({ email: loginEmail, password });
       if (error) throw error;
     }
     // 기억하기 옵션 처리
@@ -6103,6 +6143,11 @@ function paintAuthIdentity() {
   /* 계정 삭제 버튼 — 로그인 사용자만 노출 (익명은 의미 없음). */
   const deleteAccBtn = document.getElementById('delete-account-btn');
   if (deleteAccBtn) deleteAccBtn.style.display = state.isAnonymous ? 'none' : 'inline-block';
+  /* 비밀번호 변경 — 로컬(ID/비번) 로그인 사용자만. 구글·카카오 등 소셜 로그인은 숨김.
+     소셜 사용자는 비번이 없거나 provider 측에서 관리 → 변경 의미 없음. */
+  const changePwBtn = document.getElementById('change-password-btn');
+  const isSocialLogin = state.authProvider === 'google' || state.authProvider === 'kakao';
+  if (changePwBtn) changePwBtn.style.display = (state.isAnonymous || isSocialLogin) ? 'none' : 'inline-block';
 
   if (state.isAnonymous) {
     settingsBio.style.display = 'none';
@@ -7276,8 +7321,10 @@ function openHighlightDetail(highlight) {
   state.currentFeedPost = null;
   hideBottomNavCat();   // 하이라이트 상세에서도 하단바 cat 숨김 (feedFab 은 아래에서 hide)
   // 명대사 박스(card-warm 배경)를 안드 HighlightContentCard 구조로 재구성:
-  //   책표지(120x170 cover_url 또는 가죽색 폴백) + selected_text(큰 serif) + 출처 + '카드 보기' 버튼
-  const quoteBox = fpQuote ? fpQuote.closest('div[style*="card-warm"], div[style*="padding:32px"]') || fpQuote.parentElement : null;
+  //   책표지(120x170 cover_url 또는 가죽색 폴백) + selected_text(큰 serif) + 출처 + '카드 읽어보기' 버튼
+  // ⚠️ fresh query — 모듈 상단 fpQuote 변수가 stale 될 수 있어(openFeedPostDetail 이
+  // quoteBox.innerHTML 으로 교체) 매번 #feedpost-body 첫 자식을 새로 찾는다.
+  const quoteBox = document.querySelector('#feedpost-body > div:first-child');
   if (quoteBox) {
     quoteBox.style.display = '';
     const title = displayTitle(w.title || '');
@@ -7292,13 +7339,23 @@ function openHighlightDetail(highlight) {
       : `<div style="width:120px;height:170px;margin:0 auto;background:${leatherColorFor(title)};display:flex;align-items:center;justify-content:center;padding:10px;box-shadow:0 4px 14px rgba(60,40,20,0.3);border-radius:2px;">
           <span style="font-family:'Noto Serif KR',serif;color:#FAF8F2;font-weight:600;font-size:14px;text-align:center;line-height:1.3;text-shadow:0 1px 2px rgba(0,0,0,0.45);">${escapeHtml(title)}</span>
         </div>`;
+    /* 발췌 텍스트 — 피드 목록의 .hl-quote .fold-text 와 완전히 동일한 형식 유지:
+       text-align inherit (left) + white-space:pre-wrap + word-break:keep-all + 명조체.
+       100자 / 3줄 이상이면 접기·펴기 — 글로벌 .fold-btn delegation 가 토글 처리. */
+    const selText = String(highlight.selected_text || '');
+    const safeQuote = renderMarkdownBold(selText);
+    const needFold = selText.length > 100 || (selText.match(/\n/g) || []).length >= 3;
+    const quoteStyle = `font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:28px;color:var(--espresso);margin:0;white-space:pre-wrap;word-break:keep-all;`;
+    const quoteHTML = needFold
+      ? `<div class="fold-wrap"><p id="fp-quote" class="fold-text" style="${quoteStyle}">${safeQuote}</p><button type="button" class="fold-btn visible" style="display:block;margin:8px auto 0;">더 보기</button></div>`
+      : `<p id="fp-quote" style="${quoteStyle}">${safeQuote}</p>`;
     quoteBox.innerHTML = `
       ${coverHTML}
       <div style="height:22px;"></div>
-      <p id="fp-quote" class="t-headline-md c-espresso" style="line-height:1.6;font-family:'Noto Serif KR','Nanum Myeongjo',Georgia,serif;text-align:center;margin:0;">${renderMarkdownBold(highlight.selected_text || '')}</p>
+      ${quoteHTML}
       ${source ? `<div style="height:16px;"></div><p id="fp-source" class="t-label-sm c-walnut" style="letter-spacing:0.1em;text-align:center;margin:0;">— ${escapeHtml(source)}</p>` : '<p id="fp-source" style="display:none;"></p>'}
       <div style="height:24px;"></div>
-      <button id="fp-open-card" class="sharp-btn" style="width:100%;">카드 보기</button>
+      <button id="fp-open-card" class="sharp-btn" style="width:100%;">카드 읽어보기</button>
     `;
     // 클릭 핸들러는 #feedpost-screen 의 위임 리스너가 일괄 처리 → 여기선 등록 X
     //  (quoteBox.innerHTML 재설정으로 element 가 자주 교체돼도 안정적으로 동작)
@@ -7627,7 +7684,65 @@ function openCardFromFeedPost() {
 
 if (feedFab) feedFab.addEventListener('click', openFeedPicker);
 if (archiveFab) archiveFab.addEventListener('click', () => {
-  /* 라이브러리 우측 fab — 내 북마크 책꽂이로 이동 (비로그인은 openBookmarksScreen 안에서 토스트) */
+  /* (구) 라이브러리 우측 fab — 사용자 요청으로 제거. element 없으면 이 listener 도 안 등록. */
+  try { openBookmarksScreen(); } catch (e) { console.warn('[m] openBookmarksScreen failed:', e); }
+});
+
+/* 비밀번호 찾기 — 로그인 모달의 '비밀번호를 잊으셨나요' 클릭. ID 입력받아 RPC 로
+   해당 사용자의 auth.users.email 조회 후 resetPasswordForEmail 발송. */
+document.getElementById('signin-forgot-btn')?.addEventListener('click', async () => {
+  const id = (signinIdInput?.value || '').trim() || prompt('가입했던 아이디를 입력해주세요');
+  if (!id) return;
+  try {
+    const sb = await getSupabase();
+    const { data: email, error } = await sb.rpc('find_email_by_login_id', { p_login_id: id });
+    if (error) throw error;
+    if (!email) { toast('해당 아이디로 가입된 계정이 없어요'); return; }
+    if (String(email).endsWith('@user.local')) {
+      toast('이메일 정보가 없어 비밀번호 재설정이 불가합니다. 관리자에게 문의해주세요.');
+      return;
+    }
+    const { error: resetError } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: `${location.origin}/m/`,
+    });
+    if (resetError) throw resetError;
+    toast(`${email} 로 재설정 링크를 보냈어요. 이메일을 확인해주세요.`);
+  } catch (e) {
+    console.warn('[m] reset password failed:', e);
+    toast('전송 실패: ' + (e.message || e));
+  }
+});
+
+/* 비밀번호 변경 — 로컬 회원 전용. 본인 인증 위해 로그인 ID 입력 → state.userLoginId 와
+   일치 확인 → 등록된 이메일로 reset 링크 발송 (resetPasswordForEmail). */
+document.getElementById('change-password-btn')?.addEventListener('click', async () => {
+  if (state.isAnonymous || !state.userId) { toast('로그인 후 사용할 수 있어요'); return; }
+  const isSocial = state.authProvider === 'google' || state.authProvider === 'kakao';
+  if (isSocial) { toast('소셜 로그인은 해당 서비스에서 비밀번호를 관리해주세요'); return; }
+  const inputId = prompt('본인 확인을 위해 로그인 아이디를 입력해주세요');
+  if (!inputId) return;
+  if (inputId.trim() !== (state.userLoginId || '')) { toast('아이디가 일치하지 않습니다'); return; }
+  try {
+    const sb = await getSupabase();
+    const { data: email, error } = await sb.rpc('find_email_by_login_id', { p_login_id: inputId.trim() });
+    if (error) throw error;
+    if (!email) { toast('이메일 정보를 찾을 수 없어요'); return; }
+    if (String(email).endsWith('@user.local')) {
+      toast('등록된 이메일이 없어요. 프로필 편집에서 이메일을 먼저 등록해주세요');
+      return;
+    }
+    const { error: resetError } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: `${location.origin}/m/`,
+    });
+    if (resetError) throw resetError;
+    toast(`${email} 로 비밀번호 재설정 링크를 보냈어요`);
+  } catch (e) {
+    console.warn('[m] change password (reset email) failed:', e);
+    toast('전송 실패: ' + (e.message || e));
+  }
+});
+/* top-bar 의 북마크 버튼 — 모든 view 에서 노출, 내 북마크 책꽂이로 바로 이동. */
+document.getElementById('top-bookmark-btn')?.addEventListener('click', () => {
   try { openBookmarksScreen(); } catch (e) { console.warn('[m] openBookmarksScreen failed:', e); }
 });
 
