@@ -81,20 +81,26 @@ final class YarnStore: ObservableObject {
     /// 재지급되지 않는다. 로컬 `ds.yarnRewarded` 는 같은 세션의 불필요한 RPC 재호출을
     /// 막는 빠른 캐시일 뿐(userId:cardId 로 키), 진실은 서버다. 익명도 `userId` 가
     /// 있으면 보상받는다(PWA 동일).
-    /// 반환값 = 이번 열람에서 **실제 적립된 실타래 양(델타)**. 이미 받은 카드/익명 미식별/
-    /// 네트워크 오류로 적립이 없으면 0. 적립 로직(서버 `reward_yarn_first_view` RPC·dedup·
-    /// 잔액 갱신)은 그대로이며, 기존에 버리던 결과(적립량)를 보상 애니메이션 표시용으로
-    /// 노출만 한다 — Android `YarnViewModel.rewardFirstView(): Int` 와 동일한 계약. 금액(서버
-    /// 권위값, 현재 +300 / migration 038)·지급 로직은 변경하지 않는다.
+    /// 카드 첫 열람 보상 표시값 — 서버 권위값(`reward_yarn_first_view`, migration
+    /// `038_yarn_reward_300.sql`)과 **반드시 일치**시킨다(현재 +300). 서버 보상량이 바뀌면
+    /// 이 상수도 같이 바꿔야 한다(Android `YarnViewModel.FIRST_VIEW_REWARD` 와 동일한 운영
+    /// 계약). 표시 금액을 잔액 차이로 추정하지 않는 이유 ↓.
+    static let firstViewReward = 300
+
+    /// 반환값 = 이번 열람에서 보상이 **새로 지급되면** 보상량(`firstViewReward`), 아니면 0.
+    /// **잔액 델타(post − local)로 계산하지 않는다** — 로컬 잔액이 (타 기기/동기화 지연으로)
+    /// 낡았을 때 RPC 가 돌려주는 reconciled 잔액과의 차이가 보상액처럼 잘못 표시될 수 있어서다
+    /// (yarn 경제 UI 는 느슨하면 안 됨). 대신 로컬 first-reward 가드 + RPC 성공 시 권위 상수를
+    /// 돌려주는 Android 패턴을 그대로 따른다. `balance` 는 RPC 반환값으로 정상 reconcile 된다.
+    /// 적립 로직(서버 RPC·dedup·잔액 갱신)·금액은 변경하지 않으며, 표시값만 노출한다.
     @discardableResult
     func rewardFirstOpen(cardId: Int, userId: Int?) async -> Int {
         guard let userId else { return 0 }
         guard !isCardRewarded(cardId: cardId, userId: userId) else { return 0 }   // 로컬 빠른 차단(계정별)
         do {
-            let before = balance
-            balance = try await Supa.shared.rewardFirstView(userId: userId, cardId: cardId)
+            balance = try await Supa.shared.rewardFirstView(userId: userId, cardId: cardId)   // 잔액은 서버값으로 reconcile
             markCardRewarded(cardId: cardId, userId: userId)   // 성공 후 기록(서버가 진짜 dedup). 실패 시 다음 열람에 재시도.
-            return max(0, balance - before)
+            return Self.firstViewReward   // 표시값 = 권위 상수(잔액 차이 추정 금지)
         } catch {
             // 네트워크 오류 — 기록하지 않음 → 다음 열람에 재시도(서버 dedup 이 중복 적립 방지).
             return 0
