@@ -119,20 +119,31 @@ class AuthRepository {
         // only at sign-up (non-anonymous). The nickname column is non-null, so an
         // anonymous row stores an empty string.
         val startingNickname = if (isAnonymous) "" else randomCuteNickname()
+        // 원자적 get-or-create — 같은 auth.uid 로 두 기기가 동시에 첫 로그인해도 users 행은 하나로 수렴.
+        // 예전 "조회→없으면 insert" 는 anonymous_id 에 UNIQUE 가 없어 동시 insert 가 둘 다 성공 →
+        // user_id 두 개로 갈라지고 출석 +100 을 이중 수령하는 버그가 있었다(서버: 14_fix_duplicate_users.sql).
+        // ensure_user_row RPC 미배포 환경에서는 기존 insert→재조회 경로로 폴백한다.
         val newUserId = runCatching {
-            client.postgrest["users"]
-                .insert(UserInsert(anonymousId = authedUserId, nickname = startingNickname)) { select() }
-                .decodeSingle<UserRow>()
-                .userId
-        }.getOrElse { insertError ->
-            client.postgrest["users"]
-                .select {
-                    filter { eq("anonymous_id", authedUserId) }
-                    limit(1)
-                }
-                .decodeSingleOrNull<UserRow>()
-                ?.userId
-                ?: throw insertError
+            client.postgrest.rpc(
+                function = "ensure_user_row",
+                parameters = buildJsonObject { put("p_nickname", startingNickname) },
+            ).decodeAs<Long>()
+        }.getOrElse {
+            runCatching {
+                client.postgrest["users"]
+                    .insert(UserInsert(anonymousId = authedUserId, nickname = startingNickname)) { select() }
+                    .decodeSingle<UserRow>()
+                    .userId
+            }.getOrElse { insertError ->
+                client.postgrest["users"]
+                    .select {
+                        filter { eq("anonymous_id", authedUserId) }
+                        limit(1)
+                    }
+                    .decodeSingleOrNull<UserRow>()
+                    ?.userId
+                    ?: throw insertError
+            }
         }
 
         // Just signed up / logged in → stamp the entered id and carry the old

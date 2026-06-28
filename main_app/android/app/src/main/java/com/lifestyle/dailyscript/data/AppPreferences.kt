@@ -50,7 +50,6 @@ object AppPreferences {
     private val YARN_DAILY_USED = intPreferencesKey("yarn_daily_used")    // daily yarns spent on YARN_DAILY_DATE
     private val UNLOCKED = stringPreferencesKey("unlocked_card_ids")      // CSV of "cardId:epochMillis" (3일 무료 재열람)
     // 첫 열람 +300 보상 dedup 은 user-scope 동적 키(rewardedKey)로 분리 — 아래 isRewarded/markRewarded 참고.
-    private val ATTENDANCE_HISTORY = stringPreferencesKey("attendance_history")   // CSV of yyyy-MM-dd
     private val ATTENDANCE_LAST_SHOWN = stringPreferencesKey("attendance_last_shown") // 오늘 모달 띄움 표시
     private val OZ_DAILY_DATE = stringPreferencesKey("oz_daily_date")     // yyyy-MM-dd for Daily Oz pick
     private val OZ_DAILY_CARD_ID = longPreferencesKey("oz_daily_card_id") // cached card_id for that date
@@ -191,24 +190,8 @@ object AppPreferences {
     }
     suspend fun clearPendingMigrationUserId() { store.edit { it.remove(PENDING_MIGRATION_UID) } }
 
-    // 출석체크 — 00시 기준 그날 첫 진입 시 한 달 달력 모달 + 실타래 +5.
-    suspend fun attendanceHistory(): Set<String> {
-        val raw = store.data.first()[ATTENDANCE_HISTORY] ?: return emptySet()
-        return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-    }
-    suspend fun hasAttendanceToday(today: String): Boolean =
-        attendanceHistory().contains(today)
-
-    /** 오늘 출석 기록(이미 있으면 noop). */
-    suspend fun markAttendance(today: String) {
-        store.edit { p ->
-            val current = (p[ATTENDANCE_HISTORY] ?: "").split(",").map { it.trim() }
-                .filter { it.isNotEmpty() }.toMutableSet()
-            current.add(today)
-            p[ATTENDANCE_HISTORY] = current.joinToString(",")
-        }
-    }
-
+    // 출석체크 모달 1일 1회 표시 throttle (기기 로컬 UI 상태). 출석 기록·보상은 서버 권위
+    // (11_attendance.sql / check_in_attendance RPC) — YarnRepository.attendanceHistory 참고.
     /** 오늘 출석체크 모달을 띄웠는지(매일 1회로 제한). */
     suspend fun attendanceLastShown(): String? = store.data.first()[ATTENDANCE_LAST_SHOWN]
     suspend fun markAttendanceShown(today: String) {

@@ -40,7 +40,8 @@ begin
     if p_theme_id is null or p_price is null then return -1; end if;
     if p_price < 0 then return -1; end if;
 
-    select user_id into v_user_id from public.users where anonymous_id = v_uid;
+    select user_id into v_user_id from public.users where anonymous_id = v_uid
+      order by user_id limit 1;   -- 방어: UNIQUE(anonymous_id) 적용 전 중복 행이 있어도 1개로 고정
     if v_user_id is null then return -3; end if;
 
     select count(*) into v_already

@@ -1184,16 +1184,30 @@ async function bootstrapAuth() {
   // 신규 user — 익명은 닉네임 없이, 가입(비익명) 시점에만 닉네임을 부여한다.
   // 소셜 로그인이라도 제공자 이름을 쓰지 않고 ID/PW 가입과 동일하게 랜덤 닉네임을 부여한다.
   const startingNickname = state.isAnonymous ? '' : randomCuteNickname();
-  const { data: inserted, error: insErr } = await sb
-    .from('users')
-    .insert({
-      anonymous_id: state.authUid,
-      nickname: startingNickname,
-    })
-    .select('user_id, nickname').single();
-  if (insErr) throw insErr;
-  state.userId = inserted.user_id;
-  state.userNickname = inserted.nickname || startingNickname;
+  // 원자적 get-or-create — 같은 auth.uid 로 두 기기가 동시에 첫 로그인해도 users 행은 하나로 수렴.
+  // 예전 "조회→없으면 insert" 는 anonymous_id 에 UNIQUE 가 없어 동시 insert 가 둘 다 성공 →
+  // user_id 가 갈라져 출석 +100 을 이중 수령하는 버그가 있었다 (서버: 14_fix_duplicate_users.sql).
+  // ensure_user_row RPC 미배포 환경에서는 기존 insert→재조회 경로로 폴백한다.
+  let newUserId = null;
+  const ens = await sb.rpc('ensure_user_row', { p_nickname: startingNickname });
+  if (!ens.error && ens.data != null) {
+    newUserId = ens.data;
+  } else {
+    const ins = await sb.from('users')
+      .insert({ anonymous_id: state.authUid, nickname: startingNickname })
+      .select('user_id').single();
+    if (ins.error) {
+      // UNIQUE(anonymous_id) 위반 = 다른 기기가 막 만든 행 — 재조회로 수렴.
+      const re = await sb.from('users').select('user_id')
+        .eq('anonymous_id', state.authUid).maybeSingle();
+      if (re.error || !re.data) throw ins.error;
+      newUserId = re.data.user_id;
+    } else {
+      newUserId = ins.data.user_id;
+    }
+  }
+  state.userId = newUserId;
+  state.userNickname = startingNickname;
 
   // 소셜 로그인 직후라면 이전 익명 user_id의 북마크를 옮긴다
   if (!state.isAnonymous) {
