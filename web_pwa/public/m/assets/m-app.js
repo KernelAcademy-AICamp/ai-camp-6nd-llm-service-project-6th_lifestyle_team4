@@ -371,6 +371,7 @@ const state = {
   yarnPurchased: 0,        // 충전(구매) 잔액 — 서버 users.yarn_balance 시드 (무료 5/일은 localStorage)
   archiveSearch: '',       // LIBRARY 탭(전체 도서 카탈로그) 검색
   archiveGenre: '',        // '' = all, or 'movie'|'drama'|'musical'|'opera'|'play'
+  archiveSort: (typeof localStorage !== 'undefined' && localStorage.getItem('ds.archiveSort')) || 'alpha',  // 'alpha' | 'latest'
   bmSearch: '',            // MY>북마크 화면 검색 (카탈로그와 독립)
   bmGenre: '',             // MY>북마크 화면 장르 필터
   recentlyShownIds: [],    // 오늘의 명대사 셔플 시 최근 10개 제외용 큐
@@ -2872,6 +2873,20 @@ function renderArchive() {
   const allWorks = groupAllCardsByWork();
   const totalCards = state.allCards.length;
   if (archiveCount) archiveCount.textContent = `전체 ${allWorks.length}권 · 명대사 ${totalCards}편`;
+  /* 정렬 — 'alpha'(가나다, 한글 콜레이션) | 'latest'(책의 max card_id 내림차순)
+     안드 LibrarySort 미러: ALPHA / LATEST */
+  if (state.archiveSort === 'latest') {
+    allWorks.sort((a, b) => {
+      const maxA = (a.cards || []).reduce((m, c) => Math.max(m, c.card_id || 0), 0);
+      const maxB = (b.cards || []).reduce((m, c) => Math.max(m, c.card_id || 0), 0);
+      return maxB - maxA;
+    });
+  } else {
+    allWorks.sort((a, b) => displayTitle(a.title).localeCompare(displayTitle(b.title), 'ko'));
+  }
+  /* 토글 라벨 sync */
+  const sortLabelEl = document.getElementById('archive-sort-label');
+  if (sortLabelEl) sortLabelEl.textContent = state.archiveSort === 'latest' ? '최신등록순' : '가나다순';
 
   const q = (state.archiveSearch || '').trim().toLowerCase();
   const genre = state.archiveGenre || '';
@@ -7899,6 +7914,15 @@ document.getElementById('change-password-btn')?.addEventListener('click', async 
 /* top-bar 의 북마크 버튼 — 모든 view 에서 노출, 내 북마크 책꽂이로 바로 이동. */
 document.getElementById('top-bookmark-btn')?.addEventListener('click', () => {
   try { openBookmarksScreen(); } catch (e) { console.warn('[m] openBookmarksScreen failed:', e); }
+});
+
+/* 라이브러리 정렬 토글 — 가나다순 ⇄ 최신등록순 (안드 LibraryScreen SortToggle 미러) */
+document.getElementById('archive-sort-toggle')?.addEventListener('click', () => {
+  state.archiveSort = (state.archiveSort === 'latest') ? 'alpha' : 'latest';
+  try { localStorage.setItem('ds.archiveSort', state.archiveSort); } catch {}
+  state.archivePage = 1;   // 정렬 바뀌면 첫 페이지로
+  try { track('library_sorted', { sort: state.archiveSort }); } catch {}
+  if (typeof renderArchive === 'function') renderArchive();
 });
 
 // 안드 DetailScreen 하단 두 버튼 — 북마크하고 오늘의 한줄 작성 / 라이브러리 진입

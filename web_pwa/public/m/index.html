@@ -1888,7 +1888,15 @@
     <img id="archive-cat" class="archive-cat" alt="" src="assets/cat/cat_idle.png" style="height:58px;" />
     <div style="height:24px;"></div>
     <h1 class="t-display-md c-espresso">도서 카탈로그</h1>
-    <p id="archive-count" class="t-label-sm c-walnut" style="margin-top:6px;"></p>
+    <!-- 카운트 + 정렬 토글 한 줄 (안드 LibraryScreen 미러 — 가나다순 ⇄ 최신등록순) -->
+    <div style="display:flex;align-items:center;margin-top:6px;gap:12px;">
+      <p id="archive-count" class="t-label-sm c-walnut" style="flex:1;margin:0;"></p>
+      <button id="archive-sort-toggle" type="button" aria-label="정렬 변경"
+        style="background:transparent;border:0.5px solid var(--latte);border-radius:999px;padding:4px 12px;font-size:11px;color:var(--walnut);cursor:pointer;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;">
+        <span class="material-symbols-outlined" style="font-size:14px;">sort</span>
+        <span id="archive-sort-label">가나다순</span>
+      </button>
+    </div>
 
     <!-- Genre chips -->
     <div class="archive-chips" id="archive-chips" role="tablist"></div>
