@@ -5973,9 +5973,31 @@ function userGuideSeenKey() {
 // 첫 진입 시 1회 자동 노출. 띄웠으면 true 반환 → 같은 부팅에서 랜딩 로그인 유도는 미룬다.
 async function maybeShowGuide() {
   const key = userGuideSeenKey();
-  if (safeStorageGet(key) === '1') return false;
+  /* signin 직후 reload 시 set 된 force flag — seen 키와 무관하게 1회 강제 노출 */
+  let force = false;
+  try {
+    if (localStorage.getItem('ds.forceGuideNext') === '1') {
+      force = true;
+      localStorage.removeItem('ds.forceGuideNext');
+    }
+  } catch {}
+  if (!force && safeStorageGet(key) === '1') return false;
   if (!document.querySelector('#coachmark')) return false;
-  if (state.currentView !== 'home' || !state.todayCard) return false;  // 홈·오늘 카드 준비됐을 때만
+  /* 기본 view 가 'daily' (getInitialView) — 'home' alias 와 둘 다 허용해야 첫 진입에 통과 */
+  if (state.currentView !== 'home' && state.currentView !== 'daily') return false;
+  /* todayCard 가 아직 set 되지 않았으면 최대 1.5초 대기 (bootstrap 직후 race 보정) */
+  if (!state.todayCard) {
+    await new Promise((resolve) => {
+      let tries = 0;
+      const tick = () => {
+        if (state.todayCard || tries >= 15) return resolve();
+        tries += 1;
+        setTimeout(tick, 100);
+      };
+      tick();
+    });
+    if (!state.todayCard) return false;
+  }
   await onboardingReady;  // 동적 import 완료까지 대기 → 첫 진입 사용자에게 무조건 노출
   const started = launchTour();
   if (started) { safeStorageSet(key, '1'); track('onboarding_start', { userScoped: !!state.userId }); }
@@ -6237,6 +6259,10 @@ async function submitSignin() {
     track(signinMode === 'signup' ? 'sign_up' : 'login', { method: 'id_password' });
     toast(signinMode === 'signup' ? '가입 완료' : '로그인 됨');
     closeSigninModal();
+    /* 사용자 명세: 첫 로그인 직후 reload 된 새 부팅에서 코치마크 투어가 '바로' 떠야 함.
+       reload 후 maybeShowGuide 가 userGuideSeenKey 기반 1회 노출하므로 여기선 추가 동작 X.
+       다만 사용자별 키가 미설정인 사용자의 reload 첫 부팅에 확실히 떠야 하니 force flag set. */
+    try { localStorage.setItem('ds.forceGuideNext', '1'); } catch {}
     // 세션이 바뀌었으므로 reload — bootstrapAuth가 새 user 행 만들고 마이그레이션 + session_id 발급
     setTimeout(() => location.reload(), 600);
   } catch (err) {
