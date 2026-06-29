@@ -5453,6 +5453,12 @@ async function checkInAttendanceRpc(reward) {
 }
 
 function buildAttendanceCalendarHTML() {
+  /* 안드 AttendanceDialog/CalendarGrid 미러:
+     - 월 제목 left-aligned (titleMedium)
+     - 요일 헤더 7열 + 일요일은 cta 색
+     - 출석일 sand alpha 0.35, 노란빛 셀 배경
+     - 출석일은 18px 실타래 아이콘 + 날짜
+     - 오늘은 cta border 1.5dp */
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
@@ -5460,7 +5466,7 @@ function buildAttendanceCalendarHTML() {
   const lastDate = new Date(year, month + 1, 0).getDate();
   const history = new Set(getAttendanceHistory());
   const todayKey = todayStr();
-  const yarnImg = `<img src="assets/daily-script-bar.png" alt="실타래" style="width:22px;height:22px;object-fit:cover;border-radius:50%;display:block;" />`;
+  const yarnImg = `<img src="assets/daily-script-bar.png" alt="실타래" style="width:18px;height:18px;object-fit:cover;border-radius:50%;display:block;" />`;
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
   const head = dayLabels.map((d, i) =>
     `<div style="text-align:center;font-size:11px;color:${i === 0 ? 'var(--cta)' : 'var(--walnut)'};font-weight:700;padding:6px 0;">${d}</div>`
@@ -5473,15 +5479,15 @@ function buildAttendanceCalendarHTML() {
     const isToday = ds === todayKey;
     const borderStyle = isToday ? 'border:1.5px solid var(--cta);' : 'border:1px solid transparent;';
     cells.push(
-      `<div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;${borderStyle}background:${attended ? 'rgba(216,160,90,0.14)' : 'transparent'};gap:2px;">
+      `<div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;${borderStyle}background:${attended ? 'rgba(216,160,90,0.35)' : 'transparent'};gap:2px;">
         <span style="font-size:11px;color:${attended ? 'var(--espresso)' : 'var(--walnut)'};font-weight:${isToday ? 700 : 500};">${d}</span>
-        <div style="height:22px;display:flex;align-items:center;justify-content:center;">${attended ? yarnImg : ''}</div>
+        <div style="height:18px;display:flex;align-items:center;justify-content:center;">${attended ? yarnImg : ''}</div>
       </div>`
     );
   }
   while (cells.length % 7 !== 0) cells.push('<div></div>');
   return `
-    <p style="text-align:center;font-family:'Noto Serif KR',serif;font-size:18px;color:var(--espresso);font-weight:700;margin:0 0 12px;">${year}년 ${month + 1}월</p>
+    <p style="text-align:left;font-family:'Noto Serif KR',serif;font-size:16px;color:var(--espresso);font-weight:700;margin:0 0 10px;">${year}년 ${month + 1}월</p>
     <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;width:100%;">${head}${cells.join('')}</div>
   `;
 }
@@ -5529,7 +5535,7 @@ async function maybeShowAttendance() {
   const grid = modal.querySelector('#attendance-grid');
   const reward = modal.querySelector('#attendance-reward-msg');
   if (grid) grid.innerHTML = buildAttendanceCalendarHTML();
-  if (reward) reward.style.display = newAttendance ? 'block' : 'none';
+  if (reward) reward.style.display = newAttendance ? 'flex' : 'none';
   modal.style.display = 'flex';
   modal.querySelector('#attendance-close')?.addEventListener('click', () => {
     modal.style.display = 'none';
