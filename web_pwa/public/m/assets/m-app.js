@@ -3688,8 +3688,58 @@ function renderDailyOzPick() {
   const chosenGenres = new Set(Array.isArray(prefs.genres) ? prefs.genres : []);
   const userName = state.userNickname || state.userLoginId || '오즈';
 
-  // 가입 안 한 첫 방문자(익명) + 선호 미설정 → 개인화 창으로 유도.
-  if (state.isAnonymous && !hasActivePrefs(prefs)) {
+  // 비로그인 사용자 — 카드 자체는 흐릿한 미리보기로 띄우고, 그 위에 '로그인하고 보기' 안내 오버레이.
+  if (state.isAnonymous) {
+    sec.style.display = 'block';
+    const guestName = state.userNickname || '게스트';
+    sec.innerHTML = `
+      <h2 class="c-espresso" style="margin:0 0 8px;display:flex;align-items:baseline;gap:8px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-weight:400;">
+        <span style="font-size:17px;">당신을 위한</span>
+        <span class="brand-logo" style="font-size:24px;"><span class="cap">D</span>aily <span class="cap">S</span>cript<span class="dot">.</span></span>
+      </h2>
+      <article class="sharp-card" style="padding:20px;position:relative;overflow:hidden;">
+        <!-- 흐릿한 미리보기 콘텐츠 (실제 추천 데이터는 로그인 후 노출) -->
+        <div style="filter:blur(6px);pointer-events:none;user-select:none;opacity:0.7;">
+          <div style="display:flex;align-items:center;gap:18px;margin-bottom:16px;">
+            <img src="assets/cat/cat_computer.png" alt="" style="width:140px;height:auto;flex-shrink:0;" />
+            <div style="flex:1;min-width:0;">
+              <p style="margin:0;font-size:11px;color:var(--walnut);line-height:1.9;">
+                <strong style="font-size:15px;color:#000;font-weight:700;">${escapeHtml(guestName)}</strong> 님<br>
+                <strong style="color:var(--cta);">장르</strong> : 미스터리, 비극<br>
+                <strong style="color:var(--cta);">주제</strong> : 사랑, 성장, 회복
+              </p>
+            </div>
+          </div>
+          <div style="background:var(--latte);border:0.5px solid var(--sand);padding:14px 16px;margin-bottom:14px;border-radius:8px;">
+            <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:13px;color:var(--espresso);line-height:1.6;">오즈가 당신의 취향에 맞춰 골랐어요.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:56px;height:80px;background:var(--latte);border-radius:2px;"></div>
+            <div style="flex:1;min-width:0;">
+              <p style="margin:0;font-family:'Noto Serif KR',serif;font-size:15px;color:var(--espresso);font-weight:700;line-height:1.3;">로미오와 줄리엣</p>
+              <p style="margin:4px 0 0;font-size:12px;color:var(--walnut);">셰익스피어 · 1597</p>
+            </div>
+          </div>
+        </div>
+        <!-- 안내 오버레이 — 클릭 시 인증 모달 -->
+        <button type="button" id="oz-login-overlay" aria-label="로그인하고 추천 받기"
+          style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(250,248,242,0.55);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);border:none;cursor:pointer;padding:24px;text-align:center;">
+          <span class="material-symbols-outlined" style="font-size:32px;color:var(--cta);">lock</span>
+          <p style="margin:0;font-family:'Nanum Myeongjo','Noto Serif KR',serif;font-size:16px;color:var(--espresso);font-weight:700;line-height:1.4;">로그인하면 당신만의<br>오즈 추천을 받을 수 있어요</p>
+          <span style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;color:var(--cta);font-weight:600;">로그인 / 회원가입<span style="font-size:14px;">›</span></span>
+        </button>
+      </article>
+      <div style="height:36px;"></div>
+    `;
+    sec.querySelector('#oz-login-overlay')?.addEventListener('click', () => {
+      track('oz_login_cta');
+      try { openSigninModal(); } catch (e) { console.warn('[m] openSigninModal failed:', e); }
+    });
+    return;
+  }
+
+  // (옛 분기 유지 — 가입했는데 선호 미설정한 사용자만 도달 — 현재는 unreachable 이지만 향후 비익명 첫 진입 케이스 대비)
+  if (false && state.isAnonymous && !hasActivePrefs(prefs)) {
     sec.style.display = 'block';
     const guestName = state.userNickname || '게스트';
     sec.innerHTML = `
