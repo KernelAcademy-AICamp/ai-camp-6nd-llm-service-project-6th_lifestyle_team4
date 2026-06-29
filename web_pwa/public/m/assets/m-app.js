@@ -7128,12 +7128,13 @@ function buildFeedItem(post) {
 }
 
 // 카테고리 칩 클릭 → state 변경 후 재렌더 + localStorage 저장 (새로고침 유지).
-// 시트(feedpost detail)가 열려있으면 먼저 닫음 — 사용자가 다른 카테고리 가는데
-// 옛 카드 상세가 그대로 떠있으면 안 됨.
+// 사용자 명세: 시트(feedpost detail)가 열려있을 때 다른 칩을 누르면 카테고리 전환 X,
+// 시트만 닫음. 사용자가 닫힌 뒤 다시 칩을 누르면 그때 전환된다.
 document.querySelectorAll('#feed-chips .a-chip').forEach((btn) => {
   btn.addEventListener('click', () => {
     if (feedpostScreen && feedpostScreen.classList.contains('open')) {
       try { closeFeedPostDetail(); } catch (e) { closeFeedPostDetailInternal(); }
+      return;   // 시트 닫기만, 카테고리 전환 안 함
     }
     state.feedCategory = btn.dataset.feedCat || 'today';
     safeStorageSet('ds.feedCategory', state.feedCategory);
