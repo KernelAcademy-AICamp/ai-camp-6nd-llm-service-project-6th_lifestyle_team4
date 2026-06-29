@@ -5964,14 +5964,21 @@ async function runPreferenceFlow() {
   renderDailyOzPick();
 }
 
+/* 사용자별 가이드 flag — 같은 디바이스에서 비로그인 1회 본 사람이 로그인하면
+   '첫 로그인'으로 보고 다시 한 번 띄움. 사용자 명세: '첫 로그인 시 앱사용법'. */
+function userGuideSeenKey() {
+  return state.userId ? `ds.guideSeenForUser.${state.userId}` : GUIDE_SEEN_KEY;
+}
+
 // 첫 진입 시 1회 자동 노출. 띄웠으면 true 반환 → 같은 부팅에서 랜딩 로그인 유도는 미룬다.
 async function maybeShowGuide() {
-  if (safeStorageGet(GUIDE_SEEN_KEY) === '1') return false;
+  const key = userGuideSeenKey();
+  if (safeStorageGet(key) === '1') return false;
   if (!document.querySelector('#coachmark')) return false;
   if (state.currentView !== 'home' || !state.todayCard) return false;  // 홈·오늘 카드 준비됐을 때만
   await onboardingReady;  // 동적 import 완료까지 대기 → 첫 진입 사용자에게 무조건 노출
   const started = launchTour();
-  if (started) { safeStorageSet(GUIDE_SEEN_KEY, '1'); track('onboarding_start'); }
+  if (started) { safeStorageSet(key, '1'); track('onboarding_start', { userScoped: !!state.userId }); }
   return started;
 }
 
