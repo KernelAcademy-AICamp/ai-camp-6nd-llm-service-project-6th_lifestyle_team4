@@ -51,9 +51,25 @@ Don'ts:
 - **Codex (reviewer)** works in a SEPARATE git worktree off the **current integration branch** (presently `git worktree add ../curtaincall-review origin/release/1.1-b7` — PRs target the integration branch, not `main`; confirm the live name rather than hardcoding it) so its clean builds never wipe CCC's warm cache or collide on branches: clean build from that integration branch, install/launch via `xcrun simctl`, screenshot, review the diff + screenshot via `gh`.
 - **Judge visual work on a real device, not just the simulator.**
 
+## Branch model (two-level: version branch → feature branches)
+Enforced by the repo's `.githooks/pre-commit` hook — **enable once per clone**: `git config core.hooksPath .githooks`. The hook **refuses any commit made directly on `main` or a `release/*` branch** (see `.githooks/README.md`).
+
+- **`main`** — shared trunk. All teams (iOS / web / PWA / Android) merge here. **We do NOT commit iOS work directly to `main`.**
+- **Version / integration branch** — the **current version branch** (presently `release/1.1-b7`; the name **rotates per build cycle** — confirm the live one, don't pin it). A whole cycle's iOS work collects here.
+- **Feature branches** — base off the **current version branch** (not `main`); set the **PR base to that same version branch**. One task = one feature branch + PR.
+- **NEVER commit directly to `main` or a `release/*` branch** — now hard-blocked by the pre-commit hook (override only with `--no-verify`, discouraged).
+
+**Before every commit:** explicitly `git checkout <feature-branch>` immediately before `git add` / `git commit` — **do not assume HEAD is still on the feature branch you created earlier.** Concurrent Codex review, syncing, and teammate pushes can leave HEAD elsewhere (this has bitten us). The hook is the backstop; the explicit checkout is the habit.
+
+**Version → `main` merge ritual** (runs **only when a build is approved/released** — not per feature PR):
+1. `git checkout main && git pull` — reconcile teammate commits first.
+2. Merge the current version branch into `main`.
+3. `git push`.
+4. Tag the released build.
+
 ## Workflow
 - **CCC authors, Codex reviews and merges (by default).** CCC writes on a feature branch and opens the PR; Codex builds/runs/screenshots, reviews, and merges. CCC does **not** merge by default. The one exception — self-merge of self-review-eligible PRs — is spelled out under **Merge authority** in the Commit / PR conventions below.
-- **Never commit to `main`.** One task = one feature branch + PR.
+- **Never commit to `main` or the version branch.** One task = one feature branch + PR — see **Branch model** above (now enforced by the pre-commit hook).
 - Auth/data/RLS changes are **gated** — investigate and propose first; report findings. Read-only UI gets a lighter pass.
 - Keep changes additive and scoped; after editing, build (incremental) and report.
 - Flag any new dependency before adding it.
@@ -63,7 +79,7 @@ Don'ts:
 Per-brief boilerplate, captured here so briefs needn't restate it.
 - **Language:** English conventional-commit prefix (`feat` / `fix` / `chore` / `docs` / …); **Korean** summary + body.
 - **Base branch:** branch off the **current B7 integration branch** (presently `release/1.1-b7`) and set the **PR base to that same integration branch — NEVER `main`**. The integration-branch name changes per build cycle; confirm the current one rather than hardcoding it.
-- **Pre-commit guard:** run `git branch --show-current` before committing; never commit to `main` (or directly to the integration branch).
+- **Pre-commit guard:** the `.githooks/pre-commit` hook hard-blocks commits on `main` / `release/*` (enable once per clone: `git config core.hooksPath .githooks`). Habit: `git checkout <feature-branch>` **immediately before** `git add` / `git commit` — don't assume HEAD is unchanged since you branched. See **Branch model**.
 - **Review tier:**
   - *Self-review eligible* — trivial docs, dead-code deletions, version bumps, project-setting one-liners.
   - *Gated (Codex build/screenshot; + on-device QA when interaction is involved)* — gestures, navigation, animation, auth/RLS, layout, report/block.
