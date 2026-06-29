@@ -3086,6 +3086,22 @@ function openBookModal(work, worksList) {
     : `Collected · Volume #${String(idx).padStart(2, '0')}`;
   // 부제가 있으면 부제를 메인 타이틀로, 없으면 시리즈명/원제목
   bookTitleEl.textContent = work.subtitle || displayTitle(work.title);
+  /* 영어 제목 — iOS 매칭. work 자체엔 title_original 없을 수 있어 첫 카드에서 가져옴.
+     bookTitleEl 다음 형제로 .book-title-en p 를 1회 생성·재사용. */
+  const titleEn = (work.title_original || (work.cards && work.cards[0]?.works?.title_original) || '').trim();
+  let titleEnEl = bookTitleEl.parentNode.querySelector('.book-title-en');
+  if (!titleEnEl) {
+    titleEnEl = document.createElement('p');
+    titleEnEl.className = 'book-title-en t-label-sm c-walnut';
+    titleEnEl.style.cssText = 'margin:2px 0 0;font-family:"IM Fell DW Pica","Times New Roman",serif;font-size:13px;font-style:italic;letter-spacing:0.02em;opacity:0.75;';
+    bookTitleEl.parentNode.insertBefore(titleEnEl, bookTitleEl.nextSibling);
+  }
+  if (titleEn) {
+    titleEnEl.textContent = titleEn;
+    titleEnEl.style.display = 'block';
+  } else {
+    titleEnEl.style.display = 'none';
+  }
   bookMetaEl.textContent = [label.toUpperCase(), work.author, work.year]
     .filter(Boolean).join(' · ');
 
@@ -3102,7 +3118,7 @@ function openBookModal(work, worksList) {
   bookList.innerHTML = '';
   // 북마크된 card_id 집합 (체크 빠르게)
   const bookmarkedIds = new Set((state.bookmarks || []).map((b) => b?.card_id).filter((x) => x != null));
-  work.cards.forEach((card) => {
+  work.cards.forEach((card, idx) => {
     const item = document.createElement('div');
     item.className = 'book-quote-item';
     const meta = card.excerpt_description
@@ -3110,15 +3126,15 @@ function openBookModal(work, worksList) {
       : '';
     const bookmarkedAt = formatBookmarkDate(card._bookmarkedAt);
     const isBookmarked = bookmarkedIds.has(card.card_id);
-    // 북마크 표시 — 사용자 명세: 책 펼침 모달 안 카드 목록에서 북마크 한 카드 구별
-    const bookmarkBadge = isBookmarked
-      ? `<span class="book-quote-bookmark" style="position:absolute;top:8px;right:10px;display:inline-flex;align-items:center;gap:3px;color:var(--cta);">
-          <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 1;">bookmark</span>
-        </span>`
-      : '';
+    /* 카드 번호 #01, #02 ... — 안드 BookQuoteItem 매칭. 북마크 있으면 그 옆에. */
+    const numLabel = `#${String(idx + 1).padStart(2, '0')}`;
+    const badgeRow = `<span style="position:absolute;top:8px;right:10px;display:inline-flex;align-items:center;gap:6px;">
+        ${isBookmarked ? `<span class="material-symbols-outlined" style="font-size:16px;color:var(--cta);font-variation-settings:'FILL' 1;">bookmark</span>` : ''}
+        <span class="book-quote-num t-label-sm" style="color:var(--cta);font-weight:600;letter-spacing:0.04em;font-size:11px;">${numLabel}</span>
+      </span>`;
     item.style.position = 'relative';
     item.innerHTML = `
-      ${bookmarkBadge}
+      ${badgeRow}
       ${bookmarkedAt ? `<span class="book-quote-date">${escapeHtml(bookmarkedAt)}</span>` : ''}
       <p class="book-quote-text">"${escapeHtml(cleanQuote(card.quote))}"</p>
       ${meta ? `<p class="book-quote-meta">${escapeHtml(meta)}</p>` : ''}
