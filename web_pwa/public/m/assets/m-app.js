@@ -2964,19 +2964,18 @@ function renderArchive() {
     gridEl.appendChild(btn);
   }
 
-  // 페이지 버튼 — 그리드 바로 아래 한 줄. 4개 페이지씩 윈도우 표시 (‹ 1 2 3 4 ›).
-  // ›/‹ 는 한 페이지씩 이동 — 4에서 › 누르면 5로 가고 윈도우가 5 6 7 8 로 자동 전환.
-  // 페이지 버튼은 center, 우측 북마크 fab 는 fixed right — 가로 정렬상 겹치지 않으므로
-  // bottom margin 은 자연스러운 그리드 호흡 정도(20px)만.
+  // 페이지 버튼 — 화면 하단 고정(fixed). 4개 페이지씩 윈도우 표시 (‹ 1 2 3 4 ›).
+  // bottom-nav(약 64px) 위에 떠있고, view-archive 가 hide 되면 같이 사라짐(직접 hide 처리).
   let pagesEl = document.getElementById('archive-pages');
+  const pagesStyle = 'position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;justify-content:center;gap:8px;flex-wrap:wrap;z-index:40;background:rgba(250,248,242,0.92);padding:6px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(60,40,20,0.18);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);';
   if (!pagesEl) {
     pagesEl = document.createElement('div');
     pagesEl.id = 'archive-pages';
-    pagesEl.style.cssText = 'display:flex;justify-content:center;gap:8px;margin:16px 0 20px;flex-wrap:wrap;';
+    pagesEl.style.cssText = pagesStyle;
+    /* 그리드 다음 위치는 의미 없지만 DOM tree 유지를 위해 그대로 삽입 */
     gridEl.parentNode.insertBefore(pagesEl, gridEl.nextSibling);
   } else {
-    /* 이전에 큰 margin 으로 만들어진 요소도 새 값으로 동기화 */
-    pagesEl.style.margin = '16px 0 20px';
+    pagesEl.style.cssText = pagesStyle;
   }
   if (totalPages <= 1) {
     pagesEl.style.display = 'none';
