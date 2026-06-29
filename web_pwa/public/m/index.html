@@ -2338,25 +2338,26 @@
     <p id="fp-comments-header" class="t-title-lg c-espresso">댓글 0</p>
     <div style="height:14px;"></div>
 
-    <div id="fp-comment-form" style="display:none;">
-      <textarea id="fp-comment-input" maxlength="500" rows="3"
-                placeholder="이 글에 대한 생각을 남겨주세요…"
-                style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:1.6;outline:none;resize:vertical;min-height:72px;box-sizing:border-box;"></textarea>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-        <span id="fp-comment-counter" class="t-label-sm c-walnut">0 / 500</span>
-        <button id="fp-comment-submit" class="sharp-btn" style="padding:8px 18px;">등록</button>
-      </div>
-    </div>
-
-    <div style="height:20px;"></div>
-
     <p id="fp-comments-empty" class="t-body-sm c-walnut" style="display:none;text-align:center;font-style:italic;padding:8px 0;">
       아직 댓글이 없어요. 첫 생각을 남겨보세요.
     </p>
     <div id="fp-comments-list" style="display:flex;flex-direction:column;gap:10px;"></div>
 
-    <!-- 비로그인 안내 — 댓글 목록 아래(가장 하단) — 사용자 명세 -->
-    <p id="fp-comment-login" class="t-body-md c-walnut" style="display:none;text-align:center;padding:16px 0 0;cursor:pointer;">
+    <!-- 댓글 작성 form — sheet 하단에 sticky 로 고정. 로그인 시 보임. -->
+    <div id="fp-comment-form"
+         style="display:none;position:sticky;bottom:0;background:var(--paper);padding:10px 0 calc(16px + env(safe-area-inset-bottom));margin-top:24px;border-top:0.5px solid var(--latte);z-index:5;">
+      <textarea id="fp-comment-input" maxlength="500" rows="3"
+                placeholder="이 명대사에 대한 생각을 남겨보세요…"
+                style="width:100%;padding:12px 14px;background:var(--paper);border:0.5px solid var(--walnut);color:var(--espresso);font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:15px;line-height:1.6;outline:none;resize:vertical;min-height:72px;box-sizing:border-box;"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:12px;">
+        <span id="fp-comment-counter" class="t-label-sm c-walnut" style="flex-shrink:0;">0 / 500</span>
+        <button id="fp-comment-submit" class="sharp-btn" style="flex:1;padding:12px 18px;">남기기</button>
+      </div>
+    </div>
+
+    <!-- 비로그인 안내 — 같은 자리 sticky 로 (form 자리). 비로그인 시 보임. -->
+    <p id="fp-comment-login" class="t-body-md c-walnut"
+       style="display:none;position:sticky;bottom:0;background:var(--paper);text-align:center;padding:14px 0 calc(14px + env(safe-area-inset-bottom));margin-top:20px;border-top:0.5px solid var(--latte);z-index:5;cursor:pointer;">
       로그인 후 댓글을 남길 수 있어요.
     </p>
   </div>
