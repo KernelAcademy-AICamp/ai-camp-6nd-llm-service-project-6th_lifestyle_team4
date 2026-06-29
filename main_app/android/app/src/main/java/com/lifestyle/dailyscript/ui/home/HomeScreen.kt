@@ -24,9 +24,11 @@ import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,6 +59,8 @@ import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.ChipTag
 import com.lifestyle.dailyscript.ui.components.LangSegmented
+import com.lifestyle.dailyscript.ui.components.LoginPromptDialog
+import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.onboarding.LocalCoachController
 import com.lifestyle.dailyscript.ui.onboarding.coachAnchor
@@ -88,8 +92,10 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     userId: Long,
+    isAnonymous: Boolean,
     vm: HomeViewModel,
     onOpenCard: (Long) -> Unit,
+    onRequestSignIn: () -> Unit,
     yarnBalance: Int,
     purchasedThemeIds: Set<String>,
     remoteBackgrounds: List<ShareBackground> = emptyList(),
@@ -119,12 +125,20 @@ fun HomeScreen(
 
     // 공유 시트 — 공유 칩 탭 시 해당 카드 페이로드를 담아 연다.
     var sharePayload by remember { mutableStateOf<ShareCardPayload?>(null) }
+    // 게스트가 투데이 카드에서 바로 북마크를 누르면 뜨는 로그인 유도 팝업 (카드 상세와 동일).
+    var showLoginPrompt by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Paper),
     ) {
+      // 당겨서 새로고침 — 하단탭 '오늘' 재탭과 동일한 vm.refresh() 경로(익명 3회 한도 게이트 포함).
+      RefreshableBox(
+          refreshing = state.refreshing,
+          onRefresh = { vm.refresh(userId, isAnonymous) },
+          modifier = Modifier.fillMaxSize(),
+      ) {
       Column(
         modifier = Modifier
             .fillMaxSize()
@@ -158,7 +172,8 @@ fun HomeScreen(
             // 댓글 수: card_comments 집계 Map 우선(PWA 동일), 없으면 denormalized 컬럼 폴백.
             commentCount = state.todayCard?.let { state.commentCounts[it.cardId] ?: it.commentCount } ?: 0,
             shareCount = state.todayShareCount,
-            onBookmarkToggle = { vm.toggleTodayBookmark(userId) },
+            // 게스트는 서버 북마크가 불가 — 에러 대신 로그인 유도 팝업 (PWA toggleBookmark isAnonymous 가드).
+            onBookmarkToggle = { if (isAnonymous) showLoginPrompt = true else vm.toggleTodayBookmark(userId) },
             onShare = { sharePayload = it },
             onOpen = {
                 state.todayCard?.let {
@@ -211,6 +226,7 @@ fun HomeScreen(
         // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
         Box(modifier = Modifier.height(BottomBarContentInset + 24.dp))
       }
+      }
 
       sharePayload?.let { p ->
           ShareCardSheet(
@@ -224,7 +240,55 @@ fun HomeScreen(
               onShared = { vm.onCardShared(p.cardId) },
           )
       }
+
+      // 익명 새로고침 3회 한도 — 빨간 글씨 대신 로그인 유도 팝업(iOS AccountRequiredPrompt 미러).
+      if (state.refreshLimitReached) {
+          RefreshLimitDialog(
+              onLogin = {
+                  vm.consumeRefreshLimit()
+                  onRequestSignIn()
+              },
+              onDismiss = { vm.consumeRefreshLimit() },
+          )
+      }
+
+      // 게스트가 투데이 카드에서 바로 북마크를 눌렀을 때 — 로그인 유도 팝업.
+      if (showLoginPrompt) {
+          LoginPromptDialog(
+              onLogin = {
+                  showLoginPrompt = false
+                  onRequestSignIn()
+              },
+              onDismiss = { showLoginPrompt = false },
+          )
+      }
     }
+}
+
+/**
+ * 익명 사용자가 오늘 새로고침 3회를 모두 쓴 뒤 뜨는 로그인 유도 팝업.
+ * iOS HomeView.passAnonRefreshGate 의 AccountRequiredPrompt 카피를 그대로 옮긴다.
+ */
+@Composable
+private fun RefreshLimitDialog(onLogin: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onLogin) { Text(stringResource(R.string.sign_in_action), color = Cta) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("닫기", color = Walnut) }
+        },
+        title = { Text("새로운 명대사는 3번까지", color = Espresso) },
+        text = {
+            Text(
+                text = "오늘 명대사를 3번 받아보셨어요.\n로그인하면 무제한으로 고전 명대사를 즐길 수 있어요.",
+                color = Walnut,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        },
+        containerColor = Paper,
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

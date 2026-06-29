@@ -192,8 +192,8 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         yarnVm.loadShareBackgrounds()
     }
 
-    // OZ Pick "취향 알려주기" CTA → 선호도 온보딩 강제 재노출 (이미 완료한 사용자도 다시 설정 가능).
-    var forcePrefOverlay by remember { mutableStateOf(false) }
+    // OZ Pick 로그인 게이트의 "로그인 / 회원가입" → MY(설정) 탭으로 전환하며 로그인 다이얼로그 자동 오픈.
+    var pendingSignIn by remember { mutableStateOf(false) }
 
     // 출석체크 — 00시 기준 그날 첫 진입이면 1회 보상 애니(+100) → 다이얼로그.
     var attendanceVisible by remember { mutableStateOf(false) }
@@ -327,17 +327,25 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         isAnonymous = session.isAnonymous,
                         nickname = session.nickname,
                         loginId = session.loginId,
-                        onOpenNotice = { navController.navigate(Routes.NOTICE) { launchSingleTop = true } },
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
-                        // OZ Pick CTA — 게스트/무선호 사용자가 선호도 온보딩을 다시 열도록.
-                        onRequestPreferences = { forcePrefOverlay = true },
+                        // OZ Pick 로그인 게이트 — 게스트를 MY(설정) 탭의 로그인/회원가입으로 바로 이동시킨다.
+                        onRequestSignIn = {
+                            pendingSignIn = true
+                            selectBottomTab(navController, currentRoute, Routes.SETTINGS) {}
+                        },
                     )
                 }
                 composable(Routes.HOME) {
                     HomeScreen(
                         userId = session.userId,
+                        isAnonymous = session.isAnonymous,
                         vm = homeVm,
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                        // 익명 새로고침 한도 팝업의 '로그인' → MY(설정) 탭으로 이동하며 로그인 다이얼로그 자동 오픈.
+                        onRequestSignIn = {
+                            pendingSignIn = true
+                            selectBottomTab(navController, currentRoute, Routes.SETTINGS) {}
+                        },
                         yarnBalance = yarnAvailable,
                         purchasedThemeIds = purchasedShareThemes,
                         remoteBackgrounds = shareBackgrounds,
@@ -375,6 +383,9 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
                         session = session,
+                        // Daily OZ Pick 로그인 게이트에서 넘어왔으면 로그인 다이얼로그를 자동으로 연다.
+                        autoOpenSignIn = pendingSignIn,
+                        onConsumeAutoSignIn = { pendingSignIn = false },
                         yarn = yarnAvailable,
                         onYarnClick = {
                             AppAnalytics.track("yarn_info_open")
@@ -451,8 +462,14 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                 composable(Routes.BOOKMARKS) {
                     ArchiveScreen(
                         userId = session.userId,
+                        isAnonymous = session.isAnonymous,
                         onBack = { navController.popBackStack() },
                         onOpenCard = { cardId -> navController.navigate(Routes.detail(cardId)) },
+                        // 비로그인으로 북마크 페이지 진입 시 로그인 유도 팝업의 '로그인' → MY(설정) 탭.
+                        onRequestSignIn = {
+                            pendingSignIn = true
+                            selectBottomTab(navController, currentRoute, Routes.SETTINGS) {}
+                        },
                     )
                 }
                 composable(Routes.TERMS) {
@@ -497,6 +514,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
                         onOpenFeedback = {
                             AppAnalytics.track("nav", mapOf("from" to Routes.DETAIL, "to" to Routes.FEEDBACK))
                             navController.navigate(Routes.FEEDBACK) { launchSingleTop = true }
+                        },
+                        // 게스트 북마크 로그인 유도 → MY(설정) 탭으로 이동하며 로그인 다이얼로그 자동 오픈.
+                        onRequestSignIn = {
+                            pendingSignIn = true
+                            selectBottomTab(navController, currentRoute, Routes.SETTINGS) {}
                         },
                     )
                 }
@@ -586,10 +608,11 @@ private fun ScaffoldWithNav(session: UserSession, sessionVm: AppSessionViewModel
         // 홈 첫 진입 때 시작 (PWA 순서: 선호도 → 투어). 덕분에 홈 첫 카드부터 선호가 반영된다.
         // initial=null(DataStore 방출 전)엔 띄우지 않아 완료 사용자에게 깜빡임이 없다.
         val prefSelected by AppPreferences.prefSelected.collectAsState(initial = null)
-        if (prefSelected == false || forcePrefOverlay) {
+        // 소셜 첫 가입은 성별·나이 프롬프트(아래 ProfileDialog)가 먼저 뜨므로, 그게 닫힌 뒤에
+        // 취향 설정 오버레이를 띄워 두 모달이 겹치지 않게 한다.
+        if (prefSelected == false && !showProfilePrompt) {
             PreferenceOverlay(onFinish = { r ->
                 sessionVm.savePreferences(r.genres, r.themes, r.any, r.skipped)
-                forcePrefOverlay = false
             })
         }
         // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(기존 프로필 다이얼로그 재사용, 건너뛰기 가능).

@@ -1,17 +1,27 @@
 package com.lifestyle.dailyscript.ui.feed
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -36,6 +46,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -44,11 +55,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +71,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.data.model.FeedComment
@@ -76,11 +92,11 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 import com.lifestyle.dailyscript.ui.util.Markdown
 import com.lifestyle.dailyscript.ui.util.displayTitle
 import com.lifestyle.dailyscript.ui.util.formatBookmarkDate
+import kotlinx.coroutines.launch
 
 /**
- * 피드 글("오늘의 한줄") 상세 — 밑에서 올라오는 바텀시트.
- * 명대사 인용 + "명대사 읽어보기"(카드 상세로 이동) + 작성자 본문 + 댓글.
- * post 객체는 피드 목록에서 그대로 전달받고(재로드 X), 댓글만 ViewModel로 로드한다.
+ * 피드 글("오늘의 한줄") 상세 — 밑에서 올라오는 바텀시트(표준 ModalBottomSheet, 0.92 고정).
+ * 알림(확성기)에서 글로 바로 이동할 때 쓴다. 피드 탭에서는 [FeedPostDetailDraggableSheet] 사용.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,10 +108,6 @@ fun FeedPostDetailSheet(
     onDismiss: () -> Unit,
     onOpenCard: (Long) -> Unit,
 ) {
-    val vm: FeedPostDetailViewModel = viewModel()
-    val state by vm.state.collectAsState()
-    LaunchedEffect(post.postId) { vm.load(post.postId) }
-
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -103,97 +115,250 @@ fun FeedPostDetailSheet(
         sheetState = sheetState,
         containerColor = Paper,
     ) {
-        LazyColumn(
+        FeedPostDetailContent(
+            post = post,
+            userId = userId,
+            isAnonymous = isAnonymous,
+            myNickname = myNickname,
+            onClose = onDismiss,
+            onOpenCard = onOpenCard,
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.92f)
                 .imePadding(),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-        ) {
-            item(key = "head") {
-                Column {
-                    HeaderRow(onClose = onDismiss)
+        )
+    }
+}
 
-                    Box(modifier = Modifier.height(16.dp))
-                    QuoteCard(card = post.cards, onOpenCard = { onOpenCard(post.cardId) })
+private enum class SheetAnchor { Hidden, Rest, Full }
 
-                    Box(modifier = Modifier.height(20.dp))
-                    AuthorRow(nickname = post.authorNickname, createdAt = post.createdAt)
+/**
+ * 피드 탭 전용 감상평 상세 — 기본 화면 75%(Rest)만 올라오고, 상단 드래그 핸들을 잡고 위로
+ * 올리면 90%(Full)까지 커진다. 아래로 내리거나 스크림/X 를 누르면 닫힌다. 표준 바텀시트의
+ * 중간 멈춤이 50% 고정이라, 75%↔90% 2단 동작은 AnchoredDraggable 로 직접 구현한다.
+ * 키보드/스크림/뒤로가기를 위해 포커스 가능한 Popup(메인 윈도우 인셋 상속) 안에 띄운다.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun FeedPostDetailDraggableSheet(
+    post: FeedPost,
+    userId: Long,
+    isAnonymous: Boolean,
+    myNickname: String,
+    onDismiss: () -> Unit,
+    onOpenCard: (Long) -> Unit,
+) {
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val decay = rememberSplineBasedDecay<Float>()
+    val dragState = remember {
+        AnchoredDraggableState(
+            initialValue = SheetAnchor.Hidden,
+            positionalThreshold = { distance -> distance * 0.5f },
+            velocityThreshold = { with(density) { 80.dp.toPx() } },
+            snapAnimationSpec = tween(),
+            decayAnimationSpec = decay,
+        )
+    }
 
-                    Box(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = post.body,
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            fontFamily = EditorialSerif,
-                            lineHeight = 28.sp,
-                        ),
-                        color = Espresso,
-                    )
+    // 닫힘(Hidden) 위치에 안착하면 시트를 제거. 단, 한 번 열린(Rest/Full) 뒤부터만 판정한다 —
+    // 시작값이 Hidden 이라 첫 방출에서 곧장 닫히는 것을 막는다.
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(dragState) {
+        snapshotFlow { dragState.settledValue }.collect { v ->
+            if (v != SheetAnchor.Hidden) shown = true
+            else if (shown) onDismiss()
+        }
+    }
+    val close: () -> Unit = { scope.launch { dragState.animateTo(SheetAnchor.Hidden) } }
 
-                    Box(modifier = Modifier.height(24.dp))
-                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(Latte))
-                    Box(modifier = Modifier.height(20.dp))
+    Popup(
+        onDismissRequest = close,
+        properties = PopupProperties(focusable = true, dismissOnBackPress = true),
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val fullH = constraints.maxHeight.toFloat()
+            // anchor 값 = 시트 top 의 y(px). Rest=25%(=75% 노출), Full=10%(=90% 노출), Hidden=화면 밖.
+            val anchors = remember(fullH) {
+                DraggableAnchors {
+                    SheetAnchor.Full at fullH * 0.10f
+                    SheetAnchor.Rest at fullH * 0.25f
+                    SheetAnchor.Hidden at fullH
+                }
+            }
+            LaunchedEffect(anchors) {
+                dragState.updateAnchors(anchors)
+                if (dragState.currentValue == SheetAnchor.Hidden) dragState.animateTo(SheetAnchor.Rest)
+            }
 
-                    Text(
-                        text = "댓글 ${state.comments.size}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Espresso,
-                    )
-                    Box(modifier = Modifier.height(14.dp))
+            val topY = dragState.offset.let { if (it.isNaN()) fullH else it }
+            val visible = (fullH - topY).coerceAtLeast(0f)
 
-                    if (isAnonymous) {
-                        Text(
-                            text = "로그인 후 댓글을 남길 수 있어요.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Walnut,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        )
-                    } else {
-                        CommentComposer(
-                            submitting = state.submitting,
-                            replyingTo = state.replyingTo,
-                            onSubmit = { vm.submitComment(userId, myNickname, it) },
-                            onCancelReply = { vm.cancelReply() },
+            // 스크림 — 올라온 비율만큼 짙어지고, 탭하면 닫힘(리플 없이).
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = (visible / fullH).coerceIn(0f, 1f) * 0.4f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = close,
+                    ),
+            )
+
+            Surface(
+                color = Paper,
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(with(density) { visible.toDp() }),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // 상단 드래그 핸들 — 여기를 잡고 위로 올리면 90%, 아래로 내리면 닫힘.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .anchoredDraggable(dragState, Orientation.Vertical)
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 32.dp, height = 4.dp)
+                                .clip(CircleShape)
+                                .background(Latte),
                         )
                     }
+                    FeedPostDetailContent(
+                        post = post,
+                        userId = userId,
+                        isAnonymous = isAnonymous,
+                        myNickname = myNickname,
+                        onClose = close,
+                        onOpenCard = onOpenCard,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .imePadding(),
+                    )
+                }
+            }
+        }
+    }
+}
 
+/**
+ * 상세 본문(명대사 인용 + "명대사 읽어보기" + 작성자 본문 + 댓글). 표준 시트와 드래그 시트가 공유.
+ * post 객체는 피드 목록에서 그대로 전달받고(재로드 X), 댓글만 ViewModel로 로드한다.
+ * [onClose] 는 헤더 X 버튼 동작(표준=시트 닫기, 드래그=닫힘 애니메이션).
+ */
+@Composable
+private fun FeedPostDetailContent(
+    post: FeedPost,
+    userId: Long,
+    isAnonymous: Boolean,
+    myNickname: String,
+    onClose: () -> Unit,
+    onOpenCard: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val vm: FeedPostDetailViewModel = viewModel()
+    val state by vm.state.collectAsState()
+    LaunchedEffect(post.postId) { vm.load(post.postId) }
+
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+    ) {
+        item(key = "head") {
+            Column {
+                HeaderRow(onClose = onClose)
+
+                Box(modifier = Modifier.height(16.dp))
+                QuoteCard(card = post.cards, onOpenCard = { onOpenCard(post.cardId) })
+
+                Box(modifier = Modifier.height(20.dp))
+                AuthorRow(nickname = post.authorNickname, createdAt = post.createdAt)
+
+                Box(modifier = Modifier.height(16.dp))
+                Text(
+                    text = post.body,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontFamily = EditorialSerif,
+                        lineHeight = 28.sp,
+                    ),
+                    color = Espresso,
+                )
+
+                Box(modifier = Modifier.height(24.dp))
+                Box(Modifier.fillMaxWidth().height(0.5.dp).background(Latte))
+                Box(modifier = Modifier.height(20.dp))
+
+                Text(
+                    text = "댓글 ${state.comments.size}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Espresso,
+                )
+
+                // 게스트는 입력창 대신 안내 문구를 댓글 목록 '아래'로 옮긴다(login-hint item).
+                if (!isAnonymous) {
+                    Box(modifier = Modifier.height(14.dp))
+                    CommentComposer(
+                        submitting = state.submitting,
+                        replyingTo = state.replyingTo,
+                        onSubmit = { vm.submitComment(userId, myNickname, it) },
+                        onCancelReply = { vm.cancelReply() },
+                    )
                     state.error?.let {
                         Box(modifier = Modifier.height(8.dp))
                         Text(text = it, color = Cta, style = MaterialTheme.typography.bodySmall)
                     }
-
-                    Box(modifier = Modifier.height(20.dp))
                 }
+
+                Box(modifier = Modifier.height(20.dp))
             }
-
-            if (state.comments.isEmpty()) {
-                item(key = "empty") {
-                    Text(
-                        text = "아직 댓글이 없어요. 첫 생각을 남겨보세요.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Walnut,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    )
-                }
-            } else {
-                items(groupFeedComments(state.comments), key = { "c-${it.first.commentId}" }) { (c, isReply) ->
-                    FeedCommentRow(
-                        comment = c,
-                        isReply = isReply,
-                        likeUsers = state.likes[c.commentId] ?: emptySet(),
-                        myUserId = userId,
-                        isAnonymous = isAnonymous,
-                        onToggleLike = { vm.toggleLike(userId, it) },
-                        onDelete = { vm.deleteComment(userId, it) },
-                        onReply = { vm.startReply(it as FeedComment) },
-                    )
-                }
-            }
-
-            item(key = "tail") { Box(modifier = Modifier.height(40.dp)) }
         }
+
+        if (state.comments.isEmpty()) {
+            item(key = "empty") {
+                Text(
+                    text = "아직 댓글이 없어요. 첫 생각을 남겨보세요.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Walnut,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                )
+            }
+        } else {
+            items(groupFeedComments(state.comments), key = { "c-${it.first.commentId}" }) { (c, isReply) ->
+                FeedCommentRow(
+                    comment = c,
+                    isReply = isReply,
+                    likeUsers = state.likes[c.commentId] ?: emptySet(),
+                    myUserId = userId,
+                    isAnonymous = isAnonymous,
+                    onToggleLike = { vm.toggleLike(userId, it) },
+                    onDelete = { vm.deleteComment(userId, it) },
+                    onReply = { vm.startReply(it as FeedComment) },
+                )
+            }
+        }
+
+        // 댓글 목록 아래 — 게스트 안내(입력창 위에서 이리로 이동).
+        if (isAnonymous) {
+            item(key = "login-hint") {
+                Text(
+                    text = "로그인 후 댓글을 남길 수 있어요.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Walnut,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                )
+            }
+        }
+
+        item(key = "tail") { Box(modifier = Modifier.height(40.dp)) }
     }
 }
 

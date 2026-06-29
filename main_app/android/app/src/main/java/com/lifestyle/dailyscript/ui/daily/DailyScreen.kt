@@ -1,5 +1,6 @@
 package com.lifestyle.dailyscript.ui.daily
 
+import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -33,7 +34,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -72,7 +74,6 @@ import com.lifestyle.dailyscript.data.AppPreferences
 import com.lifestyle.dailyscript.data.CardTheme
 import com.lifestyle.dailyscript.data.model.BookmarkRow
 import com.lifestyle.dailyscript.data.model.CardDto
-import com.lifestyle.dailyscript.data.model.Notice
 import com.lifestyle.dailyscript.data.model.UserPrefs
 import com.lifestyle.dailyscript.data.model.WorkDto
 import com.lifestyle.dailyscript.ui.components.BookCover
@@ -109,9 +110,8 @@ fun DailyScreen(
     isAnonymous: Boolean,
     nickname: String,
     loginId: String?,
-    onOpenNotice: () -> Unit,
     onOpenCard: (Long) -> Unit,
-    onRequestPreferences: () -> Unit,
+    onRequestSignIn: () -> Unit,
     vm: DailyViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
@@ -156,13 +156,6 @@ fun DailyScreen(
                 )
             }
 
-            DailyNoticeRow(
-                notices = state.notices,
-                onClick = {
-                    AppAnalytics.track("daily_notice_clicked")
-                    onOpenNotice()
-                },
-            )
             DailyNewBooks(
                 books = state.books,
                 onOpenWork = { workId ->
@@ -171,7 +164,7 @@ fun DailyScreen(
                 },
             )
             // PWA 09d61cf 패리티: '이럴 땐, 이런 문장'(DailyContextual)·'다시 만나기'(DailyRecent) 숨김.
-            // 순서: notice → 신작(new-books) → 당신을 위한(OzPick) → 이번 주 인기 대사(Trending).
+            // 순서: 신작(new-books) → 당신을 위한(OzPick) → 이번 주 인기 대사(Trending).
             DailyOzPick(
                 card = state.ozPick,
                 bookmarks = state.bookmarks,
@@ -186,9 +179,9 @@ fun DailyScreen(
                     val w = state.books.firstOrNull { b -> b.cards.any { it.cardId == card.cardId } }
                     if (w != null) openWorkId = w.workId else onOpenCard(card.cardId)
                 },
-                onRequestPreferences = {
-                    AppAnalytics.track("daily_oz_pref_cta")
-                    onRequestPreferences()
+                onRequestSignIn = {
+                    AppAnalytics.track("daily_oz_login_cta")
+                    onRequestSignIn()
                 },
             )
             DailyTrending(
@@ -224,46 +217,6 @@ fun DailyScreen(
             )
         }
     }
-}
-
-@Composable
-private fun DailyNoticeRow(notices: List<Notice>, onClick: () -> Unit) {
-    val items = notices.take(3)
-    if (items.isEmpty()) return
-    var index by remember(items.map { it.noticeId }) { mutableStateOf(0) }
-    LaunchedEffect(items.map { it.noticeId }) {
-        index = 0
-        while (items.size > 1) {
-            delay(10_000)
-            index = (index + 1) % items.size
-        }
-    }
-    val shape = RoundedCornerShape(12.dp)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(1.dp, shape)
-            .clip(shape)
-            .background(Latte)
-            .border(0.5.dp, Sand, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Outlined.Campaign, contentDescription = null, tint = Cta, modifier = Modifier.size(18.dp))
-        Box(modifier = Modifier.width(10.dp))
-        Text(
-            text = items[index.coerceIn(0, items.lastIndex)].title,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-            color = Espresso,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Box(modifier = Modifier.width(8.dp))
-        Text(text = "›", style = MaterialTheme.typography.titleMedium, color = Walnut)
-    }
-    SectionGap()
 }
 
 @Composable
@@ -411,17 +364,20 @@ private fun DailyNewBooks(books: List<DailyWork>, onOpenWork: (Long) -> Unit) {
                         Box(modifier = Modifier.height(8.dp))
                         Text(
                             text = book.work.displayTitle().ifBlank { "—" },
-                            style = TextStyle(fontFamily = EditorialSerif, fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                            // 제목은 우리 고딕체(EditorialSans = Noto Sans KR).
+                            style = TextStyle(fontFamily = EditorialSans, fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
                             color = Espresso,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center,
                         )
                         book.work.author?.takeIf { it.isNotBlank() }?.let {
+                            // 제목과 작가 사이 간격 확보.
+                            Box(modifier = Modifier.height(4.dp))
                             Text(
                                 text = it,
-                                // PWA 작은 표지 작가: 10px (제목 11px 보다 한 단계 작게).
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                // 작가: 9sp + 좁은 자간(labelSmall 기본 0.2em 은 82dp 폭에서 7자도 잘림).
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, letterSpacing = 0.01.em),
                                 color = Walnut,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -500,7 +456,7 @@ private fun DailyNewBookHero(
         }
     }
     // 텍스트 컬럼 간격은 PWA renderDailyNewBooks 의 마진을 그대로 옮긴 값.
-    // 카드 padding 24/22 · inner gap 20 · 날짜 mb13 · NEW→제목 10 · 제목 28/lh1.25 · 제목→메타 5 · 메타→본문 15.
+    // 카드 padding 24/22 · inner gap 20 · 날짜 mb13 · NEW→제목 14 · 제목 28/lh1.25 · 제목→메타 5 · 메타→본문 15.
     Row(
         modifier = modifier
             .padding(horizontal = 22.dp, vertical = 24.dp),
@@ -524,15 +480,16 @@ private fun DailyNewBookHero(
                     .background(Cta, RoundedCornerShape(12.dp))
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             )
-            Box(modifier = Modifier.height(10.dp))
+            Box(modifier = Modifier.height(14.dp))
             Text(
-                text = work.displayTitle().ifBlank { "—" },
+                // 긴 제목(예: '도리안 그레이의 초상')이 글자 중간이 아니라 띄어쓰기(어절) 단위로만 줄바꿈되게.
+                text = keepWordsTogether(work.displayTitle().ifBlank { "—" }),
                 style = TextStyle(
                     fontFamily = EditorialSerif,
                     fontWeight = FontWeight.Bold,
                     fontSize = 28.sp,
                     lineHeight = 35.sp,
-                    letterSpacing = (-0.02).em,
+                    letterSpacing = 0.01.em,
                 ),
                 color = Paper,
                 maxLines = 3,
@@ -753,11 +710,11 @@ private fun DailyOzPick(
     loginId: String?,
     // 추천 책 클릭 → 해당 도서의 모든 카드(collected volume) 책 펼침 모달 (PWA 5bcd4b6). today 이동 X.
     onOpenVolume: (CardDto) -> Unit,
-    onRequestPreferences: () -> Unit,
+    onRequestSignIn: () -> Unit,
 ) {
-    // 익명 + 활성 선호 없음 → 카드 대신 개인화 유도 CTA (PWA renderDailyOzPick 게스트 분기).
-    if (isAnonymous && prefs?.hasActive() != true) {
-        DailyOzPickCta(nickname = nickname, onRequestPreferences = onRequestPreferences)
+    // 비로그인(게스트) → 추천 내용을 블러로 가리고 로그인 안내 게이트를 띄운다 (PWA 데일리 OZ Pick 로그인 게이트).
+    if (isAnonymous) {
+        DailyOzPickLoginGate(onRequestSignIn = onRequestSignIn)
         return
     }
     if (card == null) return
@@ -897,70 +854,114 @@ private fun DailyOzPickHeading() {
     }
 }
 
-/** 게스트/무선호 사용자에게 취향 설정을 유도하는 OZ Pick CTA (PWA renderDailyOzPick guest 카드). */
+/**
+ * 비로그인(게스트) 전용 OZ Pick 로그인 게이트 — PWA 데일리 탭의 블러+잠금 안내를 이식.
+ * 추천 카드 자리에는 실제 내용 대신 스켈레톤(고양이 + 회색 바)을 흐릿하게 깔고,
+ * 그 위에 자물쇠 + "로그인하면 당신만의 오즈 추천을 받을 수 있어요" + 로그인/회원가입 링크를 올린다.
+ * blur 는 API 31(S)+ 에서만 동작하므로, 그 미만에선 스크림(반투명 Paper)을 더 진하게 깔아
+ * 동일하게 흐릿하게 보이도록 한다. 스켈레톤이라 어느 API 든 실제 추천이 새지 않는다.
+ */
 @Composable
-private fun DailyOzPickCta(nickname: String, onRequestPreferences: () -> Unit) {
+private fun DailyOzPickLoginGate(onRequestSignIn: () -> Unit) {
     val cat = rememberAssetBitmap("cat/cat_computer.png")
+    val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val cardShape = RoundedCornerShape(14.dp)
+
     DailyOzPickHeading()
-    Box(modifier = Modifier.height(8.dp))
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .dailyCard()
-            .padding(20.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (cat != null) {
-                Image(bitmap = cat, contentDescription = "오즈", contentScale = ContentScale.Fit, modifier = Modifier.width(140.dp))
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = nickname.ifBlank { "게스트" },
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = Espresso,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Box(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "아직 당신의 취향을 몰라요",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Walnut,
-                )
-            }
-        }
-        Box(modifier = Modifier.height(14.dp))
-        Box(
+    Box(modifier = Modifier.height(12.dp))
+    Box(modifier = Modifier.fillMaxWidth()) {
+        // 흐릿한 미리보기 — 실제 추천 대신 스켈레톤(고양이 + 회색 바)을 깐다.
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Latte, RoundedCornerShape(8.dp))
-                .border(0.5.dp, Sand, RoundedCornerShape(8.dp))
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .dailyCard()
+                .then(if (canBlur) Modifier.blur(14.dp) else Modifier)
+                .padding(20.dp),
         ) {
-            Text(
-                text = "좋아하는 장르와 주제만 알려주시면, 오즈가 매일 딱 맞는 한 문장을 골라드려요.",
-                style = TextStyle(fontFamily = EditorialSerif, fontSize = 13.sp, lineHeight = 21.sp),
-                color = Espresso,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (cat != null) {
+                    Image(bitmap = cat, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.width(140.dp))
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    OzGateSkeletonBar(widthFraction = 0.5f, height = 13.dp)
+                    OzGateSkeletonBar(widthFraction = 0.85f, height = 10.dp)
+                    OzGateSkeletonBar(widthFraction = 0.7f, height = 10.dp)
+                }
+            }
+            Box(modifier = Modifier.height(14.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Latte, RoundedCornerShape(8.dp))
+                    .border(0.5.dp, Sand, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OzGateSkeletonBar(widthFraction = 1f, height = 10.dp)
+                OzGateSkeletonBar(widthFraction = 0.55f, height = 10.dp)
+            }
+            Box(modifier = Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    modifier = Modifier
+                        .width(56.dp)
+                        .aspectRatio(132f / 188f)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Sand),
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OzGateSkeletonBar(widthFraction = 0.7f, height = 12.dp)
+                    OzGateSkeletonBar(widthFraction = 0.4f, height = 10.dp)
+                }
+            }
         }
-        Box(modifier = Modifier.height(14.dp))
+        // 잠금 오버레이 — 자물쇠 + 안내 문구 + 로그인/회원가입 링크 (카드 중앙).
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(Cta)
-                .clickable(onClick = onRequestPreferences)
-                .padding(vertical = 14.dp),
+                .matchParentSize()
+                .clip(cardShape)
+                .background(Paper.copy(alpha = if (canBlur) 0.5f else 0.78f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "취향 알려주기",
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                color = Paper,
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 24.dp),
+            ) {
+                Icon(Icons.Outlined.Lock, contentDescription = null, tint = Cta, modifier = Modifier.size(30.dp))
+                Box(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "로그인하면 당신만의\n오즈 추천을 받을 수 있어요",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Espresso,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp,
+                )
+                Box(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "로그인 / 회원가입 ›",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = Cta,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onRequestSignIn)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
         }
     }
     SectionGap()
+}
+
+/** 로그인 게이트의 흐릿한 미리보기에 쓰는 회색 자리표시 바. */
+@Composable
+private fun OzGateSkeletonBar(widthFraction: Float, height: Dp) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(widthFraction)
+            .height(height)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Sand),
+    )
 }
 
 @Composable
@@ -1164,6 +1165,14 @@ private data class TrendingCard(
     val views: Int,
     val score: Int,
 )
+
+/**
+ * 한 어절(공백으로 나뉜 단어) 안의 글자들을 워드조이너(U+2060)로 이어 붙여,
+ * 한글 기본 줄바꿈이 글자 중간을 끊지 못하게 한다 → 줄바꿈은 띄어쓰기 경계에서만 일어난다.
+ * (Compose LineBreak.Phrase 는 Android 13(API 33)+ 에서만 적용돼 하위 버전을 못 덮으므로 직접 처리.)
+ */
+private fun keepWordsTogether(text: String): String =
+    text.split(" ").joinToString(" ") { word -> word.toCharArray().joinToString(Char(0x2060).toString()) }
 
 private fun bookmarkAge(iso: String): String {
     val millis = parseEpochMillis(iso) ?: return "언젠가"

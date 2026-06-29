@@ -49,6 +49,12 @@ data class UserSession(
     val yarnBalance: Int = 0,
     /** 소셜 첫 가입 직후 1회 성별·나이 입력 프롬프트를 띄울지. */
     val needsProfileSetup: Boolean = false,
+    /**
+     * 첫 회원가입/로그인(신규 users 행이 막 생성된 회원) — 온보딩(취향 설정 + 사용법 투어)을
+     * 1회 띄울지. 게스트로 이미 봤더라도 회원의 첫 로그인엔 다시 노출하기 위해 로컬 온보딩
+     * 플래그(pref_selected/guide_seen)를 리셋하는 신호로 쓴다.
+     */
+    val needsOnboarding: Boolean = false,
 )
 
 class AuthRepository {
@@ -171,6 +177,8 @@ class AuthRepository {
             ageGroup = recordedAgeGroup,
             loginId = recordedLoginId,
             needsProfileSetup = isSocialSignup,
+            // 신규 비익명 행 = 회원의 첫 가입/로그인 → 온보딩 1회 노출 (게스트 신규 행은 제외).
+            needsOnboarding = !isAnonymous,
         )
     }
 

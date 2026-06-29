@@ -267,6 +267,17 @@ object AppPreferences {
     suspend fun setGuideSeen() { store.edit { it[GUIDE_SEEN] = true } }
     suspend fun resetGuideSeen() { store.edit { it[GUIDE_SEEN] = false } }
 
+    /**
+     * 회원의 첫 가입/로그인 시 온보딩(취향 설정 + 사용법 투어)을 다시 띄우기 위해 두 로컬 플래그를
+     * 함께 리셋한다. 기존 신규-설치 흐름과 동일하게 PreferenceOverlay → 코치 투어가 재생된다.
+     */
+    suspend fun resetOnboarding() {
+        store.edit {
+            it[PREF_SELECTED] = false
+            it[GUIDE_SEEN] = false
+        }
+    }
+
     // --- 선호도 온보딩 (PWA ds.prefSelected / ds.pref — 코치 투어 직전 1회) ---
     val prefSelected: Flow<Boolean> get() = store.data.map { it[PREF_SELECTED] ?: false }
 

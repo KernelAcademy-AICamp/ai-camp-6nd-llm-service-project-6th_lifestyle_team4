@@ -300,6 +300,9 @@ class AppSessionViewModel : ViewModel() {
         }
         // 소셜 첫 가입이면 직후 1회 성별·나이 입력 프롬프트.
         if (result.getOrNull()?.needsProfileSetup == true) _profilePromptVisible.value = true
+        // 회원의 첫 가입/로그인(신규 계정) → 온보딩(취향 설정 + 사용법 투어) 1회 노출. 게스트로 이미
+        // 봤더라도 로컬 플래그를 리셋해 신규-설치와 동일한 온보딩 흐름이 재생되게 한다.
+        if (ready != null && ready.needsOnboarding) AppPreferences.resetOnboarding()
     }
 
     private fun Throwable?.messageOr(fallback: String): String =

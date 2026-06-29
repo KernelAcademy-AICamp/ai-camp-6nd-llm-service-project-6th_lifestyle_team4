@@ -46,9 +46,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -75,6 +78,9 @@ import com.lifestyle.dailyscript.ui.theme.Walnut
 @Composable
 fun SettingsScreen(
     session: UserSession,
+    /** Daily OZ Pick 로그인 게이트에서 진입했는지 — true 면 로그인 다이얼로그를 자동으로 연다. */
+    autoOpenSignIn: Boolean = false,
+    onConsumeAutoSignIn: () -> Unit = {},
     yarn: Int,
     onYarnClick: () -> Unit,
     authMessage: String?,
@@ -133,6 +139,13 @@ fun SettingsScreen(
     }
     // Once login succeeds the account is no longer anonymous → close the dialog.
     LaunchedEffect(session.isAnonymous) { if (!session.isAnonymous) showSignInDialog = false }
+    // Daily OZ Pick 로그인 게이트에서 넘어왔으면 로그인 다이얼로그를 자동으로 띄운다(게스트일 때만, 1회 소비).
+    LaunchedEffect(autoOpenSignIn) {
+        if (autoOpenSignIn && session.isAnonymous) {
+            showSignInDialog = true
+            onConsumeAutoSignIn()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -175,12 +188,6 @@ fun SettingsScreen(
         Box(modifier = Modifier.height(10.dp))
         // 보유 실타래 — 닉네임 아래 (PWA f4e9d86: top-bar 실타래 칩이 여기로 이동, '실타래' 라벨 포함).
         YarnChip(yarn = yarn, onClick = onYarnClick, label = "실타래")
-        Box(modifier = Modifier.height(10.dp))
-        Text(
-            text = stringResource(R.string.profile_bio),
-            style = MaterialTheme.typography.bodySmall,
-            color = Walnut.copy(alpha = 0.4f),
-        )
         // 로그인 상태에선 합성 이메일 대신 사람이 정한 아이디(login_id)만 노출.
         session.loginId?.takeIf { !session.isAnonymous && it.isNotBlank() }?.let { loginId ->
             Box(modifier = Modifier.height(6.dp))
@@ -533,8 +540,20 @@ private fun SignInDialog(
                     DropdownField(label = "나이대", options = AGE_OPTIONS, selected = age, onSelect = { age = it })
                 }
                 Box(modifier = Modifier.height(10.dp))
+                // 마지막 어절(회원가입/로그인)에만 밑줄을 줘 클릭 가능한 링크처럼 보이게 한다.
+                val toggleText = if (signUp) stringResource(R.string.have_account_sign_in) else stringResource(R.string.no_account_sign_up)
+                val toggleSplit = toggleText.lastIndexOf(' ')
                 Text(
-                    text = if (signUp) stringResource(R.string.have_account_sign_in) else stringResource(R.string.no_account_sign_up),
+                    text = buildAnnotatedString {
+                        if (toggleSplit >= 0) {
+                            append(toggleText.substring(0, toggleSplit + 1))
+                            withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) {
+                                append(toggleText.substring(toggleSplit + 1))
+                            }
+                        } else {
+                            withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) { append(toggleText) }
+                        }
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = Walnut,
                     modifier = Modifier.clickable { signUp = !signUp; onResetIdCheck() }.padding(vertical = 4.dp),

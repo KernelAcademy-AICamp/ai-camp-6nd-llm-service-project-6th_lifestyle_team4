@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,7 +52,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.lifestyle.dailyscript.R
 import com.lifestyle.dailyscript.ui.theme.Cta
-import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
@@ -248,72 +248,81 @@ fun YarnChip(
 
 @Composable
 fun DetailTopBar(
-    title: String,
-    subtitle: String? = null,
     bookmarked: Boolean,
     bookmarkCount: Int,
     bookmarkEnabled: Boolean = true,
+    shareEnabled: Boolean = true,
     onBack: () -> Unit,
     onToggleBookmark: () -> Unit,
+    onShare: () -> Unit,
 ) {
-    TopBarContainer {
+    // SpaceBetween Row 대신 Box 오버레이 — 로고를 좌/우 컨트롤 폭과 무관하게 전체 폭의 정중앙에 고정.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Paper)
+            .height(TopBarHeight)
+            .padding(horizontal = 20.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        // 중앙 — 책 제목 대신 우리 워드마크 로고. 제목/부제는 본문 최상단으로 이동.
+        BrandWordmark()
+
+        // 좌측 — 뒤로가기.
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
             contentDescription = stringResource(R.string.back),
             tint = Espresso,
             modifier = Modifier
+                .align(Alignment.CenterStart)
                 .size(40.dp)
                 .clickable(onClick = onBack)
                 .padding(8.dp),
         )
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+
+        // 우측 — 공유 + 북마크.
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = stringResource(R.string.app_brand).uppercase(),
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.em),
-                color = Walnut,
+            // 공유 버튼 — 오늘의 명대사 공유 시트 진입.
+            Icon(
+                imageVector = Icons.Outlined.IosShare,
+                contentDescription = stringResource(R.string.detail_share_quote),
+                tint = Espresso,
+                modifier = Modifier
+                    .size(26.dp)
+                    .clickable(enabled = shareEnabled, onClick = onShare)
+                    .padding(2.dp),
             )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontFamily = EditorialSerif,
-                ),
-                color = Espresso,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            )
-            if (!subtitle.isNullOrBlank()) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                    contentDescription = stringResource(R.string.bookmark),
+                    tint = if (bookmarked) Cta else Walnut,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clickable(enabled = bookmarkEnabled, onClick = onToggleBookmark)
+                        .padding(2.dp),
+                )
                 Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
+                    text = formatCount(bookmarkCount),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                    ),
                     color = Walnut,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                contentDescription = stringResource(R.string.bookmark),
-                tint = if (bookmarked) Cta else Walnut,
-                modifier = Modifier
-                    .size(28.dp)
-                    .clickable(enabled = bookmarkEnabled, onClick = onToggleBookmark)
-                    .padding(2.dp),
-            )
-            Text(
-                text = formatCount(bookmarkCount),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                ),
-                color = Walnut,
-            )
-        }
     }
+    // 0.5dp hairline divider under the bar
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(0.5.dp)
+            .background(Latte),
+    )
 }
 
 @Composable

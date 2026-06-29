@@ -295,7 +295,8 @@ fun FeedScreen(
     }
 
     detailPost?.let { post ->
-        FeedPostDetailSheet(
+        // 피드 탭: 기본 75%로 올라오고 상단 핸들을 잡고 올리면 90%까지 커지는 드래그 시트.
+        FeedPostDetailDraggableSheet(
             post = post,
             userId = userId,
             isAnonymous = isAnonymous,

@@ -92,6 +92,7 @@ import com.lifestyle.dailyscript.ui.components.CardCounts
 import com.lifestyle.dailyscript.ui.components.DetailTopBar
 import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.components.LangSegmented
+import com.lifestyle.dailyscript.ui.components.LoginPromptDialog
 import com.lifestyle.dailyscript.ui.components.BookCover
 import com.lifestyle.dailyscript.ui.components.SharpButton
 import com.lifestyle.dailyscript.ui.components.SharpButtonVariant
@@ -144,6 +145,8 @@ fun DetailScreen(
     onOpenFeedback: () -> Unit,
     // 첫 공유 안내 모달의 '앱 사용법 둘러보기' — 홈으로 이동 후 코치 투어 시작(루트에서 배선).
     onLaunchTour: () -> Unit = {},
+    // 게스트가 회원 전용 동작(북마크)을 시도할 때 로그인 유도 팝업의 '로그인' → MY(설정) 탭 로그인.
+    onRequestSignIn: () -> Unit = {},
 ) {
     val vm: DetailViewModel = viewModel()
     val state by vm.state.collectAsState()
@@ -256,6 +259,8 @@ fun DetailScreen(
     var hlScreenVisible by remember(cardId) { mutableStateOf(false) }
     var sharePayload by remember(cardId) { mutableStateOf<ShareCardPayload?>(null) }
     var feedComposeOpen by remember(cardId) { mutableStateOf(false) }
+    // 게스트가 북마크를 누르면 뜨는 로그인 유도 팝업 (PWA openPromptModal / iOS AccountRequiredPrompt).
+    var showLoginPrompt by remember { mutableStateOf(false) }
     val selectedForTour by rememberUpdatedState(scriptSelected)
     val userIdForTour by rememberUpdatedState(userId)
     val nicknameForTour by rememberUpdatedState(myNickname)
@@ -320,13 +325,20 @@ fun DetailScreen(
             .background(Paper),
       ) {
         DetailTopBar(
-            title = topTitle,
-            subtitle = subtitle,
             bookmarked = state.bookmarked,
             bookmarkCount = state.bookmarkCount,
             bookmarkEnabled = state.card != null && !state.bookmarkActionInFlight,
+            shareEnabled = state.card != null,
             onBack = onBack,
-            onToggleBookmark = { vm.toggleBookmark(userId) },
+            // 게스트는 서버 북마크가 불가 — 에러 대신 로그인 유도 팝업 (PWA toggleBookmark isAnonymous 가드).
+            onToggleBookmark = { if (isAnonymous) showLoginPrompt = true else vm.toggleBookmark(userId) },
+            // 상단바 공유 — 본문 '오늘의 명대사 공유하기' 와 동일하게 카드 명대사 공유 시트 진입.
+            onShare = {
+                state.card?.let { card ->
+                    AppAnalytics.track("detail_share_click", mapOf("card_id" to card.cardId))
+                    sharePayload = card.toSharePayload(english, speaker = "")
+                }
+            },
         )
 
         RefreshableBox(
@@ -351,6 +363,26 @@ fun DetailScreen(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
+                // 책 제목 — 상단바(로고)에서 본문 최상단으로 이동.
+                Text(
+                    text = topTitle,
+                    style = MaterialTheme.typography.headlineLarge.copy(fontFamily = EditorialSerif),
+                    color = Espresso,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Box(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Walnut,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Box(modifier = Modifier.height(20.dp))
+
                 MetadataChipsRow(card = card, english = english, commentCount = state.comments.size)
                 Box(modifier = Modifier.height(24.dp))
 
@@ -438,7 +470,8 @@ fun DetailScreen(
                     label = stringResource(R.string.detail_post_one_liner),
                     onClick = {
                         // 북마크 보장 — toggle 은 in-flight 자체 가드(fire-and-forget).
-                        if (!state.bookmarked) vm.toggleBookmark(userId)
+                        // 게스트는 서버 북마크가 불가하므로 호출하지 않는다(아래에서 로그인 안내 토스트).
+                        if (!isAnonymous && !state.bookmarked) vm.toggleBookmark(userId)
                         if (isAnonymous) {
                             android.widget.Toast.makeText(
                                 context,
@@ -668,6 +701,17 @@ fun DetailScreen(
                   onLaunchTour()
               },
               onLater = { showFirstShareGuide = false },
+          )
+      }
+
+      // 게스트가 북마크를 눌렀을 때 — 로그인 유도 팝업 (PWA openPromptModal / iOS AccountRequiredPrompt).
+      if (showLoginPrompt) {
+          LoginPromptDialog(
+              onLogin = {
+                  showLoginPrompt = false
+                  onRequestSignIn()
+              },
+              onDismiss = { showLoginPrompt = false },
           )
       }
     }

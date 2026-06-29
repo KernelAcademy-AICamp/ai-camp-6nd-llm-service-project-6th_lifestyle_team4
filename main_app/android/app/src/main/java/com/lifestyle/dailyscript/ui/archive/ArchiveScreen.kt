@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
@@ -59,6 +60,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -77,6 +79,7 @@ import com.lifestyle.dailyscript.data.model.CardDto
 import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.Chip
 import com.lifestyle.dailyscript.ui.components.GenreChips
+import com.lifestyle.dailyscript.ui.components.LoginPromptDialog
 import com.lifestyle.dailyscript.ui.components.OpenedBookShell
 import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.theme.CardWarm
@@ -109,10 +112,6 @@ private val Leathers = listOf(
     Color(0xFF40303B), // plum
     Color(0xFF3A463F), // sage slate
 )
-
-private val WoodLip = Color(0xFF9C7A4E)     // lit front edge of the shelf
-private val WoodFace = Color(0xFF6E5031)
-private val WoodShadow = Color(0xFF33220F)
 
 private val ShelfSidePadding = 20.dp
 
@@ -183,15 +182,23 @@ private fun frameColorsFor(genre: String): BookshelfColors =
 fun ArchiveScreen(
     userId: Long,
     onOpenCard: (Long) -> Unit,
+    isAnonymous: Boolean = false,
     onBack: (() -> Unit)? = null,
+    onRequestSignIn: () -> Unit = {},
 ) {
     val vm: ArchiveViewModel = viewModel()
     val state by vm.state.collectAsState()
 
-    LaunchedEffect(userId) { vm.load(userId) }
+    // 게스트는 서버 북마크가 없으므로 로드하지 않는다 — 빈 상태 + 로그인 유도 팝업만 보여준다.
+    LaunchedEffect(userId, isAnonymous) { if (!isAnonymous) vm.load(userId) }
+
+    // 비로그인 진입 시 1회 로그인 유도 팝업 (카드 상세 북마크와 동일, PWA '로그인 후 내 북마크를 볼 수 있어요').
+    var showGuestPrompt by remember { mutableStateOf(true) }
 
     var search by remember { mutableStateOf("") }
     var genre by remember { mutableStateOf<String?>(null) } // null = 전체
+    // 펼친 책 — 화면 전체(헤더 포함)를 덮는 오버레이로 띄우려고 화면 루트에서 상태를 들고 있는다(라이브러리와 동일).
+    var openWorkId by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(search) {
         val q = search.trim()
@@ -221,11 +228,12 @@ fun ArchiveScreen(
         }
     }
 
-    Column(
+    Box(modifier = Modifier.fillMaxSize()) {
+      Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Paper),
-    ) {
+      ) {
         // --- Header (bookstore sign) ---
         // As a MyPage sub-page (onBack != null) the back bar carries the title; as a tab
         // the large display title sits at the top instead.
@@ -283,37 +291,70 @@ fun ArchiveScreen(
             Box(modifier = Modifier.height(4.dp))
         }
 
-        RefreshableBox(
-            refreshing = state.refreshing,
-            onRefresh = { vm.refresh(userId) },
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            when {
-                state.loading && state.bookmarks.isEmpty() -> {
-                    Text(
-                        text = stringResource(R.string.loading),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Walnut,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+        if (isAnonymous) {
+            // 게스트 — 빈 서가 위에 로그인 유도 팝업.
+            EmptyShelf()
+        } else {
+            RefreshableBox(
+                refreshing = state.refreshing,
+                onRefresh = { vm.refresh(userId) },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                when {
+                    state.loading && state.bookmarks.isEmpty() -> {
+                        Text(
+                            text = stringResource(R.string.loading),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Walnut,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                        )
+                    }
+                    state.bookmarks.isEmpty() -> EmptyShelf()
+                    else -> Bookcase(
+                        books = filtered,
+                        onOpen = {
+                            openWorkId = it
+                            AppAnalytics.track("archive_book_opened", mapOf("work_id" to it))
+                        },
                     )
                 }
-                state.bookmarks.isEmpty() -> EmptyShelf()
-                else -> Bookcase(
-                    books = filtered,
-                    onOpenCard = onOpenCard,
-                )
             }
         }
+      }
+
+      // 펼친 책 — 화면 전체(헤더·칩·검색 포함)를 덮고 떠 있는 하단 바만 위에 남는다 (라이브러리와 동일, asOverlay).
+      val opened = filtered.firstOrNull { it.workId == openWorkId }
+      if (opened != null) {
+          val volumeNo = filtered.indexOfFirst { it.workId == opened.workId } + 1
+          OpenedBook(
+              book = opened,
+              volumeNo = volumeNo,
+              onOpenCard = onOpenCard,
+              onClose = { openWorkId = null },
+          )
+      }
+    }
+
+    // 비로그인 진입 시 로그인 유도 팝업 — '로그인' → 로그인 화면, '닫기' → 이전 화면으로 복귀.
+    if (isAnonymous && showGuestPrompt) {
+        LoginPromptDialog(
+            onLogin = {
+                showGuestPrompt = false
+                onRequestSignIn()
+            },
+            onDismiss = {
+                showGuestPrompt = false
+                onBack?.invoke()
+            },
+        )
     }
 }
 
 @Composable
 private fun Bookcase(
     books: List<ShelfBook>,
-    onOpenCard: (Long) -> Unit,
+    onOpen: (Long) -> Unit,
 ) {
-    var openWorkId by remember { mutableStateOf<Long?>(null) }
-
     Box(modifier = Modifier.fillMaxSize()) {
         if (books.isEmpty()) {
             Text(
@@ -336,28 +377,13 @@ private fun Bookcase(
                         GenreBookshelf(
                             colors = frameColorsFor(section.genre),
                             books = section.books,
-                            onOpen = {
-                                openWorkId = it
-                                AppAnalytics.track("archive_book_opened", mapOf("work_id" to it))
-                            },
+                            onOpen = onOpen,
                         )
                     }
                 }
                 // 떠 있는 하단 바에 가리지 않도록 — 카드 높이만큼 + 여유.
                 item { Box(modifier = Modifier.height(BottomBarContentInset + 24.dp)) }
             }
-        }
-
-        // --- Opened book: a popup whose cover swings open ---
-        val opened = books.firstOrNull { it.workId == openWorkId }
-        if (opened != null) {
-            val volumeNo = books.indexOfFirst { it.workId == opened.workId } + 1
-            OpenedBook(
-                book = opened,
-                volumeNo = volumeNo,
-                onOpenCard = onOpenCard,
-                onClose = { openWorkId = null },
-            )
         }
     }
 }
@@ -603,10 +629,16 @@ private fun OpenedBook(
 ) {
     OpenedBookShell(
         leather = book.leather,
+        coverTitle = book.title,
+        coverAuthor = book.author,
+        coverVolumeLabel = "VOL. $volumeNo",
         onClose = onClose,
         header = { dismiss -> BookHeader(book = book, volumeNo = volumeNo, onClose = dismiss) },
         // ShelfBook 엔 intro 필드가 없어 모은 카드의 work.intro 에서 가져온다 (같은 작품이라 동일).
         intro = book.cards.firstOrNull()?.works?.intro,
+        // 라이브러리와 동일하게 — Dialog 창이 아니라 이 화면 위에 깔아 떠 있는 하단 바가 책 위에 보이고
+        // 책이 바에 가리지 않게(그 위 영역에서 중앙 정렬) 한다.
+        asOverlay = true,
     ) {
         book.cards.forEach { card ->
             BookQuoteItem(
@@ -643,6 +675,15 @@ private fun BookHeader(book: ShelfBook, volumeNo: Int, onClose: () -> Unit) {
                 style = TextStyle(fontFamily = EditorialSerif, fontSize = 26.sp, lineHeight = 34.sp),
                 color = Espresso,
             )
+            // 한글 제목 바로 아래 영문(원어) 제목 — 모은 카드의 work.title_original 에서, 있을 때만 (iOS originalLine).
+            book.cards.firstOrNull()?.works?.titleOriginal?.takeIf { it.isNotBlank() }?.let { eng ->
+                Box(modifier = Modifier.height(4.dp))
+                Text(
+                    text = eng,
+                    style = TextStyle(fontFamily = EditorialSerif, fontSize = 15.sp, lineHeight = 22.sp, fontStyle = FontStyle.Italic),
+                    color = Walnut,
+                )
+            }
             val meta = listOfNotNull(
                 genreLabel(book.format),
                 book.author?.ifBlank { null },
@@ -769,32 +810,38 @@ private fun GiltBands(modifier: Modifier = Modifier) {
     }
 }
 
-/** A wooden shelf board the books rest on, with a lit front edge. */
-@Composable
-private fun ShelfBoard() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(16.dp)
-            .background(
-                Brush.verticalGradient(
-                    0f to WoodLip,
-                    0.12f to WoodFace,
-                    1f to WoodShadow,
-                ),
-            ),
-    )
-}
-
+/**
+ * 북마크가 없을 때의 빈 상태 — iOS ArchiveView.emptyState 미러: 가운데 정렬 북마크 아이콘 +
+ * 헤드라인(serif) + 서브라인(walnut). (PWA bm-empty 의 bookmark_border + 헤드라인 + 서브라인)
+ */
 @Composable
 private fun EmptyShelf() {
-    Column {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.BookmarkBorder,
+            contentDescription = null,
+            tint = Sand,
+            modifier = Modifier.size(48.dp),
+        )
+        Box(modifier = Modifier.height(16.dp))
         Text(
-            text = stringResource(R.string.empty_bookmarks),
+            text = stringResource(R.string.archive_empty_title),
+            style = MaterialTheme.typography.titleMedium.copy(fontFamily = EditorialSerif),
+            color = Espresso,
+            textAlign = TextAlign.Center,
+        )
+        Box(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.archive_empty_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = Walnut,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+            textAlign = TextAlign.Center,
         )
-        ShelfBoard()
     }
 }

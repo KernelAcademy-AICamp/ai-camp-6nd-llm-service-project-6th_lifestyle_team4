@@ -107,7 +107,7 @@ class HomeViewModel : ViewModel() {
 
     /** Refresh — non-deterministic pick excluding recently shown. Non-members are capped at 3/day. */
     fun refresh(userId: Long, isAnonymous: Boolean) {
-        if (_state.value.loading) return // 진행 중이면 무시 — 연타로 중복 새로고침/카운트 차감 방지
+        if (_state.value.loading || _state.value.refreshing) return // 진행 중이면 무시 — 연타로 중복 새로고침/카운트 차감 방지
         if (allCards.isEmpty()) { load(userId, force = true); return } // 첫 로드 실패 복구 — 가드 우회
         viewModelScope.launch {
             // load()와 동일한 세션 가드 — 로그아웃/재로그인 직후 이전 사용자의
@@ -116,14 +116,13 @@ class HomeViewModel : ViewModel() {
             if (isAnonymous) {
                 val today = LocalDate.now().toString()
                 if (AppPreferences.refreshCountToday(today) >= FREE_REFRESH_LIMIT) {
-                    _state.value = _state.value.copy(
-                        error = "오늘 새로고침 ${FREE_REFRESH_LIMIT}회를 모두 썼어요. 로그인하면 무제한이에요.",
-                    )
+                    // 한도 도달 — 빨간 글씨 대신 로그인 유도 팝업을 띄운다(iOS passAnonRefreshGate 미러).
+                    _state.value = _state.value.copy(refreshLimitReached = true)
                     return@launch
                 }
                 AppPreferences.bumpRefreshCount(today)
             }
-            _state.value = _state.value.copy(loading = true, error = null)
+            _state.value = _state.value.copy(refreshing = true, error = null)
             val tasteEnabled = AppPreferences.tasteEnabled.first()
             val recentIds = AppPreferences.recentlyShown.first()
             val prefs = AppPreferences.userPrefs.first()
@@ -145,13 +144,20 @@ class HomeViewModel : ViewModel() {
             val newRecentIds = AppPreferences.recentlyShown.first()
             val recent = buildRecent(newRecentIds)
             _state.value = _state.value.copy(
-                loading = false,
+                refreshing = false,
                 todayCard = card,
                 todayBookmarked = card != null && bookmarkCards.any { it.cardId == card.cardId },
                 todayShareCount = card?.shareCount ?: 0,
                 recent = recent,
                 bookmarkCounts = _state.value.bookmarkCounts + loadCounts(listOfNotNull(card) + recent),
             )
+        }
+    }
+
+    /** 로그인 유도 팝업 닫기 — 사용자가 닫거나 로그인으로 넘어갈 때 호출. */
+    fun consumeRefreshLimit() {
+        if (_state.value.refreshLimitReached) {
+            _state.value = _state.value.copy(refreshLimitReached = false)
         }
     }
 
@@ -238,6 +244,8 @@ class HomeViewModel : ViewModel() {
 data class HomeState(
     val loading: Boolean = true,
     val loaded: Boolean = false,
+    // 당겨서 새로고침 진행 여부 — 초기 로드(loading)와 구분해 풀투리프레시 인디케이터만 제어.
+    val refreshing: Boolean = false,
     val todayCard: CardDto? = null,
     val todayBookmarked: Boolean = false,
     // 오늘 카드 누적 공유수 — share_count 로 시드, 공유/저장 시 낙관적 +1 (onCardShared).
@@ -247,4 +255,6 @@ data class HomeState(
     val commentCounts: Map<Long, Int> = emptyMap(),
     val error: String? = null,
     val bookmarkActionInFlight: Boolean = false,
+    // 익명 새로고침 3회 한도 도달 — true 면 로그인 유도 팝업 표시(빨간 글씨 대체).
+    val refreshLimitReached: Boolean = false,
 )

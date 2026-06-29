@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -276,6 +277,8 @@ fun LibraryScreen(
         }
 
         // --- Opened book: a popup whose cover swings open to show the gathered quotes ---
+        // 라이브러리에선 Dialog 창이 아니라 이 화면 위에 깔아(asOverlay) 떠 있는 하단 바가 책 위에 보이게 한다 →
+        // 책을 닫지 않고도 바로 다른 탭으로 넘어갈 수 있다.
         val opened = books.firstOrNull { it.workId == openWorkId }
         if (opened != null) {
             OpenedLibraryBook(
@@ -283,6 +286,7 @@ fun LibraryScreen(
                 bookmarkedCardIds = state.bookmarkedCardIds,
                 onOpenCard = onOpenCard,
                 onClose = { openWorkId = null },
+                asOverlay = true,
             )
         }
         // 우측 하단 북마크 FAB 제거 — 북마크 진입은 top-bar 북마크 버튼으로 이동 (PWA f4e9d86).
@@ -485,12 +489,16 @@ internal fun OpenedLibraryBook(
     bookmarkedCardIds: Set<Long>,
     onOpenCard: (Long) -> Unit,
     onClose: () -> Unit,
+    asOverlay: Boolean = false,
 ) {
     OpenedBookShell(
         leather = leatherColorFor(book.work.title),
+        coverTitle = book.work.title,
+        coverAuthor = book.work.author,
         onClose = onClose,
         header = { dismiss -> LibraryBookHeader(book = book, onClose = dismiss) },
         intro = book.work.intro,
+        asOverlay = asOverlay,
     ) {
         book.cards.forEachIndexed { index, card ->
             LibraryQuoteItem(
@@ -525,6 +533,15 @@ private fun LibraryBookHeader(book: LibraryBook, onClose: () -> Unit) {
                 style = TextStyle(fontFamily = EditorialSerif, fontSize = 26.sp, lineHeight = 34.sp),
                 color = Espresso,
             )
+            // 한글 제목 바로 아래 영문(원어) 제목 — 있을 때만, 이탤릭 세리프로 구분 (iOS BookPage originalLine).
+            book.work.titleOriginal?.takeIf { it.isNotBlank() }?.let { eng ->
+                Box(modifier = Modifier.height(4.dp))
+                Text(
+                    text = eng,
+                    style = TextStyle(fontFamily = EditorialSerif, fontSize = 15.sp, lineHeight = 22.sp, fontStyle = FontStyle.Italic),
+                    color = Walnut,
+                )
+            }
             book.work.subtitle?.takeIf { it.isNotBlank() }?.let { sub ->
                 Box(modifier = Modifier.height(4.dp))
                 Text(
