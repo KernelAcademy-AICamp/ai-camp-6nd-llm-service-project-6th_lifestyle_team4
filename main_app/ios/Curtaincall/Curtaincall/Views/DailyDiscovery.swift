@@ -873,9 +873,9 @@ struct DailyOzPickSection: View {
 
     private func workRow(_ work: Work) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            HighlightBookCover(work: work)
-                .scaleEffect(56.0 / 132.0, anchor: .center)
-                .frame(width: 56, height: 188 * 56 / 132)
+            // WorkCover(cover_url 로드, 없으면 가죽) — discoveryCover 와 동일 컴포넌트로 통일.
+            // 기존 HighlightBookCover(가죽 전용) + scaleEffect 핵 제거 → 표지 아트워크 표시.
+            WorkCover(work: work, width: 56, height: 188 * 56 / 132, compact: true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(work.title.isEmpty ? "—" : work.title)
                     .font(.titleSerif(15)).fontWeight(.bold)
