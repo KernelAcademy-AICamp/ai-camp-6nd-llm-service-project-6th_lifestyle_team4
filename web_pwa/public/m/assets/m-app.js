@@ -6407,9 +6407,11 @@ function openDetailApproved(card) {
   const yearHtml = w.release_year
     ? `<span class="t-label-sm c-walnut">${escapeHtml(String(w.release_year))}</span><span class="t-label-sm c-walnut">·</span>`
     : '';
-  /* 사용자 명세: 본문 메타 최상단에 작품 제목(작가 이름 위). */
-  const detailWorkTitleText = displayTitle(titleSrc || w.title || '');
-  const detailSubText = subtitleSrc ? String(subtitleSrc).trim() : '';
+  /* 사용자 명세: 본문 메타 최상단에 작품 제목(작가 이름 위).
+     paintDetail 안에선 titleSrc/subtitleSrc 가 정의돼 있지 않음 — w.title/w.subtitle 직접 사용.
+     (언어 토글 시엔 applyDetailLang 가 titleSrc/subtitleSrc 기반으로 재생성) */
+  const detailWorkTitleText = displayTitle(w.title || '');
+  const detailSubText = w.subtitle ? String(w.subtitle).trim() : '';
   detailMeta.style.flexDirection = 'column';
   detailMeta.innerHTML =
       `<p style="margin:0 0 4px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:18px;font-weight:700;color:var(--espresso);text-align:center;line-height:1.3;word-break:keep-all;">${escapeHtml(detailWorkTitleText)}</p>`
