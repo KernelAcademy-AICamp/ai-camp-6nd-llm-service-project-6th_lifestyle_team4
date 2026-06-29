@@ -5978,6 +5978,9 @@ function userGuideSeenKey() {
 
 // 첫 진입 시 1회 자동 노출. 띄웠으면 true 반환 → 같은 부팅에서 랜딩 로그인 유도는 미룬다.
 async function maybeShowGuide() {
+  /* 사용자 명세: '첫 로그인에만' — 비로그인(익명) 사용자에게는 절대 띄우지 않음.
+     로그인된 사용자 1회만 노출. */
+  if (state.isAnonymous || !state.userId) return false;
   const key = userGuideSeenKey();
   /* signin 직후 reload 시 set 된 force flag — seen 키와 무관하게 1회 강제 노출 */
   let force = false;
