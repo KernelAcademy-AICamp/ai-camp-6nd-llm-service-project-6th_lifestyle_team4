@@ -7127,9 +7127,14 @@ function buildFeedItem(post) {
   return wrap;
 }
 
-// 카테고리 칩 클릭 → state 변경 후 재렌더 + localStorage 저장 (새로고침 유지)
+// 카테고리 칩 클릭 → state 변경 후 재렌더 + localStorage 저장 (새로고침 유지).
+// 시트(feedpost detail)가 열려있으면 먼저 닫음 — 사용자가 다른 카테고리 가는데
+// 옛 카드 상세가 그대로 떠있으면 안 됨.
 document.querySelectorAll('#feed-chips .a-chip').forEach((btn) => {
   btn.addEventListener('click', () => {
+    if (feedpostScreen && feedpostScreen.classList.contains('open')) {
+      try { closeFeedPostDetail(); } catch (e) { closeFeedPostDetailInternal(); }
+    }
     state.feedCategory = btn.dataset.feedCat || 'today';
     safeStorageSet('ds.feedCategory', state.feedCategory);
     renderFeed();
