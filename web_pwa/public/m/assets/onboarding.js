@@ -232,11 +232,25 @@ function positionCurrent() {
   els.badge.style.top  = clamp(r.top  - pad - 6, 6, vh - 36) + 'px';
 
   const below = (r.top + r.height / 2) < vh * 0.5;  // 대상이 위쪽이면 툴팁은 아래에
+  /* 하단 nav(약 64px) + safe-area + 호흡 만큼 reserve — tip 이 nav 영역에 가려/잘리지 않게 */
+  const BOTTOM_RESERVE = 110;
+  /* 모바일 visualViewport (주소창 토글 시 더 정확) */
+  const vvh = (window.visualViewport && window.visualViewport.height) || vh;
   requestAnimationFrame(() => {
     const th = els.tip.offsetHeight;
+    /* tip 이 화면보다 크면 max-height 로 잘라 스크롤 가능하게 */
+    const maxTh = vvh - 32 - BOTTOM_RESERVE;
+    if (th > maxTh) {
+      els.tip.style.maxHeight = maxTh + 'px';
+      els.tip.style.overflowY = 'auto';
+    } else {
+      els.tip.style.maxHeight = '';
+      els.tip.style.overflowY = '';
+    }
+    const th2 = els.tip.offsetHeight;
     const top = below
-      ? Math.min(r.bottom + 18, vh - th - 16)
-      : Math.max(16, r.top - th - 18);
-    els.tip.style.top = top + 'px';
+      ? Math.min(r.bottom + 18, vvh - th2 - BOTTOM_RESERVE)
+      : Math.max(16, r.top - th2 - 18);
+    els.tip.style.top = Math.max(16, top) + 'px';
   });
 }
