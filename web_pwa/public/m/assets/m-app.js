@@ -7393,6 +7393,9 @@ function openFeedPostDetail(post) {
   state.feedPostComments = [];
   renderFeedComments();
   history.pushState({ overlay: 'feedPost' }, '');
+  /* Bottom sheet 모드 — 피드 chips 까지 보이도록 시트 top 을 chips.bottom 위치로.
+     상단(masthead + 제목 + chips)은 안 가리고 시트가 그 아래부터 슬라이드업. */
+  positionFeedPostSheet();
   feedpostScreen.style.display = 'flex';
   if (feedpostBody) feedpostBody.scrollTop = 0;
   requestAnimationFrame(() => feedpostScreen.classList.add('open'));
@@ -7470,6 +7473,7 @@ function openHighlightDetail(highlight) {
   state.highlightCommentLikedByMe = new Set();
   renderFeedComments();
   history.pushState({ overlay: 'feedPost' }, '');
+  positionFeedPostSheet();
   feedpostScreen.style.display = 'flex';
   if (feedpostBody) feedpostBody.scrollTop = 0;
   requestAnimationFrame(() => feedpostScreen.classList.add('open'));
@@ -7736,9 +7740,22 @@ async function deleteFeedComment(commentId) {
   }
 }
 
+/* Bottom sheet 위치 — 피드 chips.bottom 으로 top 동적 설정. 피드 view 가 아니거나
+   chips 가 안 보이면 inset:0 기본(전체화면) 유지. */
+function positionFeedPostSheet() {
+  if (!feedpostScreen) return;
+  if (state.currentView !== 'feed') { feedpostScreen.style.top = ''; return; }
+  const chips = document.getElementById('feed-chips');
+  if (!chips) { feedpostScreen.style.top = ''; return; }
+  const bottom = chips.getBoundingClientRect().bottom;
+  feedpostScreen.style.top = Math.max(0, bottom) + 'px';
+}
+
 function closeFeedPostDetailInternal() {
   if (!feedpostScreen) return;
   feedpostScreen.classList.remove('open');
+  /* 다음 진입(다른 view 일 수도)에서 정확히 분기되게 top 리셋 */
+  feedpostScreen.style.top = '';
   // 하단바 cat 복귀 — view 기준 (피드면 cat_pen, 그 외 cat_today)
   showBottomNavCat();
   updateBottomNavCatForView(state.currentView);

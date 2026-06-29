@@ -1929,8 +1929,9 @@
     <h1 class="t-display-md c-espresso">피드</h1>
     <p class="t-label-sm c-walnut" style="margin-top:6px;">매일 한 문장, 그리고 기억에 남은 장면들</p>
 
-    <!-- Category chips -->
-    <div class="archive-chips" id="feed-chips" role="tablist" style="margin-top:18px;">
+    <!-- Category chips — sticky 상단 고정 (top-bar 64px 아래) -->
+    <div class="archive-chips" id="feed-chips" role="tablist"
+         style="position:sticky;top:64px;z-index:25;background:var(--paper);padding:18px 0 10px;margin:0;">
       <button class="a-chip active" data-feed-cat="today" role="tab">나의 감상평</button>
       <button class="a-chip" data-feed-cat="highlight" role="tab">하이라이트</button>
     </div>
