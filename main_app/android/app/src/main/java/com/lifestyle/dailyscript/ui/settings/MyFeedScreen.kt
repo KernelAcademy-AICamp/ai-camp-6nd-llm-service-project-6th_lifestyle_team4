@@ -1,7 +1,6 @@
 package com.lifestyle.dailyscript.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.EditNote
@@ -29,10 +28,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -48,9 +49,9 @@ import com.lifestyle.dailyscript.ui.components.BottomBarContentInset
 import com.lifestyle.dailyscript.ui.components.EditorialField
 import com.lifestyle.dailyscript.ui.components.RefreshableBox
 import com.lifestyle.dailyscript.ui.theme.Cta
+import com.lifestyle.dailyscript.ui.theme.EditorialSans
 import com.lifestyle.dailyscript.ui.theme.EditorialSerif
 import com.lifestyle.dailyscript.ui.theme.Espresso
-import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
@@ -154,13 +155,13 @@ fun MyFeedScreen(userId: Long, onBack: () -> Unit, onOpenCard: (Long) -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(Paper)) {
         ActivityTopBar(title = "내 피드", onBack = onBack)
 
-        // Category chips — mirrors the PWA #myfeed-chips (ONE LINERS / HIGHLIGHT).
+        // 카테고리 토글 — iOS MyFeedView.tabBar 와 동일한 캡슐 칩(오늘의 한줄 / 하이라이트).
         Row(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            MyFeedChip("ONE LINERS", category == CAT_COMMENT) { category = CAT_COMMENT; editingId = null }
-            MyFeedChip("HIGHLIGHT", category == CAT_HIGHLIGHT) { category = CAT_HIGHLIGHT; editingId = null }
+            MyFeedChip("오늘의 한줄", category == CAT_COMMENT) { category = CAT_COMMENT; editingId = null }
+            MyFeedChip("하이라이트", category == CAT_HIGHLIGHT) { category = CAT_HIGHLIGHT; editingId = null }
         }
 
         val empty = if (category == CAT_COMMENT) state.posts.isEmpty() else state.highlights.isEmpty()
@@ -350,16 +351,18 @@ private fun MyFeedHighlightRow(highlight: Highlight, onDelete: () -> Unit, onOpe
     ActivityHairline()
 }
 
+/** 카테고리 토글 칩 — iOS MyFeedView.tabChip 이식: 캡슐 모양, 활성 espresso / 비활성 sand 0.3, 보더 없음. */
 @Composable
 private fun MyFeedChip(text: String, active: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(4.dp)
-    Box(
+    Text(
+        text = text,
+        style = TextStyle(fontFamily = EditorialSans, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+        color = if (active) Paper else Walnut,
+        maxLines = 1,
         modifier = Modifier
-            .background(if (active) Espresso else Paper, shape)
-            .border(1.dp, if (active) Espresso else Latte, shape)
+            .clip(CircleShape)
+            .background(if (active) Espresso else Sand.copy(alpha = 0.3f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-    ) {
-        Text(text, style = MaterialTheme.typography.labelSmall, color = if (active) Paper else Walnut, maxLines = 1)
-    }
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    )
 }

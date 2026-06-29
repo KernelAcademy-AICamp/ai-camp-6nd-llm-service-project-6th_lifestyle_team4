@@ -633,7 +633,7 @@ private fun OpenedBook(
         coverAuthor = book.author,
         coverVolumeLabel = "VOL. $volumeNo",
         onClose = onClose,
-        header = { dismiss -> BookHeader(book = book, volumeNo = volumeNo, onClose = dismiss) },
+        header = { dismiss -> BookHeader(book = book, onClose = dismiss) },
         // ShelfBook 엔 intro 필드가 없어 모은 카드의 work.intro 에서 가져온다 (같은 작품이라 동일).
         intro = book.cards.firstOrNull()?.works?.intro,
         // 라이브러리와 동일하게 — Dialog 창이 아니라 이 화면 위에 깔아 떠 있는 하단 바가 책 위에 보이고
@@ -655,21 +655,13 @@ private fun OpenedBook(
 }
 
 @Composable
-private fun BookHeader(book: ShelfBook, volumeNo: Int, onClose: () -> Unit) {
+private fun BookHeader(book: ShelfBook, onClose: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            val vol = "%02d".format(volumeNo)
-            val eyebrow = if (!book.subtitle.isNullOrBlank())
-                "${book.series} · VOLUME #$vol" else "Collected · Volume #$vol"
-            Text(
-                text = eyebrow.uppercase(),
-                style = TextStyle(fontSize = 10.sp, letterSpacing = 0.3.em, color = Walnut),
-            )
-            Box(modifier = Modifier.height(6.dp))
             Text(
                 text = book.title,
                 style = TextStyle(fontFamily = EditorialSerif, fontSize = 26.sp, lineHeight = 34.sp),

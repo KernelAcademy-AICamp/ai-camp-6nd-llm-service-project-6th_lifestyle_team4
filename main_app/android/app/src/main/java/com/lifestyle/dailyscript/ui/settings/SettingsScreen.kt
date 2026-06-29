@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
@@ -463,6 +464,9 @@ private fun SocialLoginButton(
     }
 }
 
+// 로그인·회원가입·프로필 편집 팝업 공용 모양 — 테두리·그림자를 같은 둥근모서리로 그린다.
+private val DialogShape = RoundedCornerShape(28.dp)
+
 @Composable
 private fun SignInDialog(
     inProgress: Boolean,
@@ -594,7 +598,12 @@ private fun SignInDialog(
                 )
             }
         },
+        shape = DialogShape,
         containerColor = Paper,
+        // 떠 있는 팝업이 본문과 분리돼 보이도록 테두리(Latte) + 그림자.
+        modifier = Modifier
+            .shadow(16.dp, DialogShape)
+            .border(2.5.dp, Latte, DialogShape),
     )
 }
 
@@ -696,7 +705,12 @@ internal fun ProfileDialog(
                 }
             }
         },
+        shape = DialogShape,
         containerColor = Paper,
+        // 떠 있는 팝업이 본문과 분리돼 보이도록 테두리(Latte) + 그림자.
+        modifier = Modifier
+            .shadow(16.dp, DialogShape)
+            .border(2.5.dp, Latte, DialogShape),
     )
 }
 

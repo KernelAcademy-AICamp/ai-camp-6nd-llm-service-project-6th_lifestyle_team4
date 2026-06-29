@@ -355,7 +355,7 @@ private fun TodayCard(
                     CardCounts(viewCount = card.viewCount, commentCount = commentCount)
                 }
             }
-            // 우상단엔 언어 토글만 — 북마크·공유 칩은 해시태그(키워드) 줄 우측으로 이동.
+            // 우상단엔 언어 토글만 — 북마크·공유 칩은 작품 메타 아래(구분선 위) 우측 줄로 이동.
             if (card?.hasEnglish() == true) {
                 LangSegmented(english = english, onToggle = { english = !english })
             } else {
@@ -400,50 +400,46 @@ private fun TodayCard(
                 color = Walnut,
             )
         }
-        Box(modifier = Modifier.height(24.dp))
-        SectionDivider()
-        Box(modifier = Modifier.height(12.dp))
-        // 키워드(해시태그) 줄 + 우측 북마크·공유 칩. 키워드는 weight 로 남는 폭을 채우고,
-        // 칩 2개는 그 줄 오른쪽 끝에 붙는다(상단 정렬 — 키워드 첫 줄에 맞춤).
+        // 북마크·공유 칩 — 작품 메타 아래, 구분선 위 우측 정렬 (PWA today-card 하단 액션 줄).
+        Box(modifier = Modifier.height(14.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            FlowRow(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                card?.keywordsFor(english)?.forEach { kw ->
-                    Text(
-                        text = "#$kw",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Walnut,
-                        maxLines = 1,
-                    )
-                }
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TodayActionChip(
-                    icon = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                    contentDescription = stringResource(R.string.bookmark),
-                    tint = if (bookmarked) Cta else Walnut,
-                    count = if (card != null) bookmarkCount else null,
-                    enabled = card != null && !bookmarkActionInFlight,
-                    modifier = Modifier.coachAnchor(coach, "today_bookmark"),
-                    onClick = onBookmarkToggle,
-                )
-                TodayActionChip(
-                    icon = Icons.Outlined.IosShare,
-                    contentDescription = "공유",
-                    tint = Walnut,
-                    count = if (card != null) shareCount else null,
-                    enabled = card != null,
-                    onClick = { card?.let { onShare(it.toSharePayload(english, speaker)) } },
+            TodayActionChip(
+                icon = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                contentDescription = stringResource(R.string.bookmark),
+                tint = if (bookmarked) Cta else Walnut,
+                count = if (card != null) bookmarkCount else null,
+                enabled = card != null && !bookmarkActionInFlight,
+                modifier = Modifier.coachAnchor(coach, "today_bookmark"),
+                onClick = onBookmarkToggle,
+            )
+            TodayActionChip(
+                icon = Icons.Outlined.IosShare,
+                contentDescription = "공유",
+                tint = Walnut,
+                count = if (card != null) shareCount else null,
+                enabled = card != null,
+                onClick = { card?.let { onShare(it.toSharePayload(english, speaker)) } },
+            )
+        }
+        Box(modifier = Modifier.height(14.dp))
+        SectionDivider()
+        Box(modifier = Modifier.height(12.dp))
+        // 키워드(해시태그) 줄 — 구분선 아래 전체 폭 (PWA today-keywords).
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            card?.keywordsFor(english)?.forEach { kw ->
+                Text(
+                    text = "#$kw",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Walnut,
+                    maxLines = 1,
                 )
             }
         }

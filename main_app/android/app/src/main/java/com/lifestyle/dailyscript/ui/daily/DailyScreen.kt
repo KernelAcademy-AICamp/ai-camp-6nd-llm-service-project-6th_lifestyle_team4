@@ -32,9 +32,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
@@ -90,6 +94,7 @@ import com.lifestyle.dailyscript.ui.theme.Espresso
 import com.lifestyle.dailyscript.ui.theme.Highlight
 import com.lifestyle.dailyscript.ui.theme.Latte
 import com.lifestyle.dailyscript.ui.theme.MetaCaps
+import com.lifestyle.dailyscript.ui.theme.NewbookCard
 import com.lifestyle.dailyscript.ui.theme.Paper
 import com.lifestyle.dailyscript.ui.theme.Sand
 import com.lifestyle.dailyscript.ui.theme.Walnut
@@ -251,7 +256,7 @@ private fun DailyNewBooks(books: List<DailyWork>, onOpenWork: (Long) -> Unit) {
             .fillMaxWidth()
             .shadow(2.dp, cardShape)
             .clip(cardShape)
-            .background(Espresso)
+            .background(NewbookCard)
             .border(0.5.dp, Latte.copy(alpha = 0.25f), cardShape),
     ) {
         pool.forEach { ghost ->
@@ -688,16 +693,37 @@ private fun DailyTrending(
                     color = Espresso,
                 )
                 Box(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "북마크 ${formatCount(item.bookmarks)}   조회 ${formatCount(item.views)}   댓글 ${formatCount(item.comments)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Walnut,
-                )
+                // 인기 메타 — 북마크·조회·댓글을 아이콘+숫자로 (PWA renderDailyTrending: bookmark/visibility/chat_bubble).
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TrendingStat(icon = Icons.Outlined.Bookmark, count = item.bookmarks)
+                    TrendingStat(icon = Icons.Outlined.Visibility, count = item.views)
+                    TrendingStat(icon = Icons.AutoMirrored.Outlined.Comment, count = item.comments)
+                }
             }
         }
         Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Latte))
     }
     SectionGap()
+}
+
+/** 인기 대사 메타 한 칸 — 아이콘 + 숫자 (PWA daily-trending 메타: 아이콘 13 / 숫자 11 / walnut). */
+@Composable
+private fun TrendingStat(icon: ImageVector, count: Int) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Walnut,
+            modifier = Modifier.size(13.dp),
+        )
+        Text(text = formatCount(count), style = MaterialTheme.typography.labelSmall, color = Walnut)
+    }
 }
 
 @Composable
@@ -807,11 +833,14 @@ private fun DailyOzPick(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = work?.title?.takeIf { it.isNotBlank() } ?: "—",
-                    style = TextStyle(fontFamily = EditorialSerif, fontSize = 15.sp, fontWeight = FontWeight.Bold),
+                    // 책 제목 — 고딕(EditorialSans). PWA line-height 1.3 → 20sp.
+                    style = TextStyle(fontFamily = EditorialSans, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold),
                     color = Espresso,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // 제목과 작가 줄 사이 간격 (PWA 작가 줄 margin-top 4px).
+                Box(modifier = Modifier.height(4.dp))
                 Text(
                     text = listOfNotNull(work?.author, work?.releaseYear?.toString()).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,

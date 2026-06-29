@@ -39,3 +39,6 @@ val CardWarm: Color
 
 val FeedCard: Color
     @Composable @ReadOnlyComposable get() = LocalAppColors.current.feedCard
+
+val NewbookCard: Color
+    @Composable @ReadOnlyComposable get() = LocalAppColors.current.newbookCard

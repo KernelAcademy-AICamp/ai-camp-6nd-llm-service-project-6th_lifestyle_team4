@@ -25,8 +25,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -142,7 +142,7 @@ fun TopBookmarkButton(onClick: () -> Unit) {
 }
 
 /**
- * 헤더 우측 알림(확성기) 버튼 — 미읽음 [unread] > 0 이면 우상단 빨간 배지(99+ 캡). (PWA #notif-btn / #notif-badge)
+ * 헤더 우측 알림 버튼 — 종모양 아이콘. 미읽음 [unread] > 0 이면 우상단 빨간 배지(99+ 캡). (PWA #notif-btn / #notif-badge)
  */
 @Composable
 fun NotifButton(unread: Int, onClick: () -> Unit) {
@@ -153,7 +153,7 @@ fun NotifButton(unread: Int, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Outlined.Campaign,
+            imageVector = Icons.Outlined.Notifications,
             contentDescription = "알림",
             tint = Espresso,
             modifier = Modifier.size(22.dp),

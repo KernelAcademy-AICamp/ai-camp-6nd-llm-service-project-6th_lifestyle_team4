@@ -500,10 +500,9 @@ internal fun OpenedLibraryBook(
         intro = book.work.intro,
         asOverlay = asOverlay,
     ) {
-        book.cards.forEachIndexed { index, card ->
+        book.cards.forEach { card ->
             LibraryQuoteItem(
                 card = card,
-                serial = index + 1,
                 bookmarked = card.cardId in bookmarkedCardIds,
                 onOpen = {
                     onOpenCard(card.cardId)
@@ -583,7 +582,7 @@ private fun LibraryBookHeader(book: LibraryBook, onClose: () -> Unit) {
 
 /** One gathered card in the opened book (serial, quote, short description). */
 @Composable
-private fun LibraryQuoteItem(card: CardDto, serial: Int, bookmarked: Boolean, onOpen: () -> Unit) {
+private fun LibraryQuoteItem(card: CardDto, bookmarked: Boolean, onOpen: () -> Unit) {
     val accent = Sand
     Box(
         modifier = Modifier
@@ -630,9 +629,9 @@ private fun LibraryQuoteItem(card: CardDto, serial: Int, bookmarked: Boolean, on
                     .size(16.dp),
             )
         }
-        // Card serial (일련번호) — 책 안에서의 0패딩 순번(#01, #02…). 북마크 뱃지 아래로 내림.
+        // Card serial (일련번호) — 카드 고유번호(card_id). 북마크 뱃지 아래로 내림.
         Text(
-            text = "#%02d".format(serial),
+            text = "#${card.cardId}",
             style = TextStyle(
                 fontSize = 9.sp,
                 letterSpacing = 0.25.em,

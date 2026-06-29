@@ -23,19 +23,21 @@ data class AppColors(
     val highlight: Color,
     val cardWarm: Color,
     val feedCard: Color,
+    val newbookCard: Color,
 )
 
 val LightAppColors = AppColors(
-    paper = Color(0xFFFAF8F2),     // warm cream surface
+    paper = Color(0xFFE8E1D3),     // warm beige surface (PWA-matched base background)
     espresso = Color(0xFF0E0C0A),  // near-black ink
     walnut = Color(0xFF6B5D4F),    // secondary text / meta
-    latte = Color(0xFFE8E1D3),     // hairline / subtle panel
+    latte = Color(0xFFD6CAB4),     // hairline / subtle panel — darkened to stay visible on the beige page
     sand = Color(0xFFC9B89A),      // neutral accent
     cta = Color(0xFFD85A30),       // coral CTA
     roast = Color(0xFF2C2620),     // pressed state of filled button
     highlight = Color(0xFFF4C20D), // signal (LIVE, star)
-    cardWarm = Color(0xFFFFFDF7),  // card bg inside modals / notice cards
-    feedCard = Color(0xFFE6E1D7),  // feed item container
+    cardWarm = Color(0xFFEDE6D8),  // card bg inside modals / notice cards — tracks the beige page tone
+    feedCard = Color(0xFFD4CAB8),  // feed item container — kept a step darker than the beige page
+    newbookCard = Color(0xFF0E0C0A), // daily new-book hero — dark espresso card on the light page
 )
 
 val DarkAppColors = AppColors(
@@ -49,6 +51,7 @@ val DarkAppColors = AppColors(
     highlight = Color(0xFFF4C20D),
     cardWarm = Color(0xFF15120E),  // card bg inside modals / notice cards (dark)
     feedCard = Color(0xFF1C1813),  // feed item container (dark)
+    newbookCard = Color(0xFFE8E1D3), // daily new-book hero — soft beige card (not stark cream) on the dark page
 )
 
 val LocalAppColors = staticCompositionLocalOf { LightAppColors }
