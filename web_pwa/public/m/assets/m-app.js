@@ -3230,9 +3230,12 @@ function stripMarkdownLite(s) {
 }
 
 // 섹션 1: 공지 한 줄 + 메가폰 + 10초 (사용자 명세). 클릭 → view-notice.
+// (사용자 요청 — 업데이트 공지사항란 자체를 숨김. 헤더의 알림 벨로만 노출.)
 function renderDailyNotice() {
   const sec = document.getElementById('daily-section-notice');
   if (!sec) return;
+  sec.style.display = 'none';   // ← 숨김. 알림은 상단 벨 아이콘으로 확인.
+  return;
   stopNoticeCarousel();
   if (!state.noticesLoaded) {
     if (typeof loadNotices === 'function') {
