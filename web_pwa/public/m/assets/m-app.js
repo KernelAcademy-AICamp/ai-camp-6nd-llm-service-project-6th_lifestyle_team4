@@ -2476,6 +2476,46 @@ todayCompanion?.addEventListener('click', (e) => {
     onOpenCard: openRecommendedCard,
   });
 });
+/* today 화면 pull-to-refresh — 위에서 아래로 당기면 refreshTodayCard 호출.
+   threshold(80px) 넘기면 새 카드 + 실타래 spin(spinYarn) 자동. */
+(function initTodayPullToRefresh() {
+  if (!viewDaily) return;
+  let startY = 0;
+  let pulled = 0;
+  let active = false;
+  const THRESHOLD = 80;
+  const MAX_PULL = 100;
+  viewDaily.addEventListener('touchstart', (e) => {
+    if (state.currentView !== 'daily') return;
+    if ((window.scrollY || document.documentElement.scrollTop || 0) > 0) return;
+    if (!e.touches || !e.touches[0]) return;
+    startY = e.touches[0].clientY;
+    pulled = 0;
+    active = true;
+  }, { passive: true });
+  viewDaily.addEventListener('touchmove', (e) => {
+    if (!active) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { pulled = 0; viewDaily.style.transform = ''; return; }
+    pulled = dy;
+    /* 저항감 — 0.5 배율 + 상한 100px */
+    const visual = Math.min(dy * 0.5, MAX_PULL);
+    viewDaily.style.transform = `translateY(${visual}px)`;
+  }, { passive: true });
+  viewDaily.addEventListener('touchend', () => {
+    if (!active) return;
+    active = false;
+    const fired = pulled > THRESHOLD;
+    viewDaily.style.transition = 'transform .25s ease';
+    viewDaily.style.transform = '';
+    setTimeout(() => { viewDaily.style.transition = ''; }, 280);
+    if (fired) {
+      try { refreshTodayCard(); } catch (e) { console.warn('[m] pull-to-refresh failed:', e); }
+    }
+    startY = 0; pulled = 0;
+  });
+})();
+
 // '다른 명대사' 새로고침 — 카드 위 버튼을 제거하고 하단 HOME 탭 재탭으로 대체(BottomNavBar 미러).
 function refreshTodayCard() {
   if (state.isAnonymous) {
