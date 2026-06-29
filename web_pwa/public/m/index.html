@@ -2563,14 +2563,17 @@
     <button id="detail-back" aria-label="Back" style="background:transparent;border:none;cursor:pointer;padding:8px;z-index:2;">
       <span class="material-symbols-outlined c-espresso" style="font-size:24px;">arrow_back</span>
     </button>
-    <!-- 타이틀은 절대 위치로 가운데 강제 — 좌/우 액션 버튼 폭에 무관하게 항상 중앙 정렬.
-         긴 작품명도 다 보이도록 폰트 축소(17px) + 한국어 단어 단위 줄바꿈 허용 + max 2줄. -->
-    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;min-width:0;max-width:calc(100% - 140px);pointer-events:none;">
+    <!-- 사용자 명세: 상단 바는 'DAILY SCRIPT' 라벨만 가운데. 작품 제목/부제는 본문 메타에서 노출. -->
+    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;pointer-events:none;">
       <span class="t-label-sm c-walnut" style="letter-spacing:0.2em;">DAILY SCRIPT</span>
-      <span id="detail-work-title" class="c-espresso" style="text-align:center;margin-top:4px;font-size:16px;font-weight:700;line-height:1.25;word-break:keep-all;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;"></span>
-      <span id="detail-work-subtitle" class="t-label-sm c-walnut" style="display:none;text-align:center;margin-top:2px;font-size:11px;line-height:1.3;word-break:keep-all;overflow-wrap:break-word;max-width:100%;"></span>
+      <!-- 옛 id 유지(다른 코드 참조 보호) — 화면엔 안 보임 -->
+      <span id="detail-work-title" style="display:none;"></span>
+      <span id="detail-work-subtitle" style="display:none;"></span>
     </div>
     <div style="display:flex;align-items:center;gap:2px;z-index:2;">
+      <button id="detail-share-btn" aria-label="공유" style="background:transparent;border:none;cursor:pointer;padding:8px;">
+        <span class="material-symbols-outlined c-walnut" style="font-size:22px;">ios_share</span>
+      </button>
       <button id="detail-bookmark" aria-label="북마크" style="background:transparent;border:none;cursor:pointer;padding:8px;">
         <span class="material-symbols-outlined c-walnut" style="font-size:24px;">bookmark</span>
       </button>

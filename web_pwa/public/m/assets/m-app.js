@@ -6407,9 +6407,14 @@ function openDetailApproved(card) {
   const yearHtml = w.release_year
     ? `<span class="t-label-sm c-walnut">${escapeHtml(String(w.release_year))}</span><span class="t-label-sm c-walnut">·</span>`
     : '';
+  /* 사용자 명세: 본문 메타 최상단에 작품 제목(작가 이름 위). */
+  const detailWorkTitleText = displayTitle(titleSrc || w.title || '');
+  const detailSubText = subtitleSrc ? String(subtitleSrc).trim() : '';
   detailMeta.style.flexDirection = 'column';
   detailMeta.innerHTML =
-      `<div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;">`
+      `<p style="margin:0 0 4px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:18px;font-weight:700;color:var(--espresso);text-align:center;line-height:1.3;word-break:keep-all;">${escapeHtml(detailWorkTitleText)}</p>`
+    + (detailSubText ? `<p style="margin:0 0 10px;font-size:12px;color:var(--walnut);text-align:center;letter-spacing:0.04em;">${escapeHtml(detailSubText)}</p>` : `<div style="height:8px;"></div>`)
+    + `<div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;">`
     + headItems.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
     + `</div>`
     + `<div style="margin-top:6px;display:flex;gap:6px;justify-content:center;align-items:center;">`
@@ -6557,8 +6562,12 @@ function applyDetailLang(lang) {
   const yearHtml = w.release_year
     ? `<span class="t-label-sm c-walnut">${escapeHtml(String(w.release_year))}</span><span class="t-label-sm c-walnut">·</span>`
     : '';
+  const detailWorkTitleText2 = displayTitle(titleSrc || w.title || '');
+  const detailSubText2 = subtitleSrc ? String(subtitleSrc).trim() : '';
   detailMeta.innerHTML =
-      `<div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;">`
+      `<p style="margin:0 0 4px;font-family:'Nanum Myeongjo','Noto Serif KR',Georgia,serif;font-size:18px;font-weight:700;color:var(--espresso);text-align:center;line-height:1.3;word-break:keep-all;">${escapeHtml(detailWorkTitleText2)}</p>`
+    + (detailSubText2 ? `<p style="margin:0 0 10px;font-size:12px;color:var(--walnut);text-align:center;letter-spacing:0.04em;">${escapeHtml(detailSubText2)}</p>` : `<div style="height:8px;"></div>`)
+    + `<div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;">`
     + headItems.map((v) => `<span class="t-label-sm c-walnut">${escapeHtml(v)}</span>`).join('')
     + `</div>`
     + `<div style="margin-top:6px;display:flex;gap:6px;justify-content:center;align-items:center;">`
@@ -7953,6 +7962,11 @@ $('#detail-post-oneliner')?.addEventListener('click', async () => {
   track('detail_post_oneliner', { card_id: card.card_id });
   openFeedCompose(card);
 });
+/* 상단 우측 공유 아이콘 — '오늘의 명대사 공유하기' 버튼과 동일 동작 (단순 위임). */
+document.getElementById('detail-share-btn')?.addEventListener('click', () => {
+  document.getElementById('detail-go-library')?.click();
+});
+
 $('#detail-go-library')?.addEventListener('click', () => {
   const card = state.detailCard;
   if (!card) return;
