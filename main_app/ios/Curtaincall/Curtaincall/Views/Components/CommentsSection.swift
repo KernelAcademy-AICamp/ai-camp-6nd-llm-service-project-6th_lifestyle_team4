@@ -69,19 +69,25 @@ struct CommentsCopy {
     let loginPrompt: String
     let emptyText: String
     let allowEdit: Bool
+    /// 비로그인 안내를 댓글 목록 '위'에 인라인으로 띄울지 여부. 피드는 PWA
+    /// (#fp-comment-login: position:sticky;bottom:0)처럼 입력창과 같은 하단 docked
+    /// bar 자리로 옮기므로 false — 그 안내는 `FeedPostDetailSheet` 가 직접 그린다.
+    let inlineLoginPrompt: Bool
 
     static let card = CommentsCopy(
         header: .readerNotes,
         loginPrompt: "댓글을 남기려면 로그인이 필요합니다. (하트 반응도 동일)",
         emptyText: "아직 댓글이 없어요. 첫 번째 흔적을 남겨보세요.",
-        allowEdit: true
+        allowEdit: true,
+        inlineLoginPrompt: true
     )
     // PWA 피드 게시물 댓글 (index.html:2271-2293).
     static let feedPost = CommentsCopy(
         header: .count,
         loginPrompt: "로그인 후 댓글을 남길 수 있어요.",
         emptyText: "아직 댓글이 없어요. 첫 생각을 남겨보세요.",
-        allowEdit: false
+        allowEdit: false,
+        inlineLoginPrompt: false
     )
 }
 
@@ -238,7 +244,7 @@ struct CommentsSection: View {
             header
             Spacer().frame(height: 16)
 
-            if isAnonymous {
+            if isAnonymous && copy.inlineLoginPrompt {
                 Text(copy.loginPrompt)
                     .font(.bodySans(14))
                     .foregroundStyle(.walnut)

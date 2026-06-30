@@ -95,7 +95,7 @@ struct FeedView: View {
                     }
                     .padding(.horizontal, 20)
                 }
-                .refreshable { await reload() }
+                .yarnRefresh { await reload() }
                 .onChange(of: reselect) { _, _ in
                     selectedCard = nil
                     selectedHighlight = nil
@@ -691,6 +691,7 @@ private struct FeedPostDetailSheet: View {
     let post: FeedPost
     let onOpenCard: (Card) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.requestLogin) private var requestLogin   // 비로그인 안내 탭 → 인증 모달
     @EnvironmentObject private var session: AuthSession
     @StateObject private var comments: CommentsModel
     @FocusState private var composerFocused: Bool
@@ -771,16 +772,31 @@ private struct FeedPostDetailSheet: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            // 회원만 작성 — 익명은 CommentsSection 로그인 프롬프트만(RLS 도 익명 insert 차단).
-            .dockedBottomBar(isActive: !session.isAnonymous, clearTabBar: true) {
-                CommentComposer(
-                    model: comments,
-                    userId: session.userId,
-                    nickname: session.nickname,
-                    focused: $composerFocused,
-                    placeholder: "이 글에 대한 생각을 남겨주세요…",
-                    submitLabel: "등록"
-                )
+            // LOGIN+입력창은 하단 docked bar '한 자리'에서 토글한다 — PWA #fp-comment-form /
+            // #fp-comment-login (둘 다 position:sticky;bottom:0)와 동일. 회원은 입력창,
+            // 비로그인은 로그인 안내(탭하면 인증 모달; RLS 도 익명 insert 차단).
+            .dockedBottomBar(isActive: true, clearTabBar: true) {
+                if session.isAnonymous {
+                    Button { requestLogin() } label: {
+                        Text(CommentsCopy.feedPost.loginPrompt)
+                            .font(.bodySans(14))
+                            .foregroundStyle(.walnut)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .padding(.horizontal, 16)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    CommentComposer(
+                        model: comments,
+                        userId: session.userId,
+                        nickname: session.nickname,
+                        focused: $composerFocused,
+                        placeholder: "이 글에 대한 생각을 남겨주세요…",
+                        submitLabel: "등록"
+                    )
+                }
             }
         }
         .background(Color.paper)

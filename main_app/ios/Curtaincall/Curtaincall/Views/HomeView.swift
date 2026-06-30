@@ -26,8 +26,7 @@ struct HomeView: View {
     @State private var shareCard: Card?
     @State private var shareCountOverrides: [Int: Int] = [:]   // cardId → 낙관적 공유 수
     // 새로고침 토스트('갱신됨') — 헤더 새로고침 버튼과 당겨서 새로고침이 공유. 당겨서
-    // 새로고침은 표준 .refreshable 기본 인디케이터를 쓴다(커스텀 실타래 스피너 제거,
-    // Feed 와 일치 — build 6 에서 재검토).
+    // 새로고침은 실타래 회전 인디케이터(`.yarnRefresh`, Android RefreshableBox 미러).
     @State private var refreshToast: String?
 
     var body: some View {
@@ -117,9 +116,9 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 20)
             }
-            // 당겨서 새로고침 — 표준 기본 인디케이터(Feed 와 동일). 헤더 버튼과 같은
+            // 당겨서 새로고침 — 실타래 회전 인디케이터(Feed·공지와 공유). 헤더 버튼과 같은
             // 익명 3회 제한 게이트를 통과(랜덤 새 카드 + '갱신됨' 토스트는 reload 안에서).
-            .refreshable { await pullToRefresh() }
+            .yarnRefresh { await pullToRefresh() }
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)

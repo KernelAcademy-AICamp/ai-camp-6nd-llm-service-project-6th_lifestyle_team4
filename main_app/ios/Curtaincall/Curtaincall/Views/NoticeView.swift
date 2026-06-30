@@ -31,7 +31,7 @@ struct NoticeView: View {
                 }
                 .padding(.horizontal, 20)
             }
-            .refreshable { await load() }
+            .yarnRefresh { await load() }
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
