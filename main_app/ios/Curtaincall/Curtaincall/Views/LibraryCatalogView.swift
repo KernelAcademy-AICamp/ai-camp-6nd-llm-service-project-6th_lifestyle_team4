@@ -20,11 +20,18 @@ struct LibraryCatalogView: View {
     @State private var page = 0
     @State private var selectedWork: ShelfWork?
     @State private var contentWidth: CGFloat = 0
+    @State private var sort: LibrarySort = .alpha   // 가나다순(기본) ⇄ 최신등록순 (Android LibrarySort)
 
     private static let pageSize = 12          // 4열 × 3행 (Android LibraryPageSize)
     private static let genreOrder: [WorkFormat] = [
         .movie, .drama, .musical, .opera, .play, .novel, .poem, .essay, .prose,
     ]
+
+    /// 정렬 옵션 — Android `LibrarySort` 미러: 가나다순(기본) / 최신등록순. (장르순 없음)
+    private enum LibrarySort {
+        case alpha, latest
+        var label: String { self == .alpha ? "가나다순" : "최신등록순" }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,7 +47,7 @@ struct LibraryCatalogView: View {
                         Spacer().frame(height: 24)
                         loadOrEmptyState
                     } else {
-                        Spacer().frame(height: 6)
+                        Spacer().frame(height: 16)
                         metaRow
                         Spacer().frame(height: 12)
                         genreChips
@@ -50,11 +57,7 @@ struct LibraryCatalogView: View {
                         if filteredBooks.isEmpty {
                             noResultState
                         } else {
-                            grid
-                            if pageCount > 1 {
-                                Spacer().frame(height: 24)
-                                pageBar
-                            }
+                            grid   // 페이지 바는 스크롤 밖, 화면 하단에 고정(아래 pinnedPageBar).
                         }
                     }
                     Spacer().frame(height: 40)
@@ -65,6 +68,11 @@ struct LibraryCatalogView: View {
                         Color.clear.preference(key: CatalogWidthKey.self, value: geo.size.width)
                     }
                 )
+            }
+            // 페이지 바 — 스크롤과 함께 사라지지 않게 화면 하단(탭바 위)에 고정.
+            // 결과 없음/1페이지면 숨김. RootView 가 탭바를 safeAreaInset 으로 깔아 바로 위에 붙는다.
+            if !model.books.isEmpty, !filteredBooks.isEmpty, pageCount > 1 {
+                pinnedPageBar
             }
         }
         .background(Color.paper)
@@ -111,8 +119,14 @@ struct LibraryCatalogView: View {
                 || (b.subtitle ?? "").lowercased().contains(q)
                 || (b.author ?? "").lowercased().contains(q)
         }
-        // PWA: 정렬은 가나다순 고정(정렬 컨트롤 없음).
-        return base.sorted { displayTitle($0).localizedStandardCompare(displayTitle($1)) == .orderedAscending }
+        // 정렬 — Android librarySortComparator 미러: 가나다순(displayTitle 한글 콜레이션) /
+        // 최신등록순(작품 카드의 최대 card_id 내림차순 = 가장 최근 등록된 작품).
+        switch sort {
+        case .alpha:
+            return base.sorted { displayTitle($0).localizedStandardCompare(displayTitle($1)) == .orderedAscending }
+        case .latest:
+            return base.sorted { ($0.cards.map(\.cardId).max() ?? 0) > ($1.cards.map(\.cardId).max() ?? 0) }
+        }
     }
 
     private var pageCount: Int {
@@ -137,29 +151,55 @@ struct LibraryCatalogView: View {
     // MARK: - Header / meta
 
     private var metaRow: some View {
-        // PWA: 카운트 라벨 "전체 N권", 정렬 컨트롤 없음(가나다 고정) — m-app.js:2614.
-        Text("전체 \(model.books.count)권  ·  명대사 \(totalCards)편").labelCaps()
-            .frame(maxWidth: .infinity, alignment: .leading)
+        // 카운트 라벨 + 오른쪽 끝 정렬 토글(가나다순 ⇄ 최신등록순) — Android metaRow/SortToggle 미러.
+        HStack(spacing: 8) {
+            Text("전체 \(model.books.count)권  ·  명대사 \(totalCards)편").labelCaps()
+            Spacer(minLength: 8)
+            sortToggle
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 정렬 토글 — 현재 정렬 라벨 + 화살표 아이콘. 탭하면 가나다순 ⇄ 최신등록순 전환(페이지 리셋).
+    /// Android SortToggle(SwapVert + label, Paper/Latte 보더) 미러.
+    private var sortToggle: some View {
+        Button {
+            sort = (sort == .alpha) ? .latest : .alpha
+            page = 0
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 11, weight: .regular))
+                Text(sort.label)
+                    .font(.custom("Pretendard-Medium", size: 11))
+            }
+            .foregroundStyle(.walnut)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.latte, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("정렬: \(sort.label). 탭하면 전환")
     }
 
     private var genreChips: some View {
         // PWA renderShelfChips: GENRE_ORDER 의 사용 가능한 장르만 — "기타" 칩 없음.
         let available = Set(model.books.map(\.format))
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Button { selectedGenre = nil; page = 0 } label: {
-                    Chip(text: "All · \(model.books.count)", filled: selectedGenre == nil)
+        // 가로 스크롤 대신 다음 줄로 wrap(FlowLayout) — 모든 장르 칩이 한눈에 보인다.
+        return FlowLayout(spacing: 8, lineSpacing: 8) {
+            Button { selectedGenre = nil; page = 0 } label: {
+                Chip(text: "All · \(model.books.count)", filled: selectedGenre == nil)
+            }
+            .buttonStyle(.plain)
+            ForEach(Self.genreOrder.filter { available.contains($0) }, id: \.self) { format in
+                let count = model.books.filter { $0.format == format }.count
+                Button { selectedGenre = format; page = 0 } label: {
+                    Chip(text: "\(format.displayName) · \(count)", filled: selectedGenre == format)
                 }
                 .buttonStyle(.plain)
-                ForEach(Self.genreOrder.filter { available.contains($0) }, id: \.self) { format in
-                    let count = model.books.filter { $0.format == format }.count
-                    Button { selectedGenre = format; page = 0 } label: {
-                        Chip(text: "\(format.displayName) · \(count)", filled: selectedGenre == format)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var searchField: some View {
@@ -209,6 +249,17 @@ struct LibraryCatalogView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// 하단 고정 페이지 바 — 상단 Hairline + paper 배경(불투명, 스크롤된 그리드가 뒤로 안 비침).
+    private var pinnedPageBar: some View {
+        VStack(spacing: 0) {
+            Hairline()
+            pageBar
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+        }
+        .background(Color.paper)
     }
 
     private var pageBar: some View {
