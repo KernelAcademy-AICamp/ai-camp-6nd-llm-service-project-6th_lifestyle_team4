@@ -9550,15 +9550,17 @@ function renderShareCard(canvas, bg, payload) {
    본문은 0.27h~0.75h 안전 영역에 세로 중앙, 하단에 화자 + metaKo + metaEn 3줄. */
 function drawShareCardText(ctx, ink, payload, W, H) {
   const s = W / 540;
-  const zoneTop = H * 0.27, zoneBot = H * 0.75;
+  /* 메타(작가/작품)를 확실히 보이게 하단 영역을 H*0.85 까지 확장 (기존 0.75 → 0.85).
+     안드/iOS 와 동일하게 작가·작품 라인이 카드 안에 들어옴. */
+  const zoneTop = H * 0.24, zoneBot = H * 0.86;
   const zoneH = zoneBot - zoneTop;
-  const maxW = W - 260 * s;
+  const maxW = W - 220 * s;
   const SERIF = `"Nanum Myeongjo", "Noto Serif KR", "Apple SD Gothic Neo", "Malgun Gothic", serif`;
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
 
-  /* 1) 명대사 — fs 점진 축소(영역 62% 안에 들도록). */
+  /* 1) 명대사 — fs 점진 축소(영역 60% 안에 들도록). 메타가 카드 안에 확실히 들어오도록 비율 약간 줄임. */
   let qLines = [];
   let qLineH = 0;
   let bodyFs = 40;
@@ -9567,7 +9569,7 @@ function drawShareCardText(ctx, ink, payload, W, H) {
     qLines = wrapText(ctx, payload.quote || '', maxW);
     qLineH = fs * s * 1.6;
     bodyFs = fs;
-    if (qLines.length * qLineH <= zoneH * 0.62) break;
+    if (qLines.length * qLineH <= zoneH * 0.55) break;
   }
 
   const hasSpeaker = !!(payload.speaker && String(payload.speaker).trim());
@@ -9575,9 +9577,9 @@ function drawShareCardText(ctx, ink, payload, W, H) {
   const hasEn = !!(payload.metaEn && String(payload.metaEn).trim());
   const gapSpeaker = 18 * s;
   const speakerLineH = 30 * s;
-  const gapMeta = 40 * s;
-  const metaKoLineH = 26 * s;
-  const metaEnLineH = 22 * s;
+  const gapMeta = 36 * s;
+  const metaKoLineH = 28 * s;   // 19 → 22 글자 크기에 맞춰 lh 도 약간 확장
+  const metaEnLineH = 24 * s;
 
   /* 2) 블록 전체 높이 → 안전 영역 세로 중앙. */
   let blockH = qLines.length * qLineH;
@@ -9596,21 +9598,21 @@ function drawShareCardText(ctx, ink, payload, W, H) {
   if (hasSpeaker) {
     y += gapSpeaker;
     ctx.font = `400 ${22 * s}px ${SERIF}`;
-    ctx.fillStyle = ink + 'CC';
+    ctx.fillStyle = ink + 'EE';   // 화자 alpha CC → EE (더 진하게)
     ctx.fillText(`— ${payload.speaker}`, W / 2, y);
     y += speakerLineH;
   }
-  /* 메타 — 한글 / 영문 2줄 */
+  /* 메타 — 작가/작품 (사용자 명세 가장 잘 보이도록 alpha 진하게 + 글자 키움) */
   if (hasKo) {
     y += gapMeta;
-    ctx.font = `400 ${19 * s}px ${SERIF}`;
-    ctx.fillStyle = ink + '99';
+    ctx.font = `600 ${22 * s}px ${SERIF}`;    // 19px → 22px + weight 600
+    ctx.fillStyle = ink + 'DD';                // alpha 99(60%) → DD(87%)
     ctx.fillText(payload.metaKo, W / 2, y);
     y += metaKoLineH;
   }
   if (hasEn) {
-    ctx.font = `400 ${16 * s}px ${SERIF}`;
-    ctx.fillStyle = ink + '80';
+    ctx.font = `400 ${18 * s}px ${SERIF}`;    // 16 → 18
+    ctx.fillStyle = ink + 'AA';                // 80(50%) → AA(67%)
     ctx.fillText(payload.metaEn, W / 2, y);
   }
 }
