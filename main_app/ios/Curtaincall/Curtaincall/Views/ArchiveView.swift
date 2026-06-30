@@ -819,8 +819,11 @@ private struct BookPage: View {
                         }
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.paper))
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.latte, lineWidth: 0.5))
+                        // 인용 카드와 구별되는 따뜻한 종이톤(Latte) — Android BookIntroNote 미러.
+                        // 기존 paper 는 페이지 배경과 거의 같아 밋밋했음. 보더는 latte fill 위에선
+                        // 안 보여 sand 로 한 단계 진하게.
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.latte))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.sand, lineWidth: 0.5))
                     }
                     ForEach(work.rows) { row in
                         let card = row.card
