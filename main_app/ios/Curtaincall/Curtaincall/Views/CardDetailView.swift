@@ -63,11 +63,13 @@ struct CardDetailView: View {
             .task { await runOpenFlow() }
             // 충전 시트가 닫히면(구매 성공 등) 게이트를 자동 재평가 — 잠금 화면에서
             // 충전 후 뒤로 나갔다 다시 들어오지 않아도 그 자리에서 열린다.
-            // 비로그인 안내 팝업 → 기존 인증 모달(#97 SignInSheet) 재사용(새 시트 아님).
+            // 비로그인 안내 팝업 → 기존 인증 모달(#97 SignInSheet) 재사용. 중앙 팝업(폼 모드).
             // 닫힌 뒤 게이트 재평가 — 가입+출석으로 잔액이 생겼으면 그 자리에서 열린다.
-            .sheet(isPresented: $showSignIn, onDismiss: {
-                Task { await reEvaluateGate() }
-            }) { SignInSheet() }
+            // (.popup 은 onDismiss 가 없어 onChange 로 닫힘 감지.)
+            .popup(isPresented: $showSignIn, fitContent: false) { SignInSheet() }
+            .onChange(of: showSignIn) { _, shown in
+                if !shown { Task { await reEvaluateGate() } }
+            }
     }
 
     /// 게이트 상태별 화면. **`.open` 일 때만** 카드 본문을 트리에 만든다 —

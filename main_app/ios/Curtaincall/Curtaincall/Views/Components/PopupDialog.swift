@@ -18,6 +18,9 @@ struct PopupDialog<Content: View>: View {
     var maxWidth: CGFloat = 360
     /// 스크림 탭으로 닫히게 할지 — 폼/중요 액션은 false 로 실수 닫힘 방지 가능.
     var dismissOnScrimTap: Bool = true
+    /// 콘텐츠 높이에 맞춤(기본) vs **폼 모드**. 폼 모드(false)는 키보드 위 가용 높이를 채우고
+    /// 내부 ScrollView 로 스크롤 — 텍스트필드(로그인)에서 키보드가 콘텐츠를 가리지 않게.
+    var fitContent: Bool = true
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -25,19 +28,26 @@ struct PopupDialog<Content: View>: View {
             Color.espresso.opacity(0.18)
                 .ignoresSafeArea()
                 .onTapGesture { if dismissOnScrimTap { isPresented = false } }
-
-            content()
-                // 콘텐츠 고유 높이로 카드 크기 결정 — 내부 ScrollView 가 화면 전체로
-                // 늘어나지 않게(짧은 콘텐츠는 짧은 카드). 아주 긴 콘텐츠(예: 작은 화면 +
-                // 프로필 선호도)는 화면을 넘을 수 있어 그 경우만 QA 에서 확인.
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: maxWidth)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.paper))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.latte, lineWidth: 0.5))
-                .padding(.horizontal, 24)
-                .environment(\.dismissPopup) { isPresented = false }
+            card
         }
         .transition(.opacity)
+    }
+
+    @ViewBuilder private var card: some View {
+        let base = content()
+            .frame(maxWidth: maxWidth)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.paper))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.latte, lineWidth: 0.5))
+            .padding(.horizontal, 24)
+            .environment(\.dismissPopup) { isPresented = false }
+        if fitContent {
+            // 콘텐츠 고유 높이로 카드 크기 결정(짧은 콘텐츠=짧은 카드). 출석체크·프로필.
+            base.fixedSize(horizontal: false, vertical: true)
+        } else {
+            // 폼/키보드 모드 — 카드가 가용 높이(키보드 위)를 채우고 내부 ScrollView 가 스크롤.
+            // ZStack 이 키보드 safe area 를 존중해 카드 하단이 키보드 위에 머문다. 위아래 여백 36.
+            base.padding(.vertical, 36)
+        }
     }
 }
 
@@ -48,6 +58,7 @@ extension View {
         isPresented: Binding<Bool>,
         maxWidth: CGFloat = 360,
         dismissOnScrimTap: Bool = true,
+        fitContent: Bool = true,
         @ViewBuilder content: @escaping () -> C
     ) -> some View {
         overlay {
@@ -56,6 +67,7 @@ extension View {
                     isPresented: isPresented,
                     maxWidth: maxWidth,
                     dismissOnScrimTap: dismissOnScrimTap,
+                    fitContent: fitContent,
                     content: content
                 )
             }

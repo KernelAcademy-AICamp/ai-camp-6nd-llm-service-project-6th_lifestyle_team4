@@ -129,7 +129,7 @@ struct RootView: View {
         // 로그인/회원가입 모달 — MY 의 그 모달(#97/#99 SignInSheet)을 루트에서 재사용.
         // requestLogin 을 부르는 모든 유도(북마크 프롬프트·새로고침 제한·피드 익명)가
         // 이 한 곳을 띄운다(모달 분기 없음). 인증 성공 시 SignInSheet 가 자동으로 닫힌다.
-        .sheet(isPresented: $showLoginModal) { SignInSheet() }
+        .popup(isPresented: $showLoginModal, fitContent: false) { SignInSheet() }   // 폼 모드(키보드 회피)
         // 마스트헤드 공지 종 → 공지 시트(Android notif 시트 패턴).
         .sheet(isPresented: $showNoticeSheet) { NoticeView() }
         .task {

@@ -219,7 +219,7 @@ struct MyPageView: View {
         .popup(isPresented: $showAttendance) {
             AttendanceView()   // 보기 전용 (보상 지급 없음) — 중앙 팝업
         }
-        .sheet(isPresented: $showSignIn) {
+        .popup(isPresented: $showSignIn, fitContent: false) {   // 폼 모드(키보드 회피)
             SignInSheet()
         }
         // MY 하위 페이지를 모두 값 기반(MyRoute)으로 push — settingsPath 가 추적해
@@ -480,7 +480,7 @@ struct MyPageView: View {
 /// (internal — 카드 게이트의 비로그인 안내 팝업에서도 같은 모달을 재사용한다.)
 struct SignInSheet: View {
     @EnvironmentObject private var session: AuthSession
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissPopup) private var dismissPopup   // 중앙 팝업으로 표시 — \.dismiss 대신
     @Environment(\.colorScheme) private var colorScheme
     @State private var loginId = ""
     @State private var loginPassword = ""
@@ -498,13 +498,7 @@ struct SignInSheet: View {
                     Spacer().frame(height: 6)
                     FieldBox(placeholder: "아이디", text: $loginId)
                     FieldBox(placeholder: "비밀번호", text: $loginPassword, isSecure: true)
-                    Button {
-                        Task { await session.signIn(id: loginId, password: loginPassword, signUp: signUpMode) }
-                    } label: {
-                        Text(session.authInProgress ? "⋯" : (signUpMode ? "가입" : "로그인"))
-                    }
-                    .buttonStyle(EditorialButtonStyle(.filled))
-                    .disabled(session.authInProgress || loginId.isEmpty || loginPassword.isEmpty)
+                    // 로그인/가입 버튼은 하단 고정 행으로 이동(키보드가 떠도 보이게). 모드 토글만 여기.
                     Button { signUpMode.toggle() } label: {
                         Text(signUpMode ? "이미 계정이 있나요? 로그인" : "계정이 없으신가요? 회원가입")
                             .labelCaps()
@@ -589,14 +583,25 @@ struct SignInSheet: View {
                 }
                 .padding(20)
             }
+            // 고정 하단 버튼 — ScrollView 밖이라 키보드가 떠도 항상 보인다(스크린샷대로 취소|로그인).
+            HStack(spacing: 10) {
+                Button { dismissPopup() } label: { Text("취소") }
+                    .buttonStyle(EditorialButtonStyle(.outlined))
+                Button {
+                    Task { await session.signIn(id: loginId, password: loginPassword, signUp: signUpMode) }
+                } label: {
+                    Text(session.authInProgress ? "⋯" : (signUpMode ? "가입" : "로그인"))
+                }
+                .buttonStyle(EditorialButtonStyle(.filled))
+                .disabled(session.authInProgress || loginId.isEmpty || loginPassword.isEmpty)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
         }
-        .padding(.top, SheetMetrics.grabberTop)   // 그래버 ↔ 헤더 여백(공통 표준)
-        .background(Color.paper)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        // 중앙 팝업(폼 모드) — 카드 배경/모서리는 PopupDialog 담당. 시트 그래버·detents 제거.
         // Android SignInDialog: 인증 성공(익명 해제)되면 자동으로 닫힌다.
         .onChange(of: session.isAnonymous) { _, anon in
-            if !anon { dismiss() }
+            if !anon { dismissPopup() }
         }
     }
 
@@ -608,10 +613,6 @@ struct SignInSheet: View {
                 .font(.headlineSerif(20))
                 .foregroundStyle(.espresso)
             Spacer()
-            Button { dismiss() } label: {
-                Text("취소").font(.bodySans(15)).foregroundStyle(.walnut)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, SheetMetrics.cardPadding)
         .frame(height: SheetMetrics.headerHeight)
