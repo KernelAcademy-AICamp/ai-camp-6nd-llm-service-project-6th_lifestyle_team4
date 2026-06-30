@@ -117,6 +117,8 @@ struct CardDetailView: View {
                 VStack(alignment: .center, spacing: 0) {
                     Color.clear.frame(height: 0).id("detailTop")
                     Spacer().frame(height: 40)
+                    detailTitleBlock
+                    Spacer().frame(height: 16)
                     metadataBlock
                     Spacer().frame(height: 28)
 
@@ -197,12 +199,19 @@ struct CardDetailView: View {
                     .buttonStyle(EditorialButtonStyle(.filled))
 
                     Spacer().frame(height: 10)
-                    Button {
-                        requestLibrary()
-                    } label: {
-                        Text("라이브러리 가서 책 더 읽어보기")
+                    // 하단 CTA — '라이브러리로' 대신 '공유하기'(Android 공유 기능 미러; 상단바
+                    // 공유와 동일한 shareCardImage 경로). 이미지 렌더(.task) 전엔 비활성.
+                    if let shareCardImage {
+                        ShareLink(item: shareCardImage,
+                                  preview: SharePreview(QuoteCardView.shareTitle(card), image: shareCardImage)) {
+                            Text("공유하기")
+                        }
+                        .buttonStyle(EditorialButtonStyle(.outlined))
+                    } else {
+                        Button {} label: { Text("공유하기") }
+                            .buttonStyle(EditorialButtonStyle(.outlined))
+                            .disabled(true)
                     }
-                    .buttonStyle(EditorialButtonStyle(.outlined))
 
                     Spacer().frame(height: 16)
                     // edition_note: Android는 고정 문자열 리소스("Limited Edition Digital
@@ -426,7 +435,7 @@ struct CardDetailView: View {
         let names = Set(card.work.characters.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
         let lines = card.displayScript(original: showOriginal).components(separatedBy: "\n")
         let para = NSMutableParagraphStyle()
-        para.lineSpacing = 8
+        para.lineSpacing = 12   // 명대사 스크립트 줄 간격 — 더 여유롭게 (Tier1)
         // 본문 정렬 — 관리자 편집에서 저장된 text_align 적용. NULL 이면 format 기본 (poem=center, else=left). (migration 042)
         switch card.displayTextAlign(original: showOriginal) {
         case "center": para.alignment = .center
@@ -539,18 +548,8 @@ struct CardDetailView: View {
             .buttonStyle(.plain)
 
             Spacer()
-            VStack(spacing: 2) {
-                Text("DAILY SCRIPT").labelCaps()
-                Text(card.work.displayTitle(original: showOriginal))
-                    .font(.headlineSerif(20))
-                    .foregroundStyle(.espresso)
-                    .lineLimit(1)
-                if let subtitle = card.work.displaySubtitle(original: showOriginal), !subtitle.isEmpty {
-                    Text(subtitle)
-                        .labelCaps()
-                        .lineLimit(1)
-                }
-            }
+            // 상단바 중앙은 'DAILY SCRIPT' 라벨만 — 작품 제목은 본문(detailTitleBlock)으로 이동.
+            Text("DAILY SCRIPT").labelCaps()
             Spacer()
 
             // 타이포 명대사 카드 이미지 공유 (#10). 이미지는 .task 에서 1회 렌더해 캐시
@@ -754,6 +753,23 @@ struct CardDetailView: View {
 
     /// Two centered lines: FORMAT · AUTHOR / YEAR · 👁 · 🔖 · 💬.
     /// PWA 상세 메타 행 순서 — 조회 · 북마크 · 댓글 (m-app.js:2166-2170).
+    /// 작품 제목 블록 — 상단바에서 본문 상단으로 이동(상단바는 'DAILY SCRIPT' 라벨만 유지).
+    /// 본문이라 폭 제약이 없어 1줄 잘림 없이 전체 제목/부제가 보인다.
+    private var detailTitleBlock: some View {
+        VStack(spacing: 4) {
+            Text(card.work.displayTitle(original: showOriginal))
+                .font(.headlineSerif(24))
+                .foregroundStyle(.espresso)
+                .multilineTextAlignment(.center)
+            if let subtitle = card.work.displaySubtitle(original: showOriginal), !subtitle.isEmpty {
+                Text(subtitle)
+                    .labelCaps()
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var metadataBlock: some View {
         VStack(spacing: 6) {
             let head: [String] = [
