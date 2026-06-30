@@ -338,7 +338,10 @@ struct RootView: View {
             if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
                 FeedWriteFab { feedWriteTrigger += 1 }
                     .padding(.trailing, 18)
-                    .padding(.bottom, 14)      // 네비바 레벨로 내림(기존 54 → 14) — 조정 가능
+                    // 52pt FAB 를 64pt 탭바 '위'로 완전히 올림(64 + 8pt 여유 = 72). 이전 14 는
+                    // FAB 가 MY 셀과 겹쳐 탭을 가로채 MY 가 안 눌리던 버그(P1). 72 면 탭바 히트
+                    // 영역과 안 겹쳐 MY 정상 동작.
+                    .padding(.bottom, 72)
             }
         }
     }
