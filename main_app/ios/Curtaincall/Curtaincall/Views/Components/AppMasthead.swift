@@ -20,6 +20,8 @@ struct BrandWordmark: View {
 /// `TopBar`. (No trailing MY PAGE/로그인 link — Android has none there; My Page is
 /// reached via the bottom-nav MY tab.)
 struct AppMasthead: View {
+    var showsYarnChip = true
+
     @EnvironmentObject private var yarn: YarnStore
     // 트레일링 액션(북마크·공지 종)은 RootView 가 탭별로 주입한다(Android: Daily/Feed/Today/
     // Library 의 HomeTopBar 에만 표시, MY 는 별도 SettingsTopBar). 기본 false → MY 엔 안 뜸.
@@ -35,7 +37,9 @@ struct AppMasthead: View {
                 Spacer()
                 // 실타래 잔액 칩 — 잔액 표시 전용(비활성). v1 은 충전(구매) 진입점을 막아
                 // App Store 2.1/3.1.1 을 피한다(적립 전용). 탭해도 충전 화면으로 가지 않는다.
-                YarnChip(balance: yarn.balance)
+                if showsYarnChip {
+                    YarnChip(balance: yarn.balance)
+                }
                 if showsActions {
                     // 북마크(→ 서가) 먼저, 그다음 공지 종(→ 공지, 미읽음 점). Android HomeTopBar 트레일링 미러.
                     mastheadIconButton(systemName: "bookmark", label: "북마크", action: requestBookmarks)

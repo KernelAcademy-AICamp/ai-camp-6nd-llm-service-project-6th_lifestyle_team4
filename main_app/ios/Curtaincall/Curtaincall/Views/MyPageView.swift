@@ -27,7 +27,8 @@ struct MyPageView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AppMasthead()
+            // MY 본문 yarnPill이 잔액 표면을 담당하므로 상단 중복 칩은 숨긴다.
+            AppMasthead(showsYarnChip: false)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 16)
