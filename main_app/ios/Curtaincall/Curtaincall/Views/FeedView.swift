@@ -95,6 +95,16 @@ struct FeedView: View {
                     withAnimation { proxy.scrollTo(Self.topID, anchor: .top) }
                     Task { await reload() }
                 }
+                // 페이지-속-페이지 — 피드 본문 영역을 감싸는 은은한 테두리(latte 0.5pt, 가로 12pt
+                // 인셋). 글 목록이 이 프레임 안에서 스크롤돼 '페이지 안의 페이지' 느낌.
+                // (정확한 인셋·하단 위치는 실기기 QA 조정 대상.)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.latte, lineWidth: 0.5)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 6)
+                        .allowsHitTesting(false)
+                }
             }
         }
         .background(Color.paper)
@@ -393,33 +403,40 @@ private struct FeedFabButtonStyle: ButtonStyle {
 /// 주황 원형 연필 버튼. **RootView 가 탭바 '위(앞)' 레이어에 그린다** → 고양이가
 /// 탭바에 앉고(뒤로 가리지 않고) 버튼이 머리 위에 뜬다. 버튼만 탭 가능(고양이는
 /// click-through). 탭은 `onTap` 으로 위임. (고양이는 #76 그대로 유지.)
-struct FeedWriteCat: View {
+/// 글쓰기 FAB — 주황 원형 + 통통한 연필(커스텀 feed-pencil 에셋, 뾰족한 심). Android 처럼
+/// 고양이와 **분리(decouple)**해 우측 하단(네비바 레벨)에 둔다(FeedScreen FAB BottomEnd).
+struct FeedWriteFab: View {
     let onTap: () -> Void
 
     /// PWA #feed-fab 아이콘 색 (#FFFDF7) — 주황 원 위라 라이트/다크 모두 크림 고정.
     private static let fabIcon = Color(red: 1.0, green: 0.992, blue: 0.969)
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            // 주황 원형 연필 FAB — 52pt, cta 배경, 크림 연필 아이콘 + 주황 그림자.
-            // (PWA index.html #feed-fab: 52×52, --cta, edit 아이콘, shadow 0 4 14 cta/.38)
-            Button(action: onTap) {
-                Image(systemName: "pencil")
-                    .font(.system(size: 24, weight: .regular))
-                    .foregroundStyle(Self.fabIcon)
-                    .frame(width: 52, height: 52)
-                    .background(Circle().fill(Color.cta))
-                    .shadow(color: Color.cta.opacity(0.38), radius: 7, x: 0, y: 4)
-            }
-            .buttonStyle(FeedFabButtonStyle())
-            .offset(x: -34)               // 고양이 머리(중앙) 위로
-            Image("cat_pen")
+        // (PWA index.html #feed-fab: 52×52, --cta, shadow 0 4 14 cta/.38)
+        Button(action: onTap) {
+            Image("feed-pencil")          // 통통한 연필 + 뾰족한 심 (SF 'pencil' 의 젓가락 느낌 대체)
+                .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(height: 92)        // Android CatHeightFeed=92 (#76 유지)
-                .offset(y: -4)
-                .allowsHitTesting(false)
+                .frame(width: 24, height: 28)
+                .foregroundStyle(Self.fabIcon)
+                .frame(width: 52, height: 52)
+                .background(Circle().fill(Color.cta))
+                .shadow(color: Color.cta.opacity(0.38), radius: 7, x: 0, y: 4)
         }
+        .buttonStyle(FeedFabButtonStyle())
+        .accessibilityLabel("한 줄 쓰기")
+    }
+}
+
+/// 글쓰기 고양이(cat_pen) — 좌측 하단 장식(Android cat-left, CatHBiasFeed=-1). 비상호작용.
+struct FeedWriteCat: View {
+    var body: some View {
+        Image("cat_pen")
+            .resizable()
+            .scaledToFit()
+            .frame(height: 92)            // Android CatHeightFeed=92 (#76 유지)
+            .allowsHitTesting(false)
     }
 }
 
@@ -949,13 +966,23 @@ private struct FeedComposeSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(card.work.feedTitle)
-                        .font(.headlineSerif(22))
-                        .foregroundStyle(.espresso)
-                        .lineLimit(1)
-                    Text("#\(card.cardId)").labelCaps(size: 10)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    // 제목 + 작품 번호(#)를 같은 줄에(Tier1 write-pill).
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(card.work.feedTitle)
+                            .font(.headlineSerif(22))
+                            .foregroundStyle(.espresso)
+                            .lineLimit(1)
+                        Text("#\(card.cardId)").labelCaps(size: 10)
+                    }
+                    // 작품 상세(형식 · 연도 · 작가) 한 줄 — 제목 아래.
+                    let detail = [card.work.format.displayName, card.work.releaseYear.map(String.init), card.work.author]
+                        .compactMap { v in (v?.isEmpty == false) ? v : nil }
+                        .joined(separator: " · ")
+                    if !detail.isEmpty {
+                        Text(detail).labelCaps(size: 10).lineLimit(1)
+                    }
                 }
                 Spacer()
                 Button { dismiss() } label: {

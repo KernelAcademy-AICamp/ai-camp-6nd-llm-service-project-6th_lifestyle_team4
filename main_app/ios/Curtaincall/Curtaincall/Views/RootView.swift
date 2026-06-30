@@ -324,13 +324,21 @@ struct RootView: View {
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
-        // 피드 글쓰기 FAB+고양이 — 탭바 '위(앞)' 레이어라 고양이가 탭바에 앉고
-        // 주황 연필 버튼이 머리 위에 뜬다(PWA). 피드 루트에서만, 컴포저 활성 시 숨김.
+        // 피드 글쓰기 — 고양이(좌)와 글쓰기 FAB(우)를 **분리**(Android 패턴: cat-left + FAB BottomEnd).
+        // 둘 다 탭바 '위(앞)' 레이어. 피드 루트에서만, 컴포저 활성 시 숨김.
+        // (오프셋·위치는 실기기 QA 조정 대상.)
+        .overlay(alignment: .bottomLeading) {
+            if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
+                FeedWriteCat()
+                    .padding(.leading, 8)
+                    .padding(.bottom, 54)      // 고양이가 탭바 윗면에 앉도록 — 조정 가능
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
-                FeedWriteCat { feedWriteTrigger += 1 }
-                    .padding(.trailing, -4)    // LIBRARY~MY 사이로 (가로)
-                    .padding(.bottom, 54)      // 책 아랫면이 탭바 윗면에 앉도록 (세로) — 조정 가능
+                FeedWriteFab { feedWriteTrigger += 1 }
+                    .padding(.trailing, 18)
+                    .padding(.bottom, 14)      // 네비바 레벨로 내림(기존 54 → 14) — 조정 가능
             }
         }
     }
