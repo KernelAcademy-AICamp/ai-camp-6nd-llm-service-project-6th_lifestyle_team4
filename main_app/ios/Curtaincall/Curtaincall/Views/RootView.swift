@@ -74,6 +74,7 @@ struct RootView: View {
     /// Bumped when the RootView-owned feed write bubble is tapped → FeedView handles it.
     @State private var feedWriteTrigger = 0
     @State private var latestNoticeId: Int?
+    @State private var showNoticeSheet = false   // 마스트헤드 공지 종 → NoticeView 시트
 
     var body: some View {
         Group {
@@ -128,6 +129,8 @@ struct RootView: View {
         // requestLogin 을 부르는 모든 유도(북마크 프롬프트·새로고침 제한·피드 익명)가
         // 이 한 곳을 띄운다(모달 분기 없음). 인증 성공 시 SignInSheet 가 자동으로 닫힌다.
         .sheet(isPresented: $showLoginModal) { SignInSheet() }
+        // 마스트헤드 공지 종 → 공지 시트(Android notif 시트 패턴).
+        .sheet(isPresented: $showNoticeSheet) { NoticeView() }
         .task {
             if let id = pendingCardId { await resolveAndPush(id: id) }
         }
@@ -234,19 +237,23 @@ struct RootView: View {
         TabView(selection: $selectedTab) {
             NavigationStack(path: $dailyPath) {
                 DailyView(selectedTab: $selectedTab, path: $dailyPath)
+                    .environment(\.mastheadShowsActions, true)   // 북마크·공지 종 표시(MY 제외)
             }
             .tag(Tab.daily)
             NavigationStack(path: $feedPath) {
                 FeedView(selectedTab: $selectedTab, reselect: feedReselect, writeTrigger: feedWriteTrigger)
                     .id(feedResetToken)   // re-create → category resets to .today
+                    .environment(\.mastheadShowsActions, true)
             }
             .tag(Tab.feed)
             NavigationStack(path: $homePath) {
                 HomeView(selectedTab: $selectedTab, reselect: homeReselect)
+                    .environment(\.mastheadShowsActions, true)
             }
             .tag(Tab.home)
             NavigationStack(path: $archivePath) {
                 LibraryCatalogView(selectedTab: $selectedTab, path: $archivePath, reselect: archiveReselect)
+                    .environment(\.mastheadShowsActions, true)
             }
             .tag(Tab.archive)
             NavigationStack(path: $settingsPath) {
@@ -280,6 +287,14 @@ struct RootView: View {
             feedPath = NavigationPath()
             feedResetToken += 1
         }
+        // 마스트헤드 트레일링 액션 — 북마크(→ MY 하위 서가, MyRoute.bookshelf) · 공지 종(→ 공지 시트).
+        // 미읽음 점은 hasUnreadNotice 를 주입(마스트헤드는 RootView 상태에 직접 접근 못 함).
+        .environment(\.requestBookmarks) {
+            selectedTab = .settings
+            settingsPath.append(MyRoute.bookshelf)
+        }
+        .environment(\.requestNotice) { showNoticeSheet = true }
+        .environment(\.mastheadNotifUnread, hasUnreadNotice)
         // Hide the tab bar while the comment composer is focused (keyboard up),
         // so the input can pin directly above the keyboard; restore on blur.
         .onPreferenceChange(ComposerFocusedPreferenceKey.self) { active in
