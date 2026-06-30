@@ -19,7 +19,6 @@ struct DailyView: View {
     @State private var allCards: [Card] = []
     @State private var trendingCounts: [Int: Int] = [:]
     @State private var ozCard: Card?
-    @State private var notices: [Notice] = []
     @State private var hasLoaded = false
     @State private var fetchFailed = false
     /// 새 책 룰렛에서 탭한 작품 — OpenedBookView(책 펼침) 오버레이로 표시.
@@ -34,10 +33,8 @@ struct DailyView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     // PWA(web_pwa) view-daily 미러: 상단 날짜·"디스커버리" 제목 제거.
-                    // 공지 룰렛이 최상단, 날짜는 새 책 카드 안으로 이동(DailyNewBooksSection).
+                    // 공지 바(DailyNoticeCarousel) 제거 — 날짜는 새 책 카드 안으로 이동(DailyNewBooksSection).
                     Spacer().frame(height: 16)
-                    DailyNoticeCarousel(notices: notices)
-                    if !notices.isEmpty { Spacer().frame(height: 12) }
 
                     if !allCards.isEmpty {
                         // PWA view-daily 순서: 새 책 → Oz 픽 → 트렌딩.
@@ -162,7 +159,6 @@ struct DailyView: View {
                 allCards = try await Supa.shared.fetchCards()
             }
             fetchFailed = false
-            notices = (try? await Supa.shared.fetchNotices()) ?? []
             trendingCounts = (try? await Supa.shared.fetchBookmarkCounts(cardIds: allCards.map(\.cardId))) ?? [:]
             recomputeOz()
             hasLoaded = true

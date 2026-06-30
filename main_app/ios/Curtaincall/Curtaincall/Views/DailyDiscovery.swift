@@ -381,9 +381,10 @@ struct DailyNewBooksSection: View {
         let cleaned = cleanDiscoveryQuote(book.cards.first?.quote ?? "")
         let sample = String(cleaned.prefix(60))
         // PWA 제목: series/title (paper) + subtitle span(0.6em ≈ 17, sand).
-        var titleText = Text(title).font(.displaySerif(28)).foregroundColor(.paper)
+        // 검정 박스 안 텍스트는 고딕(Pretendard) — 날짜·NEW 뱃지와 동일 패밀리(번들 = Medium/Regular).
+        var titleText = Text(title).font(.custom("Pretendard-Medium", size: 28)).foregroundColor(.paper)
         if let subtitle, !subtitle.isEmpty {
-            titleText = titleText + Text(" \(subtitle)").font(.titleSerif(17)).foregroundColor(.sand)
+            titleText = titleText + Text(" \(subtitle)").font(.custom("Pretendard-Regular", size: 17)).foregroundColor(.sand)
         }
 
         // PWA: HStack gap 20 / align center · content flex:1 + cover 82.
@@ -418,14 +419,14 @@ struct DailyNewBooksSection: View {
                     // 본문 — intro 있으면 3줄(serif), 없으면 샘플 인용(이탤릭). 14px latte, lh 1.75.
                     if let intro, !intro.isEmpty {
                         Text(intro)
-                            .font(.titleSerif(14))
+                            .font(.custom("Pretendard-Regular", size: 14))
                             .foregroundStyle(Color.latte)
                             .lineLimit(3)
                             .bookLeading(size: 14)
                             .fixedSize(horizontal: false, vertical: true)
                     } else if !sample.isEmpty {
                         Text("\"\(sample)\(cleaned.count >= 60 ? "⋯" : "")\"")
-                            .font(.titleSerif(14))
+                            .font(.custom("Pretendard-Regular", size: 14))
                             .italic()
                             .foregroundStyle(Color.latte)
                             .lineLimit(3)
@@ -914,56 +915,3 @@ struct DailyOzPickSection: View {
 }
 
 // MARK: - Notice carousel
-
-/// Top-of-Daily notice strip — up to 3 notices, auto-rotating every 10s
-/// (Android `DailyNoticeRow`). Tapping opens the full Notice screen.
-struct DailyNoticeCarousel: View {
-    let notices: [Notice]
-
-    // 10초마다 회전 + PWA 크로스페이드(제목만 opacity 0→swap→1, 각 200ms).
-    @State private var idx = 0
-    @State private var titleOpacity = 1.0
-    @State private var rotation = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        let items = Array(notices.prefix(3))
-        if !items.isEmpty {
-            NavigationLink {
-                NoticeView()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "megaphone")
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(Color.cta)
-                    Text(items[min(idx, items.count - 1)].title)
-                        .font(.bodySans(13))
-                        .fontWeight(.medium)
-                        .foregroundStyle(.espresso)
-                        .lineLimit(1)
-                        .opacity(titleOpacity)   // PWA daily-notice-title-line 페이드
-                    Spacer(minLength: 8)
-                    Text("›")
-                        .font(.titleSerif(16))
-                        .foregroundStyle(.walnut)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .frame(maxWidth: .infinity)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.latte))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.sand, lineWidth: 0.5))
-                .shadow(color: Color.black.opacity(0.08), radius: 5, x: 0, y: 2)
-                .contentShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-            // PWA renderDailyNotice: 제목을 200ms 페이드아웃 → 교체 → 200ms 페이드인.
-            .onReceive(rotation) { _ in
-                guard items.count > 1 else { return }
-                withAnimation(.easeInOut(duration: 0.2)) { titleOpacity = 0 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    idx = (idx + 1) % items.count
-                    withAnimation(.easeInOut(duration: 0.2)) { titleOpacity = 1 }
-                }
-            }
-        }
-    }
-}
