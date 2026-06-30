@@ -2009,6 +2009,189 @@ saveBtn.addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// 수동 카드 입력 (크레딧 0) — LLM·번역 API 미사용.
+// /api/manual-card 로 직접 보내 card_candidates(source_kind='manual') 에 pending 저장.
+// ---------------------------------------------------------------------------
+let manualWorksLoaded = false;
+let manualWorkMode = 'existing'; // 'existing' | 'new'
+
+function manualSplitKeywords(s) {
+  return String(s || '').split(/[,，]/).map((k) => k.trim()).filter(Boolean).slice(0, 10);
+}
+
+function setEntryMode(mode) {
+  const extractSection = $('#extract-section');
+  const manualSection = $('#manual-section');
+  $$('#entry-mode-toggle .entry-mode-btn').forEach((b) => {
+    const active = b.dataset.entryMode === mode;
+    b.classList.toggle('border-primary', active);
+    b.classList.toggle('bg-primary/10', active);
+    b.classList.toggle('text-primary', active);
+    b.classList.toggle('border-outline-variant', !active);
+    b.classList.toggle('bg-surface-container-lowest', !active);
+    b.classList.toggle('text-on-surface', !active);
+  });
+  if (mode === 'manual') {
+    extractSection?.classList.add('hidden');
+    manualSection?.classList.remove('hidden');
+    manualSection?.classList.add('flex');
+    // 추출 결과 UI 숨김 (이전 추출 잔여물이 보이지 않도록)
+    summary?.classList.add('hidden');
+    cardGrid?.classList.add('hidden');
+    emptyMsg?.classList.add('hidden');
+    saveBar?.classList.add('hidden');
+    if (!manualWorksLoaded) { manualWorksLoaded = true; loadManualWorks(); }
+  } else {
+    manualSection?.classList.add('hidden');
+    manualSection?.classList.remove('flex');
+    extractSection?.classList.remove('hidden');
+    cardGrid?.classList.remove('hidden');
+    // 추출 모드 복귀 시 현재 카드 상태에 맞게 다시 그림
+    if (typeof render === 'function') render();
+  }
+}
+
+function setManualWorkMode(mode) {
+  manualWorkMode = mode;
+  $$('#manual-work-mode-toggle .manual-work-mode-btn').forEach((b) => {
+    const active = b.dataset.workMode === mode;
+    b.classList.toggle('border-primary', active);
+    b.classList.toggle('bg-primary/10', active);
+    b.classList.toggle('text-primary', active);
+    b.classList.toggle('border-outline-variant', !active);
+    b.classList.toggle('bg-surface-container-lowest', !active);
+    b.classList.toggle('text-on-surface', !active);
+  });
+  $('#manual-existing-work')?.classList.toggle('hidden', mode !== 'existing');
+  const newWork = $('#manual-new-work');
+  if (newWork) {
+    newWork.classList.toggle('hidden', mode !== 'new');
+    newWork.classList.toggle('grid', mode === 'new');
+  }
+}
+
+async function loadManualWorks() {
+  const sel = $('#manual-work-select');
+  if (!sel) return;
+  try {
+    const sb = await getSupabase();
+    const { data, error } = await sb
+      .from('works')
+      .select('work_id, title, subtitle, author')
+      .order('work_id', { ascending: false })
+      .limit(2000);
+    if (error) throw error;
+    sel.innerHTML = '';
+    const def = document.createElement('option');
+    def.value = '';
+    def.textContent = data && data.length ? '작품을 선택하세요' : '저장된 작품이 없습니다 — 새 작품으로 추가하세요';
+    sel.appendChild(def);
+    (data || []).forEach((w) => {
+      const o = document.createElement('option');
+      o.value = String(w.work_id);
+      const label = [w.title, w.subtitle].filter(Boolean).join(' - ');
+      o.textContent = label + (w.author ? ` (${w.author})` : '') + ` · #${w.work_id}`;
+      sel.appendChild(o);
+    });
+  } catch (e) {
+    sel.innerHTML = '<option value="">목록 불러오기 실패</option>';
+    toast(`작품 목록 불러오기 실패: ${e.message || e}`, 'error');
+  }
+}
+
+function resetManualCardFields() {
+  ['#manual-quote', '#manual-script', '#manual-desc', '#manual-significance', '#manual-keywords',
+   '#manual-quote-en', '#manual-script-en', '#manual-keywords-en'].forEach((s) => {
+    const el = $(s); if (el) el.value = '';
+  });
+  const t = $('#manual-temperature'); if (t) t.value = '3';
+  const i = $('#manual-intensity'); if (i) i.value = '3';
+}
+
+function resetManualAll() {
+  resetManualCardFields();
+  ['#manual-work-title', '#manual-work-subtitle', '#manual-work-author', '#manual-work-year'].forEach((s) => {
+    const el = $(s); if (el) el.value = '';
+  });
+}
+
+async function submitManualCard() {
+  const quote = ($('#manual-quote')?.value || '').trim();
+  const script = ($('#manual-script')?.value || '').trim();
+  if (!quote) { toast('명대사(quote)를 입력하세요.', 'error'); return; }
+  if (!script) { toast('대본 발췌(script_excerpt)를 입력하세요.', 'error'); return; }
+
+  const payload = {
+    card: {
+      quote,
+      script_excerpt: script,
+      excerpt_description: ($('#manual-desc')?.value || '').trim() || null,
+      significance: ($('#manual-significance')?.value || '').trim() || null,
+      keywords: manualSplitKeywords($('#manual-keywords')?.value),
+      temperature: Number($('#manual-temperature')?.value || 3),
+      intensity: Number($('#manual-intensity')?.value || 3),
+      quote_original: ($('#manual-quote-en')?.value || '').trim() || null,
+      script_excerpt_original: ($('#manual-script-en')?.value || '').trim() || null,
+      keywords_original: manualSplitKeywords($('#manual-keywords-en')?.value),
+    },
+  };
+
+  if (manualWorkMode === 'existing') {
+    const wid = $('#manual-work-select')?.value;
+    if (!wid) { toast('작품을 선택하세요.', 'error'); return; }
+    payload.work_id = wid;
+  } else {
+    const title = ($('#manual-work-title')?.value || '').trim();
+    if (!title) { toast('작품 제목을 입력하세요.', 'error'); return; }
+    payload.work = {
+      title,
+      subtitle: ($('#manual-work-subtitle')?.value || '').trim() || null,
+      format: $('#manual-work-format')?.value || 'novel',
+      author: ($('#manual-work-author')?.value || '').trim() || null,
+      release_year: ($('#manual-work-year')?.value || '').trim() || null,
+    };
+  }
+
+  const btn = $('#manual-save-btn');
+  btn.disabled = true;
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> 저장 중⋯';
+  try {
+    const token = await getAccessToken();
+    const json = await apiFetch('/api/manual-card', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    toast('카드 1건 저장됨 — 검토 큐로 이동했습니다 (크레딧 0).', 'success');
+    resetManualCardFields(); // 작품 선택은 유지 → 같은 작품에 연속 입력 편의
+    // 새 작품으로 저장했으면 다음 카드가 같은 작품에 붙도록 기존 모드로 전환 + 목록 갱신
+    if (manualWorkMode === 'new' && json?.work_id) {
+      await loadManualWorks();
+      setManualWorkMode('existing');
+      const sel = $('#manual-work-select');
+      if (sel) sel.value = String(json.work_id);
+    }
+  } catch (err) {
+    console.error(err);
+    toast(err.message || '저장 실패', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+$$('#entry-mode-toggle .entry-mode-btn').forEach((b) => {
+  b.addEventListener('click', () => setEntryMode(b.dataset.entryMode));
+});
+$$('#manual-work-mode-toggle .manual-work-mode-btn').forEach((b) => {
+  b.addEventListener('click', () => setManualWorkMode(b.dataset.workMode));
+});
+$('#manual-save-btn')?.addEventListener('click', submitManualCard);
+$('#manual-reset-btn')?.addEventListener('click', resetManualAll);
+setManualWorkMode('existing'); // 초기 상태
+
+// ---------------------------------------------------------------------------
 // Toast
 // ---------------------------------------------------------------------------
 let toastTimer = null;
