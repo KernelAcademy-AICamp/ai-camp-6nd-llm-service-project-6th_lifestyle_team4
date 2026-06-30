@@ -5063,7 +5063,7 @@ document.getElementById('delete-account-btn')?.addEventListener('click', async (
     setTimeout(() => location.reload(), 1200);
   } catch (e) {
     console.warn('[m] delete account failed:', e);
-    toast('삭제 실패. 관리자에게 문의해주세요. (1ckdgns24@gmail.com)');
+    toast('삭제 실패. 관리자에게 문의해주세요. (23happylab@gmail.com)');
   }
 });
 

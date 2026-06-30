@@ -51,6 +51,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -120,6 +121,9 @@ fun SettingsScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm2 by remember { mutableStateOf(false) } // 이중 확인 2단계 (PWA appConfirm 2회)
     var showAttendance by remember { mutableStateOf(false) }
+    // 버전 정보 7회 연속 탭 → 제작자 크레딧 이스터에그 (PWA _versionEasterEgg 패리티).
+    var showCredits by remember { mutableStateOf(false) }
+    var versionTaps by remember { mutableStateOf(0) }
     // 설정에서 수동으로 열 땐 오늘 출석(+100)을 이미 받았는지 서버 기록으로 배너를 띄운다(앱 진입 시 자동 지급됨).
     var attendanceRewardedToday by remember { mutableStateOf(false) }
     var attendanceHistory by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -145,6 +149,17 @@ fun SettingsScreen(
         if (autoOpenSignIn && session.isAnonymous) {
             showSignInDialog = true
             onConsumeAutoSignIn()
+        }
+    }
+    // 1.5초 안에 다음 탭이 없으면 카운트 리셋, 7회 도달 시 크레딧 팝업 (PWA setTimeout 1500 + count>=7).
+    LaunchedEffect(versionTaps) {
+        if (versionTaps == 0) return@LaunchedEffect
+        if (versionTaps >= 7) {
+            versionTaps = 0
+            showCredits = true
+        } else {
+            kotlinx.coroutines.delay(1500)
+            versionTaps = 0
         }
     }
 
@@ -318,7 +333,11 @@ fun SettingsScreen(
         SettingRow(title = stringResource(R.string.app_guide), onClick = onOpenGuide, trailingArrow = true)
         SettingRow(title = stringResource(R.string.terms_of_service), onClick = onOpenTerms, trailingArrow = true)
         SettingRow(title = stringResource(R.string.privacy_policy), onClick = onOpenPrivacy, trailingArrow = true)
-        SettingRow(title = stringResource(R.string.version_info), trailingText = "v${BuildConfig.VERSION_NAME}")
+        SettingRow(
+            title = stringResource(R.string.version_info),
+            trailingText = "v${BuildConfig.VERSION_NAME}",
+            onClick = { versionTaps++ },
+        )
 
         // 로그아웃 — outline 블록 버튼 대신 작은 중앙 텍스트 링크 (PWA MY 화면과 동일).
         Box(modifier = Modifier.height(20.dp))
@@ -420,6 +439,27 @@ fun SettingsScreen(
                     text = "정말 계정을 영구 삭제할까요? 이 작업은 되돌릴 수 없어요.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Walnut,
+                )
+            },
+            containerColor = Paper,
+        )
+    }
+
+    // 제작자 크레딧 — 버전 정보 7회 탭 이스터에그 (PWA: openPromptModal '제작').
+    if (showCredits) {
+        AlertDialog(
+            onDismissRequest = { showCredits = false },
+            confirmButton = {
+                TextButton(onClick = { showCredits = false }) { Text("확인", color = Cta) }
+            },
+            title = { Text("제작", color = Espresso) },
+            text = {
+                Text(
+                    text = "정환욱\n박신영\n함승엽\n이창훈",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Espresso,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             },
             containerColor = Paper,

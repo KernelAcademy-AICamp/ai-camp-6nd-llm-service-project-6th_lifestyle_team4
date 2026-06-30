@@ -376,8 +376,8 @@ fun termsDoc() = LegalDoc(
                 DocBlock.Unordered(
                     listOf(
                         "**서비스명**: Daily Script — 오늘의 명대사",
-                        "**운영자**: Daily Script (AI PM 6기)",
-                        "**이메일**: iambricoleur@gmail.com",
+                        "**운영자**: Daily Script Team",
+                        "**이메일**: 23happylab@gmail.com",
                     ),
                 ),
             ),
@@ -513,7 +513,7 @@ fun privacyDoc() = LegalDoc(
                     listOf(
                         "**서비스명**: Daily Script — 오늘의 명대사",
                         "**개인정보 보호책임자**: Daily Script 운영팀",
-                        "**이메일**: iambricoleur@gmail.com",
+                        "**이메일**: 23happylab@gmail.com",
                     ),
                 ),
                 DocBlock.Para(

@@ -116,8 +116,8 @@ extension LegalDoc {
             DocSection(heading: "제15조 (문의처)", blocks: [
                 .unordered([
                     "**서비스명**: Daily Script — 오늘의 명대사",
-                    "**운영자**: Daily Script (AI PM 6기)",
-                    "**이메일**: iambricoleur@gmail.com",
+                    "**운영자**: Daily Script Team",
+                    "**이메일**: 23happylab@gmail.com",
                 ]),
             ]),
         ],
@@ -204,7 +204,7 @@ extension LegalDoc {
                 .unordered([
                     "**서비스명**: Daily Script — 오늘의 명대사",
                     "**개인정보 보호책임자**: Daily Script 운영팀",
-                    "**이메일**: iambricoleur@gmail.com",
+                    "**이메일**: 23happylab@gmail.com",
                 ]),
                 .para("기타 개인정보 침해 신고·상담은 개인정보침해신고센터(privacy.kisa.or.kr / 118), 대검찰청 사이버수사과(spo.go.kr / 1301), 경찰청 사이버수사국(ecrm.police.go.kr / 182)에 문의할 수 있습니다."),
             ]),
