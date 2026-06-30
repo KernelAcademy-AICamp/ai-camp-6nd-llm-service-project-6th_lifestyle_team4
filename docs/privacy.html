@@ -120,16 +120,16 @@
     <thead><tr><th>수탁자</th><th>위탁 업무</th><th>비고</th></tr></thead>
     <tbody>
       <tr><td>Supabase</td><td>데이터베이스 저장 및 회원 인증</td><td>국외(해외 리전) 처리될 수 있음</td></tr>
-      <tr><td>Amplitude</td><td>서비스 이용 행태 분석</td><td>국외 처리</td></tr>
-      <tr><td>Microsoft Clarity</td><td>이용 행태·세션 분석</td><td>국외 처리</td></tr>
-      <tr><td>Apple / 구글</td><td>소셜 로그인 인증</td><td>이용자가 선택한 경우에 한함</td></tr>
+      <tr><td>Amplitude</td><td>서비스 이용 행태 분석</td><td>국외 처리 · 웹·안드로이드 앱 한정(iOS 앱 미적용)</td></tr>
+      <tr><td>Microsoft Clarity</td><td>이용 행태·세션 분석</td><td>국외 처리 · 웹·안드로이드 앱 한정(iOS 앱 미적용)</td></tr>
+      <tr><td>Apple / 구글 / 카카오</td><td>소셜 로그인 인증</td><td>이용자가 선택한 경우에 한함</td></tr>
     </tbody>
   </table>
   <p>위 수탁자는 위탁받은 업무 범위 내에서만 개인정보를 처리하며, 회사는 관계 법령에 따라 수탁자를 관리·감독합니다.</p>
 
   <h2>6. 개인정보의 국외 이전</h2>
-  <p>본 서비스는 위 수탁자(Supabase, Amplitude, Microsoft Clarity 등)의 해외 인프라를 이용하므로, 이용자의
-     개인정보가 국외에서 저장·처리될 수 있습니다. 이용자는 회원가입 및 서비스 이용으로써 이에 동의한 것으로 봅니다.</p>
+  <p>본 서비스는 위 수탁자(Supabase는 전 플랫폼 공통, Amplitude·Microsoft Clarity는 웹·안드로이드 앱 한정 — iOS 앱 미적용)의
+     해외 인프라를 이용하므로, 이용자의 개인정보가 국외에서 저장·처리될 수 있습니다. 이용자는 회원가입 및 서비스 이용으로써 이에 동의한 것으로 봅니다.</p>
 
   <h2>7. 쿠키 및 유사 기술의 사용</h2>
   <ol>
@@ -167,13 +167,14 @@
        version above; this is a brief summary.</p>
     <ul>
       <li><strong>What we collect:</strong> account email/password (or social-login identifier, email, profile name from
-        Apple/Google), user-generated data such as bookmarks, device/access logs and cookies, and — when you use the
+        Apple/Google/Kakao), user-generated data such as bookmarks, device/access logs and cookies, and — when you use the
         feedback form — a satisfaction rating, free-text feedback, optional gender/age range, and an optional reply email.
         Anonymous users are identified only by a locally stored anonymous ID.</li>
       <li><strong>Why:</strong> account authentication, providing app features (quote cards, bookmark sync),
         optional personalization, quality/abuse analysis, and responding to inquiries.</li>
-      <li><strong>Storage:</strong> data is stored and authenticated via <strong>Supabase</strong> (and analyzed via
-        Amplitude / Microsoft Clarity), which may process data on overseas infrastructure over encrypted (HTTPS) transport.</li>
+      <li><strong>Storage:</strong> data is stored and authenticated via <strong>Supabase</strong> (and, on the web and Android
+        apps only, analyzed via Amplitude / Microsoft Clarity — the iOS app does not use them), which may process data on
+        overseas infrastructure over encrypted (HTTPS) transport.</li>
       <li><strong>Account deletion:</strong> you can delete your account anytime in the app (<strong>MY → 회원 탈퇴</strong>);
         your account and usage data (including the auth account) are erased except where retention is legally required.</li>
       <li><strong>Contact:</strong> <a href="mailto:iambricoleur@gmail.com">iambricoleur@gmail.com</a></li>
