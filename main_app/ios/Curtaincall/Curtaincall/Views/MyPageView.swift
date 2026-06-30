@@ -148,7 +148,10 @@ struct MyPageView: View {
                     if !session.isAnonymous {
                         Spacer().frame(height: 40)
                         Button {
-                            Task { await session.signOut() }
+                            Task {
+                                await session.signOut()
+                                prefs.clearOnLogout()   // 이전 사용자 취향이 다음(익명) 세션에 남지 않게 초기화
+                            }
                         } label: {
                             Text("로그아웃")
                                 .font(.custom("Pretendard-Medium", size: 10))
@@ -498,8 +501,14 @@ struct SignInSheet: View {
                     FieldBox(placeholder: "비밀번호", text: $loginPassword, isSecure: true)
                     // 로그인/가입 버튼은 하단 고정 행으로 이동(키보드가 떠도 보이게). 모드 토글만 여기.
                     Button { signUpMode.toggle() } label: {
-                        Text(signUpMode ? "이미 계정이 있나요? 로그인" : "계정이 없으신가요? 회원가입")
-                            .labelCaps()
+                        // 회원가입(또는 로그인) 단어를 강조 — 안내 문구는 톤다운, 액션 단어는 accent + 밑줄.
+                        (
+                            Text(signUpMode ? "이미 계정이 있나요? " : "계정이 없으신가요? ")
+                                .foregroundStyle(.walnut)
+                            + Text(signUpMode ? "로그인" : "회원가입")
+                                .foregroundStyle(Color.cta).underline()
+                        )
+                        .font(.custom("Pretendard-Medium", size: 12))
                     }
                     .buttonStyle(.plain)
 
