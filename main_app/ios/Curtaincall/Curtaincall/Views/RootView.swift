@@ -255,14 +255,16 @@ struct RootView: View {
             .tag(Tab.settings)
         }
         .toolbar(.hidden, for: .tabBar)
-        // #9: Feed·Library 를 '떠날 때' 그 탭을 루트로 리셋 → 다시 돌아오면 직전에
-        // 열어둔 카드 상세가 아니라 탭의 목록이 보인다. (Feed 상세는 path 가 아닌
+        // #9: Feed·Library·Settings(MY) 를 '떠날 때' 그 탭을 루트로 리셋 → 다시 돌아오면 직전에
+        // 열어둔 하위 화면이 아니라 탭의 홈/목록이 보인다. (Feed 상세는 path 가 아닌
         // selectedCard/selectedHighlight @State 라 popToRoot 가 reselect 로 닫고,
         // Library 는 archivePath(카드 상세)와 archiveReselect(펼친 책 OpenedBookView
-        // 오버레이) 둘 다 popToRoot 가 리셋한다.)
-        // Home(딥링크·랜덤 카드 푸시 유지)·Daily·Settings(값기반 하위 페이지)는 보존.
+        // 오버레이) 둘 다 popToRoot 가 리셋하고, Settings(MY)는 popToRoot 가 settingsPath 를 비운다.)
+        // MY 하위(북마크 등 값 기반 MyRoute)는 다른 탭처럼 전환 후 돌아오면 MY 홈이어야 한다
+        // — 탭 전환 후 북마크 화면에 머무르던 back-nav 버그 fix.
+        // Home(딥링크·랜덤 카드 푸시 유지)·Daily 만 보존.
         .onChange(of: selectedTab) { oldTab, _ in
-            if oldTab == .feed || oldTab == .archive { popToRoot(oldTab) }
+            if oldTab == .feed || oldTab == .archive || oldTab == .settings { popToRoot(oldTab) }
         }
         // 로그인 유도(컨텍스트 메뉴 북마크 프롬프트·3회 새로고침 제한·피드 익명 프롬프트 등)
         // → MY 탭 이동 대신 인증 모달(SignInSheet, #97/#99)을 그 자리에서 직접 띄운다.
