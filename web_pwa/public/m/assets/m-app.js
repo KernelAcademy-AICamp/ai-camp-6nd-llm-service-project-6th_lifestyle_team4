@@ -5044,12 +5044,21 @@ document.getElementById('delete-account-btn')?.addEventListener('click', async (
     /* delete_my_account RPC — public.users + auth.users 둘 다 삭제 (migration 044).
        기존 sb.from('users').delete() 만 호출하면 auth.users 남아서 같은 email 재가입 시
        'already registered' 에러. */
-    const { error } = await sb.rpc('delete_my_account', { p_user_id: state.userId });
+    const deletedUid = state.userId;
+    const { error } = await sb.rpc('delete_my_account', { p_user_id: deletedUid });
     if (error) throw error;
     await sb.auth.signOut();
     resetUser();
     safeStorageRemove('ds.prevAnonUserId');
     safeStorageRemove(SESSION_KEY);
+    /* 사용자 명세: 계정 삭제 시 해당 계정의 구매 물품 전부 소멸. 서버는 FK CASCADE
+       (migration 047) 로 처리, 클라이언트도 사용자별 localStorage 백업 키 정리. */
+    try {
+      localStorage.removeItem(`ds.ownedShareBgs.${deletedUid}`);
+      localStorage.removeItem(`ds.guideSeenForUser.${deletedUid}`);
+      localStorage.removeItem(`ds.yarnRewarded.${deletedUid}`);
+      localStorage.removeItem(`ds.firstShareGuideShown.${deletedUid}`);
+    } catch {}
     toast('계정이 삭제되었어요');
     setTimeout(() => location.reload(), 1200);
   } catch (e) {
