@@ -130,7 +130,8 @@ struct MyPageView: View {
                     }
                     settingRow(
                         title: "맞춤 추천",
-                        subtitle: prefs.tasteEnabled ? tasteProfileText : "북마크와 비슷한 카드를 추천합니다"
+                        subtitle: "북마크와 비슷한 카드를 추천합니다",
+                        note: prefs.tasteEnabled ? tasteProfileText : nil   // Android: note = ON일 때 취향 프로필 라인
                     ) {
                         EditorialToggle(isOn: $prefs.tasteEnabled)
                     }
@@ -446,6 +447,7 @@ struct MyPageView: View {
     private func settingRow(
         title: String,
         subtitle: String? = nil,
+        note: String? = nil,
         trailingText: String? = nil,
         @ViewBuilder trailing: () -> some View = { EmptyView() }
     ) -> some View {
@@ -458,6 +460,13 @@ struct MyPageView: View {
                     if let subtitle {
                         Text(subtitle)
                             .font(.bodySans(12))
+                            .foregroundStyle(.walnut)
+                    }
+                    // Android SettingRow note — 부제 아래 별도 라인(맞춤 추천 ON 시 취향 프로필). 8dp 간격.
+                    if let note {
+                        Spacer().frame(height: 4)
+                        Text(note)
+                            .font(.bodySans(11))
                             .foregroundStyle(.walnut)
                     }
                 }
