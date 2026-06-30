@@ -80,6 +80,18 @@ For the full per-role type scale (sizes, weights, leading, Dynamic Type behavior
 
 - **Sheet chrome standard** — every bottom sheet / modal builds its grabber→title→body→button
   rhythm from the §1 `SheetMetrics` tokens. New sheets follow the same chrome.
+- **Pop-up dialog (centered)** — `Views/Components/PopupDialog.swift`. The app-standard centered modal:
+  `espresso.opacity(0.18)` scrim + paper card (corner radius 12, `latte` 0.5pt stroke, `maxWidth` ~360),
+  `.transition(.opacity)`. Apply like a sheet: `.popup(isPresented:)`. Content closes itself via the
+  injected `\.dismissPopup` env (an overlay doesn't get `\.dismiss`). `fitContent:` true = size to content
+  (check-in / profile-edit); false = **form mode** (login) — the card fills the space above the keyboard
+  so the inner `ScrollView` reaches the focused field. `AccountRequiredPrompt` (below) is the same
+  scrim+card scaffold specialized for the auth gate.
+  - **Pop-up vs. sheet (decide once):** small, self-contained content/action modals — check-in, sign-in,
+    profile-edit — use the centered `PopupDialog` (full content shown immediately, no bottom-sheet
+    animation hiding it). Keep `.sheet` only for composers, list/detail, the shake `RandomQuotePeek`, and
+    **system share** (`ActivityShareSheet` / `ShareLink`). Don't reach for `.sheet` for a small dialog.
+    (Mirrors the same rule in `AGENTS.md`.)
 - **Auth / "membership required" modal** — `Views/Components/AccountRequiredPrompt.swift`. Centered
   card: `maxWidth 340`, corner radius 8, `espresso.opacity(0.18)` scrim, "Members" serif eyebrow
   (`headlineSerif(22)`) + title (`titleSerif(20)`) + message (`bodySans(14)`, `walnut`) + filled
