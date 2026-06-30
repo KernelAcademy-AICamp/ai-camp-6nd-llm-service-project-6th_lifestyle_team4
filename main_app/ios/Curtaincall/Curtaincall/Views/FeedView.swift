@@ -507,17 +507,46 @@ private struct FeedPostCard: View {
         }
         .buttonStyle(.plain)
 
-        // 남의 글에만 신고·차단 메뉴(App Store 1.2). 헤더 우상단 빈 공간에 띄운다.
-        if session.userId != post.userId {
-            ModerationMenu(
-                target: .feedPost(post.postId),
-                authorUserId: post.userId,
-                onToast: onToast
-            )
-            .padding(.top, 8)
-            .padding(.trailing, 6)
+        // 좋아요 + (남의 글이면) 신고·차단 메뉴 — 카드 우상단 한 줄로.
+        // Android FeedScreen.LikeButton 의 위치/모양(heart + count)을 동일 적용.
+        // 동작 wire(toggle RPC)는 후속 PR (Auth/Data gated — AGENTS.md 위반 방지).
+        HStack(spacing: 4) {
+            LikeButton(count: 0, liked: false) { onToast("좋아요는 곧 도착해요") }
+            if session.userId != post.userId {
+                ModerationMenu(
+                    target: .feedPost(post.postId),
+                    authorUserId: post.userId,
+                    onToast: onToast
+                )
+            }
         }
+        .padding(.top, 8)
+        .padding(.trailing, 6)
         }
+    }
+}
+
+/// Like 버튼 — Android FeedScreen.LikeButton 미러. heart filled/outlined + 개수.
+/// 자식 Button 이라 카드 onTap 이 전파되지 않는다.
+private struct LikeButton: View {
+    let count: Int
+    let liked: Bool
+    let onTap: () -> Void
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 4) {
+                Image(systemName: liked ? "heart.fill" : "heart")
+                    .font(.system(size: 16, weight: .regular))
+                if count > 0 {
+                    Text("\(count)").font(.bodySans(12))
+                }
+            }
+            .foregroundStyle(liked ? Color.cta : .walnut)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -651,16 +680,20 @@ private struct HighlightFeedCard: View {
         }
         .buttonStyle(.plain)
 
-        // 남의 하이라이트에만 신고·차단 메뉴(App Store 1.2).
-        if session.userId != highlight.userId {
-            ModerationMenu(
-                target: .highlight(highlight.highlightId),
-                authorUserId: highlight.userId,
-                onToast: onToast
-            )
-            .padding(.top, 6)
-            .padding(.trailing, 4)
+        // 좋아요 + (남의 글이면) 신고·차단 메뉴 — 카드 우상단 한 줄로.
+        // Android FeedScreen.HighlightCard LikeButton 미러.
+        HStack(spacing: 4) {
+            LikeButton(count: 0, liked: false) { onToast("좋아요는 곧 도착해요") }
+            if session.userId != highlight.userId {
+                ModerationMenu(
+                    target: .highlight(highlight.highlightId),
+                    authorUserId: highlight.userId,
+                    onToast: onToast
+                )
+            }
         }
+        .padding(.top, 6)
+        .padding(.trailing, 4)
         }
     }
 
