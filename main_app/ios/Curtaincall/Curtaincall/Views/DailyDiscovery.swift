@@ -619,8 +619,6 @@ struct DailyTrendingSection: View {
     let cards: [Card]
     /// Bookmark counts for the full set (existing `fetchBookmarkCounts`).
     let bookmarkCounts: [Int: Int]
-    /// Open the full library/list — reuses existing navigation (tab switch).
-    let onOpenAll: () -> Void
 
     private struct Ranked: Identifiable {
         let card: Card
@@ -646,18 +644,11 @@ struct DailyTrendingSection: View {
         let top = Array(scored.prefix(3))
         if !top.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("이번 주 인기 대사")
-                        .font(.headlineSerif(22))
-                        .foregroundStyle(.espresso)
-                    Spacer()
-                    Button(action: onOpenAll) {
-                        Text("전체 ›")
-                            .font(.bodySans(13))
-                            .foregroundStyle(.walnut)
-                    }
-                    .buttonStyle(.plain)
-                }
+                // '전체 ›' 뷰올 버튼 제거(백로그: WEEKLY Rec view-all 제거) — 섹션 제목만 노출.
+                Text("이번 주 인기 대사")
+                    .font(.headlineSerif(22))
+                    .foregroundStyle(.espresso)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer().frame(height: 14)
                 ForEach(Array(top.enumerated()), id: \.element.id) { index, item in
                     NavigationLink(value: item.card) {

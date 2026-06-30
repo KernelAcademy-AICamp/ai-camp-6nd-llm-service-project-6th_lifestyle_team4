@@ -52,9 +52,7 @@ struct DailyView: View {
                             onRequestPreferences: { prefs.prefSelected = false }
                         )
                         Spacer().frame(height: 36)
-                        DailyTrendingSection(cards: allCards, bookmarkCounts: trendingCounts) {
-                            selectedTab = .archive
-                        }
+                        DailyTrendingSection(cards: allCards, bookmarkCounts: trendingCounts)
                     } else if !fetchFailed {
                         QuietLoadingLabel()
                             .frame(maxWidth: .infinity)
