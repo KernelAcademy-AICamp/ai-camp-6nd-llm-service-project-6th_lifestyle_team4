@@ -122,7 +122,8 @@ struct RootView: View {
         .task { checkAttendance() }
         .onChange(of: session.ready) { _, _ in checkAttendance() }
         .onChange(of: prefs.prefSelected) { _, _ in checkAttendance() }
-        .sheet(isPresented: $showAttendance) {
+        // 출석체크 — 중앙 팝업(전체 즉시 표시; +100 실타래 배너가 반쯤 올라온 시트에 가리지 않도록).
+        .popup(isPresented: $showAttendance) {
             AttendanceView(rewarded: attendanceRewarded)
         }
         // 로그인/회원가입 모달 — MY 의 그 모달(#97/#99 SignInSheet)을 루트에서 재사용.

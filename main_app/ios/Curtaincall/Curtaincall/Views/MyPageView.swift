@@ -216,8 +216,8 @@ struct MyPageView: View {
                 showNicknameSheet = false
             }
         }
-        .sheet(isPresented: $showAttendance) {
-            AttendanceView()   // 보기 전용 (보상 지급 없음)
+        .popup(isPresented: $showAttendance) {
+            AttendanceView()   // 보기 전용 (보상 지급 없음) — 중앙 팝업
         }
         .sheet(isPresented: $showSignIn) {
             SignInSheet()
