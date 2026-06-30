@@ -191,7 +191,7 @@ struct MyPageView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showNicknameSheet) {
+        .popup(isPresented: $showNicknameSheet) {
             ProfileEditor(
                 initialNickname: session.nickname,
                 initialGender: session.gender,
@@ -781,8 +781,8 @@ struct ProfileEditor: View {
             .padding(.top, 16)
         }
         .padding(24)
-        .background(Color.paper.ignoresSafeArea())
-        .presentationDetents([.medium, .large])
+        // 중앙 팝업 — 카드 배경/모서리는 PopupDialog 담당(detents 불필요). 긴 콘텐츠(프로필 +
+        // 선호도)는 작은 화면(SE)에서 화면을 넘을 수 있어 그 경우만 QA 확인.
     }
 
     // 취향(장르·주제) 칩 — Android ProfileDialog showPreferences 블록 미러.
