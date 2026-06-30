@@ -31,6 +31,9 @@ struct PopupDialog<Content: View>: View {
             card
         }
         .transition(.opacity)
+        // 폼 모드(키보드 쓰는 팝업)일 때 신호 — RootView 가 받아 탭바/고양이가 키보드를 따라
+        // 위로 떠오르지 않게 잠근다(팝업만 키보드 회피, 그 뒤 탭 UI 는 고정).
+        .preference(key: FormPopupActiveKey.self, value: !fitContent)
     }
 
     @ViewBuilder private var card: some View {
@@ -73,6 +76,14 @@ extension View {
             }
         }
     }
+}
+
+// MARK: - Form-popup-active preference (RootView pins the tab bar/cat while a keyboard popup is up)
+
+/// true 면 키보드를 쓰는 폼 팝업(로그인)이 표시 중 — RootView 가 탭 UI 의 키보드 회피를 끈다.
+struct FormPopupActiveKey: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
 }
 
 // MARK: - dismissPopup environment (PopupDialog injects this so content can close itself)

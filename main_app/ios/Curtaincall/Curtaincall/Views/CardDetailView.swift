@@ -19,8 +19,6 @@ struct CardDetailView: View {
     @State private var showAccountPrompt = false
     /// 실타래 게이트 — 잔액 부족이면 카드 내용을 가리고 충전을 유도한다.
     @State private var gate: GateState = .checking
-    // v1: 충전 시트 대신, 비로그인 안내 팝업의 '회원가입·로그인' 이 기존 인증 모달을 띄운다.
-    @State private var showSignIn = false
     /// 공유용 명대사 카드 이미지 — 콘텐츠 표시 시 1회 렌더해 캐시.
     @State private var shareCardImage: Image?
     @State private var displayedViewCount: Int
@@ -63,12 +61,11 @@ struct CardDetailView: View {
             .task { await runOpenFlow() }
             // 충전 시트가 닫히면(구매 성공 등) 게이트를 자동 재평가 — 잠금 화면에서
             // 충전 후 뒤로 나갔다 다시 들어오지 않아도 그 자리에서 열린다.
-            // 비로그인 안내 팝업 → 기존 인증 모달(#97 SignInSheet) 재사용. 중앙 팝업(폼 모드).
-            // 닫힌 뒤 게이트 재평가 — 가입+출석으로 잔액이 생겼으면 그 자리에서 열린다.
-            // (.popup 은 onDismiss 가 없어 onChange 로 닫힘 감지.)
-            .popup(isPresented: $showSignIn, fitContent: false) { SignInSheet() }
-            .onChange(of: showSignIn) { _, shown in
-                if !shown { Task { await reEvaluateGate() } }
+            // 게이트의 '회원가입·로그인' 은 루트의 단일 로그인 팝업(onLoginRequested → requestLogin)으로
+            // 띄운다(키보드 회피·탭바 고정 일원화). 로그인 성공(익명 해제) 시 게이트 재평가 —
+            // 가입+출석으로 잔액이 생겼으면 그 자리에서 열린다.
+            .onChange(of: session.isAnonymous) { _, anon in
+                if !anon { Task { await reEvaluateGate() } }
             }
     }
 
@@ -707,7 +704,7 @@ struct CardDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer().frame(height: SheetMetrics.bodyToButton)
                 if isAnon {
-                    Button { showSignIn = true } label: {
+                    Button { onLoginRequested?() } label: {   // 루트 단일 로그인 팝업
                         Text("회원가입 · 로그인")
                     }
                     .buttonStyle(EditorialButtonStyle(.filled))

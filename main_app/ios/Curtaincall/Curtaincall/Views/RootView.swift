@@ -75,6 +75,7 @@ struct RootView: View {
     @State private var feedWriteTrigger = 0
     @State private var latestNoticeId: Int?
     @State private var showNoticeSheet = false   // 마스트헤드 공지 종 → NoticeView 시트
+    @State private var formPopupActive = false   // 폼 팝업(로그인) 표시 중 — 탭 UI 키보드 회피 끔
 
     var body: some View {
         Group {
@@ -86,6 +87,10 @@ struct RootView: View {
                 LaunchLoadingView()
             }
         }
+        // 폼 팝업(로그인) 표시 중엔 탭 UI(탭바·고양이·본문)가 키보드를 따라 떠오르지 않게 잠근다.
+        // 로그인 팝업은 body 레벨 오버레이라 그 뒤에서 따로 키보드를 회피한다. 피드 댓글
+        // 컴포저는 폼 팝업이 아니므로(이 조건 false) 영향 없이 키보드 회피가 유지된다.
+        .ignoresSafeArea(formPopupActive ? .keyboard : [], edges: .bottom)
         // First-run preference picker, once. Shown over everything as soon as the
         // session is ready; finishing saves the picks locally (UserDefaults) and
         // flips prefSelected so it never reappears.
@@ -130,6 +135,8 @@ struct RootView: View {
         // requestLogin 을 부르는 모든 유도(북마크 프롬프트·새로고침 제한·피드 익명)가
         // 이 한 곳을 띄운다(모달 분기 없음). 인증 성공 시 SignInSheet 가 자동으로 닫힌다.
         .popup(isPresented: $showLoginModal, fitContent: false) { SignInSheet() }   // 폼 모드(키보드 회피)
+        // 폼 팝업(로그인)이 떠 있는 동안 탭 UI 를 키보드로부터 잠그기 위한 신호 수신.
+        .onPreferenceChange(FormPopupActiveKey.self) { formPopupActive = $0 }
         // 마스트헤드 공지 종 → 공지 시트(Android notif 시트 패턴).
         .sheet(isPresented: $showNoticeSheet) { NoticeView() }
         .task {

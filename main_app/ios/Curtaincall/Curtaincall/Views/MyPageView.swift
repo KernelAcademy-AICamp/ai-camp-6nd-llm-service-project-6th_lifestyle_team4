@@ -15,8 +15,8 @@ struct MyPageView: View {
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
+    @Environment(\.requestLogin) private var requestLogin   // 로그인 → 루트의 단일 로그인 팝업(키보드 회피·탭바 고정)
 
-    @State private var showSignIn = false   // 로그인/회원가입 모달 (Android SignInDialog)
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
     @State private var showAttendance = false
@@ -219,9 +219,7 @@ struct MyPageView: View {
         .popup(isPresented: $showAttendance) {
             AttendanceView()   // 보기 전용 (보상 지급 없음) — 중앙 팝업
         }
-        .popup(isPresented: $showSignIn, fitContent: false) {   // 폼 모드(키보드 회피)
-            SignInSheet()
-        }
+        // 로그인 팝업은 루트(showLoginModal)에서 단일로 띄운다 — 여기선 requestLogin() 만 호출.
         // MY 하위 페이지를 모두 값 기반(MyRoute)으로 push — settingsPath 가 추적해
         // MY 탭 재탭 시 한 번에 닫힌다(다른 탭과 동일). 북마크 서가는 ArchiveView 가
         // 카드 상세를 같은 스택에 push. 익명도 접근 가능(빈 책장).
@@ -287,7 +285,7 @@ struct MyPageView: View {
                 .font(.bodySans(12))
                 .foregroundStyle(.walnut)
             Spacer().frame(height: 14)
-            Button { showSignIn = true } label: {
+            Button { requestLogin() } label: {   // 루트 단일 로그인 팝업
                 Text("로그인 · 회원가입")
             }
             .buttonStyle(EditorialButtonStyle(.outlined))   // Android SharpButtonVariant.Outline
