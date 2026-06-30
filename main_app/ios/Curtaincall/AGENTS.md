@@ -40,6 +40,8 @@ Don'ts:
 - No skeuomorphic texture soup — the wood/leather Archive is the cautionary example; reconcile toward refined editorial.
 - Keep view trees sane (avoid deeply nested unbounded stacks that tank layout performance).
 
+**Pop-up vs. sheet (app-wide rule):** small, self-contained content/action modals (check-in, sign-in, profile-edit) use the **centered `PopupDialog`** (`Views/Components/PopupDialog.swift`) — full content shown immediately, no bottom-sheet animation hiding it. Keep `.sheet` only for composers, list/detail, the shake `RandomQuotePeek`, and **system share** (`ActivityShareSheet`/`ShareLink`). Don't reach for `.sheet` for a small dialog.
+
 ### Cross-platform brand/visual parity (carve-out — scoped under the north star)
 **This carve-out sits UNDER the iOS north star above, not beside it.** Layout, screens, spacing, and interaction follow the **iOS north star** and do **NOT** chase Android/PWA parity (see "iOS is its own north star" above). The single exception is **named brand-character elements** — the bottom-nav cat with per-tab poses, the yarn-ball (실타래) graphics, the Oz House room — which are core to the product's identity across clients. For **those named characters only**, iOS defers to **cross-platform brand consistency** and **matches** Android/PWA rather than reducing them to editorial-minimalism; when minimalist/anti-skeuomorphic guidance conflicts with one of these named brand characters, brand consistency wins. Everywhere else — all net-new and non-character UI — the minimalist editorial north star governs.
 

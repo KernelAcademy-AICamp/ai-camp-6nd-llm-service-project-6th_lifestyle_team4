@@ -5,7 +5,7 @@ import SwiftUI
 ///   · 하루 첫 진입 자동 모달 (rewarded=true 면 +100 배너 표시)
 ///   · MY 의 '출석체크 — 내 출석현황 보기' (rewarded=false, 보기 전용)
 struct AttendanceView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissPopup) private var dismissPopup   // 중앙 팝업으로 표시 — \.dismiss 대신
     @EnvironmentObject private var attendance: AttendanceStore
 
     /// 오늘 첫 출석으로 +100 을 막 받았는지 — true 면 보상 배너를 보여준다.
@@ -41,10 +41,7 @@ struct AttendanceView: View {
                 .padding(.horizontal, 20)
             }
         }
-        .padding(.top, SheetMetrics.grabberTop)   // 그래버 ↔ 헤더 여백(공통 표준)
-        .background(Color.paper)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        // 중앙 팝업으로 표시 — 카드 배경/모서리는 PopupDialog 가 담당(시트 그래버·detents 불필요).
     }
 
     private var header: some View {
@@ -53,7 +50,7 @@ struct AttendanceView: View {
                 .font(.headlineSerif(20))
                 .foregroundStyle(.espresso)
             Spacer()
-            Button { dismiss() } label: {
+            Button { dismissPopup() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .regular))
                     .foregroundStyle(.walnut)
