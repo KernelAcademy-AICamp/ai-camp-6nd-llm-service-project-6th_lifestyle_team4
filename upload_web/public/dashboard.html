@@ -115,8 +115,25 @@
 <main class="ml-[280px] pt-16 min-h-screen pb-32">
   <div class="p-8 flex flex-col gap-6 max-w-7xl mx-auto">
 
+    <!-- 입력 방식 토글: LLM 추출 vs 수동 입력(크레딧 0) -->
+    <div class="flex items-center gap-3 flex-wrap">
+      <span class="text-sm font-semibold text-on-surface-variant">입력 방식:</span>
+      <div id="entry-mode-toggle" class="flex gap-2 flex-wrap">
+        <button type="button" data-entry-mode="extract"
+                class="entry-mode-btn px-4 py-2 rounded-lg border-2 border-primary bg-primary/10 text-primary text-sm font-semibold transition-colors hover:border-primary flex items-center gap-1">
+          <span class="material-symbols-outlined text-base">smart_toy</span>
+          LLM 추출
+        </button>
+        <button type="button" data-entry-mode="manual"
+                class="entry-mode-btn px-4 py-2 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary flex items-center gap-1">
+          <span class="material-symbols-outlined text-base">edit_note</span>
+          수동 입력 <span class="text-xs font-normal opacity-70">(크레딧 0)</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Upload -->
-    <section class="flex flex-col gap-3">
+    <section id="extract-section" class="flex flex-col gap-3">
       <!-- Category Selector -->
       <div class="flex items-center gap-3 flex-wrap">
         <span class="text-sm font-semibold text-on-surface-variant">작품 유형:</span>
@@ -321,6 +338,150 @@
           <span class="material-symbols-outlined" style="font-size:16px;">warning</span>
           추출 진행 중입니다. 다른 메뉴로 이동하거나 새로고침하면 작업이 취소됩니다.
         </p>
+      </div>
+    </section>
+
+    <!-- 수동 카드 입력 (크레딧 0) — LLM·번역 API 미사용 -->
+    <section id="manual-section" class="hidden flex-col gap-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="material-symbols-outlined text-primary">edit_note</span>
+        <h2 class="text-lg font-bold text-on-surface">수동 카드 입력</h2>
+        <span class="text-xs text-on-surface-variant">LLM·번역 API 미사용 — 크레딧이 들지 않습니다. 영문 원본이 필요하면 직접 입력하세요.</span>
+      </div>
+
+      <!-- 작품 선택: 기존 / 새로 -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-semibold text-on-surface-variant">작품:</span>
+        <div id="manual-work-mode-toggle" class="flex gap-2 flex-wrap">
+          <button type="button" data-work-mode="existing"
+                  class="manual-work-mode-btn px-3 py-1.5 rounded-lg border-2 border-primary bg-primary/10 text-primary text-sm font-semibold transition-colors hover:border-primary">
+            기존 작품에 추가
+          </button>
+          <button type="button" data-work-mode="new"
+                  class="manual-work-mode-btn px-3 py-1.5 rounded-lg border-2 border-outline-variant bg-surface-container-lowest text-on-surface text-sm font-semibold transition-colors hover:border-primary">
+            새 작품 만들기
+          </button>
+        </div>
+      </div>
+
+      <!-- 기존 작품 선택 -->
+      <div id="manual-existing-work" class="flex flex-col gap-1">
+        <label class="text-xs font-semibold text-on-surface-variant">기존 작품 선택</label>
+        <select id="manual-work-select"
+                class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary">
+          <option value="">불러오는 중⋯</option>
+        </select>
+      </div>
+
+      <!-- 새 작품 입력 -->
+      <div id="manual-new-work" class="hidden grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">제목 <span class="text-error">*</span></label>
+          <input id="manual-work-title" type="text"
+                 class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary" />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">부제 (선택)</label>
+          <input id="manual-work-subtitle" type="text"
+                 class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary" />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">형식 <span class="text-error">*</span></label>
+          <select id="manual-work-format"
+                  class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary">
+            <option value="movie">영화 (movie)</option>
+            <option value="drama">드라마 (drama)</option>
+            <option value="play">연극 (play)</option>
+            <option value="musical">뮤지컬 (musical)</option>
+            <option value="opera">오페라 (opera)</option>
+            <option value="novel">소설 (novel)</option>
+            <option value="poem">시 (poem)</option>
+            <option value="essay">에세이 (essay)</option>
+            <option value="prose">산문 (prose)</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">작가 (선택)</label>
+          <input id="manual-work-author" type="text"
+                 class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary" />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">발표 연도 (선택)</label>
+          <input id="manual-work-year" type="text" placeholder="예: 1873"
+                 class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary" />
+        </div>
+      </div>
+
+      <!-- 카드 필드 -->
+      <div class="flex flex-col gap-3 border-t border-outline-variant pt-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">명대사 (quote) <span class="text-error">*</span></label>
+          <textarea id="manual-quote" rows="2"
+                    class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary resize-y"></textarea>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">대본 발췌 (script_excerpt) <span class="text-error">*</span>
+            <span class="font-normal opacity-60">명대사를 둘러싼 더 긴 맥락 (명대사와 동일하면 안 됨)</span></label>
+          <textarea id="manual-script" rows="5"
+                    class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary resize-y"></textarea>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">장면 설명 (선택)</label>
+          <textarea id="manual-desc" rows="2"
+                    class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary resize-y"></textarea>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">의의 (선택)</label>
+          <textarea id="manual-significance" rows="2"
+                    class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary resize-y"></textarea>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-on-surface-variant">키워드 (쉼표로 구분, 선택)</label>
+          <input id="manual-keywords" type="text" placeholder="예: 사랑, 희생, 성장"
+                 class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary" />
+        </div>
+        <div class="flex gap-6 flex-wrap">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-semibold text-on-surface-variant">온도 (1-5)</label>
+            <select id="manual-temperature"
+                    class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary">
+              <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-semibold text-on-surface-variant">강도 (1-5)</label>
+            <select id="manual-intensity"
+                    class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary">
+              <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 영문 원본 직접 입력 (선택) — 번역 API 없이 어드민이 직접 -->
+      <details class="border-t border-outline-variant pt-3">
+        <summary class="text-sm font-semibold text-on-surface-variant cursor-pointer select-none">영문 원본 직접 입력 (선택)</summary>
+        <div class="flex flex-col gap-3 mt-3">
+          <textarea id="manual-quote-en" rows="2" placeholder="quote (EN)"
+                    class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary resize-y"></textarea>
+          <textarea id="manual-script-en" rows="3" placeholder="script_excerpt (EN)"
+                    class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary resize-y"></textarea>
+          <input id="manual-keywords-en" type="text" placeholder="keywords (EN), comma-separated"
+                 class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:outline-none focus:border-primary" />
+        </div>
+      </details>
+
+      <div class="flex justify-end gap-2 border-t border-outline-variant pt-4">
+        <button id="manual-reset-btn" type="button"
+                class="px-4 py-2 rounded-lg border-2 border-outline-variant text-sm font-semibold hover:border-primary transition-colors">
+          초기화
+        </button>
+        <button id="manual-save-btn" type="button"
+                class="bg-primary text-on-primary px-6 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                title="입력한 카드 1장을 검토 큐(card_candidates) 에 pending 으로 저장합니다. 검토 페이지에서 승인하면 조회에 노출됩니다. LLM·번역 API 미사용.">
+          <span class="material-symbols-outlined text-sm">rule</span>
+          검토 큐에 추가
+        </button>
       </div>
     </section>
 
