@@ -58,21 +58,14 @@ struct FeedView: View {
     var body: some View {
         VStack(spacing: 0) {
             AppMasthead()
+            // 피드 헤더(제목·태그라인·카테고리 필터)는 스크롤과 함께 사라지지 않도록
+            // 매스트헤드 아래에 고정(ScrollView 밖)한다. 본문(글 목록)만 스크롤된다.
+            feedHeader
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        Spacer().frame(height: 24).id(Self.topID)
-                        Text("피드")
-                            .font(.displaySerif(32))
-                            .foregroundStyle(.espresso)
-                        // PWA 피드 헤더 태그라인 (index.html:1882).
-                        Spacer().frame(height: 6)
-                        Text("매일 한 문장, 그리고 기억에 남은 장면들")
-                            .font(.bodySans(13))
-                            .foregroundStyle(.walnut)
-                        Spacer().frame(height: 18)
-                        categoryChips
-                        Spacer().frame(height: 20)
+                        // 스크롤-투-탑 앵커(reselect 시 사용) — 고정 헤더 바로 아래, 본문 최상단.
+                        Color.clear.frame(height: 0).id(Self.topID)
 
                         if let errorMessage {
                             FeedInlineError(message: errorMessage)
@@ -198,6 +191,29 @@ struct FeedView: View {
         } else {
             showPicker = true
         }
+    }
+
+    /// 고정 피드 헤더 — 매스트헤드 아래, ScrollView 위에 핀. 제목·태그라인·카테고리 필터.
+    /// 본문이 위로 스크롤돼도 가려지도록 paper 배경(불투명). 패딩은 본문 VStack 에서 분리돼
+    /// 나왔으므로 여기서 직접 적용한다.
+    private var feedHeader: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer().frame(height: 24)
+            Text("피드")
+                .font(.displaySerif(32))
+                .foregroundStyle(.espresso)
+            // PWA 피드 헤더 태그라인 (index.html:1882).
+            Spacer().frame(height: 6)
+            Text("매일 한 문장, 그리고 기억에 남은 장면들")
+                .font(.bodySans(13))
+                .foregroundStyle(.walnut)
+            Spacer().frame(height: 18)
+            categoryChips
+            Spacer().frame(height: 20)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .background(Color.paper)
     }
 
     private var categoryChips: some View {
