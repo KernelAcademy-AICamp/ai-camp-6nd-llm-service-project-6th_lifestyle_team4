@@ -9337,18 +9337,41 @@ function drawShareCover(ctx, img, W, H) {
 
 // 보유 카드지 id — 서버 권위(share_theme_unlocks, 046_share_theme_unlocks.sql). 그리드를 즉시
 // 렌더하려고 캐시에 보관하고, 공유 시트 열 때 fetchPurchasedShareThemes() 로 서버에서 채운다.
+// + localStorage 영구 백업 — 서버 fetch 실패/마이그레이션 미적용 시 보유 소실 방지.
 let purchasedShareThemesCache = new Set();
+function ownedBgLsKey() { return `ds.ownedShareBgs.${state.userId || 'anon'}`; }
+function loadOwnedBgsFromLs() {
+  try {
+    const raw = localStorage.getItem(ownedBgLsKey());
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? new Set(arr) : new Set();
+  } catch { return new Set(); }
+}
+function saveOwnedBgsToLs(set) {
+  try { localStorage.setItem(ownedBgLsKey(), JSON.stringify([...set])); } catch {}
+}
 function getPurchasedShareThemes() { return purchasedShareThemesCache; }
 
-/* 서버에서 보유 카드지 id 로드. 비로그인은 빈 집합. */
+/* 서버 + 로컬 백업 합집합 → cache. 서버가 죽어도 로컬 보유는 유지.
+   비로그인은 anon 로컬 키 사용. */
 async function fetchPurchasedShareThemes() {
-  if (!state.userId) { purchasedShareThemesCache = new Set(); return purchasedShareThemesCache; }
+  /* 1) 로컬 백업 즉시 적용 — 사용자 명세 '영구 소장' 보장의 최후 안전망 */
+  const local = loadOwnedBgsFromLs();
+  purchasedShareThemesCache = new Set(local);
+  if (!state.userId) return purchasedShareThemesCache;
+  /* 2) 서버 합집합 — 성공 시 로컬에도 반영(다음 부팅에 더 정확) */
   try {
     const sb = await getSupabase();
     const { data, error } = await sb.from('share_theme_unlocks').select('theme_id');
     if (error) throw error;
-    purchasedShareThemesCache = new Set((data || []).map((r) => r.theme_id));
-  } catch (e) { console.warn('[m] share themes fetch failed:', e); }
+    const merged = new Set(local);
+    (data || []).forEach((r) => { if (r && r.theme_id) merged.add(r.theme_id); });
+    purchasedShareThemesCache = merged;
+    saveOwnedBgsToLs(merged);
+  } catch (e) {
+    console.warn('[m] share themes fetch failed (로컬 백업 유지):', e);
+  }
   return purchasedShareThemesCache;
 }
 
@@ -9381,6 +9404,7 @@ function promptUnlockShareBg(b) {
         if (!Number.isFinite(balance) || balance < 0) { showYarnInsufficient(); return; }
         state.yarnPurchased = balance;
         purchasedShareThemesCache.add(b.id);
+        saveOwnedBgsToLs(purchasedShareThemesCache);   // 영구 백업 — 다음 부팅에 서버가 미응답해도 유지
         renderYarnChip();
         shareState.bgId = b.id;
         renderShareBgList();
