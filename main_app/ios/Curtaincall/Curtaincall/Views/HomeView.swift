@@ -43,33 +43,14 @@ struct HomeView: View {
                         .labelCaps()
                         .frame(maxWidth: .infinity)
                     Spacer().frame(height: 8)
-                    ZStack(alignment: .trailing) {
-                        Text("오늘의 명대사")
-                            .font(.displaySerif(28))
-                            .foregroundStyle(.espresso)
-                            .frame(maxWidth: .infinity)
-                        Button { handleRefreshTap() } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 18, weight: .regular))
-                                .foregroundStyle(.walnut)
-                                .frame(width: 36, height: 36)
-                                .background(Circle().fill(Color.paper))
-                                .overlay(Circle().stroke(Color.latte, lineWidth: 0.5))
-                                .shadow(color: Color.black.opacity(0.12), radius: 3, x: 0, y: 2)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isLoading)
-                    }
+                    // 새로고침 버튼 제거 — 갱신은 '당겨서 새로고침' + TODAY 탭 재선택(handleRefreshTap)으로 유지.
+                    Text("오늘의 명대사")
+                        .font(.displaySerif(28))
+                        .foregroundStyle(.espresso)
+                        .frame(maxWidth: .infinity)
                     Spacer().frame(height: 20)
 
                     if let card = todayCard {
-                        if card.hasHomeOriginalLanguage {
-                            HStack {
-                                Spacer()
-                                LangToggle(showOriginal: $todayShowOriginal)
-                            }
-                            .padding(.bottom, 12)
-                        }
                         todayCardView(card)
                     } else if isLoading {
                         VStack(alignment: .leading, spacing: 0) {
@@ -182,6 +163,14 @@ struct HomeView: View {
     private func todayCardView(_ card: Card) -> some View {
         let keywords = card.displayKeywords(original: todayShowOriginal)
         return VStack(alignment: .leading, spacing: 0) {
+            // KR/ENG 토글 — 카드 밖(위)에서 카드 '안' 우상단으로 이동(원문 있는 카드만).
+            if card.hasHomeOriginalLanguage {
+                HStack {
+                    Spacer()
+                    LangToggle(showOriginal: $todayShowOriginal)
+                }
+                .padding(.bottom, 12)
+            }
             NavigationLink(value: card) {
                 TodayCardBody(card: card, isLoading: isLoading, showOriginal: todayShowOriginal)
             }
