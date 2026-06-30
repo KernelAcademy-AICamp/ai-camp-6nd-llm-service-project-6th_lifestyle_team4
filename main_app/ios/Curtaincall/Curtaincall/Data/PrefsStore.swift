@@ -78,6 +78,16 @@ final class PrefsStore: ObservableObject {
         prefSelected = true
     }
 
+    /// 로그아웃 시 호출 — 이전 사용자의 취향(장르/주제)이 다음(익명) 세션에 남지 않도록 로컬에서
+    /// 지운다. 온보딩 완료 플래그도 초기화해 새 세션이 깨끗하게 시작(취향 재선택 가능)하게 한다.
+    /// 서버(users.pref_*)는 각 계정에 그대로 남아, 재로그인 시 syncFromServer 로 복원된다.
+    func clearOnLogout() {
+        d.removeObject(forKey: Key.prefGenres)
+        d.removeObject(forKey: Key.prefThemes)
+        d.removeObject(forKey: Key.prefAny)
+        prefSelected = false   // @Published → 온보딩 재노출(깨끗한 시작)
+    }
+
     // Recently-shown queue (not @Published — used transiently by Home).
     var recentlyShown: [Int] {
         get { d.array(forKey: Key.recent) as? [Int] ?? [] }
