@@ -21,6 +21,12 @@ struct BrandWordmark: View {
 /// reached via the bottom-nav MY tab.)
 struct AppMasthead: View {
     @EnvironmentObject private var yarn: YarnStore
+    // 트레일링 액션(북마크·공지 종)은 RootView 가 탭별로 주입한다(Android: Daily/Feed/Today/
+    // Library 의 HomeTopBar 에만 표시, MY 는 별도 SettingsTopBar). 기본 false → MY 엔 안 뜸.
+    @Environment(\.mastheadShowsActions) private var showsActions
+    @Environment(\.mastheadNotifUnread) private var notifUnread
+    @Environment(\.requestBookmarks) private var requestBookmarks
+    @Environment(\.requestNotice) private var requestNotice
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,12 +36,61 @@ struct AppMasthead: View {
                 // 실타래 잔액 칩 — 잔액 표시 전용(비활성). v1 은 충전(구매) 진입점을 막아
                 // App Store 2.1/3.1.1 을 피한다(적립 전용). 탭해도 충전 화면으로 가지 않는다.
                 YarnChip(balance: yarn.balance)
+                if showsActions {
+                    // 북마크(→ 서가) 먼저, 그다음 공지 종(→ 공지, 미읽음 점). Android HomeTopBar 트레일링 미러.
+                    mastheadIconButton(systemName: "bookmark", label: "북마크", action: requestBookmarks)
+                    mastheadIconButton(systemName: "bell", label: notifUnread ? "공지, 새 소식 있음" : "공지", action: requestNotice)
+                        .overlay(alignment: .topTrailing) {
+                            if notifUnread {
+                                Circle().fill(Color.cta).frame(width: 7, height: 7).offset(x: -6, y: 9)
+                            }
+                        }
+                }
             }
             .padding(.horizontal, 20)
             .frame(height: 64)
             .background(Color.paper)
             Hairline()
         }
+    }
+
+    private func mastheadIconButton(systemName: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(.espresso)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
+// MARK: - Masthead trailing-action environment (injected per-tab by RootView)
+
+private struct MastheadShowsActionsKey: EnvironmentKey { static let defaultValue = false }
+private struct MastheadNotifUnreadKey: EnvironmentKey { static let defaultValue = false }
+private struct RequestBookmarksKey: EnvironmentKey { static let defaultValue: () -> Void = {} }
+private struct RequestNoticeKey: EnvironmentKey { static let defaultValue: () -> Void = {} }
+
+extension EnvironmentValues {
+    /// True on the 4 home tabs (Daily/Feed/Today/Library) → shows bookmark + bell. MY leaves it false.
+    var mastheadShowsActions: Bool {
+        get { self[MastheadShowsActionsKey.self] }
+        set { self[MastheadShowsActionsKey.self] = newValue }
+    }
+    var mastheadNotifUnread: Bool {
+        get { self[MastheadNotifUnreadKey.self] }
+        set { self[MastheadNotifUnreadKey.self] = newValue }
+    }
+    var requestBookmarks: () -> Void {
+        get { self[RequestBookmarksKey.self] }
+        set { self[RequestBookmarksKey.self] = newValue }
+    }
+    var requestNotice: () -> Void {
+        get { self[RequestNoticeKey.self] }
+        set { self[RequestNoticeKey.self] = newValue }
     }
 }
 
