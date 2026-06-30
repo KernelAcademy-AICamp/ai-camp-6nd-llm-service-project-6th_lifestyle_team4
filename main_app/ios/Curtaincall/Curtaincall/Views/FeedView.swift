@@ -624,13 +624,9 @@ private struct HighlightFeedCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 22)
                 // LLM 출력의 `**화자**` 마커가 그대로 노출되던 문제 — markdownBold 로 볼드 변환.
-                Text(highlight.selectedText.markdownBold)
-                    .font(.titleSerif(15))
-                    .foregroundStyle(.espresso)
-                    .multilineTextAlignment(.center)
-                    .bookLeading(size: 15)
+                // 긴 구절은 4줄로 접고 '더 보기/접기'(PWA·Android FoldableText 패리티).
+                FoldableText(text: highlight.selectedText.markdownBold, font: .titleSerif(15), leading: 15)
                     .padding(.horizontal, 28)
-                    .fixedSize(horizontal: false, vertical: true)
                 Text("”")
                     .font(.headlineSerif(22))
                     .foregroundStyle(.sand)

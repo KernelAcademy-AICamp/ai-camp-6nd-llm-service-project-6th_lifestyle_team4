@@ -143,12 +143,8 @@ struct HighlightDetailView: View {
             // 화자 라벨이 LLM 출력에 `**크레온**` 마크다운으로 들어올 수 있어 그대로 노출되던 문제 fix —
             // AttributedString(markdown:) 으로 ** 마커를 볼드로 변환. inlineOnlyPreservingWhitespace
             // 옵션으로 줄바꿈 보존.
-            Text(highlight.selectedText.markdownBold)
-                .font(.titleSerif(17))
-                .foregroundStyle(.espresso)
-                .multilineTextAlignment(.center)
-                .bookLeading(size: 17)
-                .fixedSize(horizontal: false, vertical: true)
+            // 긴 구절은 4줄로 접고 '더 보기/접기'(PWA·Android FoldableText 패리티).
+            FoldableText(text: highlight.selectedText.markdownBold, font: .titleSerif(17), leading: 17)
             if let note = highlight.userNote, !note.isEmpty {
                 Spacer().frame(height: 14)
                 Text(note)

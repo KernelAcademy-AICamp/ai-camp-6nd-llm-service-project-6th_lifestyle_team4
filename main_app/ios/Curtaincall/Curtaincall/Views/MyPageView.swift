@@ -186,8 +186,10 @@ struct MyPageView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        // 마이페이지 모달은 바텀시트 대신 중앙 팝업(Android AlertDialog/Dialog 미러).
-        .centerPopup(isPresented: $showNicknameSheet) {
+        // 프로필 편집은 내용이 많아(닉네임·성별·나이대·취향) 전체창 팝업으로 띄운다 —
+        // 좁은 중앙 카드 대신 화면 전체에서 모두 설정(Android ProfileDialog 스크롤 팝업 대응).
+        // 닫기는 ProfileEditor 의 취소/저장(showNicknameSheet=false).
+        .fullScreenCover(isPresented: $showNicknameSheet) {
             ProfileEditor(
                 initialNickname: session.nickname,
                 initialGender: session.gender,
