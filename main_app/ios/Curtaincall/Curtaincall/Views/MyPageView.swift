@@ -27,7 +27,8 @@ struct MyPageView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AppMasthead()
+            // MY 본문 yarnPill이 잔액 표면을 담당하므로 상단 중복 칩은 숨긴다.
+            AppMasthead(showsYarnChip: false)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 16)
@@ -70,6 +71,10 @@ struct MyPageView: View {
                         Spacer().frame(height: 12)
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
+
+                    // 실타래 잔액 — ACCOUNT/공지 위에 본문 펠릿으로도 노출(상단바 칩과 별개).
+                    Spacer().frame(height: 20)
+                    yarnPill
 
                     // 익명 — 로그인 CTA를 공지 위에 (PWA signin-block → 공지 순서, index.html:1944-1976).
                     if session.isAnonymous {
@@ -294,6 +299,24 @@ struct MyPageView: View {
         }
     }
 
+    /// 실타래 잔액 펠릿 — MY 본문 상단(ACCOUNT/공지 위). 브랜드 마크 + 잔액. 좌측 정렬 캡슐.
+    private var yarnPill: some View {
+        HStack(spacing: 6) {
+            Image("daily-script-bar")
+                .resizable().scaledToFill()
+                .frame(width: 16, height: 16)
+                .clipShape(Circle())
+            Text("실타래 \(yarn.balance)개")
+                .font(.custom("Pretendard-Medium", size: 13))
+                .foregroundStyle(.espresso)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Color.sand.opacity(0.35)))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel("실타래 \(yarn.balance)개")
+    }
+
     private func sectionLabel(_ text: String) -> some View {
         Text(text).labelCaps().padding(.bottom, 12)
     }
@@ -315,7 +338,7 @@ struct MyPageView: View {
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.walnut)
                 }
-                .padding(.vertical, 14)
+                .padding(.vertical, 18)
             }
             .buttonStyle(.plain)
             Hairline()
@@ -347,7 +370,7 @@ struct MyPageView: View {
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.walnut)
                 }
-                .padding(.vertical, 14)
+                .padding(.vertical, 18)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -382,7 +405,7 @@ struct MyPageView: View {
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.walnut)
                 }
-                .padding(.vertical, 14)
+                .padding(.vertical, 18)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
