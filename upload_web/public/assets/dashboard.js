@@ -2010,7 +2010,7 @@ saveBtn.addEventListener('click', async () => {
 
 // ---------------------------------------------------------------------------
 // 수동 카드 입력 (크레딧 0) — LLM·번역 API 미사용.
-// /api/manual-card 로 직접 보내 card_candidates(source_kind='manual') 에 pending 저장.
+// /api/save 에 { manual:true } 로 보내 card_candidates(source_kind='manual') 에 pending 저장.
 // ---------------------------------------------------------------------------
 let manualWorksLoaded = false;
 let manualWorkMode = 'existing'; // 'existing' | 'new'
@@ -2122,6 +2122,7 @@ async function submitManualCard() {
   if (!script) { toast('대본 발췌(script_excerpt)를 입력하세요.', 'error'); return; }
 
   const payload = {
+    manual: true, // /api/save 의 크레딧 0 수동 분기 트리거 (별도 함수 없음 — Vercel 함수 한도)
     card: {
       quote,
       script_excerpt: script,
@@ -2158,7 +2159,7 @@ async function submitManualCard() {
   btn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> 저장 중⋯';
   try {
     const token = await getAccessToken();
-    const json = await apiFetch('/api/manual-card', {
+    const json = await apiFetch('/api/save', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
