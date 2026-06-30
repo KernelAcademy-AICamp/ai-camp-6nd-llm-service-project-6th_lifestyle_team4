@@ -186,7 +186,8 @@ struct MyPageView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showNicknameSheet) {
+        // 마이페이지 모달은 바텀시트 대신 중앙 팝업(Android AlertDialog/Dialog 미러).
+        .centerPopup(isPresented: $showNicknameSheet) {
             ProfileEditor(
                 initialNickname: session.nickname,
                 initialGender: session.gender,
@@ -211,10 +212,12 @@ struct MyPageView: View {
                 showNicknameSheet = false
             }
         }
-        .sheet(isPresented: $showAttendance) {
-            AttendanceView()   // 보기 전용 (보상 지급 없음)
+        .centerPopup(isPresented: $showAttendance) {
+            // 달력 상단에 "출석체크 완료! 실타래 +100" 배너를 노출(rewarded=배너 표시 전용).
+            // 실제 보상 지급은 RootView 의 그날 첫 진입 자동 모달에서만 — 여기선 안내 배너만.
+            AttendanceView(rewarded: true)
         }
-        .sheet(isPresented: $showSignIn) {
+        .centerPopup(isPresented: $showSignIn) {
             SignInSheet()
         }
         // MY 하위 페이지를 모두 값 기반(MyRoute)으로 push — settingsPath 가 추적해
