@@ -192,7 +192,7 @@ struct CoachTourOverlay: View {
                         scrimLayer(hole: hole).allowsHitTesting(false)
                         interactionLayer(step: step, hole: hole, size: size)
                         if let hole { ringLayer(hole) }
-                        if let hole { badgeLayer(step, hole, size) }
+                        if let hole { badgeLayer(step, hole, size, tooltipAtTop: tooltipAtTop(step)) }
                     }
                     .frame(width: size.width, height: size.height)
                     // Glide the spotlight between targets on step change (slick, iOS-native spring).
@@ -297,10 +297,13 @@ struct CoachTourOverlay: View {
             .allowsHitTesting(false)
     }
 
-    private func badgeLayer(_ step: CoachStep, _ hole: CGRect, _ size: CGSize) -> some View {
+    private func badgeLayer(_ step: CoachStep, _ hole: CGRect, _ size: CGSize, tooltipAtTop: Bool) -> some View {
         let d: CGFloat = 30
         let bx = min(max(hole.minX - d * 0.5, 6), size.width - d - 6)
-        let by = min(max(hole.minY - d * 0.5, 6), size.height - d - 6)
+        // Put the badge on the hole edge AWAY from the tooltip so the bubble never covers it:
+        // tooltip on top → badge at the hole's bottom-left; tooltip on bottom → top-left.
+        let rawY = tooltipAtTop ? (hole.maxY - d * 0.5) : (hole.minY - d * 0.5)
+        let by = min(max(rawY, 6), size.height - d - 6)
         return ZStack {
             Circle().fill(Color.cta)
             Text("\(step.n)")
@@ -320,8 +323,7 @@ struct CoachTourOverlay: View {
     /// tab bar. Final/anchorless: centered.
     @ViewBuilder
     private func tooltipContainer(step: CoachStep) -> some View {
-        let holeMaxY = step.anchorId.flatMap { controller.anchors[$0] }?.maxY
-        let placeAtTop = !step.final && screenH > 0 && (holeMaxY ?? 0) > screenH * 0.5
+        let placeAtTop = tooltipAtTop(step)
         let canPrev = !step.final && controller.index > 0
             && controller.steps[controller.index - 1].scr == step.scr
         let card = CoachTooltip(
@@ -360,6 +362,13 @@ struct CoachTourOverlay: View {
     private func holeRect(for step: CoachStep) -> CGRect? {
         guard !step.final, let id = step.anchorId, let r = controller.anchors[id] else { return nil }
         return r.insetBy(dx: -pad, dy: -pad)
+    }
+
+    /// Tooltip sits at the top when the target is in the bottom half. Shared by the tooltip
+    /// layout and the badge (badge goes on the opposite hole edge so the bubble never covers it).
+    private func tooltipAtTop(_ step: CoachStep) -> Bool {
+        let maxY = step.anchorId.flatMap { controller.anchors[$0] }?.maxY
+        return !step.final && screenH > 0 && (maxY ?? 0) > screenH * 0.5
     }
 
     private func startPulse() {
@@ -407,7 +416,7 @@ private struct CoachTooltip: View {
             Text(step.desc)
                 .font(.bodySans(step.final ? 16 : 14))
                 .foregroundStyle(.walnut)
-                .bookLeading(size: step.final ? 16 : 14)
+                .lineSpacing(step.final ? 5 : 2)   // 부제는 한 덩어리로 — 줄 간격 좁게
                 .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(step.final ? .center : .leading)
 
@@ -426,20 +435,17 @@ private struct CoachTooltip: View {
                 Button(action: onEnd) { Text("건너뛰기").labelCaps() }
                     .buttonStyle(.plain)
             } else {
-                Spacer().frame(height: 10)
+                Spacer().frame(height: 8)
                 Text("강조된 곳을 탭하거나 ‘다음’으로 넘어가세요")
                     .font(.bodySans(12))
                     .fontWeight(.medium)
                     .foregroundStyle(.cta)
-                Spacer().frame(height: 14)
-                // 내비게이션 — 이전 / 단계 표시 / 다음. '다음'은 스포트라이트 홀 탭과 동일 진행
-                // (액션 스텝이면 그 액션도 수행). 한 스텝이 안 눌려도 여기서 넘어갈 수 있다.
+                Spacer().frame(height: 12)
+                // 내비게이션 — 이전 / 단계 표시 / 다음. '다음'은 스포트라이트 홀 탭과 동일 진행.
                 HStack(spacing: 12) {
                     if canPrev {
-                        Button(action: onPrev) {
-                            Text("이전").labelCaps()
-                        }
-                        .buttonStyle(.plain)
+                        Button(action: onPrev) { Text("이전").labelCaps() }
+                            .buttonStyle(.plain)
                     }
                     Text("\(step.scr) \(step.n) / \(step.tot)").labelCaps()
                     Spacer()
@@ -453,8 +459,9 @@ private struct CoachTooltip: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Spacer().frame(height: 10)
-                // 전체 종료는 별도(눈에 덜 띄게) — 스텝 스킵(다음)과 구분.
+                Spacer().frame(height: 8)
+                // '투어 종료'는 별도 줄(작게)로 유지 — '다음' 옆에 붙이면 오터치로 투어가 끊길
+                // 위험이 커서 분리(간격만 좁혀 컴팩트하게).
                 Button(action: onEnd) { Text("투어 종료").labelCaps() }
                     .buttonStyle(.plain)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -462,7 +469,8 @@ private struct CoachTooltip: View {
         }
         .frame(maxWidth: .infinity, alignment: step.final ? .center : .leading)
         .padding(.horizontal, step.final ? 30 : 18)
-        .padding(.vertical, step.final ? 30 : 16)
+        .padding(.top, step.final ? 30 : 16)
+        .padding(.bottom, step.final ? 30 : 11)
         .background(
             RoundedRectangle(cornerRadius: step.final ? 20 : 14).fill(Color.paper)
         )
