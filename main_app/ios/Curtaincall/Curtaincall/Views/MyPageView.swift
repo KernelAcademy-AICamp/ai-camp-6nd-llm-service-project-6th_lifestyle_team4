@@ -195,7 +195,9 @@ struct MyPageView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        .popup(isPresented: $showNicknameSheet) {
+        // 폼 모드(fitContent:false) — 이름 편집 시 키보드가 텍스트필드/저장 버튼을 가리지 않게
+        // 카드가 키보드 위 가용 높이를 채우고 내부 ScrollView 로 스크롤(로그인 팝업과 동일).
+        .popup(isPresented: $showNicknameSheet, fitContent: false) {
             ProfileEditor(
                 initialNickname: session.nickname,
                 initialGender: session.gender,
