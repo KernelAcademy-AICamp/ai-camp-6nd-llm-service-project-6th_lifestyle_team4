@@ -74,6 +74,8 @@ struct RootView: View {
     /// Bumped when the RootView-owned feed write bubble is tapped → FeedView handles it.
     @State private var feedWriteTrigger = 0
     @State private var latestNoticeId: Int?
+    @State private var showNoticeSheet = false   // 마스트헤드 공지 종 → NoticeView 시트
+    @State private var formPopupActive = false   // 폼 팝업(로그인) 표시 중 — 탭 UI 키보드 회피 끔
 
     var body: some View {
         Group {
@@ -85,6 +87,10 @@ struct RootView: View {
                 LaunchLoadingView()
             }
         }
+        // 폼 팝업(로그인) 표시 중엔 탭 UI(탭바·고양이·본문)가 키보드를 따라 떠오르지 않게 잠근다.
+        // 로그인 팝업은 body 레벨 오버레이라 그 뒤에서 따로 키보드를 회피한다. 피드 댓글
+        // 컴포저는 폼 팝업이 아니므로(이 조건 false) 영향 없이 키보드 회피가 유지된다.
+        .ignoresSafeArea(formPopupActive ? .keyboard : [], edges: .bottom)
         // First-run preference picker, once. Shown over everything as soon as the
         // session is ready; finishing saves the picks locally (UserDefaults) and
         // flips prefSelected so it never reappears.
@@ -121,13 +127,18 @@ struct RootView: View {
         .task { checkAttendance() }
         .onChange(of: session.ready) { _, _ in checkAttendance() }
         .onChange(of: prefs.prefSelected) { _, _ in checkAttendance() }
-        .sheet(isPresented: $showAttendance) {
+        // 출석체크 — 중앙 팝업(전체 즉시 표시; +100 실타래 배너가 반쯤 올라온 시트에 가리지 않도록).
+        .popup(isPresented: $showAttendance) {
             AttendanceView(rewarded: attendanceRewarded)
         }
         // 로그인/회원가입 모달 — MY 의 그 모달(#97/#99 SignInSheet)을 루트에서 재사용.
         // requestLogin 을 부르는 모든 유도(북마크 프롬프트·새로고침 제한·피드 익명)가
         // 이 한 곳을 띄운다(모달 분기 없음). 인증 성공 시 SignInSheet 가 자동으로 닫힌다.
-        .sheet(isPresented: $showLoginModal) { SignInSheet() }
+        .popup(isPresented: $showLoginModal, fitContent: false) { SignInSheet() }   // 폼 모드(키보드 회피)
+        // 폼 팝업(로그인)이 떠 있는 동안 탭 UI 를 키보드로부터 잠그기 위한 신호 수신.
+        .onPreferenceChange(FormPopupActiveKey.self) { formPopupActive = $0 }
+        // 마스트헤드 공지 종 → 공지 시트(Android notif 시트 패턴).
+        .sheet(isPresented: $showNoticeSheet) { NoticeView() }
         .task {
             if let id = pendingCardId { await resolveAndPush(id: id) }
         }
@@ -137,8 +148,8 @@ struct RootView: View {
                 Task { await resolveAndPush(id: id) }
             }
         }
-        // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(기존 프로필 편집기 재사용, 건너뛰기 가능).
-        .sheet(isPresented: Binding(
+        // 소셜 첫 가입 직후 1회: 성별·나이 입력 프롬프트(기존 프로필 편집기 재사용, 건너뛰기 가능). 중앙 팝업.
+        .popup(isPresented: Binding(
             get: { session.needsProfileSetup },
             set: { if !$0 { session.consumeProfileSetup() } }
         )) {
@@ -234,19 +245,23 @@ struct RootView: View {
         TabView(selection: $selectedTab) {
             NavigationStack(path: $dailyPath) {
                 DailyView(selectedTab: $selectedTab, path: $dailyPath)
+                    .environment(\.mastheadShowsActions, true)   // 북마크·공지 종 표시(MY 제외)
             }
             .tag(Tab.daily)
             NavigationStack(path: $feedPath) {
                 FeedView(selectedTab: $selectedTab, reselect: feedReselect, writeTrigger: feedWriteTrigger)
                     .id(feedResetToken)   // re-create → category resets to .today
+                    .environment(\.mastheadShowsActions, true)
             }
             .tag(Tab.feed)
             NavigationStack(path: $homePath) {
                 HomeView(selectedTab: $selectedTab, reselect: homeReselect)
+                    .environment(\.mastheadShowsActions, true)
             }
             .tag(Tab.home)
             NavigationStack(path: $archivePath) {
                 LibraryCatalogView(selectedTab: $selectedTab, path: $archivePath, reselect: archiveReselect)
+                    .environment(\.mastheadShowsActions, true)
             }
             .tag(Tab.archive)
             NavigationStack(path: $settingsPath) {
@@ -255,14 +270,16 @@ struct RootView: View {
             .tag(Tab.settings)
         }
         .toolbar(.hidden, for: .tabBar)
-        // #9: Feed·Library 를 '떠날 때' 그 탭을 루트로 리셋 → 다시 돌아오면 직전에
-        // 열어둔 카드 상세가 아니라 탭의 목록이 보인다. (Feed 상세는 path 가 아닌
+        // #9: Feed·Library·Settings(MY) 를 '떠날 때' 그 탭을 루트로 리셋 → 다시 돌아오면 직전에
+        // 열어둔 하위 화면이 아니라 탭의 홈/목록이 보인다. (Feed 상세는 path 가 아닌
         // selectedCard/selectedHighlight @State 라 popToRoot 가 reselect 로 닫고,
         // Library 는 archivePath(카드 상세)와 archiveReselect(펼친 책 OpenedBookView
-        // 오버레이) 둘 다 popToRoot 가 리셋한다.)
-        // Home(딥링크·랜덤 카드 푸시 유지)·Daily·Settings(값기반 하위 페이지)는 보존.
+        // 오버레이) 둘 다 popToRoot 가 리셋하고, Settings(MY)는 popToRoot 가 settingsPath 를 비운다.)
+        // MY 하위(북마크 등 값 기반 MyRoute)는 다른 탭처럼 전환 후 돌아오면 MY 홈이어야 한다
+        // — 탭 전환 후 북마크 화면에 머무르던 back-nav 버그 fix.
+        // Home(딥링크·랜덤 카드 푸시 유지)·Daily 만 보존.
         .onChange(of: selectedTab) { oldTab, _ in
-            if oldTab == .feed || oldTab == .archive { popToRoot(oldTab) }
+            if oldTab == .feed || oldTab == .archive || oldTab == .settings { popToRoot(oldTab) }
         }
         // 로그인 유도(컨텍스트 메뉴 북마크 프롬프트·3회 새로고침 제한·피드 익명 프롬프트 등)
         // → MY 탭 이동 대신 인증 모달(SignInSheet, #97/#99)을 그 자리에서 직접 띄운다.
@@ -278,6 +295,14 @@ struct RootView: View {
             feedPath = NavigationPath()
             feedResetToken += 1
         }
+        // 마스트헤드 트레일링 액션 — 북마크(→ MY 하위 서가, MyRoute.bookshelf) · 공지 종(→ 공지 시트).
+        // 미읽음 점은 hasUnreadNotice 를 주입(마스트헤드는 RootView 상태에 직접 접근 못 함).
+        .environment(\.requestBookmarks) {
+            selectedTab = .settings
+            settingsPath.append(MyRoute.bookshelf)
+        }
+        .environment(\.requestNotice) { showNoticeSheet = true }
+        .environment(\.mastheadNotifUnread, hasUnreadNotice)
         // Hide the tab bar while the comment composer is focused (keyboard up),
         // so the input can pin directly above the keyboard; restore on blur.
         .onPreferenceChange(ComposerFocusedPreferenceKey.self) { active in
@@ -307,13 +332,24 @@ struct RootView: View {
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
-        // 피드 글쓰기 FAB+고양이 — 탭바 '위(앞)' 레이어라 고양이가 탭바에 앉고
-        // 주황 연필 버튼이 머리 위에 뜬다(PWA). 피드 루트에서만, 컴포저 활성 시 숨김.
+        // 피드 글쓰기 — 고양이(좌)와 글쓰기 FAB(우)를 **분리**(Android 패턴: cat-left + FAB BottomEnd).
+        // 둘 다 탭바 '위(앞)' 레이어. 피드 루트에서만, 컴포저 활성 시 숨김.
+        // (오프셋·위치는 실기기 QA 조정 대상.)
+        .overlay(alignment: .bottomLeading) {
+            if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
+                FeedWriteCat()
+                    .padding(.leading, 8)
+                    .padding(.bottom, 54)      // 고양이가 탭바 윗면에 앉도록 — 조정 가능
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
-                FeedWriteCat { feedWriteTrigger += 1 }
-                    .padding(.trailing, -4)    // LIBRARY~MY 사이로 (가로)
-                    .padding(.bottom, 54)      // 책 아랫면이 탭바 윗면에 앉도록 (세로) — 조정 가능
+                FeedWriteFab { feedWriteTrigger += 1 }
+                    .padding(.trailing, 18)
+                    // 52pt FAB 를 64pt 탭바 '위'로 완전히 올림(64 + 8pt 여유 = 72). 이전 14 는
+                    // FAB 가 MY 셀과 겹쳐 탭을 가로채 MY 가 안 눌리던 버그(P1). 72 면 탭바 히트
+                    // 영역과 안 겹쳐 MY 정상 동작.
+                    .padding(.bottom, 72)
             }
         }
     }

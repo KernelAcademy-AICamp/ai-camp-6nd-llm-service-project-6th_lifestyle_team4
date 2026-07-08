@@ -15,8 +15,8 @@ struct MyPageView: View {
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
+    @Environment(\.requestLogin) private var requestLogin   // 로그인 → 루트의 단일 로그인 팝업(키보드 회피·탭바 고정)
 
-    @State private var showSignIn = false   // 로그인/회원가입 모달 (Android SignInDialog)
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
     @State private var showAttendance = false
@@ -27,7 +27,8 @@ struct MyPageView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AppMasthead()
+            // MY 본문 yarnPill이 잔액 표면을 담당하므로 상단 중복 칩은 숨긴다.
+            AppMasthead(showsYarnChip: false)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 16)
@@ -70,6 +71,10 @@ struct MyPageView: View {
                         Spacer().frame(height: 12)
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
+
+                    // 실타래 잔액 — ACCOUNT/공지 위에 본문 펠릿으로도 노출(상단바 칩과 별개).
+                    Spacer().frame(height: 20)
+                    yarnPill
 
                     // 익명 — 로그인 CTA를 공지 위에 (PWA signin-block → 공지 순서, index.html:1944-1976).
                     if session.isAnonymous {
@@ -125,7 +130,8 @@ struct MyPageView: View {
                     }
                     settingRow(
                         title: "맞춤 추천",
-                        subtitle: prefs.tasteEnabled ? tasteProfileText : "북마크와 비슷한 카드를 추천합니다"
+                        subtitle: "북마크와 비슷한 카드를 추천합니다",
+                        note: prefs.tasteEnabled ? tasteProfileText : nil   // Android: note = ON일 때 취향 프로필 라인
                     ) {
                         EditorialToggle(isOn: $prefs.tasteEnabled)
                     }
@@ -143,7 +149,10 @@ struct MyPageView: View {
                     if !session.isAnonymous {
                         Spacer().frame(height: 40)
                         Button {
-                            Task { await session.signOut() }
+                            Task {
+                                await session.signOut()
+                                prefs.clearOnLogout()   // 이전 사용자 취향이 다음(익명) 세션에 남지 않게 초기화
+                            }
                         } label: {
                             Text("로그아웃")
                                 .font(.custom("Pretendard-Medium", size: 10))
@@ -186,10 +195,7 @@ struct MyPageView: View {
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
-        // 프로필 편집은 내용이 많아(닉네임·성별·나이대·취향) 전체창 팝업으로 띄운다 —
-        // 좁은 중앙 카드 대신 화면 전체에서 모두 설정(Android ProfileDialog 스크롤 팝업 대응).
-        // 닫기는 ProfileEditor 의 취소/저장(showNicknameSheet=false).
-        .fullScreenCover(isPresented: $showNicknameSheet) {
+        .popup(isPresented: $showNicknameSheet) {
             ProfileEditor(
                 initialNickname: session.nickname,
                 initialGender: session.gender,
@@ -214,14 +220,10 @@ struct MyPageView: View {
                 showNicknameSheet = false
             }
         }
-        .centerPopup(isPresented: $showAttendance) {
-            // 달력 상단에 "출석체크 완료! 실타래 +100" 배너를 노출(rewarded=배너 표시 전용).
-            // 실제 보상 지급은 RootView 의 그날 첫 진입 자동 모달에서만 — 여기선 안내 배너만.
-            AttendanceView(rewarded: true)
+        .popup(isPresented: $showAttendance) {
+            AttendanceView()   // 보기 전용 (보상 지급 없음) — 중앙 팝업
         }
-        .centerPopup(isPresented: $showSignIn) {
-            SignInSheet()
-        }
+        // 로그인 팝업은 루트(showLoginModal)에서 단일로 띄운다 — 여기선 requestLogin() 만 호출.
         // MY 하위 페이지를 모두 값 기반(MyRoute)으로 push — settingsPath 가 추적해
         // MY 탭 재탭 시 한 번에 닫힌다(다른 탭과 동일). 북마크 서가는 ArchiveView 가
         // 카드 상세를 같은 스택에 push. 익명도 접근 가능(빈 책장).
@@ -287,7 +289,7 @@ struct MyPageView: View {
                 .font(.bodySans(12))
                 .foregroundStyle(.walnut)
             Spacer().frame(height: 14)
-            Button { showSignIn = true } label: {
+            Button { requestLogin() } label: {   // 루트 단일 로그인 팝업
                 Text("로그인 · 회원가입")
             }
             .buttonStyle(EditorialButtonStyle(.outlined))   // Android SharpButtonVariant.Outline
@@ -297,6 +299,24 @@ struct MyPageView: View {
                 .foregroundStyle(.walnut)
                 .bookLeading(size: 12)
         }
+    }
+
+    /// 실타래 잔액 펠릿 — MY 본문 상단(ACCOUNT/공지 위). 브랜드 마크 + 잔액. 좌측 정렬 캡슐.
+    private var yarnPill: some View {
+        HStack(spacing: 6) {
+            Image("daily-script-bar")
+                .resizable().scaledToFill()
+                .frame(width: 16, height: 16)
+                .clipShape(Circle())
+            Text("실타래 \(yarn.balance)개")
+                .font(.custom("Pretendard-Medium", size: 13))
+                .foregroundStyle(.espresso)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Color.sand.opacity(0.35)))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel("실타래 \(yarn.balance)개")
     }
 
     private func sectionLabel(_ text: String) -> some View {
@@ -320,7 +340,7 @@ struct MyPageView: View {
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.walnut)
                 }
-                .padding(.vertical, 14)
+                .padding(.vertical, 18)
             }
             .buttonStyle(.plain)
             Hairline()
@@ -352,7 +372,7 @@ struct MyPageView: View {
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.walnut)
                 }
-                .padding(.vertical, 14)
+                .padding(.vertical, 18)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -387,7 +407,7 @@ struct MyPageView: View {
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(.walnut)
                 }
-                .padding(.vertical, 14)
+                .padding(.vertical, 18)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -427,6 +447,7 @@ struct MyPageView: View {
     private func settingRow(
         title: String,
         subtitle: String? = nil,
+        note: String? = nil,
         trailingText: String? = nil,
         @ViewBuilder trailing: () -> some View = { EmptyView() }
     ) -> some View {
@@ -439,6 +460,13 @@ struct MyPageView: View {
                     if let subtitle {
                         Text(subtitle)
                             .font(.bodySans(12))
+                            .foregroundStyle(.walnut)
+                    }
+                    // Android SettingRow note — 부제 아래 별도 라인(맞춤 추천 ON 시 취향 프로필). 8dp 간격.
+                    if let note {
+                        Spacer().frame(height: 4)
+                        Text(note)
+                            .font(.bodySans(11))
                             .foregroundStyle(.walnut)
                     }
                 }
@@ -462,7 +490,7 @@ struct MyPageView: View {
 /// (internal — 카드 게이트의 비로그인 안내 팝업에서도 같은 모달을 재사용한다.)
 struct SignInSheet: View {
     @EnvironmentObject private var session: AuthSession
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissPopup) private var dismissPopup   // 중앙 팝업으로 표시 — \.dismiss 대신
     @Environment(\.colorScheme) private var colorScheme
     @State private var loginId = ""
     @State private var loginPassword = ""
@@ -480,16 +508,16 @@ struct SignInSheet: View {
                     Spacer().frame(height: 6)
                     FieldBox(placeholder: "아이디", text: $loginId)
                     FieldBox(placeholder: "비밀번호", text: $loginPassword, isSecure: true)
-                    Button {
-                        Task { await session.signIn(id: loginId, password: loginPassword, signUp: signUpMode) }
-                    } label: {
-                        Text(session.authInProgress ? "⋯" : (signUpMode ? "가입" : "로그인"))
-                    }
-                    .buttonStyle(EditorialButtonStyle(.filled))
-                    .disabled(session.authInProgress || loginId.isEmpty || loginPassword.isEmpty)
+                    // 로그인/가입 버튼은 하단 고정 행으로 이동(키보드가 떠도 보이게). 모드 토글만 여기.
                     Button { signUpMode.toggle() } label: {
-                        Text(signUpMode ? "이미 계정이 있나요? 로그인" : "계정이 없으신가요? 회원가입")
-                            .labelCaps()
+                        // 회원가입(또는 로그인) 단어를 강조 — 안내 문구는 톤다운, 액션 단어는 accent + 밑줄.
+                        (
+                            Text(signUpMode ? "이미 계정이 있나요? " : "계정이 없으신가요? ")
+                                .foregroundStyle(.walnut)
+                            + Text(signUpMode ? "로그인" : "회원가입")
+                                .foregroundStyle(Color.cta).underline()
+                        )
+                        .font(.custom("Pretendard-Medium", size: 12))
                     }
                     .buttonStyle(.plain)
 
@@ -545,6 +573,24 @@ struct SignInSheet: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(session.authInProgress)
+                    Spacer().frame(height: 10)
+                    // 카카오 — 공식 브랜드 버튼(노란 #FEE500 배경 + 검정 말풍선 심볼/라벨).
+                    // 색상은 카카오 브랜드 가이드를 따른다(애플=공식 흑/백, 구글=공식 흰색과 동일한
+                    // "제공자 공식 트리트먼트" 패턴). 크기/모서리는 애플·구글과 동일(높이≈44, radius 10).
+                    // 핸들러는 기존 OAuth 배선 그대로 — .kakao 는 구글과 같은 signInWithOAuth 경로.
+                    Button {
+                        Task { await session.signInWithOAuth(.kakao) }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image("KakaoLogo").resizable().renderingMode(.original).frame(width: 18, height: 18)
+                            Text("카카오 로그인").font(.bodySans(15)).foregroundStyle(Color.black.opacity(0.85))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(Color(red: 0.996, green: 0.898, blue: 0.0), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(session.authInProgress)
                     Spacer().frame(height: 14)
                     Text("소셜 로그인은 회원 식별 및 로그인 목적으로만 사용되며, 소셜 계정의 프로필 정보는 사용하지 않습니다.")
                         .font(.bodySans(12))
@@ -553,14 +599,25 @@ struct SignInSheet: View {
                 }
                 .padding(20)
             }
+            // 고정 하단 버튼 — ScrollView 밖이라 키보드가 떠도 항상 보인다(스크린샷대로 취소|로그인).
+            HStack(spacing: 10) {
+                Button { dismissPopup() } label: { Text("취소") }
+                    .buttonStyle(EditorialButtonStyle(.outlined))
+                Button {
+                    Task { await session.signIn(id: loginId, password: loginPassword, signUp: signUpMode) }
+                } label: {
+                    Text(session.authInProgress ? "⋯" : (signUpMode ? "가입" : "로그인"))
+                }
+                .buttonStyle(EditorialButtonStyle(.filled))
+                .disabled(session.authInProgress || loginId.isEmpty || loginPassword.isEmpty)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
         }
-        .padding(.top, SheetMetrics.grabberTop)   // 그래버 ↔ 헤더 여백(공통 표준)
-        .background(Color.paper)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        // 중앙 팝업(폼 모드) — 카드 배경/모서리는 PopupDialog 담당. 시트 그래버·detents 제거.
         // Android SignInDialog: 인증 성공(익명 해제)되면 자동으로 닫힌다.
         .onChange(of: session.isAnonymous) { _, anon in
-            if !anon { dismiss() }
+            if !anon { dismissPopup() }
         }
     }
 
@@ -572,10 +629,6 @@ struct SignInSheet: View {
                 .font(.headlineSerif(20))
                 .foregroundStyle(.espresso)
             Spacer()
-            Button { dismiss() } label: {
-                Text("취소").font(.bodySans(15)).foregroundStyle(.walnut)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, SheetMetrics.cardPadding)
         .frame(height: SheetMetrics.headerHeight)
@@ -745,8 +798,8 @@ struct ProfileEditor: View {
             .padding(.top, 16)
         }
         .padding(24)
-        .background(Color.paper.ignoresSafeArea())
-        .presentationDetents([.medium, .large])
+        // 중앙 팝업 — 카드 배경/모서리는 PopupDialog 담당(detents 불필요). 긴 콘텐츠(프로필 +
+        // 선호도)는 작은 화면(SE)에서 화면을 넘을 수 있어 그 경우만 QA 확인.
     }
 
     // 취향(장르·주제) 칩 — Android ProfileDialog showPreferences 블록 미러.

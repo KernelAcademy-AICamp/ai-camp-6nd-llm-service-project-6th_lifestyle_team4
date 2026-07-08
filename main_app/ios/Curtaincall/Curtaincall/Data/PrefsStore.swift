@@ -78,6 +78,17 @@ final class PrefsStore: ObservableObject {
         prefSelected = true
     }
 
+    /// 로그아웃 시 호출 — 이전 사용자의 취향(장르/주제)이 다음(익명) 세션에 남지 않도록 로컬에서
+    /// 지운다. 온보딩은 다시 띄우지 않고(prefSelected 유지) Daily 의 Oz 픽이 게스트 '취향 설정'
+    /// CTA 로 떨어진다(취향만 비움). 서버(users.pref_*)는 각 계정에 남아 재로그인 시
+    /// syncFromServer 로 복원된다. (로그아웃 시 session 변경으로 화면이 재평가되며 빈 취향을 읽음.)
+    func clearOnLogout() {
+        d.removeObject(forKey: Key.prefGenres)
+        d.removeObject(forKey: Key.prefThemes)
+        d.removeObject(forKey: Key.prefAny)
+        // prefSelected 는 유지 — 온보딩 재노출 대신 게스트 CTA 경로로.
+    }
+
     // Recently-shown queue (not @Published — used transiently by Home).
     var recentlyShown: [Int] {
         get { d.array(forKey: Key.recent) as? [Int] ?? [] }

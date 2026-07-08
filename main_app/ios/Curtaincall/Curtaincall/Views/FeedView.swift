@@ -58,21 +58,14 @@ struct FeedView: View {
     var body: some View {
         VStack(spacing: 0) {
             AppMasthead()
+            // 피드 헤더(제목·태그라인·카테고리 필터)는 스크롤과 함께 사라지지 않도록
+            // 매스트헤드 아래에 고정(ScrollView 밖)한다. 본문(글 목록)만 스크롤된다.
+            feedHeader
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        Spacer().frame(height: 24).id(Self.topID)
-                        Text("피드")
-                            .font(.displaySerif(32))
-                            .foregroundStyle(.espresso)
-                        // PWA 피드 헤더 태그라인 (index.html:1882).
-                        Spacer().frame(height: 6)
-                        Text("매일 한 문장, 그리고 기억에 남은 장면들")
-                            .font(.bodySans(13))
-                            .foregroundStyle(.walnut)
-                        Spacer().frame(height: 18)
-                        categoryChips
-                        Spacer().frame(height: 20)
+                        // 스크롤-투-탑 앵커(reselect 시 사용) — 고정 헤더 바로 아래, 본문 최상단.
+                        Color.clear.frame(height: 0).id(Self.topID)
 
                         if let errorMessage {
                             FeedInlineError(message: errorMessage)
@@ -101,6 +94,16 @@ struct FeedView: View {
                     selectedHighlight = nil
                     withAnimation { proxy.scrollTo(Self.topID, anchor: .top) }
                     Task { await reload() }
+                }
+                // 페이지-속-페이지 — 피드 본문 영역을 감싸는 은은한 테두리(latte 0.5pt, 가로 12pt
+                // 인셋). 글 목록이 이 프레임 안에서 스크롤돼 '페이지 안의 페이지' 느낌.
+                // (정확한 인셋·하단 위치는 실기기 QA 조정 대상.)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.latte, lineWidth: 0.5)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 6)
+                        .allowsHitTesting(false)
                 }
             }
         }
@@ -198,6 +201,29 @@ struct FeedView: View {
         } else {
             showPicker = true
         }
+    }
+
+    /// 고정 피드 헤더 — 매스트헤드 아래, ScrollView 위에 핀. 제목·태그라인·카테고리 필터.
+    /// 본문이 위로 스크롤돼도 가려지도록 paper 배경(불투명). 패딩은 본문 VStack 에서 분리돼
+    /// 나왔으므로 여기서 직접 적용한다.
+    private var feedHeader: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer().frame(height: 24)
+            Text("피드")
+                .font(.displaySerif(32))
+                .foregroundStyle(.espresso)
+            // PWA 피드 헤더 태그라인 (index.html:1882).
+            Spacer().frame(height: 6)
+            Text("매일 한 문장, 그리고 기억에 남은 장면들")
+                .font(.bodySans(13))
+                .foregroundStyle(.walnut)
+            Spacer().frame(height: 18)
+            categoryChips
+            Spacer().frame(height: 20)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .background(Color.paper)
     }
 
     private var categoryChips: some View {
@@ -377,33 +403,40 @@ private struct FeedFabButtonStyle: ButtonStyle {
 /// 주황 원형 연필 버튼. **RootView 가 탭바 '위(앞)' 레이어에 그린다** → 고양이가
 /// 탭바에 앉고(뒤로 가리지 않고) 버튼이 머리 위에 뜬다. 버튼만 탭 가능(고양이는
 /// click-through). 탭은 `onTap` 으로 위임. (고양이는 #76 그대로 유지.)
-struct FeedWriteCat: View {
+/// 글쓰기 FAB — 주황 원형 + 통통한 연필(커스텀 feed-pencil 에셋, 뾰족한 심). Android 처럼
+/// 고양이와 **분리(decouple)**해 우측 하단(네비바 레벨)에 둔다(FeedScreen FAB BottomEnd).
+struct FeedWriteFab: View {
     let onTap: () -> Void
 
     /// PWA #feed-fab 아이콘 색 (#FFFDF7) — 주황 원 위라 라이트/다크 모두 크림 고정.
     private static let fabIcon = Color(red: 1.0, green: 0.992, blue: 0.969)
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            // 주황 원형 연필 FAB — 52pt, cta 배경, 크림 연필 아이콘 + 주황 그림자.
-            // (PWA index.html #feed-fab: 52×52, --cta, edit 아이콘, shadow 0 4 14 cta/.38)
-            Button(action: onTap) {
-                Image(systemName: "pencil")
-                    .font(.system(size: 24, weight: .regular))
-                    .foregroundStyle(Self.fabIcon)
-                    .frame(width: 52, height: 52)
-                    .background(Circle().fill(Color.cta))
-                    .shadow(color: Color.cta.opacity(0.38), radius: 7, x: 0, y: 4)
-            }
-            .buttonStyle(FeedFabButtonStyle())
-            .offset(x: -34)               // 고양이 머리(중앙) 위로
-            Image("cat_pen")
+        // (PWA index.html #feed-fab: 52×52, --cta, shadow 0 4 14 cta/.38)
+        Button(action: onTap) {
+            Image("feed-pencil")          // 통통한 연필 + 뾰족한 심 (SF 'pencil' 의 젓가락 느낌 대체)
+                .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(height: 92)        // Android CatHeightFeed=92 (#76 유지)
-                .offset(y: -4)
-                .allowsHitTesting(false)
+                .frame(width: 24, height: 28)
+                .foregroundStyle(Self.fabIcon)
+                .frame(width: 52, height: 52)
+                .background(Circle().fill(Color.cta))
+                .shadow(color: Color.cta.opacity(0.38), radius: 7, x: 0, y: 4)
         }
+        .buttonStyle(FeedFabButtonStyle())
+        .accessibilityLabel("한 줄 쓰기")
+    }
+}
+
+/// 글쓰기 고양이(cat_pen) — 좌측 하단 장식(Android cat-left, CatHBiasFeed=-1). 비상호작용.
+struct FeedWriteCat: View {
+    var body: some View {
+        Image("cat_pen")
+            .resizable()
+            .scaledToFit()
+            .frame(height: 92)            // Android CatHeightFeed=92 (#76 유지)
+            .allowsHitTesting(false)
     }
 }
 
@@ -844,88 +877,6 @@ private struct FeedPostDetailSheet: View {
     }
 }
 
-/// Solid leather cover (used by HighlightDetailView / DailyDiscovery / ArchiveView).
-/// The feed now uses the shared `BookCover` (cover_url + leather); this stays for the
-/// other screens until they migrate (PR-I).
-struct HighlightBookCover: View {
-    let work: Work?
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(
-                    LinearGradient(
-                        colors: [leatherShadow, leather, leatherHighlight],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .shadow(color: Color.black.opacity(0.24), radius: 8, x: 0, y: 6)
-            Rectangle()
-                .fill(Color.black.opacity(0.28))
-                .frame(width: 5)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            RoundedRectangle(cornerRadius: 2)
-                .stroke(Color.white.opacity(0.22), lineWidth: 0.5)
-                .padding(7)
-            VStack(spacing: 10) {
-                Text(work?.title ?? "—")
-                    .font(.headlineSerif(17))
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.paper)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(4)
-                if let subtitle = work?.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.titleSerif(12))
-                        .foregroundStyle(Color.paper.opacity(0.90))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                }
-                if let author = work?.author, !author.isEmpty {
-                    Text(author)
-                        .labelCaps(color: Color.paper.opacity(0.75), size: 9)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 18)
-        }
-        .frame(width: 132, height: 188)
-    }
-
-    private var leatherHex: UInt32 { Self.leatherColor(for: work?.title ?? "?") }
-    private var leather: Color { Color(hex: leatherHex) }
-    private var leatherShadow: Color { Self.blend(leatherHex, with: 0x000000, amount: 0.24) }
-    private var leatherHighlight: Color { Self.blend(leatherHex, with: 0xFFFFFF, amount: 0.08) }
-
-    private static func leatherColor(for title: String) -> UInt32 {
-        let palette: [UInt32] = [
-            0x0E0C0A, 0x5A2A24, 0x2F3A30, 0x293541,
-            0x6A4A30, 0x40303B, 0x3A463F, 0x1F2A3A,
-            0x4A2B1A, 0x3D2E22, 0x26393B, 0x2E2538,
-        ]
-        let hash = title.unicodeScalars.reduce(0) { (($0 &* 31) &+ Int($1.value)) & 0x7fffffff }
-        return palette[hash % palette.count]
-    }
-
-    private static func blend(_ hex: UInt32, with target: UInt32, amount: Double) -> Color {
-        let clamped = min(1, max(0, amount))
-        let r = Double((hex >> 16) & 0xFF)
-        let g = Double((hex >> 8) & 0xFF)
-        let b = Double(hex & 0xFF)
-        let tr = Double((target >> 16) & 0xFF)
-        let tg = Double((target >> 8) & 0xFF)
-        let tb = Double(target & 0xFF)
-        return Color(
-            red: (r + (tr - r) * clamped) / 255,
-            green: (g + (tg - g) * clamped) / 255,
-            blue: (b + (tb - b) * clamped) / 255
-        )
-    }
-}
-
 private struct FeedBookmarkPicker: View {
     let title: String
     let cards: [Card]
@@ -1027,13 +978,23 @@ private struct FeedComposeSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(card.work.feedTitle)
-                        .font(.headlineSerif(22))
-                        .foregroundStyle(.espresso)
-                        .lineLimit(1)
-                    Text("#\(card.cardId)").labelCaps(size: 10)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    // 제목 + 작품 번호(#)를 같은 줄에(Tier1 write-pill).
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(card.work.feedTitle)
+                            .font(.headlineSerif(22))
+                            .foregroundStyle(.espresso)
+                            .lineLimit(1)
+                        Text("#\(card.cardId)").labelCaps(size: 10)
+                    }
+                    // 작품 상세(형식 · 연도 · 작가) 한 줄 — 제목 아래.
+                    let detail = [card.work.format.displayName, card.work.releaseYear.map(String.init), card.work.author]
+                        .compactMap { v in (v?.isEmpty == false) ? v : nil }
+                        .joined(separator: " · ")
+                    if !detail.isEmpty {
+                        Text(detail).labelCaps(size: 10).lineLimit(1)
+                    }
                 }
                 Spacer()
                 Button { dismiss() } label: {

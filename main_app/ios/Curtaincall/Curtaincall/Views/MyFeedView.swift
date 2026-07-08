@@ -149,9 +149,11 @@ struct MyFeedView: View {
         VStack(alignment: .leading, spacing: 0) {
             let meta = metaLine(date: post.createdDate, card: post.card)
             if !meta.isEmpty {
-                Text(meta).labelCaps().lineLimit(2)
-                Spacer().frame(height: 6)
+                Text(meta).labelCaps().lineLimit(1)
+                Spacer().frame(height: 4)
             }
+            workTitleLine(post.card)   // 작품 제목 별도 줄(줄바꿈 허용)
+            Spacer().frame(height: 10)
 
             if editingPostId == post.postId {
                 editBox
@@ -199,9 +201,11 @@ struct MyFeedView: View {
         VStack(alignment: .leading, spacing: 0) {
             let meta = metaLine(date: highlight.createdDate, card: highlight.card)
             if !meta.isEmpty {
-                Text(meta).labelCaps().lineLimit(2)
-                Spacer().frame(height: 6)
+                Text(meta).labelCaps().lineLimit(1)
+                Spacer().frame(height: 4)
             }
+            workTitleLine(highlight.card)   // 작품 제목 별도 줄(줄바꿈 허용)
+            Spacer().frame(height: 10)
             Button { selectedHighlight = highlight } label: {
                 VStack(alignment: .leading, spacing: 8) {
                     // LLM 출력의 `**화자**` 마커가 그대로 노출되던 문제 — markdownBold 로 볼드 변환.
@@ -309,13 +313,31 @@ struct MyFeedView: View {
         .padding(40)
     }
 
-    /// "M. d  a h:mm  —  {작품 제목}", mirroring MyCommentsView's meta line.
+    /// 메타 라인 — Android MyFeed `metaLine` 미러: "{포맷} · {날짜}". 작품 제목은 별도 줄
+    /// (`workTitleLine`)로 분리해 길어도 다음 줄로 줄바꿈되게 한다(기존엔 이 한 줄에 합쳐 잘림).
     private func metaLine(date: Date?, card: Card?) -> String {
         var parts: [String] = []
+        let fmt = card?.work.format.displayName ?? ""
+        if !fmt.isEmpty { parts.append(fmt) }
         if let date { parts.append(Self.dateText(date)) }
+        return parts.joined(separator: "  ·  ")
+    }
+
+    /// 작품 제목 줄 — Android MyFeed `titleLine` 미러: 제목(espresso, 세리프)이 자기 줄에서
+    /// 자연스럽게 줄바꿈되고, 부제가 있으면 뒤에 작게(walnut) 붙는다.
+    @ViewBuilder
+    private func workTitleLine(_ card: Card?) -> some View {
         let title = card?.work.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        parts.append(title.isEmpty ? "—" : title)
-        return parts.joined(separator: "  —  ")
+        let subtitle = card?.work.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        (
+            Text(title.isEmpty ? "—" : title)
+            + (subtitle.isEmpty ? Text("") : Text("  " + subtitle).font(.bodySans(13)).foregroundColor(.walnut))
+        )
+        .font(.titleSerif(16))
+        .foregroundStyle(.espresso)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .multilineTextAlignment(.leading)
     }
 
     private static func dateText(_ date: Date) -> String {

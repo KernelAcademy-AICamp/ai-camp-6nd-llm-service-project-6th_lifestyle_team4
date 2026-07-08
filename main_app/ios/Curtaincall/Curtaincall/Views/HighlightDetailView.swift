@@ -138,7 +138,9 @@ struct HighlightDetailView: View {
                 .labelCaps(size: 10)
                 .lineLimit(1)
             Spacer().frame(height: 22)
-            HighlightBookCover(work: highlight.card?.work)
+            // WorkCover: cover_url 아트워크 로드(WorkCoverCache), 없으면 가죽 폴백.
+            // 기존 HighlightBookCover 는 가죽 전용이라 표지가 안 떴음(Daily 와 동일 버그).
+            WorkCover(work: highlight.card?.work, width: 132, height: 188)
             Spacer().frame(height: 22)
             // 화자 라벨이 LLM 출력에 `**크레온**` 마크다운으로 들어올 수 있어 그대로 노출되던 문제 fix —
             // AttributedString(markdown:) 으로 ** 마커를 볼드로 변환. inlineOnlyPreservingWhitespace

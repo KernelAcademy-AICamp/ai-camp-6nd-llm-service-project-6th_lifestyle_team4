@@ -19,8 +19,6 @@ struct CardDetailView: View {
     @State private var showAccountPrompt = false
     /// 실타래 게이트 — 잔액 부족이면 카드 내용을 가리고 충전을 유도한다.
     @State private var gate: GateState = .checking
-    // v1: 충전 시트 대신, 비로그인 안내 팝업의 '회원가입·로그인' 이 기존 인증 모달을 띄운다.
-    @State private var showSignIn = false
     /// 공유용 명대사 카드 이미지 — 콘텐츠 표시 시 1회 렌더해 캐시.
     @State private var shareCardImage: Image?
     @State private var displayedViewCount: Int
@@ -34,6 +32,12 @@ struct CardDetailView: View {
     @State private var showHighlightLogin = false
     @State private var highlightSaving = false
     @State private var highlightToast: String?
+    // 완독 보상 fly — 이번 열람에서 적립된 실타래(델타, 보통 +300)를 본문을 끝까지
+    // 읽었을 때 1회 띄운다(Android DetailScreen readComplete → YarnRewardFly 미러).
+    @State private var readRewardAmount = 0
+    @State private var readComplete = false
+    @State private var showRewardFly = false
+    @State private var rewardFlyShown = false   // 카드 1회 가드 — 재스크롤로 반복 표시 방지
 
     init(card: Card, onLoginRequested: (() -> Void)? = nil) {
         self.card = card
@@ -57,11 +61,12 @@ struct CardDetailView: View {
             .task { await runOpenFlow() }
             // 충전 시트가 닫히면(구매 성공 등) 게이트를 자동 재평가 — 잠금 화면에서
             // 충전 후 뒤로 나갔다 다시 들어오지 않아도 그 자리에서 열린다.
-            // 비로그인 안내 팝업 → 기존 인증 모달(#97 SignInSheet) 재사용(새 시트 아님).
-            // 닫힌 뒤 게이트 재평가 — 가입+출석으로 잔액이 생겼으면 그 자리에서 열린다.
-            .sheet(isPresented: $showSignIn, onDismiss: {
-                Task { await reEvaluateGate() }
-            }) { SignInSheet() }
+            // 게이트의 '회원가입·로그인' 은 루트의 단일 로그인 팝업(onLoginRequested → requestLogin)으로
+            // 띄운다(키보드 회피·탭바 고정 일원화). 로그인 성공(익명 해제) 시 게이트 재평가 —
+            // 가입+출석으로 잔액이 생겼으면 그 자리에서 열린다.
+            .onChange(of: session.isAnonymous) { _, anon in
+                if !anon { Task { await reEvaluateGate() } }
+            }
     }
 
     /// 게이트 상태별 화면. **`.open` 일 때만** 카드 본문을 트리에 만든다 —
@@ -111,6 +116,8 @@ struct CardDetailView: View {
                 VStack(alignment: .center, spacing: 0) {
                     Color.clear.frame(height: 0).id("detailTop")
                     Spacer().frame(height: 40)
+                    detailTitleBlock
+                    Spacer().frame(height: 16)
                     metadataBlock
                     Spacer().frame(height: 28)
 
@@ -191,12 +198,19 @@ struct CardDetailView: View {
                     .buttonStyle(EditorialButtonStyle(.filled))
 
                     Spacer().frame(height: 10)
-                    Button {
-                        requestLibrary()
-                    } label: {
-                        Text("라이브러리 가서 책 더 읽어보기")
+                    // 하단 CTA — '라이브러리로' 대신 '공유하기'(Android 공유 기능 미러; 상단바
+                    // 공유와 동일한 shareCardImage 경로). 이미지 렌더(.task) 전엔 비활성.
+                    if let shareCardImage {
+                        ShareLink(item: shareCardImage,
+                                  preview: SharePreview(QuoteCardView.shareTitle(card), image: shareCardImage)) {
+                            Text("공유하기")
+                        }
+                        .buttonStyle(EditorialButtonStyle(.outlined))
+                    } else {
+                        Button {} label: { Text("공유하기") }
+                            .buttonStyle(EditorialButtonStyle(.outlined))
+                            .disabled(true)
                     }
-                    .buttonStyle(EditorialButtonStyle(.outlined))
 
                     Spacer().frame(height: 16)
                     // edition_note: Android는 고정 문자열 리소스("Limited Edition Digital
@@ -214,18 +228,9 @@ struct CardDetailView: View {
                         nickname: session.nickname
                     )
 
-                    // 장식용 '책 읽는 고양이'(library-cat-2, Daily 오즈픽과 동일 에셋/처치) —
-                    // 본문 맨 아래 여백에 가운데 배치. 본문·CTA·댓글·도킹 컴포저와 겹치지
-                    // 않는 끝맺음 브랜드 플로리시. 비상호작용(터치 통과·접근성 숨김).
-                    Image("library-cat-2")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 116)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 28)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-
+                    // '책 읽는 고양이'는 더 이상 스크롤 본문 맨 아래에 두지 않는다(스크롤
+                    // 끝까지 가야만 보였고, 키보드에 독립적으로 끌려 위로 떠버림). 하단 도킹
+                    // 컴포저 위에 데코 오버레이로 걸터앉힌다 — dockedBottomBar / commentBarCat 참조.
                     Spacer().frame(height: 24)
                 }
                 .padding(.horizontal, 20)
@@ -245,9 +250,25 @@ struct CardDetailView: View {
                     withAnimation(.easeInOut(duration: 0.15)) { scrolledPast = past }
                 }
             }
+            // 완독 감지 — 본문을 95% 이상 스크롤하면(짧아서 스크롤이 없으면 즉시) 완독으로 보고,
+            // 이번 열람에 적립된 실타래가 있을 때 보상 fly 를 1회 띄운다(Android readComplete 미러).
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                let maxY = geo.contentSize.height - geo.containerSize.height
+                return maxY <= 1 || geo.contentOffset.y >= maxY * 0.95
+            } action: { _, complete in
+                if complete && !readComplete {
+                    readComplete = true
+                    maybeFireRewardFly()
+                }
+            }
             // Docked composer: solid bar, scroll content inset by its height
             // (nothing hides behind it), flush above the tab bar when unfocused,
             // dropping into the safe area above the keyboard when focused.
+            //
+            // '책 읽는 고양이'는 별도 바/행/패널이 아니라 컴포저 위에 걸터앉은 **데코 오버레이**
+            // (Daily/Feed 고양이와 동일 처치 — 투명 배경, 카드 본문이 뒤로 비침, 비상호작용).
+            // 컴포저(safeAreaInset) 안의 overlay 라 키보드가 떠도 바와 한 덩어리로 움직이고
+            // (위로 안 떠버림), 읽기 영역을 줄이는 추가 행을 만들지 않는다.
             .dockedBottomBar(isActive: !session.isAnonymous, clearTabBar: !composerFocused) {
                 CommentComposer(
                     model: comments,
@@ -255,6 +276,7 @@ struct CardDetailView: View {
                     nickname: session.nickname,
                     focused: $composerFocused
                 )
+                .overlay(alignment: .topTrailing) { commentBarCat }
             }
             // 상단 이동 FAB — 하이라이트 핀과 겹치지 않게 선택 중엔 숨김.
             .overlay(alignment: .bottomTrailing) {
@@ -297,6 +319,13 @@ struct CardDetailView: View {
                 } onClose: {
                     showAccountPrompt = false
                 }
+            }
+        }
+        // 완독 보상 fly — 화면 중앙, 탭 불가(읽기/스크롤 방해 X). 1회만 띄운다.
+        .overlay(alignment: .center) {
+            if showRewardFly {
+                YarnRewardFly(amount: readRewardAmount) { showRewardFly = false }
+                    .allowsHitTesting(false)
             }
         }
         // Floating coral pill — appears while a non-blank script range is
@@ -405,7 +434,7 @@ struct CardDetailView: View {
         let names = Set(card.work.characters.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
         let lines = card.displayScript(original: showOriginal).components(separatedBy: "\n")
         let para = NSMutableParagraphStyle()
-        para.lineSpacing = 8
+        para.lineSpacing = 12   // 명대사 스크립트 줄 간격 — 더 여유롭게 (Tier1)
         // 본문 정렬 — 관리자 편집에서 저장된 text_align 적용. NULL 이면 format 기본 (poem=center, else=left). (migration 042)
         switch card.displayTextAlign(original: showOriginal) {
         case "center": para.alignment = .center
@@ -518,18 +547,8 @@ struct CardDetailView: View {
             .buttonStyle(.plain)
 
             Spacer()
-            VStack(spacing: 2) {
-                Text("DAILY SCRIPT").labelCaps()
-                Text(card.work.displayTitle(original: showOriginal))
-                    .font(.headlineSerif(20))
-                    .foregroundStyle(.espresso)
-                    .lineLimit(1)
-                if let subtitle = card.work.displaySubtitle(original: showOriginal), !subtitle.isEmpty {
-                    Text(subtitle)
-                        .labelCaps()
-                        .lineLimit(1)
-                }
-            }
+            // 상단바 중앙은 'DAILY SCRIPT' 라벨만 — 작품 제목은 본문(detailTitleBlock)으로 이동.
+            Text("DAILY SCRIPT").labelCaps()
             Spacer()
 
             // 타이포 명대사 카드 이미지 공유 (#10). 이미지는 .task 에서 1회 렌더해 캐시
@@ -568,6 +587,22 @@ struct CardDetailView: View {
             .frame(width: 40, height: 40)
     }
 
+    /// 감상평 도킹 바 우측('남기기' 버튼 영역) 위에 걸터앉는 '책 읽는 고양이'
+    /// (library-cat-2 — Daily 고양이와 동일 에셋/크기 140pt, 축소 X). Daily/Feed 고양이처럼
+    /// **투명 배경 데코 오버레이**라 카드 본문이 뒤로 비친다. **비상호작용**
+    /// (`allowsHitTesting(false)`) — '남기기' 버튼/텍스트필드 탭을 절대 가로채지 않는다.
+    /// 컴포저(safeAreaInset)의 overlay 라 키보드와 한 덩어리로 고정.
+    /// (perch 오프셋은 시뮬레이터로 검증 불가 — 실기기 QA 에서 미세조정.)
+    private var commentBarCat: some View {
+        Image("library-cat-2")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 140)
+            .offset(x: -8, y: -56)   // 우측 남기기 버튼 위로 걸터앉게(위로). QA 조정 가능.
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
     private func toggleBookmark() {
         guard !session.isAnonymous else {
             showAccountPrompt = true
@@ -583,12 +618,23 @@ struct CardDetailView: View {
     /// 차단 확정되면 `.locked` 오버레이로 덮는다.
     enum GateState { case checking, open, locked }
 
+    /// 완독 + 적립이 모두 성립할 때 보상 fly 를 1회 띄운다. 호출 순서(완독 먼저 vs 적립
+    /// await 먼저)에 무관하도록 양쪽(runOpenFlow·스크롤 액션)에서 호출 — 마지막에 조건이
+    /// 충족되는 쪽이 발사한다. 적립이 0(이미 받음/익명 미식별/오류)이면 띄우지 않는다.
+    private func maybeFireRewardFly() {
+        guard !rewardFlyShown, readComplete, readRewardAmount > 0 else { return }
+        rewardFlyShown = true
+        showRewardFly = true
+    }
+
     /// 카드 열람 흐름 — PWA `openDetail` 순서 미러: 첫 열람 보상(+1) 먼저, 그다음 게이트.
     ///  보상이 먼저라 새 카드의 첫 열람은 +1 로 자가 충전된다(신규 사용자 잠금 방지).
     ///  게이트: 3일 언락/투어면 무료, 아니면 consume_yarn 1 차감. 부족하면 잠금.
     private func runOpenFlow() async {
         // 보상은 그대로 유지 (PWA 는 reward + gate 둘 다 한다).
-        await yarn.rewardFirstOpen(cardId: card.cardId, userId: session.userId)
+        // 적립량(델타)을 받아 두었다가 완독 시 fly 로 표시 — 지급 로직/금액은 불변.
+        readRewardAmount = await yarn.rewardFirstOpen(cardId: card.cardId, userId: session.userId)
+        maybeFireRewardFly()   // 짧은 카드(스크롤 불가)는 이미 readComplete=true 일 수 있어 즉시 평가
         // TODO(coach): iOS 코치 투어 도입 시 tourActive 를 실제 상태로 연결 (현재 스텁 false).
         let decision = await yarn.gateOpen(cardId: card.cardId, userId: session.userId, tourActive: false)
         switch decision {
@@ -658,7 +704,7 @@ struct CardDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer().frame(height: SheetMetrics.bodyToButton)
                 if isAnon {
-                    Button { showSignIn = true } label: {
+                    Button { onLoginRequested?() } label: {   // 루트 단일 로그인 팝업
                         Text("회원가입 · 로그인")
                     }
                     .buttonStyle(EditorialButtonStyle(.filled))
@@ -706,6 +752,23 @@ struct CardDetailView: View {
 
     /// Two centered lines: FORMAT · AUTHOR / YEAR · 👁 · 🔖 · 💬.
     /// PWA 상세 메타 행 순서 — 조회 · 북마크 · 댓글 (m-app.js:2166-2170).
+    /// 작품 제목 블록 — 상단바에서 본문 상단으로 이동(상단바는 'DAILY SCRIPT' 라벨만 유지).
+    /// 본문이라 폭 제약이 없어 1줄 잘림 없이 전체 제목/부제가 보인다.
+    private var detailTitleBlock: some View {
+        VStack(spacing: 4) {
+            Text(card.work.displayTitle(original: showOriginal))
+                .font(.headlineSerif(24))
+                .foregroundStyle(.espresso)
+                .multilineTextAlignment(.center)
+            if let subtitle = card.work.displaySubtitle(original: showOriginal), !subtitle.isEmpty {
+                Text(subtitle)
+                    .labelCaps()
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var metadataBlock: some View {
         VStack(spacing: 6) {
             let head: [String] = [

@@ -1,0 +1,22 @@
+#!/bin/sh
+# Block commits to the shared trunk (main) or any version/integration branch
+# (release/*). iOS work goes on FEATURE branches → PR into the current version
+# branch. See AGENTS.md "Branch model". The release/* PATTERN means next cycle's
+# version branch is auto-protected with zero maintenance.
+#
+# Enable (one-time, per clone):  git config core.hooksPath .githooks
+# Intentional override (discouraged):  git commit --no-verify
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+case "$branch" in
+  main|release/*)
+    echo "✖ pre-commit blocked: refusing to commit directly to '$branch'." >&2
+    echo "  Commit iOS work on a FEATURE branch, then PR into the current version branch." >&2
+    echo "  → git checkout -b <feature-branch>    (or: git checkout <existing-feature-branch>)" >&2
+    echo "  Override (discouraged): git commit --no-verify" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
