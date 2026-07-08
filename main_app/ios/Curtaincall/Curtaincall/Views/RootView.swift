@@ -79,6 +79,7 @@ struct RootView: View {
     /// 코치 투어(온보딩 스포트라이트) — 앱 루트에서 호스팅해 탭 전환·상세 push 를 가로지른다.
     @StateObject private var coach = CoachController()
     @AppStorage("coachTourSeen") private var coachTourSeen = false
+    @State private var showTourIntro = false   // 온보딩 직후 '가이드 투어 볼까요?' 인트로
 
     var body: some View {
         ZStack {
@@ -112,16 +113,41 @@ struct RootView: View {
                         session.hasServerPrefs = true
                         Task { try? await Supa.shared.savePreferences(userId: uid, genres: genres, themes: themes, any: any) }
                     }
-                    // 온보딩 종료 직후 첫 실행 1회: 코치 투어 시작(홈으로 이동 → maybeStartCoach 가 start).
+                    // 온보딩 종료 직후 첫 실행 1회: 바로 시작하지 않고 '가이드 투어 볼까요?'를 먼저 묻는다.
                     if !coachTourSeen {
                         coachTourSeen = true
-                        coach.configure(memberActionsEnabled: !session.isAnonymous)
-                        selectedTab = .home
-                        coach.requestStart()
+                        showTourIntro = true
                     }
                 }
                 .transition(.opacity)
             }
+        }
+        // 코치 투어 인트로 — 온보딩 직후 1회. '둘러보기'만 투어를 시작한다.
+        .popup(isPresented: $showTourIntro, dismissOnScrimTap: false) {
+            VStack(spacing: 0) {
+                Text("가이드 투어").labelCaps(color: .cta)
+                Spacer().frame(height: 10)
+                Text("앱을 빠르게 둘러볼까요?")
+                    .font(.headlineSerif(22)).foregroundStyle(.espresso)
+                    .multilineTextAlignment(.center)
+                Spacer().frame(height: 10)
+                Text("홈·전문·피드의 핵심 기능을 짧게 안내해 드려요. 언제든 ‘투어 종료’로 멈출 수 있어요.")
+                    .font(.bodySans(14)).foregroundStyle(.walnut)
+                    .multilineTextAlignment(.center).bookLeading(size: 14)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer().frame(height: 24)
+                Button {
+                    showTourIntro = false
+                    coach.configure(memberActionsEnabled: !session.isAnonymous)
+                    selectedTab = .home
+                    coach.requestStart()
+                } label: { Text("둘러보기") }
+                    .buttonStyle(EditorialButtonStyle(.filled))
+                Spacer().frame(height: 10)
+                Button { showTourIntro = false } label: { Text("나중에").labelCaps() }
+                    .buttonStyle(.plain)
+            }
+            .padding(24)
         }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
@@ -196,7 +222,7 @@ struct RootView: View {
             // 코치 투어 스포트라이트 — 최상단 레이어(탭바·상세 위). coachRoot 좌표계의 앵커를 읽어 그린다.
             CoachTourOverlay(controller: coach)
         }
-        .coordinateSpace(name: "coachRoot")
+        // 앵커는 .global(화면) 좌표로 수집 — 오버레이의 ignoresSafeArea 지오메트리와 정렬(별도 named 공간 불필요).
         .onPreferenceChange(CoachAnchorKey.self) { coach.anchors = $0 }
         .environmentObject(coach)
         .task { debugResetIfRequested(); wireCoach() }

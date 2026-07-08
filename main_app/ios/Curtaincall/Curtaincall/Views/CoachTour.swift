@@ -128,6 +128,7 @@ final class CoachController: ObservableObject {
     func requestStart() { pending = true }
     func start() { pending = false; index = 0; active = true }
     func next() { if index < steps.count - 1 { index += 1 } else { end() } }
+    func prev() { if index > 0 { index -= 1 } }
     func end() { active = false; index = 0; pending = false; onEnd?() }
 
     func setActionHandler(_ action: String, _ handler: (() -> Void)?) {
@@ -149,14 +150,17 @@ struct CoachAnchorKey: PreferenceKey {
 }
 
 extension View {
-    /// Publish this view's frame (in the root "coachRoot" space) under `id` so the
-    /// tour can spotlight it. `active` lets a caller drop the anchor when hidden.
+    /// Publish this view's frame in **global (screen) coordinates** under `id` so the
+    /// tour can spotlight it. Global — not a named space — so it aligns with the
+    /// overlay's `.ignoresSafeArea()` geometry (both measured from the screen top-left);
+    /// a safe-area-relative space would offset every hole by the top inset. `active`
+    /// lets a caller drop the anchor when hidden.
     func coachAnchor(_ id: String, active: Bool = true) -> some View {
         background(
             GeometryReader { geo in
                 Color.clear.preference(
                     key: CoachAnchorKey.self,
-                    value: active ? [id: geo.frame(in: .named("coachRoot"))] : [:]
+                    value: active ? [id: geo.frame(in: .global)] : [:]
                 )
             }
         )
@@ -235,8 +239,7 @@ struct CoachTourOverlay: View {
                 .gesture(
                     SpatialTapGesture().onEnded { v in
                         guard !step.final, let hole, hole.contains(v.location) else { return }
-                        if let action = step.action { controller.performAction(action) }
-                        if step.advanceAfterAction { controller.next() }
+                        advance(step)
                     }
                 )
         }
@@ -308,9 +311,16 @@ struct CoachTourOverlay: View {
             if belowTarget { return min(hole!.maxY + gap, size.height - tipHeight - edge) }
             return max(hole!.minY - tipHeight - gap, edge)
         }()
-        return CoachTooltip(step: step,
-                            onSkip: { controller.end() },
-                            onCta: { controller.end() })
+        let canPrev = !step.final && controller.index > 0
+            && controller.steps[controller.index - 1].scr == step.scr
+        return CoachTooltip(
+            step: step,
+            canPrev: canPrev,
+            onPrev: { controller.prev() },
+            onNext: { advance(step) },
+            onEnd: { controller.end() },
+            onCta: { controller.end() }
+        )
             .background(
                 GeometryReader { g in
                     Color.clear.preference(key: TipHeightKey.self, value: g.size.height)
@@ -323,6 +333,13 @@ struct CoachTourOverlay: View {
     }
 
     // MARK: Helpers
+
+    /// Step progression shared by the spotlight-hole tap and the tooltip "다음" button:
+    /// run the step's action (if any), then advance unless the action host advances later.
+    private func advance(_ step: CoachStep) {
+        if let action = step.action { controller.performAction(action) }
+        if step.advanceAfterAction { controller.next() }
+    }
 
     private func holeRect(for step: CoachStep) -> CGRect? {
         guard !step.final, let id = step.anchorId, let r = controller.anchors[id] else { return nil }
@@ -357,7 +374,11 @@ private struct TipHeightKey: PreferenceKey {
 
 private struct CoachTooltip: View {
     let step: CoachStep
-    let onSkip: () -> Void
+    var canPrev: Bool = false
+    let onPrev: () -> Void
+    let onNext: () -> Void
+    /// End the whole tour (explicit "투어 종료" / final-card skip).
+    let onEnd: () -> Void
     let onCta: () -> Void
 
     var body: some View {
@@ -391,21 +412,41 @@ private struct CoachTooltip: View {
                 }
                 .buttonStyle(.plain)
                 Spacer().frame(height: 14)
-                Button(action: onSkip) { Text("건너뛰기").labelCaps() }
+                Button(action: onEnd) { Text("건너뛰기").labelCaps() }
                     .buttonStyle(.plain)
             } else {
-                Spacer().frame(height: 12)
-                Text("✋ 강조된 버튼을 눌러보세요")
+                Spacer().frame(height: 10)
+                Text("강조된 곳을 탭하거나 ‘다음’으로 넘어가세요")
                     .font(.bodySans(12))
                     .fontWeight(.medium)
                     .foregroundStyle(.cta)
                 Spacer().frame(height: 14)
-                HStack {
+                // 내비게이션 — 이전 / 단계 표시 / 다음. '다음'은 스포트라이트 홀 탭과 동일 진행
+                // (액션 스텝이면 그 액션도 수행). 한 스텝이 안 눌려도 여기서 넘어갈 수 있다.
+                HStack(spacing: 12) {
+                    if canPrev {
+                        Button(action: onPrev) {
+                            Text("이전").labelCaps()
+                        }
+                        .buttonStyle(.plain)
+                    }
                     Text("\(step.scr) \(step.n) / \(step.tot)").labelCaps()
                     Spacer()
-                    Button(action: onSkip) { Text("건너뛰기").labelCaps() }
-                        .buttonStyle(.plain)
+                    Button(action: onNext) {
+                        Text("다음")
+                            .font(.custom("Pretendard-Medium", size: 13))
+                            .foregroundStyle(.paper)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color.espresso))
+                    }
+                    .buttonStyle(.plain)
                 }
+                Spacer().frame(height: 10)
+                // 전체 종료는 별도(눈에 덜 띄게) — 스텝 스킵(다음)과 구분.
+                Button(action: onEnd) { Text("투어 종료").labelCaps() }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
         .frame(maxWidth: .infinity, alignment: step.final ? .center : .leading)
