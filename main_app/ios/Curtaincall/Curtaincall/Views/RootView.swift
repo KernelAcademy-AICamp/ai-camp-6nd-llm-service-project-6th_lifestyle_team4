@@ -199,8 +199,22 @@ struct RootView: View {
         .coordinateSpace(name: "coachRoot")
         .onPreferenceChange(CoachAnchorKey.self) { coach.anchors = $0 }
         .environmentObject(coach)
-        .task { wireCoach() }
+        .task { debugResetIfRequested(); wireCoach() }
         .onChange(of: coach.pending) { _, _ in maybeStartCoach() }
+    }
+
+    /// DEBUG 전용 QA 편의 — 스킴 Run 인자에 `-resetOnboarding` 추가 시 매 실행마다 온보딩/코치
+    /// 투어 플래그를 초기화해 '첫 실행' 상태를 재현한다(clean build 로는 UserDefaults 가 안 지워짐).
+    /// 릴리스 빌드엔 포함되지 않는다. 게이팅 상태도 콘솔에 한 줄 남겨 진단을 돕는다.
+    private func debugResetIfRequested() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-resetOnboarding") {
+            prefs.prefSelected = false
+            coachTourSeen = false
+            coach.tourCard = nil
+        }
+        print("[coach] launch — ready=\(session.ready) prefSelected=\(prefs.prefSelected) coachTourSeen=\(coachTourSeen) anon=\(session.isAnonymous)")
+        #endif
     }
 
     /// 코치 투어는 pending + 홈 탭일 때만 시작(홈 앵커 존재 보장; Android route==HOME 미러).
