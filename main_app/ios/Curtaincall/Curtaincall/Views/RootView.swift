@@ -189,7 +189,7 @@ struct RootView: View {
         .popup(isPresented: Binding(
             get: { session.needsProfileSetup },
             set: { if !$0 { session.consumeProfileSetup() } }
-        )) {
+        ), fitContent: false) {   // 폼 모드 — 키보드가 이름 입력/저장 버튼을 가리지 않게
             ProfileEditor(
                 initialNickname: session.nickname,
                 initialGender: session.gender,
