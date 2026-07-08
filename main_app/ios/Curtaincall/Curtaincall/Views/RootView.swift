@@ -454,7 +454,15 @@ struct RootView: View {
         guard !session.isAnonymous, session.userId != nil else { return }
         guard session.ready, prefs.prefSelected, !attendanceChecked else { return }
         attendanceChecked = true
-        guard attendance.shouldAutoShowToday() else { return }
+        #if DEBUG
+        // 테스트: 스킴 Run 인자 `-forceAttendance` 면 '하루 1회' 게이트를 건너뛰고 실행마다 팝업을
+        // 띄운다. 회원 가드·서버 보상 dedup 은 그대로 — +100 배너는 그 계정이 '오늘' 아직 서버
+        // 출석을 안 했을 때만(이미 했으면 팝업은 뜨되 rewarded=false, 배너 없음).
+        let force = ProcessInfo.processInfo.arguments.contains("-forceAttendance")
+        #else
+        let force = false
+        #endif
+        guard force || attendance.shouldAutoShowToday() else { return }
         attendance.markAutoShown()
         // 출석 기록·보상은 서버가 원자적으로(check_in_attendance). rewarded=true 면 오늘 첫
         // 출석 → 잔액 갱신. 달력은 서버 기록(오늘 포함)을 다시 로드해 채운다.
