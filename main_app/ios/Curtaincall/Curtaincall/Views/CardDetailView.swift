@@ -15,6 +15,7 @@ struct CardDetailView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var yarn: YarnStore
+    @EnvironmentObject private var coach: CoachController
     @StateObject private var comments: CommentsModel
     @State private var showAccountPrompt = false
     /// 실타래 게이트 — 잔액 부족이면 카드 내용을 가리고 충전을 유도한다.
@@ -54,6 +55,12 @@ struct CardDetailView: View {
         !(card.significance ?? "").isEmpty
     }
 
+    /// 코치 투어가 전문(상세) 스텝일 때 화면으로 스크롤할 타깃 앵커 id (아니면 nil).
+    private var coachDetailAnchor: String? {
+        guard coach.active, coach.current?.scr == "전문" else { return nil }
+        return coach.current?.anchorId
+    }
+
     var body: some View {
         gatedContent
             .background(Color.paper)
@@ -67,6 +74,30 @@ struct CardDetailView: View {
             .onChange(of: session.isAnonymous) { _, anon in
                 if !anon { Task { await reEvaluateGate() } }
             }
+            // 코치 투어: 구절 하이라이트 스텝은 스크립트에서 선택이 생기면 다음으로 진행.
+            .onChange(of: highlightSelection) { _, sel in
+                if coach.active, coach.current?.advanceOnSelect == true,
+                   !sel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    coach.next()
+                }
+            }
+            // 코치 투어 '하이라이트 추가' 스텝 액션 — 저장(익명은 저장 건너뜀) 후 다음 + 피드로
+            // (Android DetailScreen saveHighlight 핸들러 미러: save → next → onAction("openFeed")).
+            .onAppear {
+                coach.setActionHandler("saveHighlight") {
+                    if session.isAnonymous {
+                        coach.next()
+                        coach.performAction("openFeed")
+                    } else {
+                        Task {
+                            await saveHighlight(note: "")
+                            coach.next()
+                            coach.performAction("openFeed")
+                        }
+                    }
+                }
+            }
+            .onDisappear { coach.setActionHandler("saveHighlight", nil) }
     }
 
     /// 게이트 상태별 화면. **`.open` 일 때만** 카드 본문을 트리에 만든다 —
@@ -155,11 +186,15 @@ struct CardDetailView: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .stroke(Color.latte, lineWidth: 0.5)
                         )
+                        .coachAnchor("detail_scene")
+                        .id("detail_scene")   // 코치 투어 스크롤 타깃
                         Spacer().frame(height: 24)
                     }
 
                     SelectableScriptText(attributed: scriptAttributed, selection: $highlightSelection)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .coachAnchor("detail_script")
+                        .id("detail_script")   // 코치 투어 스크롤 타깃
 
                     if showSignificance, let sig = card.displaySignificance(original: showOriginal) {
                         Spacer().frame(height: 32)
@@ -174,6 +209,8 @@ struct CardDetailView: View {
                             .bookLeading(size: 16)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity)
+                            .coachAnchor("detail_significance")
+                            .id("detail_significance")   // 코치 투어 스크롤 타깃
                     }
 
                     Spacer().frame(height: 48)
@@ -241,6 +278,13 @@ struct CardDetailView: View {
                 .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
             }
             .scrollDismissesKeyboard(.interactively)
+            // 코치 투어: 현재 전문 스텝의 타깃을 화면 중앙으로 스크롤 — 홀/툴팁이 화면 밖에
+            // 그려져 막히지 않게(Android DetailScreen '타깃 블록 스크롤' 미러).
+            .onChange(of: coachDetailAnchor) { _, id in
+                if let id {
+                    withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(id, anchor: .center) }
+                }
+            }
             // 본문을 80% 이상 스크롤하면 상단 이동 FAB 노출.
             .onScrollGeometryChange(for: Bool.self) { geo in
                 let maxY = geo.contentSize.height - geo.containerSize.height
@@ -348,6 +392,7 @@ struct CardDetailView: View {
                         .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
+                .coachAnchor("detail_hl_button")
                 .padding(.trailing, 18)
                 .padding(.bottom, session.isAnonymous ? 28 : 92)
                 .transition(.opacity.combined(with: .move(edge: .trailing)))
@@ -636,7 +681,7 @@ struct CardDetailView: View {
         readRewardAmount = await yarn.rewardFirstOpen(cardId: card.cardId, userId: session.userId)
         maybeFireRewardFly()   // 짧은 카드(스크롤 불가)는 이미 readComplete=true 일 수 있어 즉시 평가
         // TODO(coach): iOS 코치 투어 도입 시 tourActive 를 실제 상태로 연결 (현재 스텁 false).
-        let decision = await yarn.gateOpen(cardId: card.cardId, userId: session.userId, tourActive: false)
+        let decision = await yarn.gateOpen(cardId: card.cardId, userId: session.userId, tourActive: coach.active)
         switch decision {
         case .allowed:
             gate = .open
@@ -655,7 +700,7 @@ struct CardDetailView: View {
     /// 잔액이 그대로면 consume_yarn 이 -1 → 잠금 유지(미차감).
     private func reEvaluateGate() async {
         guard gate == .locked else { return }
-        let decision = await yarn.gateOpen(cardId: card.cardId, userId: session.userId, tourActive: false)
+        let decision = await yarn.gateOpen(cardId: card.cardId, userId: session.userId, tourActive: coach.active)
         if case .allowed = decision {
             gate = .open
             await loadCountsAndIncrementView()

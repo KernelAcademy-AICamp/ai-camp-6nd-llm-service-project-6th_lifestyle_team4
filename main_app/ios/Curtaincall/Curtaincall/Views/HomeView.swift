@@ -7,6 +7,7 @@ struct HomeView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @EnvironmentObject private var coach: CoachController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Namespace private var heroNS
@@ -191,6 +192,7 @@ struct HomeView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .coachAnchor("today_bookmark")
                 // 공유 — 실제 공유 완료 시 share_count +1(낙관적 +1 후 RPC), PWA bumpShareCount.
                 Button { shareCard = card } label: {
                     VStack(spacing: 3) {
@@ -220,6 +222,7 @@ struct HomeView: View {
                 Text("Read Full Script").editorialButton(style: .filled)
             }
             .buttonStyle(.plain)
+            .coachAnchor("today_read")
         }
         .padding(20)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
@@ -273,6 +276,8 @@ struct HomeView: View {
             }
             if let pick { prefs.rememberShown(pick.cardId) }
             todayCard = pick
+            coach.tourCard = pick   // 코치 투어 openDetail 대상(실제 오늘 카드)
+
             todayShowOriginal = false  // 새 카드는 항상 한국어부터 (PWA와 동일)
             recent = buildRecent()
             await refreshBookmarkCounts(for: [pick].compactMap { $0 } + recent)

@@ -231,6 +231,7 @@ struct FeedView: View {
             FeedChip(title: "나의 감상평", isSelected: category == .today) {
                 category = .today
             }
+            .coachAnchor("feed_today_chip")
             FeedChip(title: "하이라이트", isSelected: category == .highlight) {
                 category = .highlight
             }

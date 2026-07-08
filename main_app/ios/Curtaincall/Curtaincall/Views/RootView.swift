@@ -76,8 +76,13 @@ struct RootView: View {
     @State private var latestNoticeId: Int?
     @State private var showNoticeSheet = false   // 마스트헤드 공지 종 → NoticeView 시트
     @State private var formPopupActive = false   // 폼 팝업(로그인) 표시 중 — 탭 UI 키보드 회피 끔
+    /// 코치 투어(온보딩 스포트라이트) — 앱 루트에서 호스팅해 탭 전환·상세 push 를 가로지른다.
+    @StateObject private var coach = CoachController()
+    @AppStorage("coachTourSeen") private var coachTourSeen = false
+    @State private var showTourIntro = false   // 온보딩 직후 '가이드 투어 볼까요?' 인트로
 
     var body: some View {
+        ZStack {
         Group {
             if session.ready {
                 tabs
@@ -108,9 +113,41 @@ struct RootView: View {
                         session.hasServerPrefs = true
                         Task { try? await Supa.shared.savePreferences(userId: uid, genres: genres, themes: themes, any: any) }
                     }
+                    // 온보딩 종료 직후 첫 실행 1회: 바로 시작하지 않고 '가이드 투어 볼까요?'를 먼저 묻는다.
+                    if !coachTourSeen {
+                        coachTourSeen = true
+                        showTourIntro = true
+                    }
                 }
                 .transition(.opacity)
             }
+        }
+        // 코치 투어 인트로 — 온보딩 직후 1회. '둘러보기'만 투어를 시작한다.
+        .popup(isPresented: $showTourIntro, dismissOnScrimTap: false) {
+            VStack(spacing: 0) {
+                Text("가이드 투어").labelCaps(color: .cta)
+                Spacer().frame(height: 10)
+                Text("앱을 빠르게 둘러볼까요?")
+                    .font(.headlineSerif(22)).foregroundStyle(.espresso)
+                    .multilineTextAlignment(.center)
+                Spacer().frame(height: 10)
+                Text("홈·전문·피드의 핵심 기능을 짧게 안내해 드려요. 언제든 ‘투어 종료’로 멈출 수 있어요.")
+                    .font(.bodySans(14)).foregroundStyle(.walnut)
+                    .multilineTextAlignment(.center).bookLeading(size: 14)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer().frame(height: 24)
+                Button {
+                    showTourIntro = false
+                    coach.configure(memberActionsEnabled: !session.isAnonymous)
+                    selectedTab = .home
+                    coach.requestStart()
+                } label: { Text("둘러보기") }
+                    .buttonStyle(EditorialButtonStyle(.filled))
+                Spacer().frame(height: 10)
+                Button { showTourIntro = false } label: { Text("나중에").labelCaps() }
+                    .buttonStyle(.plain)
+            }
+            .padding(24)
         }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
@@ -181,6 +218,59 @@ struct RootView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
+
+            // 코치 투어 스포트라이트 — 최상단 레이어(탭바·상세 위). coachRoot 좌표계의 앵커를 읽어 그린다.
+            CoachTourOverlay(controller: coach)
+        }
+        // 앵커는 .global(화면) 좌표로 수집 — 오버레이의 ignoresSafeArea 지오메트리와 정렬(별도 named 공간 불필요).
+        .onPreferenceChange(CoachAnchorKey.self) { coach.anchors = $0 }
+        .environmentObject(coach)
+        .task { debugResetIfRequested(); wireCoach() }
+        .onChange(of: coach.pending) { _, _ in maybeStartCoach() }
+    }
+
+    /// DEBUG 전용 QA 편의 — 스킴 Run 인자에 `-resetOnboarding` 추가 시 매 실행마다 온보딩/코치
+    /// 투어 플래그를 초기화해 '첫 실행' 상태를 재현한다(clean build 로는 UserDefaults 가 안 지워짐).
+    /// 릴리스 빌드엔 포함되지 않는다. 게이팅 상태도 콘솔에 한 줄 남겨 진단을 돕는다.
+    private func debugResetIfRequested() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-resetOnboarding") {
+            prefs.prefSelected = false
+            coachTourSeen = false
+            coach.tourCard = nil
+        }
+        print("[coach] launch — ready=\(session.ready) prefSelected=\(prefs.prefSelected) coachTourSeen=\(coachTourSeen) anon=\(session.isAnonymous)")
+        #endif
+    }
+
+    /// 코치 투어는 pending + 홈 탭일 때만 시작(홈 앵커 존재 보장; Android route==HOME 미러).
+    private func maybeStartCoach() {
+        if coach.pending && selectedTab == .home { coach.start() }
+    }
+
+    /// 코치 투어 액션·종료 후크(1회 설정). openDetail → 오늘 카드 상세 push;
+    /// openFeed → 피드 탭 + '나의 감상평'(today) 리셋(상세 하이라이트 저장 핸들러가 호출); 종료 → 홈.
+    private func wireCoach() {
+        coach.onAction = { action in
+            switch action {
+            case "openDetail":
+                // 실제 오늘 카드(HomeView 가 세팅)로 바로 상세 진입 — shake 용 cardPool 의
+                // 빈/지연/실패 상태에 의존하지 않는다(그래야 스텝이 헛돌지 않음).
+                if let card = coach.tourCard {
+                    selectedTab = .home
+                    homePath.append(card)
+                }
+            case "openFeed", "setFeedToday":
+                selectedTab = .feed
+                feedPath = NavigationPath()
+                feedResetToken += 1   // '나의 감상평'(today) 카테고리로 리셋
+            case "openFeedComposer":
+                feedWriteTrigger += 1
+            default:
+                break
+            }
+        }
+        coach.onEnd = { selectedTab = .home }
     }
 
     /// A shake fires only when foregrounded and NOT already in a modal/detail flow,
@@ -280,6 +370,7 @@ struct RootView: View {
         // Home(딥링크·랜덤 카드 푸시 유지)·Daily 만 보존.
         .onChange(of: selectedTab) { oldTab, _ in
             if oldTab == .feed || oldTab == .archive || oldTab == .settings { popToRoot(oldTab) }
+            maybeStartCoach()
         }
         // 로그인 유도(컨텍스트 메뉴 북마크 프롬프트·3회 새로고침 제한·피드 익명 프롬프트 등)
         // → MY 탭 이동 대신 인증 모달(SignInSheet, #97/#99)을 그 자리에서 직접 띄운다.
@@ -345,6 +436,7 @@ struct RootView: View {
         .overlay(alignment: .bottomTrailing) {
             if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
                 FeedWriteFab { feedWriteTrigger += 1 }
+                    .coachAnchor("feed_fab")
                     .padding(.trailing, 18)
                     // 52pt FAB 를 64pt 탭바 '위'로 완전히 올림(64 + 8pt 여유 = 72). 이전 14 는
                     // FAB 가 MY 셀과 겹쳐 탭을 가로채 MY 가 안 눌리던 버그(P1). 72 면 탭바 히트
