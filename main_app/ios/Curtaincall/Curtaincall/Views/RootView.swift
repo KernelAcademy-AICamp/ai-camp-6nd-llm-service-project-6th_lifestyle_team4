@@ -214,7 +214,9 @@ struct RootView: View {
         coach.onAction = { action in
             switch action {
             case "openDetail":
-                if let id = coach.tourCardId, let card = cardPool.first(where: { $0.cardId == id }) {
+                // 실제 오늘 카드(HomeView 가 세팅)로 바로 상세 진입 — shake 용 cardPool 의
+                // 빈/지연/실패 상태에 의존하지 않는다(그래야 스텝이 헛돌지 않음).
+                if let card = coach.tourCard {
                     selectedTab = .home
                     homePath.append(card)
                 }

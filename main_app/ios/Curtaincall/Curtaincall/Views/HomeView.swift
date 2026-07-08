@@ -276,7 +276,7 @@ struct HomeView: View {
             }
             if let pick { prefs.rememberShown(pick.cardId) }
             todayCard = pick
-            coach.tourCardId = pick?.cardId   // 코치 투어 openDetail 대상
+            coach.tourCard = pick   // 코치 투어 openDetail 대상(실제 오늘 카드)
 
             todayShowOriginal = false  // 새 카드는 항상 한국어부터 (PWA와 동일)
             recent = buildRecent()

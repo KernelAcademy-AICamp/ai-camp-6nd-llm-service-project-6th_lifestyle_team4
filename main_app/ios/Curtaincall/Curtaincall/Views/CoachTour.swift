@@ -109,8 +109,9 @@ final class CoachController: ObservableObject {
 
     private var actionHandlers: [String: () -> Void] = [:]
 
-    /// The today card id, so the tour can open its detail (set from HomeView).
-    var tourCardId: Int?
+    /// The actual today card the user sees (set from HomeView), so the tour opens
+    /// its detail directly — not via a separate, possibly-stale pool lookup.
+    var tourCard: Card?
     /// Host hooks: run a step action, and clean up on finish/skip.
     var onAction: ((String) -> Void)?
     var onEnd: (() -> Void)?
@@ -181,26 +182,17 @@ struct CoachTourOverlay: View {
                 let size = proxy.size
                 let hole = holeRect(for: step)
                 ZStack(alignment: .topLeading) {
+                    // Visual only — never intercepts touches (interaction is its own layer).
                     scrimLayer(hole: hole)
+                        .allowsHitTesting(false)
+                    // Touch handling. Sits BELOW the tooltip so 건너뛰기/CTA stay tappable
+                    // in every step, including the advanceOnSelect (구절 하이라이트) step.
+                    interactionLayer(step: step, hole: hole, size: size)
                     if let hole { ringLayer(hole) }
                     if let hole { badgeLayer(step, hole, size) }
                     tooltipLayer(step, hole, size)
                 }
                 .frame(width: size.width, height: size.height)
-                // advanceOnSelect steps let touches reach the real script (long-press
-                // to highlight); the host advances when a selection is made. Every
-                // other step swallows touches and advances on a tap inside the hole.
-                .contentShape(Rectangle())
-                .allowsHitTesting(!step.advanceOnSelect)
-                .gesture(
-                    SpatialTapGesture().onEnded { v in
-                        guard !step.final else { return }
-                        if let hole, hole.contains(v.location) {
-                            if let action = step.action { controller.performAction(action) }
-                            if step.advanceAfterAction { controller.next() }
-                        }
-                    }
-                )
             }
             .ignoresSafeArea()
             .transition(.opacity)
@@ -224,6 +216,63 @@ struct CoachTourOverlay: View {
                 }
             }
             .compositingGroup()
+    }
+
+    /// Touch layer: block stray controls without disabling the whole overlay.
+    /// advanceOnSelect keeps the spotlight target usable (script long-press → highlight);
+    /// other steps swallow touches and advance on a tap in the hole. Either way the
+    /// tooltip (drawn above this) stays interactive.
+    @ViewBuilder
+    private func interactionLayer(step: CoachStep, hole: CGRect?, size: CGSize) -> some View {
+        if step.advanceOnSelect {
+            // Pass the hole through to the real script; block only around it. Advance
+            // is driven by the host observing the selection (not a tap here).
+            touchBlockers(hole: hole, size: size)
+        } else {
+            Color.clear
+                .frame(width: size.width, height: size.height)
+                .contentShape(Rectangle())
+                .gesture(
+                    SpatialTapGesture().onEnded { v in
+                        guard !step.final, let hole, hole.contains(v.location) else { return }
+                        if let action = step.action { controller.performAction(action) }
+                        if step.advanceAfterAction { controller.next() }
+                    }
+                )
+        }
+    }
+
+    /// Four rects around the hole that consume touches, leaving the hole open — SwiftUI
+    /// has no non-rectangular hit region (mirrors Android `TouchBlockersAround`).
+    @ViewBuilder
+    private func touchBlockers(hole: CGRect?, size: CGSize) -> some View {
+        if let hole {
+            let l = min(max(hole.minX, 0), size.width)
+            let t = min(max(hole.minY, 0), size.height)
+            let r = min(max(hole.maxX, 0), size.width)
+            let b = min(max(hole.maxY, 0), size.height)
+            ZStack(alignment: .topLeading) {
+                blocker(x: 0, y: 0, w: size.width, h: t)                 // above
+                blocker(x: 0, y: b, w: size.width, h: size.height - b)   // below
+                blocker(x: 0, y: t, w: l, h: b - t)                      // left
+                blocker(x: r, y: t, w: size.width - r, h: b - t)         // right
+            }
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+        } else {
+            Color.clear
+                .frame(width: size.width, height: size.height)
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0))
+        }
+    }
+
+    private func blocker(x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat) -> some View {
+        let cw = max(w, 0), ch = max(h, 0)
+        return Color.clear
+            .frame(width: cw, height: ch)
+            .contentShape(Rectangle())
+            .position(x: x + cw / 2, y: y + ch / 2)
+            .gesture(DragGesture(minimumDistance: 0))   // consume tap/drag/long-press
     }
 
     private func ringLayer(_ hole: CGRect) -> some View {
