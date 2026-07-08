@@ -174,8 +174,9 @@ struct CoachTourOverlay: View {
     @State private var pulse: CGFloat = 0
     @State private var tipHeight: CGFloat = 0
 
-    /// Fixed dark dim (PWA rgba(14,12,10,0.68)) — theme-independent.
-    private let scrim = Color(hex: 0x0E0C0A).opacity(0.68)
+    /// Fixed dim — light enough that the screen behind stays recognizable while the
+    /// spotlight still reads (device QA: 0.68 was too dark to tell what screen you're on).
+    private let scrim = Color(hex: 0x0E0C0A).opacity(0.45)
     private let pad: CGFloat = 8
     private let holeRadius: CGFloat = 12
     private let ringMaxInset: CGFloat = 8
@@ -303,16 +304,22 @@ struct CoachTourOverlay: View {
     }
 
     private func tooltipLayer(_ step: CoachStep, _ hole: CGRect?, _ size: CGSize) -> some View {
-        let gap: CGFloat = 18
+        let gap: CGFloat = 16
         let edge: CGFloat = 16
-        let belowTarget = (hole?.midY ?? 0) < size.height / 2
-        // Always keep the tooltip (and its 다음/투어 종료 controls) fully on-screen —
-        // even if a hole is off-screen — so a mis-placed anchor can never strand the user.
-        let maxTipY = max(size.height - tipHeight - edge, edge)
+        let navReserve: CGFloat = 108   // keep the bottom bubble clear of the tab bar
+        // Two STABLE zones so the bubble & '다음' don't chase the target around (device QA:
+        // the floating bubble was jarring and kept covering the very thing it highlights).
+        // Default: bottom-anchored just above the tab bar. Flip to top only when a bottom
+        // bubble would cover the spotlight. Final/anchorless: centered.
+        let bottomTopY = max(size.height - tipHeight - navReserve, edge)   // bubble TOP when bottom-anchored
         let tipY: CGFloat = {
             if step.final || hole == nil { return max((size.height - tipHeight) / 2, edge) }
-            let raw = belowTarget ? (hole!.maxY + gap) : (hole!.minY - tipHeight - gap)
-            return min(max(raw, edge), maxTipY)
+            if hole!.maxY + gap <= bottomTopY { return bottomTopY }          // hole clears the bottom bubble → bottom
+            if edge + tipHeight + gap <= hole!.minY { return edge }          // else pin to top if the hole clears it
+            // Tall/centered hole spanning both zones — pick the roomier side, clamped on-screen.
+            let above = max(hole!.minY - tipHeight - gap, edge)
+            let below = min(hole!.maxY + gap, max(size.height - tipHeight - edge, edge))
+            return hole!.minY > (size.height - hole!.maxY) ? above : below
         }()
         let canPrev = !step.final && controller.index > 0
             && controller.steps[controller.index - 1].scr == step.scr
