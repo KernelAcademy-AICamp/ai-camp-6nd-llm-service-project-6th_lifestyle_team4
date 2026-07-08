@@ -83,6 +83,7 @@ struct EditorialTabBar: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .coachAnchor(navAnchorId(tab))
                     }
                 }
                 .frame(height: 64)
@@ -154,6 +155,17 @@ struct EditorialTabBar: View {
             yarnRotation = 360
         } completion: {
             yarnRotation = 0   // 360 ≡ 0 — 다음 탭이 0 에서 다시 돌도록 즉시 리셋(무애니).
+        }
+    }
+
+    /// 코치 투어 앵커 id — 스텝은 nav_home/nav_archive/nav_feed 만 참조(나머지는 무해한 여분).
+    private func navAnchorId(_ tab: Tab) -> String {
+        switch tab {
+        case .home: return "nav_home"
+        case .archive: return "nav_archive"
+        case .feed: return "nav_feed"
+        case .daily: return "nav_daily"
+        case .settings: return "nav_settings"
         }
     }
 
