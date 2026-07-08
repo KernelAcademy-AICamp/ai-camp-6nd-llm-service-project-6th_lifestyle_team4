@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import UIKit
 
 /// Interactive spotlight onboarding tour — a SwiftUI port of Android `CoachTour.kt`
 /// (itself a port of the PWA onboarding.js coachmark). Dims the screen, cuts a
@@ -181,6 +182,16 @@ struct CoachTourOverlay: View {
     private let holeRadius: CGFloat = 12
     private let ringMaxInset: CGFloat = 8
 
+    /// Real top safe-area inset (status bar / notch). The overlay ignores the safe area
+    /// so its geometry aligns with the `.global` anchors, but that means a top-pinned
+    /// tooltip must be pushed down past the inset or it renders behind the clock.
+    private var topSafeInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?.safeAreaInsets.top ?? 0
+    }
+
     var body: some View {
         if controller.active, let step = controller.current {
             GeometryReader { proxy in
@@ -307,18 +318,19 @@ struct CoachTourOverlay: View {
         let gap: CGFloat = 16
         let edge: CGFloat = 16
         let navReserve: CGFloat = 108   // keep the bottom bubble clear of the tab bar
+        let topEdge = max(edge, topSafeInset + 8)   // top zone must clear the status bar / notch
         // Two STABLE zones so the bubble & '다음' don't chase the target around (device QA:
         // the floating bubble was jarring and kept covering the very thing it highlights).
         // Default: bottom-anchored just above the tab bar. Flip to top only when a bottom
         // bubble would cover the spotlight. Final/anchorless: centered.
-        let bottomTopY = max(size.height - tipHeight - navReserve, edge)   // bubble TOP when bottom-anchored
+        let bottomTopY = max(size.height - tipHeight - navReserve, topEdge)   // bubble TOP when bottom-anchored
         let tipY: CGFloat = {
-            if step.final || hole == nil { return max((size.height - tipHeight) / 2, edge) }
+            if step.final || hole == nil { return max((size.height - tipHeight) / 2, topEdge) }
             if hole!.maxY + gap <= bottomTopY { return bottomTopY }          // hole clears the bottom bubble → bottom
-            if edge + tipHeight + gap <= hole!.minY { return edge }          // else pin to top if the hole clears it
+            if topEdge + tipHeight + gap <= hole!.minY { return topEdge }    // else pin below the notch if the hole clears it
             // Tall/centered hole spanning both zones — pick the roomier side, clamped on-screen.
-            let above = max(hole!.minY - tipHeight - gap, edge)
-            let below = min(hole!.maxY + gap, max(size.height - tipHeight - edge, edge))
+            let above = max(hole!.minY - tipHeight - gap, topEdge)
+            let below = min(hole!.maxY + gap, max(size.height - tipHeight - edge, topEdge))
             return hole!.minY > (size.height - hole!.maxY) ? above : below
         }()
         let canPrev = !step.final && controller.index > 0
