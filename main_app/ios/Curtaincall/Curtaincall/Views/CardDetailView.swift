@@ -55,6 +55,12 @@ struct CardDetailView: View {
         !(card.significance ?? "").isEmpty
     }
 
+    /// 코치 투어가 전문(상세) 스텝일 때 화면으로 스크롤할 타깃 앵커 id (아니면 nil).
+    private var coachDetailAnchor: String? {
+        guard coach.active, coach.current?.scr == "전문" else { return nil }
+        return coach.current?.anchorId
+    }
+
     var body: some View {
         gatedContent
             .background(Color.paper)
@@ -181,12 +187,14 @@ struct CardDetailView: View {
                                 .stroke(Color.latte, lineWidth: 0.5)
                         )
                         .coachAnchor("detail_scene")
+                        .id("detail_scene")   // 코치 투어 스크롤 타깃
                         Spacer().frame(height: 24)
                     }
 
                     SelectableScriptText(attributed: scriptAttributed, selection: $highlightSelection)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .coachAnchor("detail_script")
+                        .id("detail_script")   // 코치 투어 스크롤 타깃
 
                     if showSignificance, let sig = card.displaySignificance(original: showOriginal) {
                         Spacer().frame(height: 32)
@@ -202,6 +210,7 @@ struct CardDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity)
                             .coachAnchor("detail_significance")
+                            .id("detail_significance")   // 코치 투어 스크롤 타깃
                     }
 
                     Spacer().frame(height: 48)
@@ -269,6 +278,13 @@ struct CardDetailView: View {
                 .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
             }
             .scrollDismissesKeyboard(.interactively)
+            // 코치 투어: 현재 전문 스텝의 타깃을 화면 중앙으로 스크롤 — 홀/툴팁이 화면 밖에
+            // 그려져 막히지 않게(Android DetailScreen '타깃 블록 스크롤' 미러).
+            .onChange(of: coachDetailAnchor) { _, id in
+                if let id {
+                    withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(id, anchor: .center) }
+                }
+            }
             // 본문을 80% 이상 스크롤하면 상단 이동 FAB 노출.
             .onScrollGeometryChange(for: Bool.self) { geo in
                 let maxY = geo.contentSize.height - geo.containerSize.height

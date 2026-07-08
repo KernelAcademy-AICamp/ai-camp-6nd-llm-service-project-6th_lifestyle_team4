@@ -306,10 +306,13 @@ struct CoachTourOverlay: View {
         let gap: CGFloat = 18
         let edge: CGFloat = 16
         let belowTarget = (hole?.midY ?? 0) < size.height / 2
+        // Always keep the tooltip (and its 다음/투어 종료 controls) fully on-screen —
+        // even if a hole is off-screen — so a mis-placed anchor can never strand the user.
+        let maxTipY = max(size.height - tipHeight - edge, edge)
         let tipY: CGFloat = {
             if step.final || hole == nil { return max((size.height - tipHeight) / 2, edge) }
-            if belowTarget { return min(hole!.maxY + gap, size.height - tipHeight - edge) }
-            return max(hole!.minY - tipHeight - gap, edge)
+            let raw = belowTarget ? (hole!.maxY + gap) : (hole!.minY - tipHeight - gap)
+            return min(max(raw, edge), maxTipY)
         }()
         let canPrev = !step.final && controller.index > 0
             && controller.steps[controller.index - 1].scr == step.scr
