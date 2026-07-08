@@ -1,6 +1,5 @@
 import Combine
 import SwiftUI
-import UIKit
 
 /// Interactive spotlight onboarding tour — a SwiftUI port of Android `CoachTour.kt`
 /// (itself a port of the PWA onboarding.js coachmark). Dims the screen, cuts a
@@ -173,7 +172,7 @@ extension View {
 struct CoachTourOverlay: View {
     @ObservedObject var controller: CoachController
     @State private var pulse: CGFloat = 0
-    @State private var tipHeight: CGFloat = 0
+    @State private var screenH: CGFloat = 0
 
     /// Fixed dim — light enough that the screen behind stays recognizable while the
     /// spotlight still reads (device QA: 0.68 was too dark to tell what screen you're on).
@@ -182,35 +181,34 @@ struct CoachTourOverlay: View {
     private let holeRadius: CGFloat = 12
     private let ringMaxInset: CGFloat = 8
 
-    /// Real top safe-area inset (status bar / notch). The overlay ignores the safe area
-    /// so its geometry aligns with the `.global` anchors, but that means a top-pinned
-    /// tooltip must be pushed down past the inset or it renders behind the clock.
-    private var topSafeInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow)?.safeAreaInsets.top ?? 0
-    }
-
     var body: some View {
         if controller.active, let step = controller.current {
-            GeometryReader { proxy in
-                let size = proxy.size
-                let hole = holeRect(for: step)
-                ZStack(alignment: .topLeading) {
-                    // Visual only — never intercepts touches (interaction is its own layer).
-                    scrimLayer(hole: hole)
-                        .allowsHitTesting(false)
-                    // Touch handling. Sits BELOW the tooltip so 건너뛰기/CTA stay tappable
-                    // in every step, including the advanceOnSelect (구절 하이라이트) step.
-                    interactionLayer(step: step, hole: hole, size: size)
-                    if let hole { ringLayer(hole) }
-                    if let hole { badgeLayer(step, hole, size) }
-                    tooltipLayer(step, hole, size)
+            ZStack {
+                // Scrim + spotlight + badge — full-screen layer aligned to the .global anchors.
+                GeometryReader { proxy in
+                    let size = proxy.size
+                    let hole = holeRect(for: step)
+                    ZStack(alignment: .topLeading) {
+                        scrimLayer(hole: hole).allowsHitTesting(false)
+                        interactionLayer(step: step, hole: hole, size: size)
+                        if let hole { ringLayer(hole) }
+                        if let hole { badgeLayer(step, hole, size) }
+                    }
+                    .frame(width: size.width, height: size.height)
+                    // Glide the spotlight between targets on step change (slick, iOS-native spring).
+                    .animation(.spring(response: 0.45, dampingFraction: 0.82), value: controller.index)
+                    .onAppear { screenH = size.height }
+                    .onChange(of: size.height) { _, h in screenH = h }
                 }
-                .frame(width: size.width, height: size.height)
+                .ignoresSafeArea()
+
+                // Tooltip in a SAFE-AREA-respecting layer → auto-clears the notch & home
+                // indicator (no manual inset math). Cross-fades on each step change.
+                tooltipContainer(step: step)
+                    .id(controller.index)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.25), value: controller.index)
             }
-            .ignoresSafeArea()
             .transition(.opacity)
             .onAppear { startPulse() }
             .task(id: controller.index) { await skipIfAnchorMissing(step) }
@@ -314,28 +312,19 @@ struct CoachTourOverlay: View {
         .allowsHitTesting(false)
     }
 
-    private func tooltipLayer(_ step: CoachStep, _ hole: CGRect?, _ size: CGSize) -> some View {
-        let gap: CGFloat = 16
-        let edge: CGFloat = 16
-        let navReserve: CGFloat = 108   // keep the bottom bubble clear of the tab bar
-        let topEdge = max(edge, topSafeInset + 8)   // top zone must clear the status bar / notch
-        // Two STABLE zones so the bubble & '다음' don't chase the target around (device QA:
-        // the floating bubble was jarring and kept covering the very thing it highlights).
-        // Default: bottom-anchored just above the tab bar. Flip to top only when a bottom
-        // bubble would cover the spotlight. Final/anchorless: centered.
-        let bottomTopY = max(size.height - tipHeight - navReserve, topEdge)   // bubble TOP when bottom-anchored
-        let tipY: CGFloat = {
-            if step.final || hole == nil { return max((size.height - tipHeight) / 2, topEdge) }
-            if hole!.maxY + gap <= bottomTopY { return bottomTopY }          // hole clears the bottom bubble → bottom
-            if topEdge + tipHeight + gap <= hole!.minY { return topEdge }    // else pin below the notch if the hole clears it
-            // Tall/centered hole spanning both zones — pick the roomier side, clamped on-screen.
-            let above = max(hole!.minY - tipHeight - gap, topEdge)
-            let below = min(hole!.maxY + gap, max(size.height - tipHeight - edge, topEdge))
-            return hole!.minY > (size.height - hole!.maxY) ? above : below
-        }()
+    /// Tooltip laid out with alignment in a safe-area-respecting layer (not `.position`),
+    /// so it always sits fully inside the safe area — top zone clears the notch, bottom
+    /// zone clears the home indicator — without any manual inset math. Two stable zones
+    /// (top / bottom) chosen from the target's on-screen position so the bubble and '다음'
+    /// don't chase the target: target in the bottom half → bubble on top; else above the
+    /// tab bar. Final/anchorless: centered.
+    @ViewBuilder
+    private func tooltipContainer(step: CoachStep) -> some View {
+        let holeMaxY = step.anchorId.flatMap { controller.anchors[$0] }?.maxY
+        let placeAtTop = !step.final && screenH > 0 && (holeMaxY ?? 0) > screenH * 0.5
         let canPrev = !step.final && controller.index > 0
             && controller.steps[controller.index - 1].scr == step.scr
-        return CoachTooltip(
+        let card = CoachTooltip(
             step: step,
             canPrev: canPrev,
             onPrev: { controller.prev() },
@@ -343,15 +332,20 @@ struct CoachTourOverlay: View {
             onEnd: { controller.end() },
             onCta: { controller.end() }
         )
-            .background(
-                GeometryReader { g in
-                    Color.clear.preference(key: TipHeightKey.self, value: g.size.height)
-                }
-            )
-            .onPreferenceChange(TipHeightKey.self) { tipHeight = $0 }
-            .padding(.horizontal, 16)
-            .frame(width: size.width)
-            .position(x: size.width / 2, y: tipY + tipHeight / 2)
+        .padding(.horizontal, 16)
+
+        VStack(spacing: 0) {
+            if step.final {
+                Spacer(minLength: 0); card; Spacer(minLength: 0)
+            } else if placeAtTop {
+                card.padding(.top, 8)
+                Spacer(minLength: 0)
+            } else {
+                Spacer(minLength: 0)
+                card.padding(.bottom, 72)   // sit above the tab bar
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: Helpers
@@ -385,11 +379,6 @@ struct CoachTourOverlay: View {
             controller.next()
         }
     }
-}
-
-private struct TipHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 // MARK: - Tooltip
