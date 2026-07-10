@@ -70,25 +70,28 @@ struct EditorialTabBar: View {
             // 콘텐츠는 이 위에서 끝나므로 그 아래로 스크롤되지 않는다. click-through 라
             // 이 여백 아래의 콘텐츠(예: 피드 글쓰기 pill) 탭을 가로채지 않는다.
             Color.clear.frame(height: Self.catClearance).allowsHitTesting(false)
-            VStack(spacing: 0) {
-                Hairline()
-                HStack(spacing: 0) {
-                    ForEach(Tab.allCases, id: \.self) { tab in
-                        Button {
-                            handleTap(tab)
-                        } label: {
-                            tabItem(tab: tab, active: tab == selection)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .coachAnchor(navAnchorId(tab))
+            // 플로팅 필 — Android 필 네비바 미러 + iOS 글래스(26+ Liquid Glass /
+            // 18-25 ultraThinMaterial 폴백). 풀-폭 솔리드 바 + 헤어라인 대신 좌우
+            // 인셋 캡슐이 바닥에서 살짝 떠 있다. 고양이 ledge 선(catClearance)은
+            // 그대로 필 윗면이라 자세 수치·롱프레스 캐처·코치 앵커 전부 무변경.
+            HStack(spacing: 0) {
+                ForEach(Tab.allCases, id: \.self) { tab in
+                    Button {
+                        handleTap(tab)
+                    } label: {
+                        tabItem(tab: tab, active: tab == selection)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .coachAnchor(navAnchorId(tab))
                 }
-                .frame(height: 64)
             }
-            .background(Color.paper)
+            .frame(height: 64)
+            .navPillSurface()
+            .padding(.horizontal, 14)
+            .padding(.bottom, 4)
         }
         // 장식 고양이 — 위 투명 여백 안에 앉아 바 윗면에 걸친다. 여백 높이만큼만 솟으므로
         // 콘텐츠 영역을 침범하지 않는다. click-through(allowsHitTesting=false)라 탭을 가리지 않음.
@@ -297,6 +300,25 @@ struct EditorialTabBar: View {
         }
         .id(pose.asset)                                  // 자세 바뀌면 새 뷰 → 크로스페이드 + idle 재시작
         .transition(reduceMotion ? .identity : .opacity)
+    }
+}
+
+/// 네비 필 표면 — iOS 26+ 는 시스템 Liquid Glass(glassEffect, 캡슐 기본형),
+/// iOS 18-25 는 ultraThinMaterial 캡슐 + latte 스트로크 + 부드러운 그림자 폴백.
+/// 콘텐츠(탭 아이템·센터 메달리온)는 클립하지 않는다 — 메달리온이 필 윗면 위로
+/// 살짝 솟는 오버플로(Android 센터 버튼)와 뱃지 도트가 잘리지 않아야 한다.
+private extension View {
+    @ViewBuilder
+    func navPillSurface() -> some View {
+        if #available(iOS 26.0, *) {
+            // 시스템 글래스가 자체 림 라이트/스펙큘러를 그리므로 스트로크·그림자 추가 없음.
+            self.glassEffect(.regular, in: .capsule)
+        } else {
+            self
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().stroke(Color.latte.opacity(0.85), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.10), radius: 12, x: 0, y: 5)
+        }
     }
 }
 
