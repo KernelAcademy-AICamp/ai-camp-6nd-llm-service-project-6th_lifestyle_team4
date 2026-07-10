@@ -324,3 +324,45 @@ nonisolated struct HighlightInsert: Encodable, Sendable {
         case userNote = "user_note"
     }
 }
+
+// MARK: - Content likes (043_content_likes.sql)
+// 피드 글(feed_post) / 하이라이트(highlight) 공통 좋아요 — target_type 으로 분기.
+
+/// content_like_counts 뷰 행 — target_type 별 (target_id, like_count).
+nonisolated struct ContentLikeCountRow: Decodable, Sendable {
+    let targetId: Int
+    let likeCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case targetId = "target_id"
+        case likeCount = "like_count"
+    }
+}
+
+/// content_likes 행(내 좋아요 조회용) — target_id 만 뽑는다.
+nonisolated struct ContentLikeRow: Decodable, Sendable {
+    let targetId: Int
+
+    enum CodingKeys: String, CodingKey {
+        case targetId = "target_id"
+    }
+}
+
+/// toggle_content_like RPC 반환 — {liked, count}.
+nonisolated struct ContentLikeResult: Decodable, Sendable {
+    let liked: Bool
+    let count: Int
+}
+
+/// toggle_content_like RPC 파라미터 — Int/String 혼합이라 dict 대신 Encodable 구조체.
+nonisolated struct ContentLikeToggleParams: Encodable, Sendable {
+    let userId: Int
+    let targetType: String
+    let targetId: Int
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "p_user_id"
+        case targetType = "p_target_type"
+        case targetId = "p_target_id"
+    }
+}

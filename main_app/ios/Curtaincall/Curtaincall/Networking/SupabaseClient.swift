@@ -176,6 +176,41 @@ final class Supa {
             .value
     }
 
+    // MARK: - Content likes (043_content_likes.sql) — 피드 글/하이라이트 공통 좋아요.
+
+    /// content_like_counts 뷰 — target_type 별 (target_id → like_count). 목록 1회 fetch.
+    func fetchContentLikeCounts(targetType: String) async throws -> [Int: Int] {
+        let rows: [ContentLikeCountRow] = try await client.from("content_like_counts")
+            .select("target_id, like_count")
+            .eq("target_type", value: targetType)
+            .execute()
+            .value
+        return Dictionary(rows.map { ($0.targetId, $0.likeCount) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// 내가 누른 좋아요 target_id 집합 — content_likes WHERE user_id, target_type (로그인 전용).
+    func fetchMyContentLikes(userId: Int, targetType: String) async throws -> Set<Int> {
+        let rows: [ContentLikeRow] = try await client.from("content_likes")
+            .select("target_id")
+            .eq("user_id", value: userId)
+            .eq("target_type", value: targetType)
+            .execute()
+            .value
+        return Set(rows.map { $0.targetId })
+    }
+
+    /// 좋아요 토글 — 있으면 취소, 없으면 추가. {liked, count} 반환. 로그인 필수
+    /// (서버 RPC 가 p_user_id NULL 이면 예외; 호출부에서 익명 게이트 먼저 처리).
+    @discardableResult
+    func toggleContentLike(userId: Int, targetType: String, targetId: Int) async throws -> ContentLikeResult {
+        try await client.rpc(
+            "toggle_content_like",
+            params: ContentLikeToggleParams(userId: userId, targetType: targetType, targetId: targetId)
+        )
+        .execute()
+        .value
+    }
+
     // MARK: - My Feed (내 피드) — a member's own one-liners + highlights, with
     // own-row edit/delete. All writes are `.eq(user_id)`-guarded (RLS also enforces
     // owner-only), mirroring updateComment/deleteComment.

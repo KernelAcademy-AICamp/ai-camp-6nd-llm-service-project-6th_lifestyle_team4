@@ -14,6 +14,9 @@ struct ModerationMenu: View {
     /// 차단 성공 시 호출 — 상세 화면이면 dismiss 해서 차단된 콘텐츠를 화면에 남기지 않는다.
     /// nil 이면(목록 카드 등) 토스트만 띄우고 목록이 즉시 재필터된다.
     var onBlocked: (() -> Void)? = nil
+    /// 오버플로 트리거 글리프. 기본은 오버플로 관례(⋯). 좋아요 하트와 나란히 놓이는
+    /// 피드 카드에선 "신고"가 명확하도록 flag 로 넘긴다(댓글 등 다른 호출부는 ⋯ 유지).
+    var icon: String = "ellipsis"
 
     @EnvironmentObject private var moderation: ModerationStore
     @EnvironmentObject private var session: AuthSession
@@ -39,7 +42,7 @@ struct ModerationMenu: View {
                 Label("이 사용자 차단", systemImage: "hand.raised")
             }
         } label: {
-            Image(systemName: "ellipsis")
+            Image(systemName: icon)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.walnut)
                 .frame(width: 32, height: 32)
