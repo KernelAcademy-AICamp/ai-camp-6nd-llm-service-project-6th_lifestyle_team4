@@ -26,6 +26,7 @@ struct CardDetailView: View {
     @State private var bookmarkCount = 0
     @State private var didIncrementView = false
     @State private var showOriginal = false
+    @State private var bookmarkHaptic = 0
     @FocusState private var composerFocused: Bool
     // Highlight creation (select script text → save passage).
     @State private var highlightSelection = ""
@@ -66,6 +67,7 @@ struct CardDetailView: View {
             .background(Color.paper)
             .toolbar(.hidden, for: .navigationBar)
             .task { await runOpenFlow() }
+            .sensoryFeedback(.impact(flexibility: .soft), trigger: bookmarkHaptic)
             // 충전 시트가 닫히면(구매 성공 등) 게이트를 자동 재평가 — 잠금 화면에서
             // 충전 후 뒤로 나갔다 다시 들어오지 않아도 그 자리에서 열린다.
             // 게이트의 '회원가입·로그인' 은 루트의 단일 로그인 팝업(onLoginRequested → requestLogin)으로
@@ -653,6 +655,7 @@ struct CardDetailView: View {
             showAccountPrompt = true
             return
         }
+        bookmarkHaptic += 1
         Task {
             await bookmarks.toggle(userId: session.userId, cardId: card.cardId)
             await loadBookmarkCount()

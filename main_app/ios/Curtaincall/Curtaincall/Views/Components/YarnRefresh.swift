@@ -75,6 +75,10 @@ private struct YarnRefreshModifier: ViewModifier {
                     angle = 0
                 }
             }
+            // 당김이 임계를 넘어 arm 되는 순간 짧은 햅틱 — iOS 당겨서 새로고침 '딸깍' 느낌.
+            .sensoryFeedback(.impact(flexibility: .rigid), trigger: armed) { _, isArmed in
+                isArmed
+            }
     }
 
     /// Android `YarnRefreshIndicator` 미러 — 당기는 거리만큼 위에서 내려오며 페이드·확대·

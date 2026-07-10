@@ -29,6 +29,7 @@ struct HomeView: View {
     // 새로고침 토스트('갱신됨') — 헤더 새로고침 버튼과 당겨서 새로고침이 공유. 당겨서
     // 새로고침은 실타래 회전 인디케이터(`.yarnRefresh`, Android RefreshableBox 미러).
     @State private var refreshToast: String?
+    @State private var bookmarkHaptic = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -121,6 +122,7 @@ struct HomeView: View {
             }
         }
         .task { await loadOnce() }
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: bookmarkHaptic)
         .task { await bookmarks.load(userId: session.userId) }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
@@ -348,6 +350,7 @@ struct HomeView: View {
             showAccountPrompt = true
             return
         }
+        bookmarkHaptic += 1
         Task {
             await bookmarks.toggle(userId: session.userId, cardId: cardId)
             await refreshBookmarkCounts(for: [todayCard].compactMap { $0 } + recent)

@@ -10,12 +10,22 @@ import SwiftUI
 /// missing-original case.
 struct LangToggle: View {
     @Binding var showOriginal: Bool
+    @State private var tick = 0
 
     var body: some View {
         HStack(spacing: 0) {
-            segment("KR", active: !showOriginal) { showOriginal = false }
-            segment("ENG", active: showOriginal) { showOriginal = true }
+            segment("KR", active: !showOriginal) {
+                guard showOriginal else { return }
+                showOriginal = false
+                tick += 1
+            }
+            segment("ENG", active: showOriginal) {
+                guard !showOriginal else { return }
+                showOriginal = true
+                tick += 1
+            }
         }
+        .sensoryFeedback(.selection, trigger: tick)
         // LangSegmented pill (Android `LangSegmented`): latte track, walnut active
         // fill + paper text.
         .padding(2)
