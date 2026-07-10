@@ -577,6 +577,9 @@ private struct FeedLikeButton: View {
 private struct FeedPostHeader: View {
     let nickname: String
     let timeText: String
+    /// 메타 줄 오버라이드 — 목록 카드는 기본("한 줄 리뷰 · {상대시간}", Android 목록과
+    /// 동일), 상세 시트는 Android AuthorRow 처럼 모니커 없이 작성일시만 넘긴다.
+    var metaOverride: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -592,7 +595,7 @@ private struct FeedPostHeader: View {
                     .font(.bodySans(15))
                     .foregroundStyle(.espresso)
                     .lineLimit(1)
-                Text("한 줄 리뷰 · \(timeText)")
+                Text(metaOverride ?? "한 줄 리뷰 · \(timeText)")
                     .font(.bodySans(11))
                     .foregroundStyle(.roast)
             }
@@ -909,7 +912,10 @@ private struct FeedPostDetailSheet: View {
                     }
                     FeedPostHeader(
                         nickname: post.authorNickname?.ifEmpty("익명") ?? "익명",
-                        timeText: FeedTime.relative(post.createdAt)
+                        timeText: FeedTime.relative(post.createdAt),
+                        // 상세는 Android AuthorRow 패리티 — "한 줄 리뷰" 모니커 없이
+                        // 작성일시("M. d 오전/오후 h:mm")만.
+                        metaOverride: FeedTime.stamp(post.createdAt)
                     )
                     Spacer().frame(height: 16)
                     Text(post.body)
@@ -1203,6 +1209,16 @@ private enum FeedTime {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ko_KR")
         f.dateFormat = "yyyy.MM.dd"
+        return f.string(from: date)
+    }
+
+    /// 절대 작성일시 — Android formatBookmarkDate 미러("M. d  오전/오후 h:mm").
+    /// 피드 글 상세 헤더(AuthorRow 패리티)용.
+    static func stamp(_ iso: String) -> String {
+        guard let date = parseISODate(iso) else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "M. d  a h:mm"
         return f.string(from: date)
     }
 }

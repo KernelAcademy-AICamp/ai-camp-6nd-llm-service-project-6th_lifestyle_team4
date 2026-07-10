@@ -483,21 +483,26 @@ struct CommentComposer: View {
                 }
 
                 Button(action: send) {
+                    // 전송 버튼은 항상 에스프레소(다크) — Android 의 '기본이 검은 등록
+                    // 버튼' 미러. 입력 전엔 반투명으로 비활성만 표시한다. 이전의
+                    // latte 비활성 필은 paper 시트 위에서 컴포저 전체를 묻히게 했다(QA).
                     Text(submitLabel)
-                        .labelCaps(color: canSend ? .paper : .walnut)
+                        .labelCaps(color: .paper)
                         .padding(.horizontal, 16)
                         .frame(height: 36)
                         .background(
                             RoundedRectangle(cornerRadius: 18)
-                                .fill(canSend ? Color.espresso : Color.latte)
+                                .fill(Color.espresso.opacity(canSend ? 1 : 0.35))
                         )
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .padding(4)
             }
-            .background(RoundedRectangle(cornerRadius: 22).fill(Color.paper))
-            .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.latte, lineWidth: 0.5))
+            // 입력창 존재감 — paper-위-paper 라 눈에 안 띄던 문제(QA): 필드는 cardWarm
+            // 으로 살짝 띄우고 테두리는 sand 0.8pt 로 한 단계 진하게. 캡슐 형태는 유지.
+            .background(RoundedRectangle(cornerRadius: 22).fill(Color.cardWarm))
+            .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.sand, lineWidth: 0.8))
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
