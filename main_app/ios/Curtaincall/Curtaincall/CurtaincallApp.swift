@@ -11,6 +11,7 @@ import IssueReporting
 @main
 struct CurtaincallApp: App {
     @State private var pendingCardId: Int?
+    @State private var showIntro = true   // 콜드 스타트 브랜드 인트로(1회, 프로세스당)
     @StateObject private var session = AuthSession()
     @StateObject private var bookmarks = BookmarkStore()
     @StateObject private var prefs = PrefsStore()
@@ -31,24 +32,34 @@ struct CurtaincallApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(pendingCardId: $pendingCardId)
-                .environmentObject(session)
-                .environmentObject(bookmarks)
-                .environmentObject(prefs)
-                .environmentObject(yarn)
-                .environmentObject(attendance)
-                .environmentObject(moderation)
-                .preferredColorScheme(prefs.darkTheme ? .dark : .light)
-                .task {
-                    await session.start()
-                    await bookmarks.load(userId: session.userId)
-                    yarn.sync(serverBalance: session.yarnBalance)   // 부트스트랩 잔액 시드
-                }
-                .onOpenURL { url in
-                    if let id = Self.parseCardId(from: url) {
-                        pendingCardId = id
+            ZStack {
+                RootView(pendingCardId: $pendingCardId)
+                    .environmentObject(session)
+                    .environmentObject(bookmarks)
+                    .environmentObject(prefs)
+                    .environmentObject(yarn)
+                    .environmentObject(attendance)
+                    .environmentObject(moderation)
+                    .preferredColorScheme(prefs.darkTheme ? .dark : .light)
+                    .task {
+                        await session.start()
+                        await bookmarks.load(userId: session.userId)
+                        yarn.sync(serverBalance: session.yarnBalance)   // 부트스트랩 잔액 시드
                     }
+                    .onOpenURL { url in
+                        if let id = Self.parseCardId(from: url) {
+                            pendingCardId = id
+                        }
+                    }
+
+                // 브랜드 인트로 — 최상단에서 1회 재생 후 스스로 페이드아웃하며 사라진다.
+                // (세션 부트스트랩은 아래에서 동시에 진행 — 인트로가 로딩을 막지 않는다.)
+                if showIntro {
+                    LaunchIntroView { showIntro = false }
+                        .transition(.opacity)
+                        .zIndex(1)
                 }
+            }
         }
     }
 
