@@ -61,16 +61,12 @@ struct EditorialTabBar: View {
 
     // MARK: - Shared pill geometry (기기 적응)
 
-    /// 홈 인디케이터 유무 — safe-area bottom 이 0 이면 홈 버튼 기기(SE 계열, iOS 18
-    /// 지원 대상). 앱 시작 후 1회 판정, 윈도우 미확보 시 인디케이터 있음으로 폴백
-    /// (오판 시에도 6pt 여유가 더 생길 뿐 깨지지 않는 방향).
-    private static let hasHomeIndicator: Bool = {
-        let keyWindow = UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first
-        guard let keyWindow else { return true }
-        return keyWindow.safeAreaInsets.bottom > 0
-    }()
+    /// 홈 인디케이터 유무 — ⚠️ UIApplication/keyWindow 접근 금지: body 평가 중의
+    /// 정적 초기화가 윈도우 레이아웃을 유발 → 같은 body 재진입 → dispatch_once
+    /// 재진입 트랩(SIGTRAP) 즉사(26.5 심 셀프체크에서 검출·수정). 레이아웃을
+    /// 유발하지 않는 화면 치수 휴리스틱: iOS 18+ 지원 iPhone 중 홈 버튼(safe
+    /// bottom=0)은 SE 2·3세대(논리 높이 667pt)뿐 — 700pt 초과면 인디케이터 기기.
+    private static let hasHomeIndicator: Bool = UIScreen.main.bounds.height > 700
 
     /// 필 바닥 부양 — 인디케이터 기기는 6(이미 34pt 인디케이터 지대 위), 홈 버튼
     /// 기기는 12(safe bottom=0 이라 6 은 화면 모서리에 과밀착). 기기별 눈대중 값이
