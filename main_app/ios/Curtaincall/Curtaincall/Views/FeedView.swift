@@ -201,6 +201,9 @@ struct FeedView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+            // 위로 스크롤이 시트 확장(detent 협상)에 먼저 먹혀 '스크롤이 무겁게' 느껴지던
+            // 문제(QA 지적) — 콘텐츠 스크롤을 우선한다. 시트 확장은 드래그 인디케이터로.
+            .presentationContentInteraction(.scrolls)
         }
     }
 
@@ -554,12 +557,14 @@ private struct FeedLikeButton: View {
             HStack(spacing: 3) {
                 Image(systemName: liked ? "heart.fill" : "heart")
                     .foregroundStyle(liked ? Color.cta : Color.walnut)
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.bodySans(12))
-                        .monospacedDigit()
-                        .foregroundStyle(.walnut)
-                }
+                // 카운트 슬롯은 항상 렌더(0이면 투명) — 조건부 삽입이면 0→1에서 버튼 폭이
+                // 늘며 우측 정렬된 하트가 왼쪽으로 '점프'한다(QA 지적). 자리를 예약해 하트를
+                // 고정하고, monospacedDigit 으로 같은 자릿수 안에서는 폭이 불변.
+                Text("\(max(count, 0))")
+                    .font(.bodySans(12))
+                    .monospacedDigit()
+                    .foregroundStyle(.walnut)
+                    .opacity(count > 0 ? 1 : 0)
             }
             .font(.system(size: 15, weight: .regular))
             .frame(minWidth: 32, minHeight: 32)
