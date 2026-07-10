@@ -267,7 +267,10 @@ struct CommentsSection: View {
                     .padding(.vertical, 8)
             } else {
                 ForEach(visibleGroups, id: \.top.id) { group in
+                    // REPLY 대상은 최상위 댓글뿐(답글의 답글 없음) — 스크롤 앵커 id 도
+                    // 최상위 행에만 단다.
                     commentRow(group.top, isReply: false)
+                        .id(Self.replyAnchorID(group.top.commentId))
                     ForEach(group.replies) { reply in
                         commentRow(reply, isReply: true)
                     }
@@ -287,6 +290,10 @@ struct CommentsSection: View {
         }
         .task { await model.load() }
     }
+
+    /// 답글 스크롤 앵커 id — 최상위 댓글 행에 부여. 스크롤 자체는 ScrollView 를
+    /// '소유한' 부모 화면이 `replyAutoScroll(_:proxy:)` 로 수행한다(아래 modifier).
+    static func replyAnchorID(_ commentId: Int) -> String { "reply-anchor-\(commentId)" }
 
     private func commentRow(_ c: Comment, isReply: Bool) -> some View {
         let likeUsers = model.likes[c.commentId] ?? []
@@ -502,5 +509,38 @@ struct CommentComposer: View {
         let body = trimmed
         draft = ""
         Task { await model.submit(userId: uid, nickname: nickname, body: body) }
+    }
+}
+
+/// REPLY 탭 → 답글 대상(최상위 댓글)을 뷰포트 상단(고정 헤더 바로 아래)으로 스크롤
+/// (PWA m-app.js 답글 진입 scrollIntoView 미러). ScrollViewProxy 는 자기 콘텐츠에
+/// '포함된' ScrollView 만 스크롤할 수 있으므로, 이 modifier 는 CommentsSection 이
+/// 아니라 **ScrollView 를 소유한 부모 화면**(카드 상세·피드 글 상세·하이라이트 상세)이
+/// ScrollViewReader 로 감싼 ScrollView 체인에 붙인다.
+/// 취소/등록(replyingTo=nil)에는 움직이지 않고, Reduce Motion 은 애니 없이 점프한다.
+struct ReplyAutoScroll: ViewModifier {
+    @ObservedObject var model: CommentsModel
+    let proxy: ScrollViewProxy
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.onChange(of: model.replyingTo?.commentId) { _, target in
+            guard let target else { return }
+            let anchor = CommentsSection.replyAnchorID(target)
+            if reduceMotion {
+                proxy.scrollTo(anchor, anchor: .top)
+            } else {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo(anchor, anchor: .top)
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    /// 부모 상세 화면(ScrollView 소유자)이 ScrollViewReader 프록시와 함께 부착.
+    func replyAutoScroll(_ model: CommentsModel, proxy: ScrollViewProxy) -> some View {
+        modifier(ReplyAutoScroll(model: model, proxy: proxy))
     }
 }

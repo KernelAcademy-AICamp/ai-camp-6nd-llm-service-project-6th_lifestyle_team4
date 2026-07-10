@@ -42,6 +42,9 @@ struct HighlightDetailView: View {
         VStack(spacing: 0) {
             topBar
             Hairline()
+            // ScrollViewReader 는 ScrollView 소유자인 여기서 감싼다 — 답글 진입 시
+            // 대상 댓글 상단 스크롤(replyAutoScroll)이 이 프록시로 동작한다.
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     header
@@ -63,6 +66,8 @@ struct HighlightDetailView: View {
                 .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
             }
             .scrollDismissesKeyboard(.interactively)
+            // REPLY 탭 → 대상 댓글을 상단(고정 헤더 아래)으로 (보드 #38, PWA scrollIntoView 미러).
+            .replyAutoScroll(comments, proxy: proxy)
             .dockedBottomBar(isActive: !session.isAnonymous, clearTabBar: !composerFocused) {
                 CommentComposer(
                     model: comments,
@@ -70,6 +75,7 @@ struct HighlightDetailView: View {
                     nickname: session.nickname,
                     focused: $composerFocused
                 )
+            }
             }
         }
         .background(Color.paper)
