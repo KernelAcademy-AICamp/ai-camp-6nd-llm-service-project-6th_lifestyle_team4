@@ -49,6 +49,8 @@ Don'ts:
 
 ## Build & verify (local toolchain; author/reviewer split)
 - Scheme: **Curtaincall** (app). Widget is a separate target.
+- **Xcode version is pinned** — see [`.xcode-version`](./.xcode-version) (currently `26.5`). Build with the same major so Xcode doesn't re-serialize `project.pbxproj` differently.
+- **`project.pbxproj` hygiene:** the project uses Xcode **synchronized folder groups**, so new/removed `.swift` files need **no** pbxproj edit. Stage iOS files **explicitly** (`git add <files>`, never `git add .`) so incidental churn can't ride into a feature commit. If `git status` shows *only* pbxproj `TARGETED_DEVICE_FAMILY` quote churn, it's Xcode reformatting — discard it (`git restore`), don't commit it. Commit the pbxproj **only** for deliberate project-structure/build-setting changes.
 - **CCC (author)** works in the main checkout: verify with an **incremental** `xcodebuild build` (never `clean` — it discards warm DerivedData and slows the next iteration). Use SwiftUI Previews for quick visual iteration. Do NOT run the simulator or capture screenshots — that is the reviewer's step. Commit + open PR.
 - **Codex (reviewer)** works in a SEPARATE git worktree off the **current integration branch** (presently `git worktree add ../curtaincall-review origin/release/1.1-b7` — PRs target the integration branch, not `main`; confirm the live name rather than hardcoding it) so its clean builds never wipe CCC's warm cache or collide on branches: clean build from that integration branch, install/launch via `xcrun simctl`, screenshot, review the diff + screenshot via `gh`.
 - **Judge visual work on a real device, not just the simulator.**
