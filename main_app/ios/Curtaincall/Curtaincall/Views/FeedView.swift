@@ -24,10 +24,16 @@ struct FeedView: View {
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
 
     private static let topID = "feedTop"
+    // content_likes target_type (043_content_likes.sql).
+    private static let likeFeedPost = "feed_post"
+    private static let likeHighlight = "highlight"
 
     @State private var category: FeedCategory = .today
     @State private var posts: [FeedPost] = []
     @State private var highlights: [CardHighlight] = []
+    // 콘텐츠 좋아요(043) — id → {count, liked}. 비어 있으면 0/미좋아요로 표시.
+    @State private var postLikes: [Int: ContentLikeUI] = [:]
+    @State private var highlightLikes: [Int: ContentLikeUI] = [:]
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showPicker = false
@@ -159,7 +165,10 @@ struct FeedView: View {
             await reload()
         }
         .onChange(of: session.userId) { _, userId in
-            Task { await bookmarks.load(userId: userId) }
+            Task {
+                await bookmarks.load(userId: userId)
+                await loadLikes()   // 로그인/로그아웃 시 내 좋아요(하트 채움) 반영
+            }
         }
         .sheet(isPresented: $showPicker) {
             FeedBookmarkPicker(
@@ -243,11 +252,21 @@ struct FeedView: View {
             switch category {
             case .today:
                 ForEach(visiblePosts) { post in
-                    FeedPostCard(post: post, onToast: showToast) { detailPost = post }
+                    FeedPostCard(
+                        post: post,
+                        like: postLikes[post.postId],
+                        onToast: showToast,
+                        onToggleLike: { toggleLike(targetType: Self.likeFeedPost, targetId: post.postId) }
+                    ) { detailPost = post }
                 }
             case .highlight:
                 ForEach(visibleHighlights) { highlight in
-                    HighlightFeedCard(highlight: highlight, onToast: showToast) {
+                    HighlightFeedCard(
+                        highlight: highlight,
+                        like: highlightLikes[highlight.highlightId],
+                        onToast: showToast,
+                        onToggleLike: { toggleLike(targetType: Self.likeHighlight, targetId: highlight.highlightId) }
+                    ) {
                         selectedHighlight = highlight
                     }
                 }
@@ -305,6 +324,59 @@ struct FeedView: View {
             }
         }
         errorMessage = hadGenuineError ? "피드를 불러오지 못했어요. 잠시 후 다시 시도해주세요." : nil
+        // content_likes(043) — 카운트(전체) + 내 좋아요(회원). 실패는 흡수(목록 표시 유지).
+        await loadLikes()
+    }
+
+    /// 좋아요 상태 로드 — 전체 카운트(content_like_counts) + 내 좋아요(content_likes, 회원만).
+    /// Android FeedViewModel.loadLikes 미러: 카운트 target ∪ 내가 누른 target 의 합집합으로 맵 구성.
+    private func loadLikes() async {
+        let uid = session.userId
+        let anon = session.isAnonymous
+        let postCounts = (try? await Supa.shared.fetchContentLikeCounts(targetType: Self.likeFeedPost)) ?? [:]
+        let hlCounts = (try? await Supa.shared.fetchContentLikeCounts(targetType: Self.likeHighlight)) ?? [:]
+        var myPost: Set<Int> = []
+        var myHl: Set<Int> = []
+        if let uid, !anon {   // 게스트는 내 좋아요 건너뜀
+            myPost = (try? await Supa.shared.fetchMyContentLikes(userId: uid, targetType: Self.likeFeedPost)) ?? []
+            myHl = (try? await Supa.shared.fetchMyContentLikes(userId: uid, targetType: Self.likeHighlight)) ?? []
+        }
+        var pl: [Int: ContentLikeUI] = [:]
+        for id in Set(postCounts.keys).union(myPost) {
+            pl[id] = ContentLikeUI(count: postCounts[id] ?? 0, liked: myPost.contains(id))
+        }
+        var hl: [Int: ContentLikeUI] = [:]
+        for id in Set(hlCounts.keys).union(myHl) {
+            hl[id] = ContentLikeUI(count: hlCounts[id] ?? 0, liked: myHl.contains(id))
+        }
+        postLikes = pl
+        highlightLikes = hl
+    }
+
+    /// 좋아요 토글 — 익명은 로그인 안내 토스트(Android 게스트 가드). 회원은 낙관적 업데이트
+    /// 후 RPC, 성공하면 서버 {liked,count} 로 확정, 실패하면 원복.
+    private func toggleLike(targetType: String, targetId: Int) {
+        guard let uid = session.userId, !session.isAnonymous else {
+            showToast("로그인하면 좋아요를 남길 수 있어요")
+            return
+        }
+        let isPost = (targetType == Self.likeFeedPost)
+        let current = (isPost ? postLikes[targetId] : highlightLikes[targetId]) ?? ContentLikeUI(count: 0, liked: false)
+        let optimistic = ContentLikeUI(
+            count: max(0, current.count + (current.liked ? -1 : 1)),
+            liked: !current.liked
+        )
+        if isPost { postLikes[targetId] = optimistic } else { highlightLikes[targetId] = optimistic }
+        Task {
+            do {
+                let res = try await Supa.shared.toggleContentLike(userId: uid, targetType: targetType, targetId: targetId)
+                let val = ContentLikeUI(count: res.count, liked: res.liked)
+                if isPost { postLikes[targetId] = val } else { highlightLikes[targetId] = val }
+            } catch {
+                if !AppLog.isCancellation(error) { AppLog.error("toggle content like", error) }
+                if isPost { postLikes[targetId] = current } else { highlightLikes[targetId] = current }
+            }
+        }
     }
 
     private func handlePickedCard(_ card: Card) {
@@ -455,6 +527,43 @@ private struct FeedInlineError: View {
     }
 }
 
+/// 콘텐츠 좋아요 UI 상태 — 카운트 + 내가 눌렀는지(content_likes 043).
+private struct ContentLikeUI: Equatable {
+    var count: Int
+    var liked: Bool
+}
+
+/// 피드 카드 우상단 좋아요 하트(+수). 누르면 부모 onToggleLike(낙관적 토글). 좋아요=cta
+/// 채운 하트, 미좋아요=walnut 빈 하트. 카운트 0이면 숨긴다(SS3a/Android 패리티).
+private struct FeedLikeButton: View {
+    let like: ContentLikeUI?
+    let action: () -> Void
+
+    var body: some View {
+        let liked = like?.liked ?? false
+        let count = like?.count ?? 0
+        return Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: liked ? "heart.fill" : "heart")
+                    .foregroundStyle(liked ? Color.cta : Color.walnut)
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.bodySans(12))
+                        .monospacedDigit()
+                        .foregroundStyle(.walnut)
+                }
+            }
+            .font(.system(size: 15, weight: .regular))
+            .frame(minWidth: 32, minHeight: 32)
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(liked ? "좋아요 취소" : "좋아요")
+        .accessibilityValue("\(count)")
+    }
+}
+
 /// Post card header — avatar + nickname + "한 줄 리뷰 · time". Shared by the real
 /// post card, the sample card, and the detail sheet.
 private struct FeedPostHeader: View {
@@ -487,7 +596,9 @@ private struct FeedPostHeader: View {
 
 private struct FeedPostCard: View {
     let post: FeedPost
+    var like: ContentLikeUI? = nil
     var onToast: (String) -> Void = { _ in }
+    var onToggleLike: () -> Void = {}
     let onTap: () -> Void
     @EnvironmentObject private var session: AuthSession
 
@@ -541,16 +652,21 @@ private struct FeedPostCard: View {
         }
         .buttonStyle(.plain)
 
-        // 남의 글에만 신고·차단 메뉴(App Store 1.2). 헤더 우상단 빈 공간에 띄운다.
-        if session.userId != post.userId {
-            ModerationMenu(
-                target: .feedPost(post.postId),
-                authorUserId: post.userId,
-                onToast: onToast
-            )
-            .padding(.top, 8)
-            .padding(.trailing, 6)
+        // 우상단 — 좋아요 하트(+수) + (남의 글이면)신고 메뉴(App Store 1.2). 카드 Button
+        // 밖 레이어라 탭이 상세 이동으로 새지 않는다. 신고는 하트와 나란히 두므로 ⋯ 대신 flag.
+        HStack(spacing: 2) {
+            FeedLikeButton(like: like, action: onToggleLike)
+            if session.userId != post.userId {
+                ModerationMenu(
+                    target: .feedPost(post.postId),
+                    authorUserId: post.userId,
+                    onToast: onToast,
+                    icon: "flag"
+                )
+            }
         }
+        .padding(.top, 8)
+        .padding(.trailing, 6)
         }
     }
 }
@@ -616,7 +732,9 @@ private struct FeedSampleCard: View {
 
 private struct HighlightFeedCard: View {
     let highlight: CardHighlight
+    var like: ContentLikeUI? = nil
     var onToast: (String) -> Void = { _ in }
+    var onToggleLike: () -> Void = {}
     let onTap: () -> Void
     @EnvironmentObject private var session: AuthSession
 
@@ -681,16 +799,20 @@ private struct HighlightFeedCard: View {
         }
         .buttonStyle(.plain)
 
-        // 남의 하이라이트에만 신고·차단 메뉴(App Store 1.2).
-        if session.userId != highlight.userId {
-            ModerationMenu(
-                target: .highlight(highlight.highlightId),
-                authorUserId: highlight.userId,
-                onToast: onToast
-            )
-            .padding(.top, 6)
-            .padding(.trailing, 4)
+        // 우상단 — 좋아요 하트(+수) + (남의 하이라이트면)신고 메뉴(App Store 1.2).
+        HStack(spacing: 2) {
+            FeedLikeButton(like: like, action: onToggleLike)
+            if session.userId != highlight.userId {
+                ModerationMenu(
+                    target: .highlight(highlight.highlightId),
+                    authorUserId: highlight.userId,
+                    onToast: onToast,
+                    icon: "flag"
+                )
+            }
         }
+        .padding(.top, 6)
+        .padding(.trailing, 4)
         }
     }
 
