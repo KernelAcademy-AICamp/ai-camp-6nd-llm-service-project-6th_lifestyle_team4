@@ -663,9 +663,16 @@ struct DailyTrendingSection: View {
                                     .foregroundStyle(.espresso)
                                     .bookLeading(size: 14)
                                     .fixedSize(horizontal: false, vertical: true)
-                                Text("북마크 \(formatCount(item.bookmarks))   조회 \(formatCount(item.views))   댓글 \(formatCount(item.comments))")
-                                    .font(.bodySans(12))
-                                    .foregroundStyle(.walnut)
+                                // 북마크·조회·댓글 — 텍스트 라벨 대신 3개 SF 심볼 아이콘
+                                // (Android 패리티, TodayCardBody 카운트 행과 동일 스타일).
+                                HStack(spacing: 12) {
+                                    Label(formatCount(item.bookmarks), systemImage: "bookmark")
+                                    Label(formatCount(item.views), systemImage: "eye")
+                                    Label(formatCount(item.comments), systemImage: "bubble.right")
+                                }
+                                .font(.bodySans(12))
+                                .foregroundStyle(.walnut)
+                                .labelStyle(.titleAndIcon)
                             }
                             Spacer(minLength: 0)
                         }
@@ -733,7 +740,7 @@ func chooseOzPick(cards: [Card], taste: Set<String>, prefs: PrefsStore, today: S
 }
 
 /// Oz Pick (Android `DailyOzPick`). Personalized: nickname header + 장르/주제 meta +
-/// theme-hit reason + library-cat-2 + book line. Guest (anon + no active prefs):
+/// theme-hit reason + cat_computer(오즈) + book line. Guest (anon + no active prefs):
 /// the "취향 알려주기" CTA instead. Read-only over existing prefs/nickname/taste.
 struct DailyOzPickSection: View {
     let card: Card?
@@ -767,12 +774,13 @@ struct DailyOzPickSection: View {
         }
     }
 
-    /// "당신을 위한 Daily Script." — trailing period in Cta. (Text concatenation needs
-    /// `foregroundColor`, the Text-returning variant.)
+    /// "당신을 위한 데일리 스크립트" — 상단 매스트헤드가 이미 "Daily Script." 워드마크라
+    /// 스크롤 중 로고가 두 번 반복되지 않도록 헤딩은 한글 + 단일 서체("당신을 위한"과
+    /// 동일한 titleSerif 17)로 통일. 워드마크 스타일(크기 점프·코랄 마침표)은 제거.
     private var heading: some View {
-        Text("당신을 위한 ").font(.titleSerif(17)).foregroundColor(.espresso)
-            + Text("Daily Script").font(.headlineSerif(22)).fontWeight(.bold).foregroundColor(.espresso)
-            + Text(".").font(.headlineSerif(22)).fontWeight(.bold).foregroundColor(.cta)
+        Text("당신을 위한 데일리 스크립트")
+            .font(.titleSerif(17))
+            .foregroundStyle(.espresso)
     }
 
     private func personalizedCard(_ card: Card) -> some View {
@@ -782,11 +790,16 @@ struct DailyOzPickSection: View {
             ? CardTheme.cardThemeSet(card.keywords).first { prefs.themes.contains($0) }
             : nil
         let tasteHit = card.keywords.first { taste.contains($0) }
-        // 추천 한마디 — Android reason 문구와 동일(themeHit > tasteHit > 일반).
-        let reason: String = {
-            if let themeHit { return "'\(themeHit)' 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요." }
-            if let tasteHit { return "'\(tasteHit)'에 자주 머무는 당신이라면, 좋아할 한 문장이에요." }
-            return "오즈가 오늘 골라드린 한 문장이에요."
+        // 추천 한마디 — Android reason 문구와 동일(themeHit > tasteHit > 일반). 매칭된
+        // 취향어(themeHit/tasteHit)는 볼드로 강조(Android 패리티).
+        let reason: Text = {
+            if let themeHit {
+                return Text("'") + Text(themeHit).fontWeight(.bold) + Text("' 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요.")
+            }
+            if let tasteHit {
+                return Text("'") + Text(tasteHit).fontWeight(.bold) + Text("'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.")
+            }
+            return Text("오즈가 오늘 골라드린 한 문장이에요.")
         }()
         let genresJoined = prefs.genres.map(Self.genreLabel).joined(separator: ", ")
         let genreText = genresJoined.isEmpty ? "상관없음" : genresJoined
@@ -796,7 +809,9 @@ struct DailyOzPickSection: View {
         return NavigationLink(value: card) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .center, spacing: 16) {
-                    Image("library-cat-2").resizable().scaledToFit().frame(width: 140)
+                    // 오즈 = 노트북 고양이(cat_computer) — Android DailyOzPick 과 동일 에셋
+                    // (브랜드 캐릭터 크로스플랫폼 일치; library-cat-2 는 카드 상세 전용).
+                    Image("cat_computer").resizable().scaledToFit().frame(width: 140)
                     VStack(alignment: .leading, spacing: 0) {
                         ozNameLine.lineLimit(1)
                         Spacer().frame(height: 6)
@@ -824,7 +839,8 @@ struct DailyOzPickSection: View {
     private var ctaCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 16) {
-                Image("library-cat-2").resizable().scaledToFit().frame(width: 140)
+                // 게스트 CTA 도 노트북 고양이 — Android 게이트 스켈레톤과 동일 에셋.
+                Image("cat_computer").resizable().scaledToFit().frame(width: 140)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(nickname.isEmpty ? "게스트" : nickname)
                         .font(.bodySans(14)).fontWeight(.bold)
@@ -855,7 +871,13 @@ struct DailyOzPickSection: View {
     }
 
     private func reasonBox(_ text: String) -> some View {
-        Text(text)
+        reasonBox(Text(text))
+    }
+
+    /// 이유 박스 — 매칭 취향어 볼드를 살리기 위해 Text 를 그대로 받는 오버로드. 바깥에서
+    /// 폰트/색을 지정하고, 볼드 세그먼트만 fontWeight 로 덮어쓴다(같은 폰트 패밀리 유지).
+    private func reasonBox(_ text: Text) -> some View {
+        text
             .font(.titleSerif(13)).foregroundStyle(.espresso).bookLeading(size: 13)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
@@ -864,7 +886,7 @@ struct DailyOzPickSection: View {
     }
 
     private func workRow(_ work: Work) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             // WorkCover(cover_url 로드, 없으면 가죽) — discoveryCover 와 동일 컴포넌트로 통일.
             // 기존 HighlightBookCover(가죽 전용) + scaleEffect 핵 제거 → 표지 아트워크 표시.
             WorkCover(work: work, width: 56, height: 188 * 56 / 132, compact: true)
@@ -878,7 +900,20 @@ struct DailyOzPickSection: View {
                     Text(line).font(.bodySans(13)).foregroundStyle(.walnut).lineLimit(1)
                 }
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+            // "책 펼치기 ›" — Android 패리티. 카드 전체가 NavigationLink(추천 카드 상세)라
+            // 별도 버튼이 아니라 시각적 어포던스로 둔다(중첩 탭 방지). 코랄(cta) 강조.
+            HStack(spacing: 3) {
+                Text("책 펼치기")
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .font(.custom("Pretendard-Medium", size: 13))
+            .fontWeight(.bold)
+            .foregroundStyle(Color.cta)
+            .fixedSize()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("책 펼치기")
         }
     }
 
@@ -887,16 +922,22 @@ struct DailyOzPickSection: View {
     private var ozNameLine: Text {
         let userName = !nickname.isEmpty ? nickname : loginId
         guard !userName.isEmpty else {
-            return Text("당신").font(.bodySans(15)).fontWeight(.bold).foregroundColor(.espresso)
+            // 취향은 골랐지만 비로그인(닉네임/아이디 없음) — "당신" 대신 "당신은"으로
+            // 아래 장르/주제 줄로 자연스럽게 이어지게 한다(완결감).
+            return Text("당신은").font(.bodySans(15)).fontWeight(.bold).foregroundColor(.espresso)
         }
         return Text(userName).font(.bodySans(15)).fontWeight(.bold).foregroundColor(.espresso)
             + Text(" 님").font(.bodySans(11)).foregroundColor(.walnut)
     }
 
+    /// 장르/주제 메타 — 라벨은 코랄(cta)로 강조(Android 패리티), 값은 walnut. 주제는
+    /// 여러 줄로 넘어갈 수 있어 줄 간격을 촘촘히(lineSpacing 0, Android 보다 타이트)
+    /// 유지하고 전부 노출한다(고른 취향의 '완결성').
     private func ozMetaLine(_ label: String, _ value: String) -> some View {
-        (Text(label).font(.custom("Pretendard-Medium", size: 11)).foregroundColor(.espresso)
+        (Text(label).font(.custom("Pretendard-Medium", size: 11)).fontWeight(.bold).foregroundColor(.cta)
             + Text(" : \(value)").font(.custom("Pretendard-Regular", size: 11)).foregroundColor(.walnut))
-            .lineLimit(2)
+            .lineSpacing(0)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private static func genreLabel(_ format: String) -> String {
