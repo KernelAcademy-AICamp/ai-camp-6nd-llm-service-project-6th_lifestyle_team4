@@ -293,6 +293,11 @@ struct LibraryCatalogView: View {
             pageArrow("chevron.right", enabled: effectivePage < pageCount - 1) { page = effectivePage + 1 }
         }
         .frame(maxWidth: .infinity)
+        // 페이지 전환은 '즉시 스왑' — 슬라이딩 윈도우 시절 버튼 identity(페이지 번호)가
+        // 슬롯 사이를 이동하며 검은 활성 사각형이 '떠다니던' 아티팩트(기기 QA: 1→5 시
+        // 6 위에 나타나 5 로 부유). 고정 블록 윈도우(아래)로 이동 자체를 없애고,
+        // 상속 애니메이션도 차단해 엣지 케이스를 원천 봉쇄한다.
+        .transaction { $0.animation = nil }
     }
 
     private func pageArrow(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
@@ -306,12 +311,13 @@ struct LibraryCatalogView: View {
         .disabled(!enabled)
     }
 
+    /// 고정 블록 윈도우 — Android PageBar 미러: [1-4], [5-8], … 4개 단위로 통째 전환.
+    /// (기존 '중앙 정렬 슬라이딩 5개' 윈도우는 탭할 때마다 재중앙화돼 버튼이 슬롯
+    /// 사이를 미끄러졌고, 활성 사각형이 함께 부유하는 아티팩트의 근원이었다.)
     private var pageWindow: [Int] {
-        let maxButtons = 5
-        if pageCount <= maxButtons { return Array(0..<pageCount) }
-        let half = maxButtons / 2
-        let start = max(0, min(effectivePage - half, pageCount - maxButtons))
-        return Array(start..<(start + maxButtons))
+        let blockSize = 4
+        let start = (effectivePage / blockSize) * blockSize
+        return Array(start..<min(start + blockSize, pageCount))
     }
 
     // MARK: - States
