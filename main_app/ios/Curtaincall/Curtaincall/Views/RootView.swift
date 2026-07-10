@@ -469,8 +469,15 @@ struct RootView: View {
         guard !session.isAnonymous, session.userId != nil else { return }
         guard session.ready, prefs.prefSelected, !attendanceChecked else { return }
         attendanceChecked = true
-        guard attendance.shouldAutoShowToday() else { return }
-        attendance.markAutoShown()
+        // DEBUG QA — 스킴 Run 인자 `-forceAttendance`: '오늘 이미 표시함' 로컬 게이트를
+        // 무시하고 매 실행 출석 플로우를 재생한다(릴리스 빌드 미포함). 서버 보상은
+        // 그날 1회 dedup 그대로 — 이미 받았다면 달력만 뜬다(+100 버스트는 그날 첫 1회).
+        var forceShow = false
+        #if DEBUG
+        forceShow = ProcessInfo.processInfo.arguments.contains("-forceAttendance")
+        #endif
+        guard forceShow || attendance.shouldAutoShowToday() else { return }
+        if !forceShow { attendance.markAutoShown() }
         // 출석 기록·보상은 서버가 원자적으로(check_in_attendance). rewarded=true 면 오늘 첫
         // 출석 → 잔액 갱신. 달력은 서버 기록(오늘 포함)을 다시 로드해 채운다.
         Task { @MainActor in
