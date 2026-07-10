@@ -60,7 +60,10 @@ struct LibraryCatalogView: View {
                             grid   // 페이지 바는 스크롤 밖, 화면 하단에 고정(아래 pinnedPageBar).
                         }
                     }
-                    Spacer().frame(height: 40)
+                    // 콘텐츠 끝 여백 — RootView 의 safeAreaInset 은 TabView '페이지 안'까지
+                    // 전파되지 않아(UIKit 페이징 컨테이너) 각 탭이 직접 보상한다. 40 이면
+                    // 스크롤 끝 콘텐츠가 글래스 필 뒤에 멈춘다(기기 QA) — Feed 와 동일 104.
+                    Spacer().frame(height: 104)
                 }
                 .padding(.horizontal, 20)
                 .background(
@@ -69,10 +72,15 @@ struct LibraryCatalogView: View {
                     }
                 )
             }
-            // 페이지 바 — 스크롤과 함께 사라지지 않게 화면 하단(탭바 위)에 고정.
-            // 결과 없음/1페이지면 숨김. RootView 가 탭바를 safeAreaInset 으로 깔아 바로 위에 붙는다.
+            // 페이지 바 — 스크롤과 함께 사라지지 않게 하단 고정. 결과 없음/1페이지면 숨김.
+            // ⚠️ RootView 의 safeAreaInset 은 TabView 페이지에 전파되지 않으므로(위 참조)
+            // 필 블록 높이만큼 직접 띄운다 — Android BottomBarContentInset(BarHeight 64 +
+            // BarBottomMargin 12 = 76) 미러: 페이지 바가 필 윗면에 바로 얹힌다.
+            // (예전엔 이 보상이 없어 페이지 바가 불투명 바 '뒤'에 숨어 있었고, 글래스
+            //  필 전환으로 비쳐 보이며 드러난 기존 버그 — 기기 QA.)
             if !model.books.isEmpty, !filteredBooks.isEmpty, pageCount > 1 {
                 pinnedPageBar
+                    .padding(.bottom, 76)
             }
         }
         .background(Color.paper)

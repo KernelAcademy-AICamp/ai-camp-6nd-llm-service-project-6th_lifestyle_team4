@@ -409,6 +409,10 @@ struct RootView: View {
         .environment(\.requestNotice) { showNoticeSheet = true }
         .environment(\.requestYarnInfo) { showYarnInfo = true }
         .environment(\.mastheadNotifUnread, hasUnreadNotice)
+        // 코치 앵커 발행 전역 게이트 — 투어 중에만 모든 .coachAnchor 가 프레임을 발행.
+        // (평시 스크롤 안 앵커(홈·카드 상세)의 매 프레임 preference 전파 → RootView
+        //  리렌더 → 글래스 필 재합성 랙 차단. 기기 QA: TODAY·카드 상세 스크롤.)
+        .environment(\.coachAnchorsActive, coach.active)
         // Hide the tab bar while the comment composer is focused (keyboard up),
         // so the input can pin directly above the keyboard; restore on blur.
         .onPreferenceChange(ComposerFocusedPreferenceKey.self) { active in

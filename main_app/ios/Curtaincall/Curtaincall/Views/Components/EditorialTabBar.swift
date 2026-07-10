@@ -58,11 +58,8 @@ struct EditorialTabBar: View {
     /// long-press 이스터에그용 깜짝 자세 (cat_confused). 돌출 60*0.72≈43 ≤ clearance.
     private static let catEggPose = NavCatPose(asset: "cat_confused", height: 60, hBias: 0.30, ledgeFraction: 0.72)
 
-    /// idle 모션 사이클 — 대부분 호흡(.rest↔.inhale), 가끔 .flick(꼬리 튕김 느낌).
-    /// CaseIterable 이 아니라 시퀀스를 직접 지정해 flick 빈도를 낮춘다.
-    private enum IdleCatPhase { case rest, inhale, flick }
-    private static let idleCatCycle: [IdleCatPhase] =
-        [.rest, .inhale, .rest, .inhale, .rest, .inhale, .flick]
+    // (idle 모션은 Android BottomNavBar 와 동일한 '호흡 only'(2.2s, 발끝 기준) —
+    //  기존 flick 사이클은 Android 에 없어 제거. 기기 QA: 고양이 모션 크로스플랫폼 통일.)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,7 +81,10 @@ struct EditorialTabBar: View {
                             .padding(.vertical, 6)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    // .plain 이 아니라 커스텀 bare 스타일 — iOS 26 글래스 위 버튼에
+                    // 시스템이 씌우는 회색 하이라이트 필(탭 전환 시 버튼을 따라다니던
+                    // '회색 알약', 기기 QA)을 차단한다. 눌림 피드백은 은은한 딤만.
+                    .buttonStyle(BareNavButtonStyle())
                     .coachAnchor(navAnchorId(tab))
                 }
             }
@@ -260,8 +260,9 @@ struct EditorialTabBar: View {
         case .feed:
             return NavCatPose(asset: "cat_pen", height: 64, hBias: 0.92, ledgeFraction: 0.86)    // 돌출 ≈ 55
         case .archive:
-            // hBias 0.80→0.60 — 책더미 고양이가 LIBRARY↔MY 탭 버튼 '사이'에 서도록(기기 QA).
-            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.60, ledgeFraction: 0.86) // Android CatHeightLibrary=90
+            // hBias 0.77 = LIBRARY↔MY 버튼 중간 지점(기기 QA 라운드2 의 0.60 은 과이동,
+            // 원래 0.80 은 살짝 우측). x = w/2 + bias*(w/2-44) 기준 중간 ≈ 0.77.
+            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.77, ledgeFraction: 0.86) // Android CatHeightLibrary=90
         case .daily, .settings:
             return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)  // 돌출 ≈ 24
         case .home:
@@ -284,34 +285,46 @@ struct EditorialTabBar: View {
                 .position(x: centerX, y: centerY)
         }
         .allowsHitTesting(false)                                  // click-through
-        .animation(poseAnimation, value: selection)
-        .animation(poseAnimation, value: catEggActive)
+        // Android BottomNavBar 미러 — 위치·크기는 '연속 보간'(catSpring: damping 0.72),
+        // 에셋은 아래 idleCat 의 280ms 크로스페이드. pose(Equatable) 하나로 트리거해
+        // 모든 자세 전환이 동일한 글라이드+페이드로 움직인다(자세별 상이 거동 제거).
+        .animation(poseAnimation, value: pose)
     }
 
-    /// 고양이 이미지 + 은은한 '살아있는' idle 모션 — 느린 호흡 스케일 + 가끔 꼬리 튕김.
-    /// 자세가 바뀌면 `.id` 로 크로스페이드. **Reduce Motion 시 idle 모션 완전 비활성**(정지).
+    /// 고양이 이미지 — Android Crossfade(tween 280) 미러: **컨테이너 identity 는 유지**
+    /// (위치·높이는 navCat 의 스프링으로 글라이드)하고, 이미지 원본만 .id 교체로
+    /// 280ms 크로스페이드한다. idle 은 Android 와 동일한 '호흡 only'(2.2s, 발끝 기준
+    /// 1.0↔1.03). **Reduce Motion 시 페이드·호흡 모두 비활성**(즉시 교체·정지).
     @ViewBuilder
     private func idleCat(pose: NavCatPose) -> some View {
-        let img = Image(pose.asset)
-            .resizable()
-            .scaledToFit()
-            .frame(height: pose.height)
-        Group {
-            if reduceMotion {
-                img
-            } else {
-                img.phaseAnimator(Self.idleCatCycle) { view, phase in
-                    view
-                        .scaleEffect(phase == .inhale ? 1.03 : 1.0, anchor: .bottom)        // 호흡
-                        .rotationEffect(.degrees(phase == .flick ? 2.5 : 0), anchor: .bottom) // 꼬리 튕김
-                } animation: { phase in
-                    // 호흡은 아주 느리고 잔잔하게, flick 만 살짝 빠르게.
-                    phase == .flick ? .easeInOut(duration: 0.5) : .easeInOut(duration: 2.2)
-                }
+        let crossfading = ZStack {
+            Image(pose.asset)
+                .resizable()
+                .scaledToFit()
+                .id(pose.asset)
+                .transition(reduceMotion ? .identity : .opacity)
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: pose.asset)
+        .frame(height: pose.height)
+
+        if reduceMotion {
+            crossfading
+        } else {
+            crossfading.phaseAnimator([false, true]) { view, inhale in
+                view.scaleEffect(inhale ? 1.03 : 1.0, anchor: .bottom)   // 호흡(발끝 기준)
+            } animation: { _ in
+                .easeInOut(duration: 2.2)
             }
         }
-        .id(pose.asset)                                  // 자세 바뀌면 새 뷰 → 크로스페이드 + idle 재시작
-        .transition(reduceMotion ? .identity : .opacity)
+    }
+}
+
+/// iOS 26 글래스 위 버튼에 시스템이 그리는 회색 하이라이트 필 차단용 bare 스타일 —
+/// 라벨만 그대로 그리고, 눌림은 은은한 딤(0.6)으로만 표시한다.
+private struct BareNavButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.6 : 1)
     }
 }
 
@@ -332,7 +345,13 @@ private extension View {
             // 글래스 '위'에 그려져 seam 없음. .clear = 더 투명한 변형(기기 QA:
             // .regular 는 밋밋). 스트로크·그림자는 시스템이 그림.
             self.background {
-                Color.clear.glassEffect(.clear, in: .rect(cornerRadius: 28))
+                ZStack {
+                    // 페이퍼 35% 언더레이 — .clear 글래스 단독은 과투명(기기 QA '아주
+                    // 약간만 불투명하게'). 바디감이 생기면 글래스 아래 시스템 그림자가
+                    // '이중 필'로 읽히던 착시도 함께 줄어든다.
+                    RoundedRectangle(cornerRadius: 28).fill(Color.paper.opacity(0.35))
+                    Color.clear.glassEffect(.clear, in: .rect(cornerRadius: 28))
+                }
             }
         } else {
             self

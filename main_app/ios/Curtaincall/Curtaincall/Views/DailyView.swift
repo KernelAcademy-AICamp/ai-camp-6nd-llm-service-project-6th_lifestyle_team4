@@ -58,7 +58,9 @@ struct DailyView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 80)
                     }
-                    Spacer().frame(height: 40)
+                    // 104 = 필 블록 보상 — safeAreaInset 은 TabView 페이지에 전파되지 않아
+                    // 40 이면 스크롤 끝이 글래스 필 뒤에 멈춘다(기기 QA, Feed 와 동일 값).
+                    Spacer().frame(height: 104)
                 }
                 .padding(.horizontal, 20)
             }
