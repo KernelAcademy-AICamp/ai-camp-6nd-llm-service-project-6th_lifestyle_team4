@@ -35,6 +35,9 @@ struct EditorialTabBar: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// 선택 로진지 글라이드용 네임스페이스 (matchedGeometryEffect).
+    @Namespace private var selectionNS
+
     /// TODAY(center) 탭을 누를 때마다 1씩 증가 → 실타래 'jiggle' 트리거.
     @State private var yarnTapCount = 0
     /// jiggle 중 실타래에 적용하는 스케일/회전.
@@ -82,18 +85,32 @@ struct EditorialTabBar: View {
                             .contentShape(Rectangle())
                     }
                     // .plain 이 아니라 커스텀 bare 스타일 — iOS 26 글래스 위 버튼에
-                    // 시스템이 씌우는 회색 하이라이트 필(탭 전환 시 버튼을 따라다니던
-                    // '회색 알약', 기기 QA)을 차단한다. 눌림 피드백은 은은한 딤만.
+                    // 시스템이 씌우는 눌림 하이라이트를 차단한다. 피드백은 은은한 딤만.
                     .buttonStyle(BareNavButtonStyle())
+                    // 선택 로진지 — 네이티브 iOS 26 탭바의 회색 알약을 '우리 것'으로 재현
+                    // (기기 QA: 유령 네이티브 바의 알약은 우리 버튼과 정렬 불가 → 직접
+                    // 그려 항상 아이템 정중앙). 센터(TODAY)는 메달리온이 지표라 제외.
+                    // matchedGeometryEffect 로 탭 전환 시 아이템 사이를 미끄러진다.
+                    .background {
+                        if tab == selection && !tab.isCenter {
+                            Capsule()
+                                .fill(Color.espresso.opacity(0.10))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 8)
+                                .matchedGeometryEffect(id: "navSelection", in: selectionNS)
+                        }
+                    }
                     .coachAnchor(navAnchorId(tab))
                 }
             }
             .frame(height: 64)
+            // 로진지 글라이드 — selection 변경을 애니메이션화(matchedGeometry 이동).
+            .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.82), value: selection)
             .navPillSurface()
-            // Android BottomNavBar 지오메트리 그대로: BarSideMargin=14 ·
-            // BarBottomMargin=12 (홈 인디케이터 위 12pt 부양).
-            .padding(.horizontal, 14)
-            .padding(.bottom, 12)
+            // 지오메트리(라운드4, 기기 QA 눈대중 보정): 좌우 20(14 는 과폭) ·
+            // 바닥 6(네이티브 iOS 탭바 높이에 근접하게 하강; 12 는 과부양).
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
         }
         // 장식 고양이 — 위 투명 여백 안에 앉아 바 윗면에 걸친다. 여백 높이만큼만 솟으므로
         // 콘텐츠 영역을 침범하지 않는다. click-through(allowsHitTesting=false)라 탭을 가리지 않음.
@@ -260,9 +277,9 @@ struct EditorialTabBar: View {
         case .feed:
             return NavCatPose(asset: "cat_pen", height: 64, hBias: 0.92, ledgeFraction: 0.86)    // 돌출 ≈ 55
         case .archive:
-            // hBias 0.77 = LIBRARY↔MY 버튼 중간 지점(기기 QA 라운드2 의 0.60 은 과이동,
-            // 원래 0.80 은 살짝 우측). x = w/2 + bias*(w/2-44) 기준 중간 ≈ 0.77.
-            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.77, ledgeFraction: 0.86) // Android CatHeightLibrary=90
+            // hBias 0.74 — LIBRARY↔MY 중간에서 MY 쪽으로 기울던 것 한 눈금 좌측(기기
+            // QA 라운드4; 0.60 과이동 → 0.77 소폭 우편향 → 0.74).
+            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.74, ledgeFraction: 0.86) // Android CatHeightLibrary=90
         case .daily, .settings:
             return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)  // 돌출 ≈ 24
         case .home:

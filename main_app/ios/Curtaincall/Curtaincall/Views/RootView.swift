@@ -346,30 +346,40 @@ struct RootView: View {
     }
 
     private var tabs: some View {
+        // ⚠️ 네이티브 탭바 숨김은 '페이지 안'에도 걸어야 한다 — iOS 26 의 새 플로팅
+        // Liquid Glass 탭바는 TabView 레벨의 .toolbar(.hidden) 만으로는 완전히 숨지
+        // 않아, 빈 유령 필(+선택 로진지)이 커스텀 필 아래에 비쳤다(기기 QA: '중복
+        // 그림자 필' + '따라다니는 회색 알약'). 예전 불투명 풀-폭 바가 우연히 가리고
+        // 있던 것 — 페이지 루트마다 명시 숨김으로 근절한다.
         TabView(selection: $selectedTab) {
             NavigationStack(path: $dailyPath) {
                 DailyView(selectedTab: $selectedTab, path: $dailyPath)
                     .environment(\.mastheadShowsActions, true)   // 북마크·공지 종 표시(MY 제외)
+                    .toolbar(.hidden, for: .tabBar)
             }
             .tag(Tab.daily)
             NavigationStack(path: $feedPath) {
                 FeedView(selectedTab: $selectedTab, reselect: feedReselect, writeTrigger: feedWriteTrigger)
                     .id(feedResetToken)   // re-create → category resets to .today
                     .environment(\.mastheadShowsActions, true)
+                    .toolbar(.hidden, for: .tabBar)
             }
             .tag(Tab.feed)
             NavigationStack(path: $homePath) {
                 HomeView(selectedTab: $selectedTab, reselect: homeReselect)
                     .environment(\.mastheadShowsActions, true)
+                    .toolbar(.hidden, for: .tabBar)
             }
             .tag(Tab.home)
             NavigationStack(path: $archivePath) {
                 LibraryCatalogView(selectedTab: $selectedTab, path: $archivePath, reselect: archiveReselect)
                     .environment(\.mastheadShowsActions, true)
+                    .toolbar(.hidden, for: .tabBar)
             }
             .tag(Tab.archive)
             NavigationStack(path: $settingsPath) {
                 MyPageView(selectedTab: $selectedTab, path: $settingsPath)
+                    .toolbar(.hidden, for: .tabBar)
             }
             .tag(Tab.settings)
         }
@@ -449,9 +459,9 @@ struct RootView: View {
             if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
                 FeedWriteCat()
                     .padding(.leading, 8)
-                    // 필 전환(#177)으로 바 윗면이 12pt 올라감(BarBottomMargin) — 54→66
-                    // 으로 동반 상승해 고양이가 필 윗면에 앉는다(기기 QA: 필 안으로 꺼짐).
-                    .padding(.bottom, 66)
+                    // 필 윗면 = 바텀마진(6) + 바(64) = 70 — 고양이가 필 윗면에 앉도록
+                    // 동반 배치(라운드4: 필 6pt 하강과 함께 66→60).
+                    .padding(.bottom, 60)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -459,10 +469,9 @@ struct RootView: View {
                 FeedWriteFab { feedWriteTrigger += 1 }
                     .coachAnchor("feed_fab")
                     .padding(.trailing, 18)
-                    // 52pt FAB 를 필 '위'로 완전히 올림 — 필 윗면(12 마진 + 64 바) + 8pt
-                    // 여유 = 84. (#177 이전 72 는 바 윗면 64+8; 필 전환으로 12pt 동반 상승.
-                    // 이전 14 는 FAB 가 MY 셀 탭을 가로채던 P1 — 히트영역 비겹침 유지.)
-                    .padding(.bottom, 84)
+                    // 52pt FAB 를 필 '위'로 완전히 올림 — 필 윗면(6 마진 + 64 바 = 70) +
+                    // 8pt 여유 = 78 (라운드4: 필 6pt 하강 동반). MY 셀 히트영역 비겹침 유지.
+                    .padding(.bottom, 78)
             }
         }
     }

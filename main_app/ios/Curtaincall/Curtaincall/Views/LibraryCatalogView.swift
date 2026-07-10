@@ -74,13 +74,13 @@ struct LibraryCatalogView: View {
             }
             // 페이지 바 — 스크롤과 함께 사라지지 않게 하단 고정. 결과 없음/1페이지면 숨김.
             // ⚠️ RootView 의 safeAreaInset 은 TabView 페이지에 전파되지 않으므로(위 참조)
-            // 필 블록 높이만큼 직접 띄운다 — Android BottomBarContentInset(BarHeight 64 +
-            // BarBottomMargin 12 = 76) 미러: 페이지 바가 필 윗면에 바로 얹힌다.
+            // 필 블록 높이만큼 직접 띄운다 — 필 윗면 = BarBottomMargin(6) + BarHeight(64)
+            // = 70: 페이지 바가 필 윗면에 바로 얹힌다(Android BottomBarContentInset 방식).
             // (예전엔 이 보상이 없어 페이지 바가 불투명 바 '뒤'에 숨어 있었고, 글래스
             //  필 전환으로 비쳐 보이며 드러난 기존 버그 — 기기 QA.)
             if !model.books.isEmpty, !filteredBooks.isEmpty, pageCount > 1 {
                 pinnedPageBar
-                    .padding(.bottom, 76)
+                    .padding(.bottom, 70)
             }
         }
         .background(Color.paper)
