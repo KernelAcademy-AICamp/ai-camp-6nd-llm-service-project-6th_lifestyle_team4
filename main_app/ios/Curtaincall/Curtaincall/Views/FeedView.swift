@@ -898,6 +898,9 @@ private struct FeedPostDetailSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
+            // ScrollViewReader 는 ScrollView 소유자인 여기서 감싼다 — 답글 진입 시
+            // 대상 댓글 상단 스크롤(replyAutoScroll)이 이 프록시로 동작한다.
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if let card = post.card {
@@ -932,6 +935,8 @@ private struct FeedPostDetailSheet: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
+            // REPLY 탭 → 대상 댓글을 상단(고정 헤더 아래)으로 (보드 #38, PWA scrollIntoView 미러).
+            .replyAutoScroll(comments, proxy: proxy)
             // LOGIN+입력창은 하단 docked bar '한 자리'에서 토글한다 — PWA #fp-comment-form /
             // #fp-comment-login (둘 다 position:sticky;bottom:0)와 동일. 회원은 입력창,
             // 비로그인은 로그인 안내(탭하면 인증 모달; RLS 도 익명 insert 차단).
@@ -957,6 +962,7 @@ private struct FeedPostDetailSheet: View {
                         submitLabel: "등록"
                     )
                 }
+            }
             }
         }
         .background(Color.paper)

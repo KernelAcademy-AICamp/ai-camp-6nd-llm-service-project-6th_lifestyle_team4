@@ -280,6 +280,8 @@ struct CardDetailView: View {
                 .simultaneousGesture(TapGesture().onEnded { composerFocused = false })
             }
             .scrollDismissesKeyboard(.interactively)
+            // REPLY 탭 → 대상 댓글을 상단(고정 헤더 아래)으로 (보드 #38, PWA scrollIntoView 미러).
+            .replyAutoScroll(comments, proxy: proxy)
             // 코치 투어: 현재 전문 스텝의 타깃을 화면 중앙으로 스크롤 — 홀/툴팁이 화면 밖에
             // 그려져 막히지 않게(Android DetailScreen '타깃 블록 스크롤' 미러).
             .onChange(of: coachDetailAnchor) { _, id in

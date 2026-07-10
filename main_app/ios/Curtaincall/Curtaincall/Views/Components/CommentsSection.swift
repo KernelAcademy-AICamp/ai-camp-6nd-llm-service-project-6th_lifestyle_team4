@@ -206,7 +206,6 @@ struct CommentsSection: View {
     var copy: CommentsCopy = .card
 
     @EnvironmentObject private var moderation: ModerationStore
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editDraft = ""
     @State private var moderationToast: String?
 
@@ -241,11 +240,6 @@ struct CommentsSection: View {
     }
 
     var body: some View {
-        // ScrollViewReader 를 섹션 안(부모 ScrollView 내부)에 중첩 — REPLY 탭 시 답글
-        // 대상 댓글을 뷰포트 상단(고정 타이틀 바 바로 아래)으로 스크롤한다(PWA
-        // m-app.js 답글 진입 scrollIntoView 미러). 부모(카드 상세/피드 상세/하이라이트
-        // 상세)의 ScrollView 를 그대로 쓰므로 호출부 변경 없음.
-        ScrollViewReader { proxy in
         VStack(alignment: .leading, spacing: 0) {
             header
             Spacer().frame(height: 16)
@@ -295,23 +289,11 @@ struct CommentsSection: View {
             }
         }
         .task { await model.load() }
-        // REPLY 탭 → 대상 댓글을 상단으로 (답글 배너/키보드에 가리지 않게 문맥 확보).
-        // 취소/등록(nil 복귀) 시에는 움직이지 않는다. Reduce Motion 은 즉시 점프.
-        .onChange(of: model.replyingTo?.commentId) { _, target in
-            guard let target else { return }
-            if reduceMotion {
-                proxy.scrollTo(Self.replyAnchorID(target), anchor: .top)
-            } else {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    proxy.scrollTo(Self.replyAnchorID(target), anchor: .top)
-                }
-            }
-        }
-        }
     }
 
-    /// 답글 스크롤 앵커 id — 최상위 댓글 행에 부여.
-    private static func replyAnchorID(_ commentId: Int) -> String { "reply-anchor-\(commentId)" }
+    /// 답글 스크롤 앵커 id — 최상위 댓글 행에 부여. 스크롤 자체는 ScrollView 를
+    /// '소유한' 부모 화면이 `replyAutoScroll(_:proxy:)` 로 수행한다(아래 modifier).
+    static func replyAnchorID(_ commentId: Int) -> String { "reply-anchor-\(commentId)" }
 
     private func commentRow(_ c: Comment, isReply: Bool) -> some View {
         let likeUsers = model.likes[c.commentId] ?? []
@@ -527,5 +509,38 @@ struct CommentComposer: View {
         let body = trimmed
         draft = ""
         Task { await model.submit(userId: uid, nickname: nickname, body: body) }
+    }
+}
+
+/// REPLY 탭 → 답글 대상(최상위 댓글)을 뷰포트 상단(고정 헤더 바로 아래)으로 스크롤
+/// (PWA m-app.js 답글 진입 scrollIntoView 미러). ScrollViewProxy 는 자기 콘텐츠에
+/// '포함된' ScrollView 만 스크롤할 수 있으므로, 이 modifier 는 CommentsSection 이
+/// 아니라 **ScrollView 를 소유한 부모 화면**(카드 상세·피드 글 상세·하이라이트 상세)이
+/// ScrollViewReader 로 감싼 ScrollView 체인에 붙인다.
+/// 취소/등록(replyingTo=nil)에는 움직이지 않고, Reduce Motion 은 애니 없이 점프한다.
+struct ReplyAutoScroll: ViewModifier {
+    @ObservedObject var model: CommentsModel
+    let proxy: ScrollViewProxy
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.onChange(of: model.replyingTo?.commentId) { _, target in
+            guard let target else { return }
+            let anchor = CommentsSection.replyAnchorID(target)
+            if reduceMotion {
+                proxy.scrollTo(anchor, anchor: .top)
+            } else {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo(anchor, anchor: .top)
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    /// 부모 상세 화면(ScrollView 소유자)이 ScrollViewReader 프록시와 함께 부착.
+    func replyAutoScroll(_ model: CommentsModel, proxy: ScrollViewProxy) -> some View {
+        modifier(ReplyAutoScroll(model: model, proxy: proxy))
     }
 }
