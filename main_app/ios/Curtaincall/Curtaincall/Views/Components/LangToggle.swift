@@ -14,8 +14,16 @@ struct LangToggle: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            segment("KR", active: !showOriginal) { showOriginal = false; tick += 1 }
-            segment("ENG", active: showOriginal) { showOriginal = true; tick += 1 }
+            segment("KR", active: !showOriginal) {
+                guard showOriginal else { return }
+                showOriginal = false
+                tick += 1
+            }
+            segment("ENG", active: showOriginal) {
+                guard !showOriginal else { return }
+                showOriginal = true
+                tick += 1
+            }
         }
         .sensoryFeedback(.selection, trigger: tick)
         // LangSegmented pill (Android `LangSegmented`): latte track, walnut active
