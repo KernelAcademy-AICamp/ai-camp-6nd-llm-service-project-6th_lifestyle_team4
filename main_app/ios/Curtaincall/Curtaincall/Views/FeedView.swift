@@ -203,7 +203,9 @@ struct FeedView: View {
                 detailPost = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { selectedCard = card }
             }
-            .presentationDetents([.medium, .large])
+            // Android 상세 시트 높이 미러 — 반높이(.medium)로 열리면 뒤 피드 카드의
+            // 하트가 시트 하트와 이중으로 보인다(QA). 크게 한 단만 둔다(드래그 dismiss 유지).
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
     }
@@ -909,8 +911,11 @@ private struct FeedPostDetailSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
+            // "DAILY SCRIPT" 라벨이 시트 모서리·드래그 핸들에 붙어 보이던 문제(QA) —
+            // Android HeaderRow 수준의 여백(가로 20 · 위 18 · 아래 6)으로 숨통.
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 6)
             // ScrollViewReader 는 ScrollView 소유자인 여기서 감싼다 — 답글 진입 시
             // 대상 댓글 상단 스크롤(replyAutoScroll)이 이 프록시로 동작한다.
             ScrollViewReader { proxy in
