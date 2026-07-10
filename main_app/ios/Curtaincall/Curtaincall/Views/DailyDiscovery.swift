@@ -811,12 +811,12 @@ struct DailyOzPickSection: View {
                 HStack(alignment: .center, spacing: 16) {
                     // 오즈 = 노트북 고양이(cat_computer) — Android DailyOzPick 과 동일 에셋
                     // (브랜드 캐릭터 크로스플랫폼 일치; library-cat-2 는 카드 상세 전용).
-                    Image("cat_computer").resizable().scaledToFit().frame(width: 140)
+                    Image("cat_computer").resizable().scaledToFit().frame(width: 150)
                     VStack(alignment: .leading, spacing: 0) {
                         ozNameLine.lineLimit(1)
                         Spacer().frame(height: 6)
                         ozMetaLine("장르", genreText)
-                        Spacer().frame(height: 2)
+                        Spacer().frame(height: 4)   // 장르↔주제 간격 살짝 (QA 지적)
                         ozMetaLine("주제", themeText)
                     }
                     Spacer(minLength: 0)
@@ -840,7 +840,7 @@ struct DailyOzPickSection: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 16) {
                 // 게스트 CTA 도 노트북 고양이 — Android 게이트 스켈레톤과 동일 에셋.
-                Image("cat_computer").resizable().scaledToFit().frame(width: 140)
+                Image("cat_computer").resizable().scaledToFit().frame(width: 150)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(nickname.isEmpty ? "게스트" : nickname)
                         .font(.bodySans(14)).fontWeight(.bold)
