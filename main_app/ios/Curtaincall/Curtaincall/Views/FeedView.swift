@@ -34,6 +34,9 @@ struct FeedView: View {
     // 콘텐츠 좋아요(043) — id → {count, liked}. 비어 있으면 0/미좋아요로 표시.
     @State private var postLikes: [Int: ContentLikeUI] = [:]
     @State private var highlightLikes: [Int: ContentLikeUI] = [:]
+    // 타깃별 토글 RPC 진행 중 가드 — 연타로 RPC 가 동시 실행되면 응답 역전으로
+    // 하트/카운트가 실제 서버 상태와 어긋날 수 있어, 진행 중인 타깃의 재탭은 무시한다.
+    @State private var likesInFlight: Set<String> = []
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showPicker = false
@@ -354,12 +357,15 @@ struct FeedView: View {
     }
 
     /// 좋아요 토글 — 익명은 로그인 안내 토스트(Android 게스트 가드). 회원은 낙관적 업데이트
-    /// 후 RPC, 성공하면 서버 {liked,count} 로 확정, 실패하면 원복.
+    /// 후 RPC, 성공하면 서버 {liked,count} 로 확정, 실패하면 원복. 같은 타깃의 RPC 가
+    /// 진행 중이면 재탭 무시(연타 레이스 — 응답 역전/이중 롤백 방지).
     private func toggleLike(targetType: String, targetId: Int) {
         guard let uid = session.userId, !session.isAnonymous else {
             showToast("로그인하면 좋아요를 남길 수 있어요")
             return
         }
+        let key = "\(targetType)#\(targetId)"
+        guard !likesInFlight.contains(key) else { return }
         let isPost = (targetType == Self.likeFeedPost)
         let current = (isPost ? postLikes[targetId] : highlightLikes[targetId]) ?? ContentLikeUI(count: 0, liked: false)
         let optimistic = ContentLikeUI(
@@ -367,7 +373,9 @@ struct FeedView: View {
             liked: !current.liked
         )
         if isPost { postLikes[targetId] = optimistic } else { highlightLikes[targetId] = optimistic }
+        likesInFlight.insert(key)
         Task {
+            defer { likesInFlight.remove(key) }
             do {
                 let res = try await Supa.shared.toggleContentLike(userId: uid, targetType: targetType, targetId: targetId)
                 let val = ContentLikeUI(count: res.count, liked: res.liked)
