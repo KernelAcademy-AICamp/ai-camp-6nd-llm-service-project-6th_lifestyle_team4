@@ -195,11 +195,17 @@ struct FeedView: View {
         }
         // 포스트 탭 → 인용 팝업 대신 상세 시트 (Android FeedPostDetailSheet).
         .sheet(item: $detailPost) { post in
-            FeedPostDetailSheet(post: post) { card in
+            FeedPostDetailSheet(
+                post: post,
+                like: postLikes[post.postId],
+                onToggleLike: { toggleLike(targetType: Self.likeFeedPost, targetId: post.postId) }
+            ) { card in
                 detailPost = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { selectedCard = card }
             }
-            .presentationDetents([.medium, .large])
+            // Android 상세 시트 높이 미러 — 반높이(.medium)로 열리면 뒤 피드 카드의
+            // 하트가 시트 하트와 이중으로 보인다(QA). 크게 한 단만 둔다(드래그 dismiss 유지).
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             // 위로 스크롤이 시트 확장(detent 협상)에 먼저 먹혀 '스크롤이 무겁게' 느껴지던
             // 문제(QA 지적) — 콘텐츠 스크롤을 우선한다. 시트 확장은 드래그 인디케이터로.
@@ -582,6 +588,9 @@ private struct FeedLikeButton: View {
 private struct FeedPostHeader: View {
     let nickname: String
     let timeText: String
+    /// 메타 줄 오버라이드 — 목록 카드는 기본("한 줄 리뷰 · {상대시간}", Android 목록과
+    /// 동일), 상세 시트는 Android AuthorRow 처럼 모니커 없이 작성일시만 넘긴다.
+    var metaOverride: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -597,7 +606,7 @@ private struct FeedPostHeader: View {
                     .font(.bodySans(15))
                     .foregroundStyle(.espresso)
                     .lineLimit(1)
-                Text("한 줄 리뷰 · \(timeText)")
+                Text(metaOverride ?? "한 줄 리뷰 · \(timeText)")
                     .font(.bodySans(11))
                     .foregroundStyle(.roast)
             }
@@ -854,6 +863,10 @@ private struct HighlightFeedCard: View {
 /// section (list + compose, 500자, 로그인 게이트) via the shared CommentsModel(.feedPost).
 private struct FeedPostDetailSheet: View {
     let post: FeedPost
+    /// 목록과 동일한 좋아요 소스(FeedView.postLikes) — 시트에서 토글해도 목록 카드
+    /// 하트/카운트가 함께 갱신된다(부모 상태 공유).
+    let like: ContentLikeUI?
+    let onToggleLike: () -> Void
     let onOpenCard: (Card) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.requestLogin) private var requestLogin   // 비로그인 안내 탭 → 인증 모달
@@ -869,8 +882,10 @@ private struct FeedPostDetailSheet: View {
         }
     }
 
-    init(post: FeedPost, onOpenCard: @escaping (Card) -> Void) {
+    init(post: FeedPost, like: ContentLikeUI?, onToggleLike: @escaping () -> Void, onOpenCard: @escaping (Card) -> Void) {
         self.post = post
+        self.like = like
+        self.onToggleLike = onToggleLike
         self.onOpenCard = onOpenCard
         _comments = StateObject(wrappedValue: CommentsModel(backend: .feedPost(post.postId)))
     }
@@ -901,8 +916,11 @@ private struct FeedPostDetailSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
+            // "DAILY SCRIPT" 라벨이 시트 모서리·드래그 핸들에 붙어 보이던 문제(QA) —
+            // Android HeaderRow 수준의 여백(가로 20 · 위 18 · 아래 6)으로 숨통.
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 6)
             // ScrollViewReader 는 ScrollView 소유자인 여기서 감싼다 — 답글 진입 시
             // 대상 댓글 상단 스크롤(replyAutoScroll)이 이 프록시로 동작한다.
             ScrollViewReader { proxy in
@@ -914,8 +932,24 @@ private struct FeedPostDetailSheet: View {
                     }
                     FeedPostHeader(
                         nickname: post.authorNickname?.ifEmpty("익명") ?? "익명",
-                        timeText: FeedTime.relative(post.createdAt)
+                        timeText: FeedTime.relative(post.createdAt),
+                        // 상세는 Android AuthorRow 패리티 — "한 줄 리뷰" 모니커 없이
+                        // 작성일시("M. d 오전/오후 h:mm")만.
+                        metaOverride: FeedTime.stamp(post.createdAt)
                     )
+                    // 하트+카운트 — 작성자 행 트레일링(아바타·닉네임과 인라인). 목록과
+                    // 같은 상태 소스라 시트 토글이 목록 카드에도 반영된다. 게스트 탭은
+                    // 시트 안 토스트(하단 토스트는 시트에 가려 보이지 않음).
+                    .overlay(alignment: .trailing) {
+                        FeedLikeButton(like: like) {
+                            if session.isAnonymous {
+                                showModerationToast("로그인하면 좋아요를 남길 수 있어요")
+                            } else {
+                                onToggleLike()
+                            }
+                        }
+                        .padding(.trailing, 16)
+                    }
                     Spacer().frame(height: 16)
                     Text(post.body)
                         .font(.titleSerif(16))
@@ -1208,6 +1242,16 @@ private enum FeedTime {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ko_KR")
         f.dateFormat = "yyyy.MM.dd"
+        return f.string(from: date)
+    }
+
+    /// 절대 작성일시 — Android formatBookmarkDate 미러("M. d  오전/오후 h:mm").
+    /// 피드 글 상세 헤더(AuthorRow 패리티)용.
+    static func stamp(_ iso: String) -> String {
+        guard let date = parseISODate(iso) else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "M. d  a h:mm"
         return f.string(from: date)
     }
 }
