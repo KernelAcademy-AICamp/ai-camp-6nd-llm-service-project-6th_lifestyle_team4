@@ -195,7 +195,11 @@ struct FeedView: View {
         }
         // 포스트 탭 → 인용 팝업 대신 상세 시트 (Android FeedPostDetailSheet).
         .sheet(item: $detailPost) { post in
-            FeedPostDetailSheet(post: post) { card in
+            FeedPostDetailSheet(
+                post: post,
+                like: postLikes[post.postId],
+                onToggleLike: { toggleLike(targetType: Self.likeFeedPost, targetId: post.postId) }
+            ) { card in
                 detailPost = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { selectedCard = card }
             }
@@ -852,6 +856,10 @@ private struct HighlightFeedCard: View {
 /// section (list + compose, 500자, 로그인 게이트) via the shared CommentsModel(.feedPost).
 private struct FeedPostDetailSheet: View {
     let post: FeedPost
+    /// 목록과 동일한 좋아요 소스(FeedView.postLikes) — 시트에서 토글해도 목록 카드
+    /// 하트/카운트가 함께 갱신된다(부모 상태 공유).
+    let like: ContentLikeUI?
+    let onToggleLike: () -> Void
     let onOpenCard: (Card) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.requestLogin) private var requestLogin   // 비로그인 안내 탭 → 인증 모달
@@ -867,8 +875,10 @@ private struct FeedPostDetailSheet: View {
         }
     }
 
-    init(post: FeedPost, onOpenCard: @escaping (Card) -> Void) {
+    init(post: FeedPost, like: ContentLikeUI?, onToggleLike: @escaping () -> Void, onOpenCard: @escaping (Card) -> Void) {
         self.post = post
+        self.like = like
+        self.onToggleLike = onToggleLike
         self.onOpenCard = onOpenCard
         _comments = StateObject(wrappedValue: CommentsModel(backend: .feedPost(post.postId)))
     }
@@ -917,6 +927,19 @@ private struct FeedPostDetailSheet: View {
                         // 작성일시("M. d 오전/오후 h:mm")만.
                         metaOverride: FeedTime.stamp(post.createdAt)
                     )
+                    // 하트+카운트 — 작성자 행 트레일링(아바타·닉네임과 인라인). 목록과
+                    // 같은 상태 소스라 시트 토글이 목록 카드에도 반영된다. 게스트 탭은
+                    // 시트 안 토스트(하단 토스트는 시트에 가려 보이지 않음).
+                    .overlay(alignment: .trailing) {
+                        FeedLikeButton(like: like) {
+                            if session.isAnonymous {
+                                showModerationToast("로그인하면 좋아요를 남길 수 있어요")
+                            } else {
+                                onToggleLike()
+                            }
+                        }
+                        .padding(.trailing, 16)
+                    }
                     Spacer().frame(height: 16)
                     Text(post.body)
                         .font(.titleSerif(16))
