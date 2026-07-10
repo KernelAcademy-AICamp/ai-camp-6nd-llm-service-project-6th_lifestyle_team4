@@ -29,16 +29,17 @@ struct AppMasthead: View {
     @Environment(\.mastheadNotifUnread) private var notifUnread
     @Environment(\.requestBookmarks) private var requestBookmarks
     @Environment(\.requestNotice) private var requestNotice
+    @Environment(\.requestYarnInfo) private var requestYarnInfo
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 10) {
                 BrandWordmark()
                 Spacer()
-                // 실타래 잔액 칩 — 잔액 표시 전용(비활성). v1 은 충전(구매) 진입점을 막아
-                // App Store 2.1/3.1.1 을 피한다(적립 전용). 탭해도 충전 화면으로 가지 않는다.
+                // 실타래 잔액 칩 — 탭하면 '실타래란?' 설명 팝업(YarnInfoView). 충전(구매) 진입은
+                // 없다(App Store 2.1/3.1.1, 적립 전용) — 정보 팝업만 띄운다. Android 칩 탭 미러.
                 if showsYarnChip {
-                    YarnChip(balance: yarn.balance)
+                    YarnChip(balance: yarn.balance, action: { requestYarnInfo() })
                 }
                 if showsActions {
                     // 북마크(→ 서가) 먼저, 그다음 공지 종(→ 공지, 미읽음 점). Android HomeTopBar 트레일링 미러.
@@ -77,6 +78,7 @@ private struct MastheadShowsActionsKey: EnvironmentKey { static let defaultValue
 private struct MastheadNotifUnreadKey: EnvironmentKey { static let defaultValue = false }
 private struct RequestBookmarksKey: EnvironmentKey { static let defaultValue: () -> Void = {} }
 private struct RequestNoticeKey: EnvironmentKey { static let defaultValue: () -> Void = {} }
+private struct RequestYarnInfoKey: EnvironmentKey { static let defaultValue: () -> Void = {} }
 
 extension EnvironmentValues {
     /// True on the 4 home tabs (Daily/Feed/Today/Library) → shows bookmark + bell. MY leaves it false.
@@ -95,6 +97,11 @@ extension EnvironmentValues {
     var requestNotice: () -> Void {
         get { self[RequestNoticeKey.self] }
         set { self[RequestNoticeKey.self] = newValue }
+    }
+    /// 실타래 칩/펠릿 탭 → 실타래 설명 팝업(YarnInfoView). RootView 가 주입.
+    var requestYarnInfo: () -> Void {
+        get { self[RequestYarnInfoKey.self] }
+        set { self[RequestYarnInfoKey.self] = newValue }
     }
 }
 

@@ -75,6 +75,7 @@ struct RootView: View {
     @State private var feedWriteTrigger = 0
     @State private var latestNoticeId: Int?
     @State private var showNoticeSheet = false   // 마스트헤드 공지 종 → NoticeView 시트
+    @State private var showYarnInfo = false      // 실타래 칩/펠릿 탭 → 설명 팝업
     @State private var formPopupActive = false   // 폼 팝업(로그인) 표시 중 — 탭 UI 키보드 회피 끔
     /// 코치 투어(온보딩 스포트라이트) — 앱 루트에서 호스팅해 탭 전환·상세 push 를 가로지른다.
     @StateObject private var coach = CoachController()
@@ -176,6 +177,8 @@ struct RootView: View {
         .onPreferenceChange(FormPopupActiveKey.self) { formPopupActive = $0 }
         // 마스트헤드 공지 종 → 공지 시트(Android notif 시트 패턴).
         .sheet(isPresented: $showNoticeSheet) { NoticeView() }
+        // 실타래 칩/펠릿 → '실타래란?' 설명 팝업(중앙 팝업, 충전 진입 없음).
+        .popup(isPresented: $showYarnInfo) { YarnInfoView() }
         .task {
             if let id = pendingCardId { await resolveAndPush(id: id) }
         }
@@ -393,6 +396,7 @@ struct RootView: View {
             settingsPath.append(MyRoute.bookshelf)
         }
         .environment(\.requestNotice) { showNoticeSheet = true }
+        .environment(\.requestYarnInfo) { showYarnInfo = true }
         .environment(\.mastheadNotifUnread, hasUnreadNotice)
         // Hide the tab bar while the comment composer is focused (keyboard up),
         // so the input can pin directly above the keyboard; restore on blur.

@@ -16,6 +16,7 @@ struct MyPageView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
     @Environment(\.requestLogin) private var requestLogin   // 로그인 → 루트의 단일 로그인 팝업(키보드 회피·탭바 고정)
+    @Environment(\.requestYarnInfo) private var requestYarnInfo   // 실타래 펠릿 탭 → 설명 팝업
 
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
@@ -305,20 +306,23 @@ struct MyPageView: View {
 
     /// 실타래 잔액 펠릿 — MY 본문 상단(ACCOUNT/공지 위). 브랜드 마크 + 잔액. 좌측 정렬 캡슐.
     private var yarnPill: some View {
-        HStack(spacing: 6) {
-            Image("daily-script-bar")
-                .resizable().scaledToFill()
-                .frame(width: 16, height: 16)
-                .clipShape(Circle())
-            Text("실타래 \(yarn.balance)개")
-                .font(.custom("Pretendard-Medium", size: 13))
-                .foregroundStyle(.espresso)
+        Button { requestYarnInfo() } label: {
+            HStack(spacing: 6) {
+                Image("daily-script-bar")
+                    .resizable().scaledToFill()
+                    .frame(width: 16, height: 16)
+                    .clipShape(Circle())
+                Text("실타래 \(yarn.balance)개")
+                    .font(.custom("Pretendard-Medium", size: 13))
+                    .foregroundStyle(.espresso)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Color.sand.opacity(0.35)))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(Color.sand.opacity(0.35)))
+        .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel("실타래 \(yarn.balance)개")
+        .accessibilityLabel("실타래 \(yarn.balance)개, 설명 보기")
     }
 
     private func sectionLabel(_ text: String) -> some View {
