@@ -206,6 +206,7 @@ struct CommentsSection: View {
     var copy: CommentsCopy = .card
 
     @EnvironmentObject private var moderation: ModerationStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editDraft = ""
     @State private var moderationToast: String?
 
@@ -240,6 +241,11 @@ struct CommentsSection: View {
     }
 
     var body: some View {
+        // ScrollViewReader 를 섹션 안(부모 ScrollView 내부)에 중첩 — REPLY 탭 시 답글
+        // 대상 댓글을 뷰포트 상단(고정 타이틀 바 바로 아래)으로 스크롤한다(PWA
+        // m-app.js 답글 진입 scrollIntoView 미러). 부모(카드 상세/피드 상세/하이라이트
+        // 상세)의 ScrollView 를 그대로 쓰므로 호출부 변경 없음.
+        ScrollViewReader { proxy in
         VStack(alignment: .leading, spacing: 0) {
             header
             Spacer().frame(height: 16)
@@ -267,7 +273,10 @@ struct CommentsSection: View {
                     .padding(.vertical, 8)
             } else {
                 ForEach(visibleGroups, id: \.top.id) { group in
+                    // REPLY 대상은 최상위 댓글뿐(답글의 답글 없음) — 스크롤 앵커 id 도
+                    // 최상위 행에만 단다.
                     commentRow(group.top, isReply: false)
+                        .id(Self.replyAnchorID(group.top.commentId))
                     ForEach(group.replies) { reply in
                         commentRow(reply, isReply: true)
                     }
@@ -286,7 +295,23 @@ struct CommentsSection: View {
             }
         }
         .task { await model.load() }
+        // REPLY 탭 → 대상 댓글을 상단으로 (답글 배너/키보드에 가리지 않게 문맥 확보).
+        // 취소/등록(nil 복귀) 시에는 움직이지 않는다. Reduce Motion 은 즉시 점프.
+        .onChange(of: model.replyingTo?.commentId) { _, target in
+            guard let target else { return }
+            if reduceMotion {
+                proxy.scrollTo(Self.replyAnchorID(target), anchor: .top)
+            } else {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo(Self.replyAnchorID(target), anchor: .top)
+                }
+            }
+        }
+        }
     }
+
+    /// 답글 스크롤 앵커 id — 최상위 댓글 행에 부여.
+    private static func replyAnchorID(_ commentId: Int) -> String { "reply-anchor-\(commentId)" }
 
     private func commentRow(_ c: Comment, isReply: Bool) -> some View {
         let likeUsers = model.likes[c.commentId] ?? []
