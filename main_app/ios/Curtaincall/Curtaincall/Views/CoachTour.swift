@@ -149,21 +149,47 @@ struct CoachAnchorKey: PreferenceKey {
     }
 }
 
+/// 앵커 프레임 발행 전역 게이트 — 투어가 돌지 않을 때 스크롤 안 앵커(홈·카드 상세)가
+/// 매 프레임 global frame preference 를 발행 → RootView 리렌더 → 글래스 필 재합성으로
+/// 스크롤이 버벅였다(기기 QA: TODAY·카드 상세). RootView 가 `coach.active` 를 주입하고,
+/// 비활성 시 모든 앵커가 상수 빈 값을 내 전파 비용이 0 이 된다. 기본 true(프리뷰 안전).
+private struct CoachAnchorsActiveKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var coachAnchorsActive: Bool {
+        get { self[CoachAnchorsActiveKey.self] }
+        set { self[CoachAnchorsActiveKey.self] = newValue }
+    }
+}
+
+private struct CoachAnchorModifier: ViewModifier {
+    let id: String
+    let active: Bool
+    @Environment(\.coachAnchorsActive) private var anchorsActive
+
+    func body(content: Content) -> some View {
+        content.background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: CoachAnchorKey.self,
+                    value: (active && anchorsActive) ? [id: geo.frame(in: .global)] : [:]
+                )
+            }
+        )
+    }
+}
+
 extension View {
     /// Publish this view's frame in **global (screen) coordinates** under `id` so the
     /// tour can spotlight it. Global — not a named space — so it aligns with the
     /// overlay's `.ignoresSafeArea()` geometry (both measured from the screen top-left);
     /// a safe-area-relative space would offset every hole by the top inset. `active`
-    /// lets a caller drop the anchor when hidden.
+    /// lets a caller drop the anchor when hidden. 발행 자체는 `coachAnchorsActive`
+    /// 환경 게이트(투어 중에만 true — RootView 주입)와 AND 된다.
     func coachAnchor(_ id: String, active: Bool = true) -> some View {
-        background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: CoachAnchorKey.self,
-                    value: active ? [id: geo.frame(in: .global)] : [:]
-                )
-            }
-        )
+        modifier(CoachAnchorModifier(id: id, active: active))
     }
 }
 

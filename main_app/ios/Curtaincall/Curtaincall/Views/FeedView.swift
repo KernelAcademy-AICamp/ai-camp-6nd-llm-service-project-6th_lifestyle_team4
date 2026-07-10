@@ -504,10 +504,10 @@ struct FeedWriteFab: View {
     var body: some View {
         // (PWA index.html #feed-fab: 52×52, --cta, shadow 0 4 14 cta/.38)
         Button(action: onTap) {
-            // Android FAB(Icons.Outlined.Edit) 미러 — 밑줄 있는 아웃라인 연필.
-            // 기존 커스텀 feed-pencil(통짜 실루엣)은 밋밋하다는 기기 QA 피드백.
-            Image(systemName: "pencil.line")
-                .font(.system(size: 23, weight: .medium))
+            // Android FAB(Icons.Outlined.Edit) 미러 — 통통한 연필, 밑줄 없음
+            // (기기 QA 라운드3: pencil.line 의 밑줄 제거 + 더 두껍게).
+            Image(systemName: "pencil")
+                .font(.system(size: 25, weight: .black))
                 .foregroundStyle(Self.fabIcon)
                 .frame(width: 52, height: 52)
                 .background(Circle().fill(Color.cta))
