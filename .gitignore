@@ -20,3 +20,6 @@ DerivedData/
 # Gutenberg RDF dump 작업 폴더 (~125MB tar + 78000 RDF) — 로컬 1회 인덱싱 전용
 gutenberg-dump/
 main_app/ios/Curtaincall/Curtaincall.xcodeproj/xcshareddata/
+
+# 데모/PRD 영상 산출물 (로컬 전용, 커밋하지 않음)
+_deliverables/
