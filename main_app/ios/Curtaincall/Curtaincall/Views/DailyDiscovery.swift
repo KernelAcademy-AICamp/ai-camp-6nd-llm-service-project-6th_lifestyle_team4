@@ -740,7 +740,7 @@ func chooseOzPick(cards: [Card], taste: Set<String>, prefs: PrefsStore, today: S
 }
 
 /// Oz Pick (Android `DailyOzPick`). Personalized: nickname header + 장르/주제 meta +
-/// theme-hit reason + library-cat-2 + book line. Guest (anon + no active prefs):
+/// theme-hit reason + cat_computer(오즈) + book line. Guest (anon + no active prefs):
 /// the "취향 알려주기" CTA instead. Read-only over existing prefs/nickname/taste.
 struct DailyOzPickSection: View {
     let card: Card?
@@ -774,12 +774,13 @@ struct DailyOzPickSection: View {
         }
     }
 
-    /// "당신을 위한 Daily Script." — trailing period in Cta. (Text concatenation needs
-    /// `foregroundColor`, the Text-returning variant.)
+    /// "당신을 위한 데일리 스크립트" — 상단 매스트헤드가 이미 "Daily Script." 워드마크라
+    /// 스크롤 중 로고가 두 번 반복되지 않도록 헤딩은 한글 + 단일 서체("당신을 위한"과
+    /// 동일한 titleSerif 17)로 통일. 워드마크 스타일(크기 점프·코랄 마침표)은 제거.
     private var heading: some View {
-        Text("당신을 위한 ").font(.titleSerif(17)).foregroundColor(.espresso)
-            + Text("Daily Script").font(.headlineSerif(22)).fontWeight(.bold).foregroundColor(.espresso)
-            + Text(".").font(.headlineSerif(22)).fontWeight(.bold).foregroundColor(.cta)
+        Text("당신을 위한 데일리 스크립트")
+            .font(.titleSerif(17))
+            .foregroundStyle(.espresso)
     }
 
     private func personalizedCard(_ card: Card) -> some View {
@@ -808,7 +809,9 @@ struct DailyOzPickSection: View {
         return NavigationLink(value: card) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .center, spacing: 16) {
-                    Image("library-cat-2").resizable().scaledToFit().frame(width: 140)
+                    // 오즈 = 노트북 고양이(cat_computer) — Android DailyOzPick 과 동일 에셋
+                    // (브랜드 캐릭터 크로스플랫폼 일치; library-cat-2 는 카드 상세 전용).
+                    Image("cat_computer").resizable().scaledToFit().frame(width: 140)
                     VStack(alignment: .leading, spacing: 0) {
                         ozNameLine.lineLimit(1)
                         Spacer().frame(height: 6)
@@ -836,7 +839,8 @@ struct DailyOzPickSection: View {
     private var ctaCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 16) {
-                Image("library-cat-2").resizable().scaledToFit().frame(width: 140)
+                // 게스트 CTA 도 노트북 고양이 — Android 게이트 스켈레톤과 동일 에셋.
+                Image("cat_computer").resizable().scaledToFit().frame(width: 140)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(nickname.isEmpty ? "게스트" : nickname)
                         .font(.bodySans(14)).fontWeight(.bold)
