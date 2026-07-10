@@ -179,7 +179,9 @@ struct MyPageView: View {
                         .buttonStyle(.plain)
                         .disabled(session.authInProgress)
                     }
-                    Spacer().frame(height: 40)
+                    // 104 = 필 블록 보상 — safeAreaInset 은 TabView 페이지에 전파되지 않아
+                    // 기존 40+24 로는 스크롤 끝이 글래스 필 뒤에 멈춘다(기기 QA, Feed 동일 값).
+                    Spacer().frame(height: 104)
                     // Bottom room so the submit button can scroll clear of the
                     // keyboard (keyboard avoidance insets the scroll content).
                     Spacer().frame(height: 24)
