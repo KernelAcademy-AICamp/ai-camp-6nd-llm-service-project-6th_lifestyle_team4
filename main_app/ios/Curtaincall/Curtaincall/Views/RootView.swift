@@ -52,6 +52,7 @@ struct RootView: View {
     // 사용자가 '로그인'을 눌렀으니 그 자리에서 로그인 UI 를 보여준다(MY 스크롤 헌트 제거).
     @State private var showLoginModal = false
     @State private var attendanceRewarded = false
+    @State private var attendanceRewardFly: Int?   // >0 이면 출석 +100 보상 버스트 재생 중
     @State private var attendanceChecked = false   // 앱 실행당 1회만 자동 체크
     @State private var dailyPath = NavigationPath()
     @State private var homePath = NavigationPath()
@@ -168,6 +169,16 @@ struct RootView: View {
         // 출석체크 — 중앙 팝업(전체 즉시 표시; +100 실타래 배너가 반쯤 올라온 시트에 가리지 않도록).
         .popup(isPresented: $showAttendance) {
             AttendanceView(rewarded: attendanceRewarded)
+        }
+        // 출석 +100 보상 버스트 — 달력보다 먼저 화면 중앙에 재생, 끝나면 달력을 연다(Android 미러).
+        .overlay {
+            if let amt = attendanceRewardFly {
+                YarnRewardFly(amount: amt) {
+                    attendanceRewardFly = nil
+                    showAttendance = true
+                }
+                .allowsHitTesting(false)
+            }
         }
         // 로그인/회원가입 모달 — MY 의 그 모달(#97/#99 SignInSheet)을 루트에서 재사용.
         // requestLogin 을 부르는 모든 유도(북마크 프롬프트·새로고침 제한·피드 익명)가
@@ -467,7 +478,13 @@ struct RootView: View {
             attendanceRewarded = result?.rewarded ?? false
             if let result, result.rewarded { yarn.sync(serverBalance: result.balance) }
             await attendance.loadHistory()
-            showAttendance = true
+            // 오늘 첫 출석(+100)이면 보상 버스트를 먼저 재생하고, 끝나면 달력을 연다
+            // (Android DailyScriptRoot: rewardAnim → attendanceVisible 순서 미러).
+            if attendanceRewarded {
+                attendanceRewardFly = AttendanceStore.reward
+            } else {
+                showAttendance = true
+            }
         }
     }
 
