@@ -194,7 +194,10 @@ struct HomeView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .coachAnchor("today_bookmark")
+                // 투어 중에만 프레임 발행 — 스크롤 안 앵커는 매 프레임 global frame 이
+                // 변해 preference 전파 → RootView 리렌더 → 글래스 필 재합성으로 TODAY
+                // 스크롤이 버벅였다(기기 QA). 비활성 시 상수 빈 값이라 전파 비용 0.
+                .coachAnchor("today_bookmark", active: coach.active)
                 // 공유 — 실제 공유 완료 시 share_count +1(낙관적 +1 후 RPC), PWA bumpShareCount.
                 Button { shareCard = card } label: {
                     VStack(spacing: 3) {
@@ -224,7 +227,7 @@ struct HomeView: View {
                 Text("Read Full Script").editorialButton(style: .filled)
             }
             .buttonStyle(.plain)
-            .coachAnchor("today_read")
+            .coachAnchor("today_read", active: coach.active)   // 위와 동일 — 투어 중에만 발행
         }
         .padding(20)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
