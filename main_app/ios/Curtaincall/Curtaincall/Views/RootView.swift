@@ -459,9 +459,9 @@ struct RootView: View {
             if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
                 FeedWriteCat()
                     .padding(.leading, 8)
-                    // 필 윗면 = 바텀마진(6) + 바(64) = 70 — 고양이가 필 윗면에 앉도록
-                    // 동반 배치(라운드4: 필 6pt 하강과 함께 66→60).
-                    .padding(.bottom, 60)
+                    // 필 윗면(pillTopInset)에서 파생 — 고양이 발이 필 윗면에 10pt 걸쳐
+                    // 앉는다. 기기별(홈 버튼/인디케이터) 마진 차이 자동 추종.
+                    .padding(.bottom, EditorialTabBar.pillTopInset - 10)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -469,9 +469,9 @@ struct RootView: View {
                 FeedWriteFab { feedWriteTrigger += 1 }
                     .coachAnchor("feed_fab")
                     .padding(.trailing, 18)
-                    // 52pt FAB 를 필 '위'로 완전히 올림 — 필 윗면(6 마진 + 64 바 = 70) +
-                    // 8pt 여유 = 78 (라운드4: 필 6pt 하강 동반). MY 셀 히트영역 비겹침 유지.
-                    .padding(.bottom, 78)
+                    // 필 윗면(pillTopInset) + 8pt 여유 — 52pt FAB 가 필/MY 셀 히트영역과
+                    // 겹치지 않게 완전히 위로. 기기별 마진 차이 자동 추종.
+                    .padding(.bottom, EditorialTabBar.pillTopInset + 8)
             }
         }
     }

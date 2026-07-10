@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 탭별 장식 고양이 자세 — Android `BottomNavBar.kt` 의 `catPose` / PWA
 /// `updateBottomNavCatForView` 미러. 위치/크기 수치는 실기기에서 미세조정 가능(조정 가능).
@@ -58,6 +59,29 @@ struct EditorialTabBar: View {
     /// (각 자세 height*ledgeFraction ≤ 이 값이 되도록 catPose 수치를 잡는다.)
     private static let catClearance: CGFloat = 56
 
+    // MARK: - Shared pill geometry (기기 적응)
+
+    /// 홈 인디케이터 유무 — safe-area bottom 이 0 이면 홈 버튼 기기(SE 계열, iOS 18
+    /// 지원 대상). 앱 시작 후 1회 판정, 윈도우 미확보 시 인디케이터 있음으로 폴백
+    /// (오판 시에도 6pt 여유가 더 생길 뿐 깨지지 않는 방향).
+    private static let hasHomeIndicator: Bool = {
+        let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first
+        guard let keyWindow else { return true }
+        return keyWindow.safeAreaInsets.bottom > 0
+    }()
+
+    /// 필 바닥 부양 — 인디케이터 기기는 6(이미 34pt 인디케이터 지대 위), 홈 버튼
+    /// 기기는 12(safe bottom=0 이라 6 은 화면 모서리에 과밀착). 기기별 눈대중 값이
+    /// 아니라 safe-area 유무 기준이라 전 iPhone 에서 일관된 시각 간격이 나온다.
+    static let barBottomMargin: CGFloat = hasHomeIndicator ? 6 : 12
+
+    /// safe-area bottom → 필 '윗면'까지의 거리 — 필 위에 얹히는 모든 동반 요소
+    /// (피드 고양이·연필 FAB·Library 페이지 바)가 이 값에서 파생해야 한다.
+    /// (매직 넘버 60/78/70 하드코딩이 기기/마진 변경마다 어긋나던 문제의 단일화.)
+    static let pillTopInset: CGFloat = barBottomMargin + 64
+
     /// long-press 이스터에그용 깜짝 자세 (cat_confused). 돌출 60*0.72≈43 ≤ clearance.
     private static let catEggPose = NavCatPose(asset: "cat_confused", height: 60, hBias: 0.30, ledgeFraction: 0.72)
 
@@ -108,9 +132,9 @@ struct EditorialTabBar: View {
             .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.82), value: selection)
             .navPillSurface()
             // 지오메트리(라운드4, 기기 QA 눈대중 보정): 좌우 20(14 는 과폭) ·
-            // 바닥 6(네이티브 iOS 탭바 높이에 근접하게 하강; 12 는 과부양).
+            // 바닥 barBottomMargin(인디케이터 기기 6 / 홈 버튼 기기 12 — 기기 적응).
             .padding(.horizontal, 20)
-            .padding(.bottom, 6)
+            .padding(.bottom, Self.barBottomMargin)
         }
         // 장식 고양이 — 위 투명 여백 안에 앉아 바 윗면에 걸친다. 여백 높이만큼만 솟으므로
         // 콘텐츠 영역을 침범하지 않는다. click-through(allowsHitTesting=false)라 탭을 가리지 않음.
