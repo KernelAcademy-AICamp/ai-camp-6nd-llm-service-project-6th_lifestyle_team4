@@ -445,7 +445,9 @@ struct RootView: View {
             if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
                 FeedWriteCat()
                     .padding(.leading, 8)
-                    .padding(.bottom, 54)      // 고양이가 탭바 윗면에 앉도록 — 조정 가능
+                    // 필 전환(#177)으로 바 윗면이 12pt 올라감(BarBottomMargin) — 54→66
+                    // 으로 동반 상승해 고양이가 필 윗면에 앉는다(기기 QA: 필 안으로 꺼짐).
+                    .padding(.bottom, 66)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -453,10 +455,10 @@ struct RootView: View {
                 FeedWriteFab { feedWriteTrigger += 1 }
                     .coachAnchor("feed_fab")
                     .padding(.trailing, 18)
-                    // 52pt FAB 를 64pt 탭바 '위'로 완전히 올림(64 + 8pt 여유 = 72). 이전 14 는
-                    // FAB 가 MY 셀과 겹쳐 탭을 가로채 MY 가 안 눌리던 버그(P1). 72 면 탭바 히트
-                    // 영역과 안 겹쳐 MY 정상 동작.
-                    .padding(.bottom, 72)
+                    // 52pt FAB 를 필 '위'로 완전히 올림 — 필 윗면(12 마진 + 64 바) + 8pt
+                    // 여유 = 84. (#177 이전 72 는 바 윗면 64+8; 필 전환으로 12pt 동반 상승.
+                    // 이전 14 는 FAB 가 MY 셀 탭을 가로채던 P1 — 히트영역 비겹침 유지.)
+                    .padding(.bottom, 84)
             }
         }
     }

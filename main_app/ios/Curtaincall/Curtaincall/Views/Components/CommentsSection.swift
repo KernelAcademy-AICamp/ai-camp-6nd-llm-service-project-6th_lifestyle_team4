@@ -477,7 +477,10 @@ struct CommentComposer: View {
                 .lineLimit(1...5)
                 .focused(focused)
                 .padding(.leading, 16)
-                .padding(.vertical, 10)
+                // 세로 13 — 한 줄일 때 필드 높이(≈43)가 등록 버튼(44)과 맞아 플레이스
+                // 홀더가 필 안 수직 중앙으로 보인다(기기 QA: 처져 보임). 여러 줄 성장은
+                // bottom 정렬 그대로.
+                .padding(.vertical, 13)
                 .onChange(of: draft) { _, newValue in
                     if newValue.count > 500 { draft = String(newValue.prefix(500)) }
                 }

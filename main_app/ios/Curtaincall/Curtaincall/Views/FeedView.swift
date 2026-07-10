@@ -203,9 +203,9 @@ struct FeedView: View {
                 detailPost = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { selectedCard = card }
             }
-            // Android 상세 시트 높이 미러 — 반높이(.medium)로 열리면 뒤 피드 카드의
-            // 하트가 시트 하트와 이중으로 보인다(QA). 크게 한 단만 둔다(드래그 dismiss 유지).
-            .presentationDetents([.large])
+            // Android 상세 시트 높이 미러 — .medium 은 뒤 카드 하트 이중 노출,
+            // .large 는 피드를 전부 덮어 과함(기기 QA 왕복). Android 실측 ≈ 화면 80%.
+            .presentationDetents([.fraction(0.8)])
             .presentationDragIndicator(.visible)
             // 위로 스크롤이 시트 확장(detent 협상)에 먼저 먹혀 '스크롤이 무겁게' 느껴지던
             // 문제(QA 지적) — 콘텐츠 스크롤을 우선한다. 시트 확장은 드래그 인디케이터로.
@@ -504,11 +504,10 @@ struct FeedWriteFab: View {
     var body: some View {
         // (PWA index.html #feed-fab: 52×52, --cta, shadow 0 4 14 cta/.38)
         Button(action: onTap) {
-            Image("feed-pencil")          // 통통한 연필 + 뾰족한 심 (SF 'pencil' 의 젓가락 느낌 대체)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 24, height: 28)
+            // Android FAB(Icons.Outlined.Edit) 미러 — 밑줄 있는 아웃라인 연필.
+            // 기존 커스텀 feed-pencil(통짜 실루엣)은 밋밋하다는 기기 QA 피드백.
+            Image(systemName: "pencil.line")
+                .font(.system(size: 23, weight: .medium))
                 .foregroundStyle(Self.fabIcon)
                 .frame(width: 52, height: 52)
                 .background(Circle().fill(Color.cta))

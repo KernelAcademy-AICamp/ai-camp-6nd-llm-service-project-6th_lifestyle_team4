@@ -217,6 +217,12 @@ struct EditorialTabBar: View {
     private func centerItem(tab: Tab, active: Bool) -> some View {
         VStack(spacing: 2) {
             ZStack {
+                // 페이퍼 백킹 링 — 메달리온이 필 위로 솟은 부분 뒤로 스크롤 콘텐츠의
+                // 선(카드 테두리 등)이 그대로 지나가 '줄이 관통'해 보이던 문제(기기 QA).
+                // 컷아웃 노치처럼 3pt 페이퍼 링으로 분리해 배경과 절연한다.
+                Circle()
+                    .fill(Color.paper)
+                    .frame(width: 60, height: 60)
                 Circle()
                     .fill(Color.latte)
                     .frame(width: 54, height: 54)
@@ -254,7 +260,8 @@ struct EditorialTabBar: View {
         case .feed:
             return NavCatPose(asset: "cat_pen", height: 64, hBias: 0.92, ledgeFraction: 0.86)    // 돌출 ≈ 55
         case .archive:
-            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.80, ledgeFraction: 0.86) // Android CatHeightLibrary=90
+            // hBias 0.80→0.60 — 책더미 고양이가 LIBRARY↔MY 탭 버튼 '사이'에 서도록(기기 QA).
+            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.60, ledgeFraction: 0.86) // Android CatHeightLibrary=90
         case .daily, .settings:
             return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)  // 돌출 ≈ 24
         case .home:
@@ -319,7 +326,14 @@ private extension View {
     func navPillSurface() -> some View {
         if #available(iOS 26.0, *) {
             // 시스템 글래스가 자체 림 라이트/스펙큘러를 그리므로 스트로크·그림자 추가 없음.
-            self.glassEffect(.regular, in: .rect(cornerRadius: 28))
+            // 글래스를 '배경 레이어'로 분리 — 콘텐츠 뷰에 직접 glassEffect 를 걸면
+            // 콘텐츠가 글래스 표면에 합성돼, 도형 밖으로 솟은 센터 메달리온에
+            // 경계선(seam)이 그였다(기기 QA: 실타래에 줄). 배경 분리면 콘텐츠는
+            // 글래스 '위'에 그려져 seam 없음. .clear = 더 투명한 변형(기기 QA:
+            // .regular 는 밋밋). 스트로크·그림자는 시스템이 그림.
+            self.background {
+                Color.clear.glassEffect(.clear, in: .rect(cornerRadius: 28))
+            }
         } else {
             self
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
