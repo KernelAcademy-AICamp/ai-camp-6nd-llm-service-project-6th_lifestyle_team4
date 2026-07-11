@@ -257,12 +257,13 @@ struct EditorialTabBar: View {
     private func centerItem(tab: Tab, active: Bool) -> some View {
         VStack(spacing: 2) {
             ZStack {
-                // 백킹 링 제거(라운드6) — 68pt 링이 라이트/다크 모두 '두꺼운 테'로
-                // 읽혔다(기기 QA). Android 는 링 없이 공+그림자뿐. 림 라인 절연은
-                // 이제 필 도형 자체의 원형 노치(NotchedPillShape)가 담당한다.
+                // 라떼 헤일로 — 노치(r31) 틈으로 배경이 비쳐 다크에서 공 둘레가 '검은
+                // 테'로 읽히던 문제(기기 QA). Android 센터 버튼의 라떼 서클(다크=브라운)
+                // 헤일로 미러: 64pt 라떼 원이 노치 홀(62)을 1pt 겹침으로 꽉 채우고,
+                // 공(54) 둘레에 5pt 헤일로(라이트=베이지·다크=브라운)를 남긴다.
                 Circle()
                     .fill(Color.latte)
-                    .frame(width: 54, height: 54)
+                    .frame(width: 64, height: 64)
                     .shadow(color: Color.black.opacity(0.18), radius: 4, x: 0, y: 2)
                 // 실타래가 메달리온을 가득 채우도록 fill+clip (이미지 좌우 투명 여백은 잘라낸다).
                 Image("daily-script-bar")
