@@ -233,22 +233,29 @@ struct MyPageView: View {
         // MY 탭 재탭 시 한 번에 닫힌다(다른 탭과 동일). 북마크 서가는 ArchiveView 가
         // 카드 상세를 같은 스택에 push. 익명도 접근 가능(빈 책장).
         .navigationDestination(for: MyRoute.self) { route in
-            switch route {
-            case .bookshelf:
-                ArchiveView(selectedTab: $selectedTab, path: $path, asSubPage: true)
-            case .notice:
-                NoticeView()
-            case .myComments:
-                MyCommentsView()
-            case .myFeed:
-                MyFeedView()
-            case .feedback:
-                FeedbackView()
-            case .terms:
-                LegalView(doc: .terms)
-            case .privacy:
-                LegalView(doc: .privacy)
+            Group {
+                switch route {
+                case .bookshelf:
+                    ArchiveView(selectedTab: $selectedTab, path: $path, asSubPage: true)
+                case .notice:
+                    NoticeView()
+                case .myComments:
+                    MyCommentsView()
+                case .myFeed:
+                    MyFeedView()
+                case .feedback:
+                    FeedbackView()
+                case .terms:
+                    LegalView(doc: .terms)
+                case .privacy:
+                    LegalView(doc: .privacy)
+                }
             }
+            // iOS 26 유령 네이티브 탭바 — 탭바 표시는 '최상단 목적지'의 선호를 따르므로
+            // 루트에만 hidden 을 걸면 push 순간 유령 바가 재출현해 커스텀 필을 위로
+            // 밀어올린다(기기 QA: 사용 중 필 부양 + 하단 이중 바). 모든 MY 하위
+            // 목적지에 일괄 적용.
+            .toolbar(.hidden, for: .tabBar)
         }
         .task { await bookmarks.load(userId: session.userId) }
         .task { latestNoticeId = (try? await Supa.shared.fetchLatestNotice())?.noticeId }

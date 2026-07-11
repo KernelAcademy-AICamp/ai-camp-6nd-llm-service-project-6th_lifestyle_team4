@@ -92,6 +92,8 @@ struct HighlightDetailView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        // iOS 26 유령 네이티브 탭바 — push 목적지 명시 hidden (기기 QA, CardDetail 동일).
+        .toolbar(.hidden, for: .tabBar)
         .preference(key: ComposerFocusedPreferenceKey.self, value: composerFocused)
         .onChange(of: comments.replyingTo?.commentId) { _, newValue in
             if newValue != nil { composerFocused = true }
