@@ -370,7 +370,9 @@ struct CoachTourOverlay: View {
                 Spacer(minLength: 0)
             } else {
                 Spacer(minLength: 0)
-                card.padding(.bottom, 72)   // sit above the tab bar
+                // 필 윗면(pillTopInset) + 2pt — 하드코딩 72 는 SE(pillTopInset 76)에서
+                // 필 위로 4pt 겹쳤다(셀프체크 리뷰 지적). 파생값으로 기기 자동 추종.
+                card.padding(.bottom, EditorialTabBar.pillTopInset + 2)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

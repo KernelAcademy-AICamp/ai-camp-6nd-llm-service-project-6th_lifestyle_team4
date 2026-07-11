@@ -35,6 +35,7 @@ struct EditorialTabBar: View {
     var onReselect: ((Tab) -> Void)? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     /// 선택 로진지 글라이드용 네임스페이스 (matchedGeometryEffect).
     @Namespace private var selectionNS
@@ -113,10 +114,12 @@ struct EditorialTabBar: View {
                     // matchedGeometryEffect 로 탭 전환 시 아이템 사이를 미끄러진다.
                     .background {
                         if tab == selection && !tab.isCenter {
+                            // 인셋 4/5 — 기기 QA '로진지가 작다' 보정(기존 8/8). 아이템
+                            // 셀을 거의 채우는 네이티브 iOS 26 알약 크기감.
                             Capsule()
                                 .fill(Color.espresso.opacity(0.10))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 5)
                                 .matchedGeometryEffect(id: "navSelection", in: selectionNS)
                         }
                     }
@@ -254,12 +257,14 @@ struct EditorialTabBar: View {
     private func centerItem(tab: Tab, active: Bool) -> some View {
         VStack(spacing: 2) {
             ZStack {
-                // 페이퍼 백킹 링 — 메달리온이 필 위로 솟은 부분 뒤로 스크롤 콘텐츠의
-                // 선(카드 테두리 등)이 그대로 지나가 '줄이 관통'해 보이던 문제(기기 QA).
-                // 컷아웃 노치처럼 3pt 페이퍼 링으로 분리해 배경과 절연한다.
+                // 백킹 링(컷아웃 노치) — 메달리온 뒤로 지나가는 콘텐츠 선 + 글래스 필
+                // 상단 림 하이라이트가 공(ball)을 '관통'해 보이던 문제(기기 QA 2회) 절연.
+                // 60→68: 3pt 링은 림 라인을 못 끊었다 — 7pt 로 확실한 소켓 룩.
+                // 다크에선 paper(≈검정)가 두꺼운 검은 테로 읽혀(기기 QA) latte 로 —
+                // 메달리온 원과 한 톤으로 녹아 부드러운 다크-웜 디스크가 된다.
                 Circle()
-                    .fill(Color.paper)
-                    .frame(width: 60, height: 60)
+                    .fill(colorScheme == .dark ? Color.latte : Color.paper)
+                    .frame(width: 68, height: 68)
                 Circle()
                     .fill(Color.latte)
                     .frame(width: 54, height: 54)
