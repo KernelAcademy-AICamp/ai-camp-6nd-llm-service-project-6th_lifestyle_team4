@@ -66,6 +66,10 @@ struct CardDetailView: View {
         gatedContent
             .background(Color.paper)
             .toolbar(.hidden, for: .navigationBar)
+            // iOS 26 유령 네이티브 탭바 — 탭바 표시는 '최상단 목적지'의 선호를 따르므로
+            // 루트에만 hidden 을 걸면 push 순간 유령 바가 재출현해 커스텀 필을 위로
+            // 밀어올린다(기기 QA). 카드 상세는 모든 스택의 공통 push 목적지라 여기서 차단.
+            .toolbar(.hidden, for: .tabBar)
             .task { await runOpenFlow() }
             .sensoryFeedback(.impact(flexibility: .soft), trigger: bookmarkHaptic)
             // 충전 시트가 닫히면(구매 성공 등) 게이트를 자동 재평가 — 잠금 화면에서
