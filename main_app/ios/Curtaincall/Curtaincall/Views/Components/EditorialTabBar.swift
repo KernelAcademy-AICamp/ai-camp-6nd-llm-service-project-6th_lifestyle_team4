@@ -257,13 +257,14 @@ struct EditorialTabBar: View {
     private func centerItem(tab: Tab, active: Bool) -> some View {
         VStack(spacing: 2) {
             ZStack {
-                // 라떼 헤일로 — 노치(r31) 틈으로 배경이 비쳐 다크에서 공 둘레가 '검은
-                // 테'로 읽히던 문제(기기 QA). Android 센터 버튼의 라떼 서클(다크=브라운)
-                // 헤일로 미러: 64pt 라떼 원이 노치 홀(62)을 1pt 겹침으로 꽉 채우고,
-                // 공(54) 둘레에 5pt 헤일로(라이트=베이지·다크=브라운)를 남긴다.
+                // 라떼 헤일로 — 노치 틈으로 배경이 비쳐 다크에서 공 둘레가 '검은 테'로
+                // 읽히던 문제(기기 QA). Android 센터 버튼의 라떼 서클(다크=브라운) 미러.
+                // 라운드6b: 5pt 헤일로가 두껍다는 QA → 60pt(가시 3pt)로 축소. 노치 홀도
+                // 58(r29)로 동반 축소 — 헤일로가 항상 1pt 겹침으로 홀을 꽉 채워야
+                // 배경 틈(다크 검은 선)이 재발하지 않는다(짝 유지 필수).
                 Circle()
                     .fill(Color.latte)
-                    .frame(width: 64, height: 64)
+                    .frame(width: 60, height: 60)
                     .shadow(color: Color.black.opacity(0.18), radius: 4, x: 0, y: 2)
                 // 실타래가 메달리온을 가득 채우도록 fill+clip (이미지 좌우 투명 여백은 잘라낸다).
                 Image("daily-script-bar")
@@ -370,11 +371,12 @@ private struct BareNavButtonStyle: ButtonStyle {
 /// 자리만큼 원형 노치를 뺀 형태(Android/PWA '컷아웃 노치' 룩). 글래스 림 하이라이트가
 /// 공 둘레를 따라 휘어 지나가므로, 백킹 링 없이도 라인이 공을 관통하지 않는다.
 /// 노치 원 중심 = 메달리온 중심과 동일: 공 54pt 가 필 위로 16pt 돌출(HomeProtrusion)
-/// → 중심은 필 윗면에서 11pt 아래. 반경 31 = 공 27 + 4pt 클리어런스.
+/// → 중심은 필 윗면에서 11pt 아래. 반경 29 = 공 27 + 2pt 클리어런스 — ⚠️ 라떼
+/// 헤일로(60pt, centerItem)와 짝: 홀(58)을 헤일로가 1pt 겹침으로 채우는 관계 유지.
 struct NotchedPillShape: Shape {
     func path(in rect: CGRect) -> Path {
         let pill = Path(roundedRect: rect, cornerRadius: 28)
-        let r: CGFloat = 31
+        let r: CGFloat = 29
         let notch = Path(ellipseIn: CGRect(x: rect.midX - r, y: 11 - r, width: r * 2, height: r * 2))
         return pill.subtracting(notch)
     }
