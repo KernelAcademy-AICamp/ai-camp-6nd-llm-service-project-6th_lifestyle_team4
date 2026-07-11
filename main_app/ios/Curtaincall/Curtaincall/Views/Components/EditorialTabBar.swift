@@ -114,12 +114,12 @@ struct EditorialTabBar: View {
                     // matchedGeometryEffect 로 탭 전환 시 아이템 사이를 미끄러진다.
                     .background {
                         if tab == selection && !tab.isCenter {
-                            // 인셋 4/5 — 기기 QA '로진지가 작다' 보정(기존 8/8). 아이템
-                            // 셀을 거의 채우는 네이티브 iOS 26 알약 크기감.
+                            // 인셋 3/3(라운드6: 더 크고 '덜 눌린' 비율) + 불투명도
+                            // 0.10→0.08(필 워밍과 함께 은은하게 — 기기 QA).
                             Capsule()
-                                .fill(Color.espresso.opacity(0.10))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 5)
+                                .fill(Color.espresso.opacity(0.08))
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 3)
                                 .matchedGeometryEffect(id: "navSelection", in: selectionNS)
                         }
                     }
@@ -257,14 +257,9 @@ struct EditorialTabBar: View {
     private func centerItem(tab: Tab, active: Bool) -> some View {
         VStack(spacing: 2) {
             ZStack {
-                // 백킹 링(컷아웃 노치) — 메달리온 뒤로 지나가는 콘텐츠 선 + 글래스 필
-                // 상단 림 하이라이트가 공(ball)을 '관통'해 보이던 문제(기기 QA 2회) 절연.
-                // 60→68: 3pt 링은 림 라인을 못 끊었다 — 7pt 로 확실한 소켓 룩.
-                // 다크에선 paper(≈검정)가 두꺼운 검은 테로 읽혀(기기 QA) latte 로 —
-                // 메달리온 원과 한 톤으로 녹아 부드러운 다크-웜 디스크가 된다.
-                Circle()
-                    .fill(colorScheme == .dark ? Color.latte : Color.paper)
-                    .frame(width: 68, height: 68)
+                // 백킹 링 제거(라운드6) — 68pt 링이 라이트/다크 모두 '두꺼운 테'로
+                // 읽혔다(기기 QA). Android 는 링 없이 공+그림자뿐. 림 라인 절연은
+                // 이제 필 도형 자체의 원형 노치(NotchedPillShape)가 담당한다.
                 Circle()
                     .fill(Color.latte)
                     .frame(width: 54, height: 54)
@@ -370,35 +365,44 @@ private struct BareNavButtonStyle: ButtonStyle {
     }
 }
 
-/// 네비 필 표면 — 형태는 Android BottomNavBar 와 동일(BarCornerRadius=28 라운드
-/// 사각, 캡슐 아님). 표면만 iOS 글래스: 26+ 는 시스템 Liquid Glass(glassEffect),
-/// 18-25 는 ultraThinMaterial + latte 스트로크 + 부드러운 그림자(Android
-/// BarElevation=8 상당) 폴백. 콘텐츠(탭 아이템·센터 메달리온)는 클립하지 않는다 —
-/// 메달리온이 필 윗면 위로 솟는 오버플로(Android HomeProtrusion=16)와 뱃지 도트가
-/// 잘리지 않아야 한다.
+/// 필 도형 — Android BarCornerRadius=28 라운드 사각에서 상단 중앙, 실타래 메달리온
+/// 자리만큼 원형 노치를 뺀 형태(Android/PWA '컷아웃 노치' 룩). 글래스 림 하이라이트가
+/// 공 둘레를 따라 휘어 지나가므로, 백킹 링 없이도 라인이 공을 관통하지 않는다.
+/// 노치 원 중심 = 메달리온 중심과 동일: 공 54pt 가 필 위로 16pt 돌출(HomeProtrusion)
+/// → 중심은 필 윗면에서 11pt 아래. 반경 31 = 공 27 + 4pt 클리어런스.
+struct NotchedPillShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let pill = Path(roundedRect: rect, cornerRadius: 28)
+        let r: CGFloat = 31
+        let notch = Path(ellipseIn: CGRect(x: rect.midX - r, y: 11 - r, width: r * 2, height: r * 2))
+        return pill.subtracting(notch)
+    }
+}
+
+/// 네비 필 표면 — 형태는 NotchedPillShape(위 참조). 표면: 26+ 는 시스템 Liquid
+/// Glass(glassEffect), 18-25 는 ultraThinMaterial + latte 스트로크 + 그림자 폴백.
+/// 콘텐츠(탭 아이템·센터 메달리온)는 클립하지 않는다 — 메달리온 오버플로와 뱃지
+/// 도트가 잘리지 않아야 한다.
 private extension View {
     @ViewBuilder
     func navPillSurface() -> some View {
         if #available(iOS 26.0, *) {
             // 시스템 글래스가 자체 림 라이트/스펙큘러를 그리므로 스트로크·그림자 추가 없음.
-            // 글래스를 '배경 레이어'로 분리 — 콘텐츠 뷰에 직접 glassEffect 를 걸면
-            // 콘텐츠가 글래스 표면에 합성돼, 도형 밖으로 솟은 센터 메달리온에
-            // 경계선(seam)이 그였다(기기 QA: 실타래에 줄). 배경 분리면 콘텐츠는
-            // 글래스 '위'에 그려져 seam 없음. .clear = 더 투명한 변형(기기 QA:
-            // .regular 는 밋밋). 스트로크·그림자는 시스템이 그림.
+            // 글래스를 '배경 레이어'로 분리 — 콘텐츠에 직접 걸면 도형 밖 메달리온에
+            // 합성 seam 이 그였다(기기 QA). .clear = 투명 변형.
             self.background {
                 ZStack {
-                    // 페이퍼 35% 언더레이 — .clear 글래스 단독은 과투명(기기 QA '아주
-                    // 약간만 불투명하게'). 바디감이 생기면 글래스 아래 시스템 그림자가
-                    // '이중 필'로 읽히던 착시도 함께 줄어든다.
-                    RoundedRectangle(cornerRadius: 28).fill(Color.paper.opacity(0.35))
-                    Color.clear.glassEffect(.clear, in: .rect(cornerRadius: 28))
+                    // 라떼 30% 언더레이(기존 paper 35%) — 필이 크림 배경 위에서
+                    // '하얗게' 떠 보이던 문제(기기 QA) 워밍. 라떼(웜 베이지)가
+                    // 글래스 밝힘을 상쇄해 페이지 크림과 한 톤으로 가라앉는다.
+                    NotchedPillShape().fill(Color.latte.opacity(0.30))
+                    Color.clear.glassEffect(.clear, in: NotchedPillShape())
                 }
             }
         } else {
             self
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
-                .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.latte.opacity(0.85), lineWidth: 0.5))
+                .background(.ultraThinMaterial, in: NotchedPillShape())
+                .overlay(NotchedPillShape().stroke(Color.latte.opacity(0.85), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
         }
     }
