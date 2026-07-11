@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 탭별 장식 고양이 자세 — Android `BottomNavBar.kt` 의 `catPose` / PWA
 /// `updateBottomNavCatForView` 미러. 위치/크기 수치는 실기기에서 미세조정 가능(조정 가능).
@@ -34,6 +35,10 @@ struct EditorialTabBar: View {
     var onReselect: ((Tab) -> Void)? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// 선택 로진지 글라이드용 네임스페이스 (matchedGeometryEffect).
+    @Namespace private var selectionNS
 
     /// TODAY(center) 탭을 누를 때마다 1씩 증가 → 실타래 'jiggle' 트리거.
     @State private var yarnTapCount = 0
@@ -54,6 +59,25 @@ struct EditorialTabBar: View {
     /// safeAreaInset 이 스크롤 콘텐츠를 그만큼 위로 밀어 — 고양이가 읽을 내용을 가리지 않는다.
     /// (각 자세 height*ledgeFraction ≤ 이 값이 되도록 catPose 수치를 잡는다.)
     private static let catClearance: CGFloat = 56
+
+    // MARK: - Shared pill geometry (기기 적응)
+
+    /// 홈 인디케이터 유무 — ⚠️ UIApplication/keyWindow 접근 금지: body 평가 중의
+    /// 정적 초기화가 윈도우 레이아웃을 유발 → 같은 body 재진입 → dispatch_once
+    /// 재진입 트랩(SIGTRAP) 즉사(26.5 심 셀프체크에서 검출·수정). 레이아웃을
+    /// 유발하지 않는 화면 치수 휴리스틱: iOS 18+ 지원 iPhone 중 홈 버튼(safe
+    /// bottom=0)은 SE 2·3세대(논리 높이 667pt)뿐 — 700pt 초과면 인디케이터 기기.
+    private static let hasHomeIndicator: Bool = UIScreen.main.bounds.height > 700
+
+    /// 필 바닥 부양 — 인디케이터 기기는 6(이미 34pt 인디케이터 지대 위), 홈 버튼
+    /// 기기는 12(safe bottom=0 이라 6 은 화면 모서리에 과밀착). 기기별 눈대중 값이
+    /// 아니라 safe-area 유무 기준이라 전 iPhone 에서 일관된 시각 간격이 나온다.
+    static let barBottomMargin: CGFloat = hasHomeIndicator ? 6 : 12
+
+    /// safe-area bottom → 필 '윗면'까지의 거리 — 필 위에 얹히는 모든 동반 요소
+    /// (피드 고양이·연필 FAB·Library 페이지 바)가 이 값에서 파생해야 한다.
+    /// (매직 넘버 60/78/70 하드코딩이 기기/마진 변경마다 어긋나던 문제의 단일화.)
+    static let pillTopInset: CGFloat = barBottomMargin + 64
 
     /// long-press 이스터에그용 깜짝 자세 (cat_confused). 돌출 60*0.72≈43 ≤ clearance.
     private static let catEggPose = NavCatPose(asset: "cat_confused", height: 60, hBias: 0.30, ledgeFraction: 0.72)
@@ -82,18 +106,34 @@ struct EditorialTabBar: View {
                             .contentShape(Rectangle())
                     }
                     // .plain 이 아니라 커스텀 bare 스타일 — iOS 26 글래스 위 버튼에
-                    // 시스템이 씌우는 회색 하이라이트 필(탭 전환 시 버튼을 따라다니던
-                    // '회색 알약', 기기 QA)을 차단한다. 눌림 피드백은 은은한 딤만.
+                    // 시스템이 씌우는 눌림 하이라이트를 차단한다. 피드백은 은은한 딤만.
                     .buttonStyle(BareNavButtonStyle())
+                    // 선택 로진지 — 네이티브 iOS 26 탭바의 회색 알약을 '우리 것'으로 재현
+                    // (기기 QA: 유령 네이티브 바의 알약은 우리 버튼과 정렬 불가 → 직접
+                    // 그려 항상 아이템 정중앙). 센터(TODAY)는 메달리온이 지표라 제외.
+                    // matchedGeometryEffect 로 탭 전환 시 아이템 사이를 미끄러진다.
+                    .background {
+                        if tab == selection && !tab.isCenter {
+                            // 인셋 4/5 — 기기 QA '로진지가 작다' 보정(기존 8/8). 아이템
+                            // 셀을 거의 채우는 네이티브 iOS 26 알약 크기감.
+                            Capsule()
+                                .fill(Color.espresso.opacity(0.10))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 5)
+                                .matchedGeometryEffect(id: "navSelection", in: selectionNS)
+                        }
+                    }
                     .coachAnchor(navAnchorId(tab))
                 }
             }
             .frame(height: 64)
+            // 로진지 글라이드 — selection 변경을 애니메이션화(matchedGeometry 이동).
+            .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.82), value: selection)
             .navPillSurface()
-            // Android BottomNavBar 지오메트리 그대로: BarSideMargin=14 ·
-            // BarBottomMargin=12 (홈 인디케이터 위 12pt 부양).
-            .padding(.horizontal, 14)
-            .padding(.bottom, 12)
+            // 지오메트리(라운드4, 기기 QA 눈대중 보정): 좌우 20(14 는 과폭) ·
+            // 바닥 barBottomMargin(인디케이터 기기 6 / 홈 버튼 기기 12 — 기기 적응).
+            .padding(.horizontal, 20)
+            .padding(.bottom, Self.barBottomMargin)
         }
         // 장식 고양이 — 위 투명 여백 안에 앉아 바 윗면에 걸친다. 여백 높이만큼만 솟으므로
         // 콘텐츠 영역을 침범하지 않는다. click-through(allowsHitTesting=false)라 탭을 가리지 않음.
@@ -217,12 +257,14 @@ struct EditorialTabBar: View {
     private func centerItem(tab: Tab, active: Bool) -> some View {
         VStack(spacing: 2) {
             ZStack {
-                // 페이퍼 백킹 링 — 메달리온이 필 위로 솟은 부분 뒤로 스크롤 콘텐츠의
-                // 선(카드 테두리 등)이 그대로 지나가 '줄이 관통'해 보이던 문제(기기 QA).
-                // 컷아웃 노치처럼 3pt 페이퍼 링으로 분리해 배경과 절연한다.
+                // 백킹 링(컷아웃 노치) — 메달리온 뒤로 지나가는 콘텐츠 선 + 글래스 필
+                // 상단 림 하이라이트가 공(ball)을 '관통'해 보이던 문제(기기 QA 2회) 절연.
+                // 60→68: 3pt 링은 림 라인을 못 끊었다 — 7pt 로 확실한 소켓 룩.
+                // 다크에선 paper(≈검정)가 두꺼운 검은 테로 읽혀(기기 QA) latte 로 —
+                // 메달리온 원과 한 톤으로 녹아 부드러운 다크-웜 디스크가 된다.
                 Circle()
-                    .fill(Color.paper)
-                    .frame(width: 60, height: 60)
+                    .fill(colorScheme == .dark ? Color.latte : Color.paper)
+                    .frame(width: 68, height: 68)
                 Circle()
                     .fill(Color.latte)
                     .frame(width: 54, height: 54)
@@ -260,9 +302,9 @@ struct EditorialTabBar: View {
         case .feed:
             return NavCatPose(asset: "cat_pen", height: 64, hBias: 0.92, ledgeFraction: 0.86)    // 돌출 ≈ 55
         case .archive:
-            // hBias 0.77 = LIBRARY↔MY 버튼 중간 지점(기기 QA 라운드2 의 0.60 은 과이동,
-            // 원래 0.80 은 살짝 우측). x = w/2 + bias*(w/2-44) 기준 중간 ≈ 0.77.
-            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.77, ledgeFraction: 0.86) // Android CatHeightLibrary=90
+            // hBias 0.74 — LIBRARY↔MY 중간에서 MY 쪽으로 기울던 것 한 눈금 좌측(기기
+            // QA 라운드4; 0.60 과이동 → 0.77 소폭 우편향 → 0.74).
+            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.74, ledgeFraction: 0.86) // Android CatHeightLibrary=90
         case .daily, .settings:
             return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)  // 돌출 ≈ 24
         case .home:
