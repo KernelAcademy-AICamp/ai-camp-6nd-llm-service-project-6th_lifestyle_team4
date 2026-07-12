@@ -499,6 +499,15 @@ struct RootView: View {
             let result = await attendance.checkIn()
             attendanceRewarded = result?.rewarded ?? false
             if let result, result.rewarded { yarn.sync(serverBalance: result.balance) }
+            #if DEBUG
+            // -forceRewardFly: 서버가 오늘 이미 보상했어도(+rewarded=false) +100 버스트
+            // 애니를 강제 재생 — '보상' 자체는 서버가 그날 1회 dedup 하므로 시각 QA 로는
+            // 자정을 기다려야 했던 갭. 잔액 동기화(yarn.sync)는 위에서 '실제' rewarded 에만
+            // 묶여 있어 가짜 잔액 없음. -forceAttendance 와 함께 쓰면 매 실행 재현.
+            if ProcessInfo.processInfo.arguments.contains("-forceRewardFly") {
+                attendanceRewarded = true
+            }
+            #endif
             await attendance.loadHistory()
             // 오늘 첫 출석(+100)이면 보상 버스트를 먼저 재생하고, 끝나면 달력을 연다
             // (Android DailyScriptRoot: rewardAnim → attendanceVisible 순서 미러).
