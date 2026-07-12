@@ -402,7 +402,13 @@ struct CardDetailView: View {
                 .buttonStyle(.plain)
                 .coachAnchor("detail_hl_button")
                 .padding(.trailing, 18)
-                .padding(.bottom, session.isAnonymous ? 28 : 92)
+                // 필 윗면(pillTopInset)에서 파생 — 고정 28/92 는 글래스 필 부양 전
+                // 좌표라 FAB 가 필 뒤에 숨었다(기기 QA: 코치 5/5 스포트라이트도 필 뒤).
+                // 게스트=필 위 8pt, 회원=필+도킹 컴포저(≈64) 위. 코치 앵커도 함께 올라가
+                // 스포트라이트가 버튼에 정확히 앉는다.
+                .padding(.bottom, session.isAnonymous
+                    ? EditorialTabBar.pillTopInset + 8
+                    : EditorialTabBar.pillTopInset + 72)
                 .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
         }
