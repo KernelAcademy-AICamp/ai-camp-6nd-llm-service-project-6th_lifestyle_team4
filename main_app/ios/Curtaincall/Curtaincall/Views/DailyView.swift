@@ -156,7 +156,7 @@ struct DailyView: View {
         if hasLoaded && !force { return }
         do {
             if allCards.isEmpty {
-                allCards = try await Supa.shared.fetchCards()
+                allCards = try await CardCache.shared.cards()   // 세션 공유(무료 티어 부하↓)
             }
             fetchFailed = false
             trendingCounts = (try? await Supa.shared.fetchBookmarkCounts(cardIds: allCards.map(\.cardId))) ?? [:]

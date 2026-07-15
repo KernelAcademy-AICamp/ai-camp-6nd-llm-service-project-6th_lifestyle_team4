@@ -387,7 +387,7 @@ final class LibraryCatalogModel: ObservableObject {
         loading = true
         loadError = false
         do {
-            let cards = try await Supa.shared.fetchCards(limit: 500)
+            let cards = try await CardCache.shared.cards()   // 세션 공유(무료 티어 부하↓; limit 파라미터는 원래 무시됨)
             books = Self.groupBooks(cards)
             loaded = true
         } catch {
