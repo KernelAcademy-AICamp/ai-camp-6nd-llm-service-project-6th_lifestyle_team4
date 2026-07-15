@@ -72,7 +72,9 @@ struct EditorialTabBar: View {
     /// 필 바닥 부양 — 인디케이터 기기는 6(이미 34pt 인디케이터 지대 위), 홈 버튼
     /// 기기는 12(safe bottom=0 이라 6 은 화면 모서리에 과밀착). 기기별 눈대중 값이
     /// 아니라 safe-area 유무 기준이라 전 iPhone 에서 일관된 시각 간격이 나온다.
-    static let barBottomMargin: CGFloat = hasHomeIndicator ? 6 : 12
+    // 라운드7: 필을 살짝 낮춰(6→4 / 12→10) 콘텐츠 가독 영역 확보(QA). pillTopInset
+    // 파생이라 고양이·FAB·페이지 바가 함께 내려온다.
+    static let barBottomMargin: CGFloat = hasHomeIndicator ? 4 : 10
 
     /// safe-area bottom → 필 '윗면'까지의 거리 — 필 위에 얹히는 모든 동반 요소
     /// (피드 고양이·연필 FAB·Library 페이지 바)가 이 값에서 파생해야 한다.
@@ -119,7 +121,7 @@ struct EditorialTabBar: View {
                             Capsule()
                                 .fill(Color.espresso.opacity(0.08))
                                 .padding(.horizontal, 3)
-                                .padding(.vertical, 3)
+                                .padding(.vertical, 2)   // 라운드7: 세로 3→2 (로진지 살짝 키 ↑)
                                 .matchedGeometryEffect(id: "navSelection", in: selectionNS)
                         }
                     }
@@ -259,12 +261,12 @@ struct EditorialTabBar: View {
             ZStack {
                 // 라떼 헤일로 — 노치 틈으로 배경이 비쳐 다크에서 공 둘레가 '검은 테'로
                 // 읽히던 문제(기기 QA). Android 센터 버튼의 라떼 서클(다크=브라운) 미러.
-                // 라운드6c: 아직 한 끗 두껍다는 QA → 58pt(가시 2pt)로 축소. 노치 홀도
-                // 56(r28)로 동반 축소 — 헤일로가 항상 1pt 겹침으로 홀을 꽉 채워야
-                // 배경 틈(다크 검은 선)이 재발하지 않는다(짝 유지 필수).
+                // 라운드7: 더 얇게(QA) → 56pt(가시 1pt). 노치 홀도 54(r27) 동반 축소 —
+                // 헤일로가 항상 1pt 겹침으로 홀을 꽉 채워야 배경 틈(다크 검은 선)이
+                // 재발하지 않는다(헤일로 = 노치홀+2 짝 유지 필수).
                 Circle()
                     .fill(Color.latte)
-                    .frame(width: 58, height: 58)
+                    .frame(width: 56, height: 56)
                     .shadow(color: Color.black.opacity(0.18), radius: 4, x: 0, y: 2)
                 // 실타래가 메달리온을 가득 채우도록 fill+clip (이미지 좌우 투명 여백은 잘라낸다).
                 Image("daily-script-bar")
@@ -371,12 +373,12 @@ private struct BareNavButtonStyle: ButtonStyle {
 /// 자리만큼 원형 노치를 뺀 형태(Android/PWA '컷아웃 노치' 룩). 글래스 림 하이라이트가
 /// 공 둘레를 따라 휘어 지나가므로, 백킹 링 없이도 라인이 공을 관통하지 않는다.
 /// 노치 원 중심 = 메달리온 중심과 동일: 공 54pt 가 필 위로 16pt 돌출(HomeProtrusion)
-/// → 중심은 필 윗면에서 11pt 아래. 반경 28 = 공 27 + 1pt 클리어런스 — ⚠️ 라떼
-/// 헤일로(58pt, centerItem)와 짝: 홀(56)을 헤일로가 1pt 겹침으로 채우는 관계 유지.
+/// → 중심은 필 윗면에서 11pt 아래. 반경 27 = 공 지름 54 와 동일 — ⚠️ 라떼
+/// 헤일로(56pt, centerItem)와 짝: 홀(54)을 헤일로가 1pt 겹침으로 채우는 관계 유지.
 struct NotchedPillShape: Shape {
     func path(in rect: CGRect) -> Path {
         let pill = Path(roundedRect: rect, cornerRadius: 28)
-        let r: CGFloat = 28
+        let r: CGFloat = 27
         let notch = Path(ellipseIn: CGRect(x: rect.midX - r, y: 11 - r, width: r * 2, height: r * 2))
         return pill.subtracting(notch)
     }
