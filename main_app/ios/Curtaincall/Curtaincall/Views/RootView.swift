@@ -218,7 +218,7 @@ struct RootView: View {
         // Shake → random 명대사 peek. Load a pool once; pick on shake.
         .task {
             if cardPool.isEmpty {
-                cardPool = (try? await Supa.shared.fetchCards()) ?? []
+                cardPool = (try? await CardCache.shared.cards()) ?? []   // 세션 공유(무료 티어 부하↓)
             }
         }
         .onShake { handleShake() }

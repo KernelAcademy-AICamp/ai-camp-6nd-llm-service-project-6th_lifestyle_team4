@@ -261,7 +261,7 @@ struct HomeView: View {
         defer { isLoading = false }
         do {
             if allCards.isEmpty {
-                allCards = try await Supa.shared.fetchCards()
+                allCards = try await CardCache.shared.cards()   // 세션 공유(무료 티어 부하↓)
             }
             fetchFailed = false
             let pick: Card?
