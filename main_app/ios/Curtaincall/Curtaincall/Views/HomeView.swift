@@ -393,8 +393,11 @@ private struct TodayCardBody: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                if let format = card?.work.format.label(original: showOriginal), !format.isEmpty {
-                    Chip(text: format, filled: true)
+                // 장르 배지 — Android 미러: 항상 영어 라벨(Chip 이 대문자화) + 장르별
+                // 가죽 톤 색(chipColor). 기존엔 KR/ENG 토글을 따라 한글·espresso 단색이라
+                // 장르 구분이 안 됐다(기기 QA).
+                if let fmt = card?.work.format, !fmt.displayNameEnglish.isEmpty {
+                    Chip(text: fmt.displayNameEnglish, filled: true, fillColor: fmt.chipColor)
                 }
                 // PWA renderCountsForToday: 포맷 칩 옆에 조회 · 댓글 (북마크 수는 하단 아이콘으로
                 // 이동, m-app.js:2027/2245). 키워드는 하단 해시태그로만 표시(상단 칩 없음).

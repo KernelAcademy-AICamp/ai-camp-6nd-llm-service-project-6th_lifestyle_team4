@@ -833,8 +833,11 @@ struct CardDetailView: View {
 
     private var metadataBlock: some View {
         VStack(spacing: 6) {
+            // 장르는 KR/ENG 토글과 무관하게 항상 영어 대문자(Android 상세 메타 미러:
+            // 예 "NOVEL 알렉상드르 뒤마"). 기존 label(original:) 은 토글을 따라 한글로
+            // 나왔다(기기 QA). 작가는 기존대로 토글 반영.
             let head: [String] = [
-                card.work.format.label(original: showOriginal),
+                card.work.format.displayNameEnglish.uppercased(),
                 card.work.displayAuthor(original: showOriginal)?.uppercased() ?? "",
             ].filter { !$0.isEmpty }
             if !head.isEmpty {
