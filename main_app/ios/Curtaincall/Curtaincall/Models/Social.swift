@@ -1,17 +1,34 @@
 import Foundation
 
+// 파서용 포매터는 생성 비용이 크다(ISO8601DateFormatter.init ~수 ms/개). 예전엔
+// parseISODate 호출마다 3개를 새로 만들어, 피드/댓글/공지 createdDate 게터가
+// 대량 호출되는 탭 전환·스크롤 때 수십 ms 를 태웠다(Instruments Time Profiler:
+// parseISODate 14ms + ISO8601DateFormatter.init 11ms 이 탭전환 하이치 상위 2·3위).
+// → 파일 스코프 싱글턴으로 1회만 생성해 캐시. 설정 후 불변이고 date(from:) 읽기는
+// Foundation 상에서 스레드-세이프라(mutate 안 함) nonisolated(unsafe) 로 공유한다.
+nonisolated(unsafe) private let isoWithFraction: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+nonisolated(unsafe) private let isoPlain: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime]
+    return f
+}()
+nonisolated(unsafe) private let isoFallback: DateFormatter = {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+    return f
+}()
+
 /// Parses Postgres/ISO8601 timestamps, with or without fractional seconds.
+/// 포매터는 위 캐시 싱글턴을 재사용(호출당 할당 0).
 nonisolated func parseISODate(_ iso: String) -> Date? {
-    let withFraction = ISO8601DateFormatter()
-    withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let d = withFraction.date(from: iso) { return d }
-    let plain = ISO8601DateFormatter()
-    plain.formatOptions = [.withInternetDateTime]
-    if let d = plain.date(from: iso) { return d }
-    let fallback = DateFormatter()
-    fallback.locale = Locale(identifier: "en_US_POSIX")
-    fallback.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-    return fallback.date(from: String(iso.prefix(19)))
+    if let d = isoWithFraction.date(from: iso) { return d }
+    if let d = isoPlain.date(from: iso) { return d }
+    return isoFallback.date(from: String(iso.prefix(19)))
 }
 
 // MARK: - Users

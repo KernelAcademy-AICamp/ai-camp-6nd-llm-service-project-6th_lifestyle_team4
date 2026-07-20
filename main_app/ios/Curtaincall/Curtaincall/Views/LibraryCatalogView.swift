@@ -32,10 +32,26 @@ struct LibraryCatalogView: View {
     ]
 
     /// 정렬 옵션 — Android `LibrarySort` 미러: 가나다순(기본) / 최신등록순. (장르순 없음)
-    private enum LibrarySort {
+    private enum LibrarySort: Equatable {
         case alpha, latest
         var label: String { self == .alpha ? "가나다순" : "최신등록순" }
     }
+
+    /// filteredBooks 메모이제이션 캐시 — 아래 filteredBooks 주석 참조. 참조형이라
+    /// body 평가 중 내용을 갱신해도 @State 세터를 거치지 않아 재평가 루프가 없다.
+    private final class FilterMemo {
+        var key: FilterKey?
+        var value: [ShelfWork] = []
+    }
+    /// 캐시 무효화 키 — 이 값들이 바뀔 때만 필터+정렬을 다시 돈다. bookCount 는
+    /// model.books(1회 로드 후 불변) 변경 감지용 저비용 프록시.
+    private struct FilterKey: Equatable {
+        let q: String
+        let genre: WorkFormat?
+        let sort: LibrarySort
+        let bookCount: Int
+    }
+    @State private var filterMemo = FilterMemo()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -118,8 +134,16 @@ struct LibraryCatalogView: View {
 
     private var totalCards: Int { model.books.reduce(0) { $0 + $1.cards.count } }
 
+    // filteredBooks 는 body 한 번에 여러 번 접근된다(빈 체크·pageCount·pageBooks·
+    // firstIndex). 접근마다 전체 카탈로그를 필터 + 로케일 정렬(localizedStandardCompare)
+    // 하던 것이 탭 전환 시 최상위 비용이었다(Instruments Time Profiler:
+    // filteredBooks.getter 27ms — 단일 최대 self-weight). 입력(검색어·장르·정렬·책 수)이
+    // 실제로 바뀔 때만 재계산하도록 메모이즈 — 같은 body 패스의 반복 접근은 캐시 히트.
     private var filteredBooks: [ShelfWork] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let key = FilterKey(q: q, genre: selectedGenre, sort: sort, bookCount: model.books.count)
+        if filterMemo.key == key { return filterMemo.value }
+
         let base = model.books.filter { b in
             if let selectedGenre, b.format != selectedGenre {
                 return false
@@ -131,12 +155,16 @@ struct LibraryCatalogView: View {
         }
         // 정렬 — Android librarySortComparator 미러: 가나다순(displayTitle 한글 콜레이션) /
         // 최신등록순(작품 카드의 최대 card_id 내림차순 = 가장 최근 등록된 작품).
+        let result: [ShelfWork]
         switch sort {
         case .alpha:
-            return base.sorted { displayTitle($0).localizedStandardCompare(displayTitle($1)) == .orderedAscending }
+            result = base.sorted { displayTitle($0).localizedStandardCompare(displayTitle($1)) == .orderedAscending }
         case .latest:
-            return base.sorted { ($0.cards.map(\.cardId).max() ?? 0) > ($1.cards.map(\.cardId).max() ?? 0) }
+            result = base.sorted { ($0.cards.map(\.cardId).max() ?? 0) > ($1.cards.map(\.cardId).max() ?? 0) }
         }
+        filterMemo.key = key
+        filterMemo.value = result
+        return result
     }
 
     private var pageCount: Int {
