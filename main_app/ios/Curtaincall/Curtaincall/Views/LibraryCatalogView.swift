@@ -274,7 +274,7 @@ struct LibraryCatalogView: View {
 
     private var pageBar: some View {
         HStack(spacing: 8) {
-            pageArrow("chevron.left", enabled: effectivePage > 0) { page = effectivePage - 1 }
+            pageArrow("chevron.left", label: "이전 페이지", enabled: effectivePage > 0) { page = effectivePage - 1 }
             ForEach(pageWindow, id: \.self) { p in
                 Button { page = p } label: {
                     Text("\(p + 1)")
@@ -295,8 +295,12 @@ struct LibraryCatalogView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // 숫자 칩은 Button 이라 버튼 시맨틱은 유지되지만, 라벨이 맨숫자("1")로만
+                // 읽히고 현재 페이지 여부가 전달되지 않았다 — 화살표 접근성 복원과 함께 보완.
+                .accessibilityLabel("\(p + 1)페이지")
+                .accessibilityAddTraits(p == effectivePage ? [.isButton, .isSelected] : .isButton)
             }
-            pageArrow("chevron.right", enabled: effectivePage < pageCount - 1) { page = effectivePage + 1 }
+            pageArrow("chevron.right", label: "다음 페이지", enabled: effectivePage < pageCount - 1) { page = effectivePage + 1 }
         }
         .frame(maxWidth: .infinity)
         // 페이지 전환은 '즉시 스왑' — 슬라이딩 윈도우 시절 버튼 identity(페이지 번호)가
@@ -310,12 +314,22 @@ struct LibraryCatalogView: View {
     /// Button 대신 단일 DragGesture(minimumDistance 0)로 누름/뗌을 직접 다뤄 탭과
     /// 홀드가 서로 먹지 않게 한다(Button + 제스처 조합은 탭이 중복 발화).
     /// 히트 영역 28→44pt(HIG 최소) — 화살표가 가끔 안 먹던 원인이 작은 타깃이었다.
-    private func pageArrow(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func pageArrow(_ icon: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Image(systemName: icon)
             .font(.system(size: 13, weight: .regular))
             .foregroundStyle(enabled ? Color.walnut : Color.latte)
             .frame(width: 44, height: 44)          // 시각 아이콘은 그대로, 히트 영역만 44
             .contentShape(Rectangle())
+            // ⚠️ 접근성 — Button 을 제스처로 대체하면서 잃은 시맨틱을 명시 복원(리뷰 P2).
+            // DragGesture 는 보조기술에 노출되지 않으므로 버튼 특성 + 라벨 + 기본
+            // 액션(VoiceOver 더블탭/스위치 컨트롤)을 직접 부여한다. 경계에서 동작이
+            // 없는 화살표는 보조기술 탐색에서 건너뛴다(비활성 Button 의 dimmed 대응).
+            .accessibilityElement()
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("길게 누르면 연속으로 이동합니다")
+            .accessibilityAction { if enabled { action() } }
+            .accessibilityHidden(!enabled)
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
