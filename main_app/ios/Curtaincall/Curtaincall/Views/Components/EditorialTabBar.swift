@@ -139,7 +139,11 @@ struct EditorialTabBar: View {
         }
         // 장식 고양이 — 위 투명 여백 안에 앉아 바 윗면에 걸친다. 여백 높이만큼만 솟으므로
         // 콘텐츠 영역을 침범하지 않는다. click-through(allowsHitTesting=false)라 탭을 가리지 않음.
-        .overlay { if showCat { navCat } }
+        // ⚠️ 고양이는 순수 배경 장식 — 키보드에 반응할 이유가 없다. 부모 필의
+        // .ignoresSafeArea(.keyboard)(RootView safeAreaInset)가 safeAreaInset 안
+        // 오버레이까지는 확실히 닿지 않아, 로그인 팝업 키보드 dismiss 시 고양이가 잠깐
+        // 떠올랐다 내려앉았다(기기 QA). 고양이 레이어에 직접 걸어 배경에 고정한다.
+        .overlay { if showCat { navCat.ignoresSafeArea(.keyboard, edges: .bottom) } }
         // 고양이 long-press 이스터에그 캐처 — '투명 여백'(바 위쪽)에만 둔다. 그 영역엔
         // 탭 버튼이 없으므로 탭 히트테스트를 가리지 않는다(탭은 그 아래 64pt 바에 있음).
         .overlay(alignment: .top) { if showCat { catLongPressCatcher } }
