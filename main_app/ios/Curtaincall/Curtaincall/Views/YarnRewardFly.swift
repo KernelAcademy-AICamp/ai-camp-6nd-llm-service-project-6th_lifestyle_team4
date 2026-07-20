@@ -41,7 +41,8 @@ struct YarnRewardFly: View {
             withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { bobbing = true }
             Task { @MainActor in
                 // 0.35s 페이드 인 + 2.0s 유지
-                try? await Task.sleep(nanoseconds: 2_350_000_000)
+                // 3.6s 체류(기존 2.35s) — 시선이 다른 곳에 있으면 놓친다는 기기 QA 반영.
+                try? await Task.sleep(nanoseconds: 3_600_000_000)
                 withAnimation(.easeIn(duration: 0.4)) { visible = false }
                 try? await Task.sleep(nanoseconds: 400_000_000)
                 onFinished()

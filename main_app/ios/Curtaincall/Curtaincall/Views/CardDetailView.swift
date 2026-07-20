@@ -390,16 +390,18 @@ struct CardDetailView: View {
                     if session.isAnonymous { showHighlightLogin = true }
                     else { showHighlightSheet = true }
                 } label: {
-                    Text("하이라이트 추가")
-                        .font(.uiSans(14, weight: .medium))
-                        .tracking(0.8)
+                    // Android HlAddFab 미러(DetailScreen.kt:926 — 48dp 원형 Cta + 흰 '+').
+                    // 기존 '하이라이트 추가' 한글 텍스트 캡슐 → 아이콘 FAB(기기 QA).
+                    // 크기는 피드 글쓰기 FAB(52)와 맞춰 iOS 내부 일관성 유지.
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 13)
-                        .background(Capsule().fill(Color.cta))
+                        .frame(width: 52, height: 52)
+                        .background(Circle().fill(Color.cta))
                         .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("하이라이트 추가")   // 아이콘 전용이라 라벨 필수
                 .coachAnchor("detail_hl_button")
                 .padding(.trailing, 18)
                 // 필 윗면(pillTopInset)에서 파생 — 고정 28/92 는 글래스 필 부양 전
