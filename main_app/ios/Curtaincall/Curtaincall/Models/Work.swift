@@ -189,7 +189,9 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
 private extension Optional where Wrapped == String {
     /// The string if it has non-whitespace content, otherwise nil — so a blank
     /// original never wins over the Korean fallback.
-    var filledValue: String? {
+    /// (nonisolated — 순수 문자열 검사인데 파일 기본 MainActor 격리를 상속하면
+    ///  nonisolated Work 메서드에서 호출 시 격리 경고 3건이 났다. #188 리뷰 참조.)
+    nonisolated var filledValue: String? {
         guard let s = self,
               !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return s

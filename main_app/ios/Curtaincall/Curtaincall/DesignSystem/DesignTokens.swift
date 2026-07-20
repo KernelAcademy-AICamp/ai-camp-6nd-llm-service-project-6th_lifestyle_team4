@@ -36,7 +36,10 @@ extension Color {
     /// Feed post/card surface (replaces the old hardcoded 0xF4EFE6).
     static let feedCard = adaptive(light: 0xE6E1D7, dark: 0x1C1813)
 
-    init(hex: UInt32) {
+    // nonisolated — 순수 수치 변환(+ Color 는 Sendable)이라 액터 격리가 불필요한데,
+    // 파일 기본 MainActor 격리를 상속하면 nonisolated 모델(WorkFormat.chipColor 등)
+    // 에서 호출할 때마다 격리 경고가 난다(#188 리뷰 P2).
+    nonisolated init(hex: UInt32) {
         let r = Double((hex >> 16) & 0xFF) / 255
         let g = Double((hex >> 8) & 0xFF) / 255
         let b = Double(hex & 0xFF) / 255

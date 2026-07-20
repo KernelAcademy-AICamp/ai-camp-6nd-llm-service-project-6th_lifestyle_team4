@@ -16,7 +16,9 @@ nonisolated(unsafe) private let isoPlain: ISO8601DateFormatter = {
     f.formatOptions = [.withInternetDateTime]
     return f
 }()
-nonisolated(unsafe) private let isoFallback: DateFormatter = {
+// (unsafe 불필요 — DateFormatter 는 SDK 에서 Sendable 로 표기돼 있어 plain
+//  nonisolated 로 충분. ISO8601DateFormatter 는 아니라서 위 둘만 unsafe.)
+nonisolated private let isoFallback: DateFormatter = {
     let f = DateFormatter()
     f.locale = Locale(identifier: "en_US_POSIX")
     f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
