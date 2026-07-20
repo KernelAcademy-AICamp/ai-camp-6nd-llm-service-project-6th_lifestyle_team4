@@ -792,12 +792,17 @@ struct DailyOzPickSection: View {
         let tasteHit = card.keywords.first { taste.contains($0) }
         // 추천 한마디 — Android reason 문구와 동일(themeHit > tasteHit > 일반). 매칭된
         // 취향어(themeHit/tasteHit)는 볼드로 강조(Android 패리티).
+        // 매칭 취향어 강조 — ⚠️ .fontWeight(.bold) 는 무시된다: 본문 서체가
+        // .custom("NanumMyeongjo") 인데 번들에 Regular 페이스만 있어(볼드 페이스 없음)
+        // 커스텀 폰트에는 웨이트가 합성되지 않는다(기기 QA: '볼드 안 먹음'의 원인).
+        // → 같은 카드의 장르/주제 라벨과 동일한 cta(코랄) 색 강조로 대체. 폰트 에셋
+        // 추가 없이 확실히 눈에 띄고 카드 안에서 일관된 강조 언어가 된다.
         let reason: Text = {
             if let themeHit {
-                return Text("'") + Text(themeHit).fontWeight(.bold) + Text("' 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요.")
+                return Text("'") + Text(themeHit).foregroundColor(.cta) + Text("' 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요.")
             }
             if let tasteHit {
-                return Text("'") + Text(tasteHit).fontWeight(.bold) + Text("'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.")
+                return Text("'") + Text(tasteHit).foregroundColor(.cta) + Text("'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.")
             }
             return Text("오즈가 오늘 골라드린 한 문장이에요.")
         }()
