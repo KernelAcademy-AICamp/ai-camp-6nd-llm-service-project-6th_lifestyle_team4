@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 nonisolated enum WorkFormat: String, Decodable, Sendable {
     case movie
@@ -49,6 +50,23 @@ nonisolated enum WorkFormat: String, Decodable, Sendable {
     /// only if it has no English form, which it always does here except `.unknown`).
     func label(original: Bool) -> String {
         original ? displayNameEnglish : displayName
+    }
+
+    /// 장르 배지 채움 색(가죽 톤) — Android `genreChipColor` / PWA `.chip.filled.g-*`
+    /// 미러. `nil`(unknown/prose)이면 기본 espresso 채움 칩. 값은 Android GENRE_CHIP_COLOR
+    /// 와 동일(0xAARRGGBB → RGB).
+    var chipColor: Color? {
+        switch self {
+        case .movie:   return Color(hex: 0x4A2A18)
+        case .drama:   return Color(hex: 0x6B4A2A)
+        case .musical: return Color(hex: 0x5A2818)
+        case .opera:   return Color(hex: 0x4A2B1A)
+        case .play:    return Color(hex: 0x5A2A24)
+        case .novel:   return Color(hex: 0x3E585A)
+        case .poem:    return Color(hex: 0x27393B)
+        case .essay:   return Color(hex: 0x3A4030)
+        case .prose, .unknown: return nil   // Android GENRE_CHIP_COLOR 에 없음 → 기본 채움
+        }
     }
 
     /// Lenient decode: an unrecognized format string maps to `.unknown` instead
@@ -171,7 +189,9 @@ nonisolated struct Work: Decodable, Hashable, Sendable {
 private extension Optional where Wrapped == String {
     /// The string if it has non-whitespace content, otherwise nil — so a blank
     /// original never wins over the Korean fallback.
-    var filledValue: String? {
+    /// (nonisolated — 순수 문자열 검사인데 파일 기본 MainActor 격리를 상속하면
+    ///  nonisolated Work 메서드에서 호출 시 격리 경고 3건이 났다. #188 리뷰 참조.)
+    nonisolated var filledValue: String? {
         guard let s = self,
               !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return s
