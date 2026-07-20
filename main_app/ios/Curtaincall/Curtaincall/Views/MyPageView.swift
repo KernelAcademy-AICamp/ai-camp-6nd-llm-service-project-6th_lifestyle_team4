@@ -32,8 +32,11 @@ struct MyPageView: View {
             AppMasthead(showsYarnChip: false)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Spacer().frame(height: 16)
+                    // 상단 여백 16→28 — 닉네임이 매스트헤드에 눌려 답답하다는 기기 QA.
+                    Spacer().frame(height: 28)
 
+                    // 정체성 블록(로그인) — 닉네임 → 아이디 → 실타래 로 한 덩어리(기기 QA
+                    // 재구성). 태그라인 제거, 구분선은 이 블록이 아니라 '공지' 위로 이동.
                     if !session.isAnonymous {
                         HStack(alignment: .top, spacing: 12) {
                             Text(session.nickname.isEmpty ? "Signed In" : session.nickname)
@@ -51,39 +54,39 @@ struct MyPageView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        Spacer().frame(height: 10)
-                        Text("매일 한 장의 명대사로 하루를 시작합니다.")
-                            .font(.bodySans(12))
-                            .foregroundStyle(.walnut.opacity(0.6))
-                            .bookLeading(size: 12)
-                        Spacer().frame(height: 16)
-                        Hairline()
+
+                        // 아이디 — 닉네임 바로 아래(합성 이메일 대신 사람이 정한 login_id).
+                        if !session.loginId.isEmpty {
+                            Spacer().frame(height: 8)
+                            Text("아이디 · \(session.loginId)")
+                                .font(.bodySans(13))
+                                .foregroundStyle(.walnut)
+                        }
+
+                        // 실타래 — 아이디 줄 바로 아래(상단바 칩과 별개 본문 펠릿).
+                        Spacer().frame(height: 12)
+                        yarnPill
                     }
 
-                    // 로그인 상태에선 합성 이메일 대신 사람이 정한 아이디(login_id)만 노출.
-                    if !session.isAnonymous, !session.loginId.isEmpty {
-                        Spacer().frame(height: 6)
-                        Text("아이디 · \(session.loginId)")
-                            .font(.bodySans(13))
-                            .foregroundStyle(.walnut)
+                    // 익명 — 로그인 CTA를 공지 위에 (PWA signin-block → 공지 순서, index.html:1944-1976).
+                    if session.isAnonymous {
+                        Spacer().frame(height: 20)
+                        yarnPill
+                        Spacer().frame(height: 20)
+                        signInBlock
+                        Spacer().frame(height: 32)
                     }
 
+                    // 로그인 안내 메시지("로그인 됐어요" 등) — 정체성 블록을 끊지 않도록
+                    // 블록 '끝'으로 내렸다(기기 QA). 일시적 상태 피드백이라 작게.
                     if let msg = session.authMessage {
                         Spacer().frame(height: 12)
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
 
-                    // 실타래 잔액 — ACCOUNT/공지 위에 본문 펠릿으로도 노출(상단바 칩과 별개).
-                    Spacer().frame(height: 20)
-                    yarnPill
-
-                    // 익명 — 로그인 CTA를 공지 위에 (PWA signin-block → 공지 순서, index.html:1944-1976).
-                    if session.isAnonymous {
-                        Spacer().frame(height: 20)
-                        signInBlock
-                        Spacer().frame(height: 32)
-                        Hairline()
-                    }
+                    // 구분선 — 정체성 블록과 '공지' 섹션 사이(기기 QA: 닉네임 밑 → 여기로).
+                    Spacer().frame(height: 28)
+                    Hairline()
 
                     // 공지 — 익명·로그인 모두 노출 (내 활동 위 top-level 섹션).
                     Spacer().frame(height: 20)
@@ -321,7 +324,7 @@ struct MyPageView: View {
                     .resizable().scaledToFill()
                     .frame(width: 16, height: 16)
                     .clipShape(Circle())
-                Text("실타래 \(yarn.balance)개")
+                Text("실타래 \(yarn.balance)")   // '개' 제거(기기 QA)
                     .font(.custom("Pretendard-Medium", size: 13))
                     .foregroundStyle(.espresso)
             }

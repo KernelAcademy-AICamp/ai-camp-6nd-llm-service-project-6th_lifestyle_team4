@@ -21,6 +21,10 @@ struct LibraryCatalogView: View {
     @State private var selectedWork: ShelfWork?
     @State private var contentWidth: CGFloat = 0
     @State private var sort: LibrarySort = .alpha   // 가나다순(기본) ⇄ 최신등록순 (Android LibrarySort)
+    /// 페이지 화살표 홀드-연속이동 상태(아래 pageArrow) — 진행 중 Task 와 '홀드로
+    /// 이미 이동했는지' 플래그(뗄 때 중복 1칸 이동 방지).
+    @State private var repeatTask: Task<Void, Never>?
+    @State private var didRepeat = false
 
     private static let pageSize = 12          // 4열 × 3행 (Android LibraryPageSize)
     private static let genreOrder: [WorkFormat] = [
@@ -270,7 +274,7 @@ struct LibraryCatalogView: View {
 
     private var pageBar: some View {
         HStack(spacing: 8) {
-            pageArrow("chevron.left", enabled: effectivePage > 0) { page = effectivePage - 1 }
+            pageArrow("chevron.left", label: "이전 페이지", enabled: effectivePage > 0) { page = effectivePage - 1 }
             ForEach(pageWindow, id: \.self) { p in
                 Button { page = p } label: {
                     Text("\(p + 1)")
@@ -285,10 +289,18 @@ struct LibraryCatalogView: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .stroke(p == effectivePage ? Color.clear : Color.latte, lineWidth: 1)
                         )
+                        // 칩 시각 크기(28)는 유지하고 세로 히트 영역만 44pt(HIG 최소)로 —
+                        // 숫자 버튼도 화살표와 같은 작은-타깃 문제를 안고 있었다.
+                        .frame(height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // 숫자 칩은 Button 이라 버튼 시맨틱은 유지되지만, 라벨이 맨숫자("1")로만
+                // 읽히고 현재 페이지 여부가 전달되지 않았다 — 화살표 접근성 복원과 함께 보완.
+                .accessibilityLabel("\(p + 1)페이지")
+                .accessibilityAddTraits(p == effectivePage ? [.isButton, .isSelected] : .isButton)
             }
-            pageArrow("chevron.right", enabled: effectivePage < pageCount - 1) { page = effectivePage + 1 }
+            pageArrow("chevron.right", label: "다음 페이지", enabled: effectivePage < pageCount - 1) { page = effectivePage + 1 }
         }
         .frame(maxWidth: .infinity)
         // 페이지 전환은 '즉시 스왑' — 슬라이딩 윈도우 시절 버튼 identity(페이지 번호)가
@@ -298,15 +310,49 @@ struct LibraryCatalogView: View {
         .transaction { $0.animation = nil }
     }
 
-    private func pageArrow(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(enabled ? Color.walnut : Color.latte)
-                .frame(width: 28, height: 28)
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
+    /// 페이지 화살표 — 탭 1칸 이동 + **길게 누르면 연속 이동**(기기 QA 요청).
+    /// Button 대신 단일 DragGesture(minimumDistance 0)로 누름/뗌을 직접 다뤄 탭과
+    /// 홀드가 서로 먹지 않게 한다(Button + 제스처 조합은 탭이 중복 발화).
+    /// 히트 영역 28→44pt(HIG 최소) — 화살표가 가끔 안 먹던 원인이 작은 타깃이었다.
+    private func pageArrow(_ icon: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 13, weight: .regular))
+            .foregroundStyle(enabled ? Color.walnut : Color.latte)
+            .frame(width: 44, height: 44)          // 시각 아이콘은 그대로, 히트 영역만 44
+            .contentShape(Rectangle())
+            // ⚠️ 접근성 — Button 을 제스처로 대체하면서 잃은 시맨틱을 명시 복원(리뷰 P2).
+            // DragGesture 는 보조기술에 노출되지 않으므로 버튼 특성 + 라벨 + 기본
+            // 액션(VoiceOver 더블탭/스위치 컨트롤)을 직접 부여한다. 경계에서 동작이
+            // 없는 화살표는 보조기술 탐색에서 건너뛴다(비활성 Button 의 dimmed 대응).
+            .accessibilityElement()
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("길게 누르면 연속으로 이동합니다")
+            .accessibilityAction { if enabled { action() } }
+            .accessibilityHidden(!enabled)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard enabled, repeatTask == nil else { return }
+                        didRepeat = false
+                        repeatTask = Task { @MainActor in
+                            // 0.45s 뒤부터 0.22s 간격 연속 이동(홀드 스크롤).
+                            try? await Task.sleep(nanoseconds: 450_000_000)
+                            while !Task.isCancelled {
+                                didRepeat = true
+                                action()
+                                try? await Task.sleep(nanoseconds: 220_000_000)
+                            }
+                        }
+                    }
+                    .onEnded { _ in
+                        repeatTask?.cancel()
+                        repeatTask = nil
+                        // 홀드로 이미 이동했으면 뗄 때 한 번 더 가지 않는다(탭만 1칸).
+                        if enabled, !didRepeat { action() }
+                        didRepeat = false
+                    }
+            )
     }
 
     /// 고정 블록 윈도우 — Android PageBar 미러: [1-4], [5-8], … 4개 단위로 통째 전환.
