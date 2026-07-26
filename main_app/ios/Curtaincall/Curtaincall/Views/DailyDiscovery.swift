@@ -795,14 +795,18 @@ struct DailyOzPickSection: View {
         // 매칭 취향어 강조 — ⚠️ .fontWeight(.bold) 는 무시된다: 본문 서체가
         // .custom("NanumMyeongjo") 인데 번들에 Regular 페이스만 있어(볼드 페이스 없음)
         // 커스텀 폰트에는 웨이트가 합성되지 않는다(기기 QA: '볼드 안 먹음'의 원인).
-        // → 같은 카드의 장르/주제 라벨과 동일한 cta(코랄) 색 강조로 대체. 폰트 에셋
-        // 추가 없이 확실히 눈에 띄고 카드 안에서 일관된 강조 언어가 된다.
+        // 1차로 cta(코랄) 색만 입혔으나 "색만으론 약하다"(UX 판단) → 코랄 유지 +
+        // '실제 웨이트'를 얹는다: 강조 세그먼트만 번들된 sansMedium(Pretendard-Medium,
+        // 500)으로 교체. 세리프 Regular 본문 안에서 패밀리 대비 + 웨이트 상승 + 코랄이
+        // 겹쳐 확실히 도드라진다(Pretendard 한글 x-height 가 명조보다 커 광학적으로도
+        // 살짝 크게 읽힌다). 폰트 에셋 추가 0 — 앱 용량 무변경.
+        let emphasis = Font.uiSans(13, weight: .medium)
         let reason: Text = {
             if let themeHit {
-                return Text("'") + Text(themeHit).foregroundColor(.cta) + Text("' 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요.")
+                return Text("'") + Text(themeHit).font(emphasis).foregroundColor(.cta) + Text("' 이야기를 좋아한다면, 이 작품이 잘 맞을 거예요.")
             }
             if let tasteHit {
-                return Text("'") + Text(tasteHit).foregroundColor(.cta) + Text("'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.")
+                return Text("'") + Text(tasteHit).font(emphasis).foregroundColor(.cta) + Text("'에 자주 머무는 당신이라면, 좋아할 한 문장이에요.")
             }
             return Text("오즈가 오늘 골라드린 한 문장이에요.")
         }()
