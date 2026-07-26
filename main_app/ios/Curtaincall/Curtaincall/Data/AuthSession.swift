@@ -417,12 +417,19 @@ final class AuthSession: ObservableObject {
 
 /// ASWebAuthenticationSession(OAuth 웹뷰)의 표시 앵커 제공자.
 /// 현재 foreground 윈도우를 앵커로 돌려준다.
-final class WebAuthPresentationContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+/// nonisolated + @unchecked Sendable — 상태가 없는 싱글턴인데 파일 기본 MainActor
+/// 격리를 상속하면 `signInWithOAuth` 의 @Sendable 설정 클로저에서 `.shared` 를
+/// 참조할 때 격리 경고가 난다. 앵커 조회만 UIKit(메인 스레드 보장 콜백)이라
+/// `MainActor.assumeIsolated` 로 감싼다. #188 리뷰 참조.
+nonisolated final class WebAuthPresentationContextProvider: NSObject,
+    ASWebAuthenticationPresentationContextProviding, @unchecked Sendable {
     static let shared = WebAuthPresentationContextProvider()
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }
-        return scene?.keyWindow ?? ASPresentationAnchor()
+        MainActor.assumeIsolated {
+            let scene = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first { $0.activationState == .foregroundActive }
+            return scene?.keyWindow ?? ASPresentationAnchor()
+        }
     }
 }

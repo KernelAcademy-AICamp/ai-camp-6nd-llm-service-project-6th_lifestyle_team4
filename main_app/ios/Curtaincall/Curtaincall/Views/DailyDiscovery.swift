@@ -949,7 +949,9 @@ struct DailyOzPickSection: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private static func genreLabel(_ format: String) -> String {
+    /// nonisolated — 순수 문자열 변환인데 `map(Self.genreLabel)` 로 함수 참조를
+    /// nonisolated 클로저에 넘기면 파일 기본 MainActor 격리 때문에 경고가 난다.
+    private nonisolated static func genreLabel(_ format: String) -> String {
         let label = WorkFormat(rawValue: format.lowercased())?.displayName ?? ""
         return label.isEmpty ? "기타" : label
     }

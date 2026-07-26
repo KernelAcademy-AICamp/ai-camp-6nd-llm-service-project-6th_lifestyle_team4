@@ -849,7 +849,9 @@ private struct HighlightFeedCard: View {
             .joined(separator: " · ")
     }
 
-    private static func dateText(_ date: Date) -> String {
+    /// nonisolated — 순수 날짜 포맷인데 `map(Self.dateText)` 로 함수 참조를
+    /// nonisolated 클로저에 넘기면 파일 기본 MainActor 격리 때문에 경고가 난다.
+    private nonisolated static func dateText(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.dateFormat = "M. d  a h:mm"
