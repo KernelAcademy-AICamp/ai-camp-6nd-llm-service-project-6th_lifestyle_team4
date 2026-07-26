@@ -433,7 +433,29 @@ struct RootView: View {
         .onPreferenceChange(FeedDetailPresentedPreferenceKey.self) { presented in
             feedDetailPresented = presented
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // 탭바 호스팅: safeAreaInset → overlay (키보드 부양 근본 수정, 기기 QA 재발).
+        //
+        // 왜 바꿨나: .safeAreaInset(bottom) 은 배치 계산을 '바깥 컨텍스트'에서 먼저
+        // 한다 — 키보드가 애니메이션 중이면 그 프레임마다 (키보드 포함) safe area 로
+        // 앵커를 다시 잡은 '뒤에' 콘텐츠의 .ignoresSafeArea(.keyboard) 가 적용된다.
+        // 게다가 ignoresSafeArea 는 '고정 높이' 콘텐츠(탭바 VStack)를 붙잡아 주지
+        // 못한다(문서화된 한계). 결과: 키보드 dismiss 애니메이션 동안 바/고양이가
+        // 사라지는 키보드를 타고 떠올랐다 내려앉는 트랜지언트. 예전 불투명 풀-폭 바가
+        // 이를 시각적으로 가리고 있었고(a045992 참조), 7/11 글래스 필 전환 + 고양이
+        // 스프링 컨테이너(4c0ce1e)가 이 트랜지언트를 눈에 띄는 글라이드로 만들었다.
+        //
+        // 새 구조: overlay(bottom) + '탐욕 프레임'(maxHeight .infinity, 하단 정렬)
+        // + 그 바깥 .ignoresSafeArea(.keyboard). 프레임이 유연해야 ignoresSafeArea 가
+        // 매 프레임 키보드-무시 전체 높이를 채우고 바를 진짜 컨테이너 바닥에 정렬한다
+        // (show/dismiss 애니메이션 내내 안정). .container 는 무시하지 않으므로 홈
+        // 인디케이터 인셋은 그대로 존중 — barBottomMargin 로직 무변경.
+        //
+        // 인셋 손실 없음: 루트 safeAreaInset 은 TabView 페이지 안으로 전파되지 않아
+        // (각 탭 104pt 스페이서·pillTopInset 파생값으로 전부 수동 보상 — 각 파일 주석
+        // 참조) 인셋 제공 기능이 실사용처 0 이었다. z-order 도 동일(로그인 팝업 딤
+        // 아래, FeedWriteCat 위 순서 유지). 탐욕 프레임의 빈 영역은 히트테스트 없음
+        // (레이아웃 컨테이너일 뿐) — 바/고양이 외 터치는 그대로 통과.
+        .overlay(alignment: .bottom) {
             if !composerActive {
                 EditorialTabBar(
                     selection: $selectedTab,
@@ -446,9 +468,10 @@ struct RootView: View {
                     onReselect: popToRoot
                 )
                 .transition(.move(edge: .bottom))
-                // 키보드가 올라와도 탭바·고양이는 바닥에 고정 — 키보드가 덮도록.
-                // (기본 동작은 safeAreaInset 콘텐츠가 키보드 위로 떠올라 고양이가
-                // 키보드 위에 앉는 버그. 본문 텍스트필드 회피는 그대로 유지된다.)
+                // ⚠️ 이 두 줄이 키보드 고정의 핵심 — 순서 불변: 탐욕 프레임(유연한
+                // 대상)이 먼저, keyboard-ignore 가 그 바깥. 프레임 없이 ignore 만 걸면
+                // 고정 높이 콘텐츠라 다시 못 붙잡는다(위 주석의 원 버그 재발).
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
