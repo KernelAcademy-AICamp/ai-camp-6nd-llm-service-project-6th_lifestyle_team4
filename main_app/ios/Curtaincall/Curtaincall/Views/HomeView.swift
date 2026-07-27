@@ -291,7 +291,9 @@ struct HomeView: View {
 
     /// deterministic == true → today's seed pick (stable per day).
     /// deterministic == false → random refresh, excluding recently shown.
-    private func reload(deterministic: Bool) async {
+    /// `refundQuotaOnFailure`: **이 호출이** 익명 쿼터를 소모했는가(게이트가 소모 시점에
+    /// 기록). 실패 환불은 이 값만 본다 — 완료 시점의 세션 상태는 믿지 않는다.
+    private func reload(deterministic: Bool, refundQuotaOnFailure: Bool = false) async {
         isLoading = true
         defer { isLoading = false }
         // 이번 새로고침이 **실제로 서버에 닿았는지**. 예전엔 fetch 가 throw 할 때만 실패로
@@ -353,10 +355,10 @@ struct HomeView: View {
         }
         fetchFailed = !reachedServer
         // 익명 3회 제한은 '새 명대사를 받았을 때'의 대가다. 실패해서 카드가 그대로면
-        // 소모분을 돌려준다 — 안 그러면 비행기 모드에서 당기기만 해도 한도가 닳는다(리뷰 지적).
-        // 회원은 게이트가 애초에 소모하지 않으므로(`passAnonRefreshGate` 즉시 true) 익명일
-        // 때만 되돌린다 — 회원에게 refund 를 돌리면 로그인 전에 쌓인 익명 카운트가 깎인다.
-        if !deterministic, !reachedServer, session.isAnonymous { AnonRefreshLimit.refund() }
+        // 소모분을 돌려준다 — 안 그러면 비행기 모드에서 당기기만 해도 한도가 닳는다.
+        // 판단 기준은 오직 '이 요청이 소모했는가'(파라미터). deterministic 여부나 지금의
+        // isAnonymous 를 다시 볼 필요가 없다 — 소모한 요청만 true 를 들고 온다.
+        if refundQuotaOnFailure, !reachedServer { AnonRefreshLimit.refund() }
         // 새로고침(랜덤) 완료 시 갱신됨/갱신 실패 토스트 — 버튼·당김 둘 다 여기로 모인다
         // (초기/시드 로드는 deterministic=true 라 토스트 없음). PWA toast('갱신됨') 미러.
         if !deterministic {
@@ -386,32 +388,37 @@ struct HomeView: View {
         }
     }
 
-    /// 익명 3회 제한 게이트(PWA refreshTodayCard / REFRESH_LIMIT) — 통과하면 true
-    /// (익명이면 카운트 +1 포함), 한도 도달이면 '3번까지' 모달을 띄우고 false. 회원은
-    /// 항상 true. 헤더 버튼·센터 재탭·당겨서 새로고침이 모두 이 게이트를 통과한다.
-    private func passAnonRefreshGate() -> Bool {
-        guard session.isAnonymous else { return true }
+    /// 익명 3회 제한 게이트(PWA refreshTodayCard / REFRESH_LIMIT) — 통과 여부와 함께
+    /// **이 호출이 쿼터를 실제로 소모했는지**를 돌려준다. 환불 판단은 완료 시점의
+    /// `session.isAnonymous` 를 다시 읽으면 안 된다(리뷰 지적) — 요청이 도는 사이 로그인/
+    /// 로그아웃이 끼면, 소모한 쿼터를 못 돌려받거나(익명 시작→회원 종료) 소모하지도 않은
+    /// 쿼터를 돌려줘 공짜 새로고침이 생긴다(회원 시작→익명 종료). 소모 사실은 소모한
+    /// 시점에 기록해 요청에 딸려 보낸다. 회원은 항상 (true, false).
+    private func passAnonRefreshGate() -> (pass: Bool, consumedQuota: Bool) {
+        guard session.isAnonymous else { return (true, false) }
         if AnonRefreshLimit.atLimit {
             promptTitle = "새로운 명대사는 3번까지"
             promptMessage = "오늘 명대사를 3번 받아보셨어요.\n로그인하면 무제한으로 고전 명대사를 즐길 수 있어요."
             showAccountPrompt = true
-            return false
+            return (false, false)
         }
         AnonRefreshLimit.bump()
-        return true
+        return (true, true)
     }
 
     /// TODAY 새로고침(헤더 버튼·센터 재탭) — 익명 게이트 통과 시 새 카드.
     private func handleRefreshTap() {
-        guard passAnonRefreshGate() else { return }
-        Task { await reload(deterministic: false) }
+        let gate = passAnonRefreshGate()
+        guard gate.pass else { return }
+        Task { await reload(deterministic: false, refundQuotaOnFailure: gate.consumedQuota) }
     }
 
     /// 당겨서 새로고침 — 헤더 버튼과 동일한 익명 3회 제한을 적용(같은 게이트). 한도면
     /// 모달만 띄우고 새로고침하지 않으므로 기본 스피너도 즉시 끝난다.
     private func pullToRefresh() async {
-        guard passAnonRefreshGate() else { return }
-        await reload(deterministic: false)
+        let gate = passAnonRefreshGate()
+        guard gate.pass else { return }
+        await reload(deterministic: false, refundQuotaOnFailure: gate.consumedQuota)
     }
 
     private func toggleBookmark(cardId: Int) {
