@@ -96,6 +96,12 @@ struct DailyView: View {
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
         }
+        // 신원 초기화 — 이전 사용자의 오즈 추천을 즉시 버리고 다시 계산한다. 신호가 '정리 후'에
+        // 오므로 recomputeOz 는 이미 비워진 취향·오즈 캐시를 읽어 게스트 기준으로 뽑는다(P1).
+        .onChange(of: prefs.identityResetToken) { _, _ in
+            ozCard = nil
+            recomputeOz()
+        }
         // Bookmarks load separately, so recompute the (taste-matched) Oz pick once
         // they arrive — chooseOzPick re-promotes a cached non-personalized pick.
         .onChange(of: bookmarks.bookmarks.map(\.cardId)) { _, _ in

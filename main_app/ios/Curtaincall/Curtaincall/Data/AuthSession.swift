@@ -260,10 +260,27 @@ final class AuthSession: ObservableObject {
         authInProgress = false
     }
 
-    func signOut() async {
-        try? await auth.signOut()
+    /// 로그아웃 — **게스트로 실제 전환됐을 때만 `true`**. 호출부는 이 값이 true 일 때만
+    /// 로컬 사용자 상태를 지운다. 예전엔 `try?` 로 실패를 삼키고 호출부가 무조건 정리해서,
+    /// 오프라인 로그아웃 실패 시 **회원은 로그인된 채 취향·이력만 날아갔다**(Codex 리뷰 P2).
+    @discardableResult
+    func signOut() async -> Bool {
+        do {
+            try await auth.signOut()
+        } catch {
+            // 세션이 그대로 남아 있다 = 여전히 회원. 로컬 데이터를 건드리면 안 된다.
+            authMessage = "로그아웃에 실패했어요. 잠시 후 다시 시도해주세요."
+            return false
+        }
         await bootstrap()
+        // 부트스트랩이 실패하면(오프라인 등) 게스트 세션이 성립하지 않은 것 — 이때도 정리하지
+        // 않는다(비파괴 우선). 서버 소유 데이터는 그대로라 재시도로 회복된다.
+        guard case .ready = bootstrapStatus, isAnonymous else {
+            authMessage = "로그아웃에 실패했어요. 잠시 후 다시 시도해주세요."
+            return false
+        }
         authMessage = nil
+        return true
     }
 
     /// Permanently deletes the signed-in member's account via the existing
