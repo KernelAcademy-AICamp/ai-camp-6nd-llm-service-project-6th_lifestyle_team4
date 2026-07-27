@@ -121,7 +121,10 @@ extension Card {
 private extension Optional where Wrapped == String {
     /// The string if it has non-whitespace content, otherwise nil — so a blank
     /// original never wins over the Korean fallback.
-    var filledValue: String? {
+    /// (nonisolated — Work.swift 의 동일 헬퍼와 같은 이유. 순수 문자열 검사인데
+    ///  파일 기본 MainActor 격리를 상속하면 nonisolated `Card` 프로퍼티에서
+    ///  호출할 때 격리 경고 5건이 난다. #188 리뷰 참조.)
+    nonisolated var filledValue: String? {
         guard let s = self,
               !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return s
