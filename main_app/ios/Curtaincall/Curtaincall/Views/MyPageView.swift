@@ -157,7 +157,7 @@ struct MyPageView: View {
                                 // 게스트 전환에 **성공했을 때만** 로컬 정리. 실패 시엔 회원 상태와
                                 // 취향·최근 본 카드·오즈 픽·공지 읽음을 그대로 보존한다(Codex 리뷰 P2).
                                 // 탈퇴 경로와 동일한 규칙 — 성공 반환값이 정리의 유일한 조건이다.
-                                if await session.signOut() { prefs.clearUserScopedState() }
+                                if await session.signOut() { await finishIdentityChange() }
                             }
                         } label: {
                             Text("로그아웃")
@@ -274,11 +274,30 @@ struct MyPageView: View {
                 // 빠져 있어서 삭제된 계정의 취향·최근 본 카드·오즈 픽·공지 읽음 표시가
                 // 새로 부트스트랩된 게스트 세션에 그대로 남았다(외부 QA A-84).
                 // 실패 시에는 로그인 상태를 그대로 유지해야 하므로 지우지 않는다.
-                Task { if await session.deleteAccount() { prefs.clearUserScopedState() } }
+                Task { if await session.deleteAccount() { await finishIdentityChange() } }
             }
         } message: {
             Text("계정과 모든 데이터(북마크·댓글·하트·피드)가 영구 삭제되며 되돌릴 수 없습니다.")
         }
+    }
+
+    /// 로그아웃·탈퇴 성공 후 공통 마무리 — **순서가 전부다.**
+    ///
+    /// 1) 북마크를 먼저 새 신원 기준으로 비우고 다시 읽는다. 이게 없으면 2)의 초기화 신호를
+    ///    받은 TODAY/DAILY 가 **아직 메모리에 남은 이전 회원의 북마크**로 카드를 고른다:
+    ///    `Recommend.pickToday(bookmarkCards:)` 와 DailyView 의 `taste`(북마크 키워드 집합)가
+    ///    모두 BookmarkStore 를 직접 읽기 때문이다. 특히 TODAY 는 고른 뒤 `hasLoaded` 가 true 로
+    ///    굳어, 잘못 고른 카드가 앱 재실행 전까지 **영구히** 남는다(Codex 리뷰 P1 잔존분).
+    ///    `load(userId: nil)` 은 가드 경로라 네트워크 없이 즉시 비우고, 이어지는 로드가 실패해도
+    ///    '마지막 상태 유지'가 곧 **비어 있는 상태**라 이전 회원 데이터로 되돌아가지 않는다.
+    /// 2) 그 다음에야 로컬 상태를 비우고 identityResetToken 을 emit 한다.
+    ///
+    /// 로그아웃과 탈퇴가 같은 함수를 쓰는 이유: 두 경로의 사후 처리가 어긋나면 한쪽에서만
+    /// 데이터가 새는 이번 같은 버그가 다시 난다.
+    private func finishIdentityChange() async {
+        await bookmarks.load(userId: nil)               // 이전 신원 북마크 즉시 비움
+        await bookmarks.load(userId: session.userId)    // 새(게스트) 신원으로 재적재
+        prefs.clearUserScopedState()                    // 정리 → identityResetToken emit
     }
 
     private func dismissKeyboard() {
