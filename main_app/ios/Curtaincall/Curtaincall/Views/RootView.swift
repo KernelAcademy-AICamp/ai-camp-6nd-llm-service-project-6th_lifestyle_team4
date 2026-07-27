@@ -403,6 +403,16 @@ struct RootView: View {
     /// `hasLoaded` 래치를 들고 있어 신호를 따로 받아야 하는데, HomeView 는 지금 다른
     /// PR(#199)이 잡고 있어 파일을 겹치지 않으려고 후속으로 미뤘다.
     private func retryAfterReconnect(force: Bool = false) async {
+        // ① 시작 부트스트랩이 아직 도는 중이면 **끝날 때까지 기다린다**(리뷰 지적). 그냥
+        //    돌아가면 재연결 신호가 버려진다: 오프라인 콜드 스타트 중 연결이 돌아온 경우
+        //    진행 중이던 부트스트랩은 이미 실패한 요청을 물고 있어 .offline 으로 끝나고,
+        //    신호는 소비돼 버려 수동 재시도 전까지 오프라인에 갇힌다. `bootstrap()` 자체도
+        //    `bootstrapInProgress` 가드로 조용히 no-op 하므로 대기는 필수다. 기다린 뒤
+        //    상태를 보면 두 경우 모두 옳게 처리된다 — 그 부트스트랩이 살아났으면(.ready)
+        //    아래 가드가 재왕복을 막고, 실패했으면(.offline/.failed) 재시도가 이어진다.
+        while session.bootstrapInProgress {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
         if !force {
             switch session.bootstrapStatus {
             case .offline, .failed: break
@@ -410,7 +420,21 @@ struct RootView: View {
             }
         }
         await session.bootstrap()
+        // 재시도도 실패했으면 여기서 멈춘다 — 배너는 그대로 남고, 다음 재연결 신호나
+        // 수동 '다시 시도'가 또 온다. 실패한 세션 위에 데이터를 다시 얹지 않는다.
+        guard case .ready = session.bootstrapStatus else { return }
+        // ② 회원 데이터 **전부** 재동기화(리뷰 지적: 북마크만 다시 읽었었다). 오프라인
+        //    복구는 `userId` 가 '같은 값'으로 확정되는 경로라 `.onChange(of: session.userId)`
+        //    에 걸어둔 재적재 훅(북마크·차단 목록·실타래 잔액·서버 취향)이 하나도 울리지
+        //    않는다 — 캐시 신원으로 그린 화면이 그대로 남는다. 그 훅이 하는 일을 여기서
+        //    명시적으로 반복한다(RootView 의 onChange(of: userId) 블록과 짝 — 하나를
+        //    바꾸면 다른 쪽도 맞출 것).
         await bookmarks.load(userId: session.userId)
+        await moderation.refresh(userId: session.userId)
+        yarn.sync(serverBalance: session.yarnBalance)
+        if session.hasServerPrefs {
+            prefs.syncFromServer(genres: session.prefGenres, themes: session.prefThemes, any: session.prefAny)
+        }
     }
 
     private var tabs: some View {
