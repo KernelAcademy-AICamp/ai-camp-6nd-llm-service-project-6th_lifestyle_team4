@@ -294,16 +294,32 @@ final class AuthSession: ObservableObject {
         authInProgress = true
         authMessage = nil
         defer { authInProgress = false }
+
+        // 1단계 — 서버 삭제. 여기서 실패하면 계정은 **그대로 살아 있다**. 회원 상태도
+        // 로컬 데이터도 하나도 건드리지 않고 재시도 가능한 상태로 남긴다(외부 QA A-84:
+        // 실패가 파괴적이면 안 된다). 원시 오류는 로그로만 — 화면엔 고정 한국어 문구.
         do {
             try await Supa.shared.deleteAccount()
-            try? await auth.signOut()
-            await bootstrap()
-            authMessage = "계정이 삭제됐어요"
-            return true
         } catch {
-            authMessage = "계정 삭제에 실패했어요: \(error.localizedDescription)"
+            AppLog.error("delete account", error)
+            authMessage = "탈퇴에 실패했어요. 잠시 후 다시 시도해주세요."
             return false
         }
+
+        // 2단계 — 여기서부터는 **되돌릴 수 없다.** 계정은 이미 서버에서 사라졌다.
+        // ⚠️ 이후 단계(로컬 세션 정리·게스트 부트스트랩)가 실패해도 false 를 돌려주면 안 된다.
+        // 호출부에게 false 는 '로컬 정리하지 마라'는 뜻이라, 존재하지도 않는 계정의 취향·
+        // 최근 본 카드·오즈 픽이 기기에 그대로 남는 A-84 를 그대로 재현한다.
+        try? await auth.signOut()
+        await bootstrap()
+        if case .ready = bootstrapStatus, isAnonymous {
+            authMessage = "계정이 삭제됐어요"
+        } else {
+            // 삭제는 끝났는데 게스트 세션이 아직 못 섰다(오프라인 등). 그 계정으로는 다시
+            // 로그인할 수 없으니 '실패'로 알리면 오히려 오해를 준다 — 사실만 전한다.
+            authMessage = "계정이 삭제됐어요. 연결이 불안정하니 앱을 다시 실행해주세요."
+        }
+        return true
     }
 
     func updateNickname(_ newName: String) async {
@@ -316,7 +332,8 @@ final class AuthSession: ObservableObject {
             nickname = trimmed
             authMessage = "이름이 변경됐어요"
         } catch {
-            authMessage = "저장 실패: \(error.localizedDescription)"
+            AppLog.error("update nickname", error)
+            authMessage = "저장에 실패했어요. 잠시 후 다시 시도해주세요."
         }
     }
 
@@ -333,7 +350,8 @@ final class AuthSession: ObservableObject {
             if let newAge { ageGroup = newAge }
             authMessage = "프로필이 저장됐어요"
         } catch {
-            authMessage = "저장 실패: \(error.localizedDescription)"
+            AppLog.error("update profile", error)
+            authMessage = "저장에 실패했어요. 잠시 후 다시 시도해주세요."
         }
     }
 
