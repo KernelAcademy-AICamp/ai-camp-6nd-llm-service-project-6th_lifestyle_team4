@@ -69,6 +69,11 @@ final class AuthSession: ObservableObject {
     /// 잃지 않기 위한 기기 로컬 캐시다 — 서버로 나가지 않고, 원래 서버에서 받아온 값의
     /// 사본일 뿐이라 새로 수집하는 정보는 없다.
     private struct CachedIdentity: Codable {
+        /// **어느 Supabase 인증 유저의 신원인지.** 이게 없으면 캐시는 '기기의 마지막 회원'
+        /// 이라는 뜻밖에 안 돼서, A 가 남긴 캐시가 B 의 실패한 부트스트랩에 복원될 수 있다
+        /// (계정 간 상태 누출 — #194 에서 잡은 것과 같은 부류). 복원 전에 현재
+        /// `auth.currentUser` 와 대조한다.
+        var authUserId: String
         var userId: Int
         var isAnonymous: Bool
         var nickname: String
@@ -76,29 +81,33 @@ final class AuthSession: ObservableObject {
         var gender: String
         var ageGroup: String
         var yarnBalance: Int
-        var prefGenres: [String]
-        var prefThemes: [String]
-        var prefAny: Bool
-        var hasServerPrefs: Bool
+        // ⚠️ 서버 선호도(pref_*)는 **일부러 캐시하지 않는다.** `hasServerPrefs` 가 true 면
+        // RootView 가 `prefs.syncFromServer(...)` 로 로컬을 덮어쓰는데, 오래된 스냅샷으로
+        // 그렇게 하면 그 뒤에 사용자가 고른 최신 로컬 취향이 되돌아간다(오즈 픽 재계산까지
+        // 딸려온다). 선호도는 **서버에서 갓 읽었을 때만** 신뢰할 수 있는 값이다.
     }
 
     private static let cachedIdentityKey = "ds.lastIdentity"
 
     private func saveCachedIdentity() {
-        guard let userId else { return }
+        guard let userId, let authUserId = auth.currentUser?.id.uuidString else { return }
         let snapshot = CachedIdentity(
+            authUserId: authUserId,
             userId: userId, isAnonymous: isAnonymous, nickname: nickname, loginId: loginId,
-            gender: gender, ageGroup: ageGroup, yarnBalance: yarnBalance,
-            prefGenres: prefGenres, prefThemes: prefThemes, prefAny: prefAny,
-            hasServerPrefs: hasServerPrefs
+            gender: gender, ageGroup: ageGroup, yarnBalance: yarnBalance
         )
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         UserDefaults.standard.set(data, forKey: Self.cachedIdentityKey)
     }
 
+    /// 현재 인증 유저의 것일 때만 돌려준다 — 다른 유저(또는 유저 없음)의 캐시는 없는 셈 친다.
     private func loadCachedIdentity() -> CachedIdentity? {
-        guard let data = UserDefaults.standard.data(forKey: Self.cachedIdentityKey) else { return nil }
-        return try? JSONDecoder().decode(CachedIdentity.self, from: data)
+        guard let data = UserDefaults.standard.data(forKey: Self.cachedIdentityKey),
+              let cached = try? JSONDecoder().decode(CachedIdentity.self, from: data),
+              let current = auth.currentUser?.id.uuidString,
+              cached.authUserId == current
+        else { return nil }
+        return cached
     }
 
     private func clearCachedIdentity() {
@@ -113,10 +122,13 @@ final class AuthSession: ObservableObject {
         gender = cached.gender
         ageGroup = cached.ageGroup
         yarnBalance = cached.yarnBalance
-        prefGenres = cached.prefGenres
-        prefThemes = cached.prefThemes
-        prefAny = cached.prefAny
-        hasServerPrefs = cached.hasServerPrefs
+        // 서버 선호도는 확인하지 못했다 — false 로 둬야 RootView 가 오래된 값으로
+        // `syncFromServer` 를 돌려 최신 로컬 선택을 덮어쓰는 일이 없다. 로컬 PrefsStore 가
+        // 오프라인 동안의 권위 있는 사본이다.
+        prefGenres = []
+        prefThemes = []
+        prefAny = false
+        hasServerPrefs = false
     }
 
     /// 끊긴 네트워크처럼 **일시적**인 실패인가(= 재시도하면 될 일인가), 아니면 세션이 실제로
