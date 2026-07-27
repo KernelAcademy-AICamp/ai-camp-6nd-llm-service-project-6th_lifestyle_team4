@@ -18,6 +18,7 @@ struct CurtaincallApp: App {
     @StateObject private var yarn = YarnStore()
     @StateObject private var attendance = AttendanceStore()
     @StateObject private var moderation = ModerationStore()
+    @StateObject private var network = NetworkMonitor()
 
     init() {
         FontRegistration.register()
@@ -40,6 +41,7 @@ struct CurtaincallApp: App {
                     .environmentObject(yarn)
                     .environmentObject(attendance)
                     .environmentObject(moderation)
+                    .environmentObject(network)
                     .preferredColorScheme(prefs.darkTheme ? .dark : .light)
                     .task {
                         await session.start()
