@@ -36,6 +36,12 @@ final class PrefsStore: ObservableObject {
     /// dot clears live when the user opens the Notice screen.
     @Published var noticeLastSeenId: Int { didSet { d.set(noticeLastSeenId, forKey: Key.noticeLastSeen) } }
 
+    /// 신원 초기화 신호 — `clearUserScopedState()` 의 **맨 마지막**에 증가한다.
+    /// UserDefaults 를 지워도 이미 그려진 화면의 @State 는 그대로 남는다: 로그아웃 뒤에도
+    /// TODAY 의 오늘 카드·최근 목록, DAILY 의 오즈 추천이 계속 보였다(Codex 리뷰 P1).
+    /// 화면들이 이 토큰을 관찰해 메모리 상태를 즉시 버리고 게스트 기준으로 다시 계산한다.
+    @Published private(set) var identityResetToken = 0
+
     init() {
         pushEnabled = d.object(forKey: Key.push) as? Bool ?? true
         tasteEnabled = d.bool(forKey: Key.taste)
@@ -105,6 +111,9 @@ final class PrefsStore: ObservableObject {
         d.removeObject(forKey: Key.ozDailyCardId)
         // 공지 읽음 표시 — 계정별 상태. @Published 라 대입해야 MY 탭 unread 닷도 즉시 갱신된다.
         noticeLastSeenId = 0
+        // ⚠️ 반드시 **마지막**에 — 관찰자(HomeView/DailyView)가 이 신호를 받아 재계산할 때
+        // 이미 비워진 취향·오즈 캐시를 읽어야 게스트 기준으로 다시 뽑힌다.
+        identityResetToken &+= 1
     }
 
     // Recently-shown queue (not @Published — used transiently by Home).

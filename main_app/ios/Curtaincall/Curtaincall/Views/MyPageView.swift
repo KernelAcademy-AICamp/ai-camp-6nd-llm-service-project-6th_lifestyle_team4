@@ -154,8 +154,10 @@ struct MyPageView: View {
                         Spacer().frame(height: 40)
                         Button {
                             Task {
-                                await session.signOut()
-                                prefs.clearUserScopedState()   // 이전 사용자의 로컬 상태가 다음(익명) 세션에 남지 않게 초기화
+                                // 게스트 전환에 **성공했을 때만** 로컬 정리. 실패 시엔 회원 상태와
+                                // 취향·최근 본 카드·오즈 픽·공지 읽음을 그대로 보존한다(Codex 리뷰 P2).
+                                // 탈퇴 경로와 동일한 규칙 — 성공 반환값이 정리의 유일한 조건이다.
+                                if await session.signOut() { prefs.clearUserScopedState() }
                             }
                         } label: {
                             Text("로그아웃")

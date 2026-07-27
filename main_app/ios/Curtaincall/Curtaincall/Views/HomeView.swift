@@ -129,6 +129,16 @@ struct HomeView: View {
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
         }
+        // 신원 초기화 — PrefsStore 가 로컬을 비운 '뒤' 신호가 온다. UserDefaults 만 지우면
+        // 이미 그려진 이전 사용자의 오늘 카드·최근 목록이 게스트에게 그대로 보였다(P1).
+        // hasLoaded 를 되돌려 loadOnce 를 다시 태운다 — prefSelected 는 유지되므로
+        // 온보딩이 다시 뜨지는 않는다.
+        .onChange(of: prefs.identityResetToken) { _, _ in
+            todayCard = nil
+            recent = []
+            hasLoaded = false
+            Task { await loadOnce() }
+        }
         // Onboarding finished (prefSelected flips true) → make the first,
         // preference-weighted today pick that loadOnce held back.
         .onChange(of: prefs.prefSelected) { _, selected in
