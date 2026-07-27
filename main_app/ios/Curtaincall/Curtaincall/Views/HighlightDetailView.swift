@@ -131,7 +131,7 @@ struct HighlightDetailView: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: 56)
+        .frame(height: SheetMetrics.headerHeight)
     }
 
     private var header: some View {

@@ -26,13 +26,21 @@ spacing (calendar grids, form fields) stays local to each screen.
 **Rule: reference these tokens, never hardcode sheet/modal spacing.**
 
 - `SheetMetrics.grabberTop` = **12** — grabber ↔ first content (custom header / title)
-- `SheetMetrics.headerHeight` = **56** — sheet custom header bar height (title + close row)
+- `SheetMetrics.headerHeight` = **56** — header bar height, **single-line title** (title + close row)
+- `SheetMetrics.headerHeightStacked` = **72** — header bar height when a **subtitle sits under the title**
 - `SheetMetrics.titleToBody` = **12** — title ↔ body
 - `SheetMetrics.bodyToButton` = **24** — body ↔ primary action button
 - `SheetMetrics.buttonGap` = **10** — between stacked buttons
 - `SheetMetrics.cardPadding` = **20** — centered modal-card inner padding + header horizontal padding
 
-Consumers today: `AttendanceView`, `MyPageView`, `CardDetailView`, `AccountRequiredPrompt`.
+**Header height picks itself from the content, not the screen:** one line of title → `headerHeight`;
+title **plus** a subtitle → `headerHeightStacked`. Putting a subtitle inside the 56pt single-line box
+leaves only ~8pt above and below and reads as squished (device QA: the 공지사항 header). If a third
+line ever appears, add a token — do not hand-tune one screen.
+
+Consumers today: every in-app top bar — `NoticeView` (stacked), `ArchiveView`, `HighlightDetailView`,
+`MyFeedView`, `MyCommentsView`, `LegalView`, `FeedbackView`, `AttendanceView`, `MyPageView`,
+`CardDetailView`, `AccountRequiredPrompt`.
 
 ## 2. Color tokens
 
