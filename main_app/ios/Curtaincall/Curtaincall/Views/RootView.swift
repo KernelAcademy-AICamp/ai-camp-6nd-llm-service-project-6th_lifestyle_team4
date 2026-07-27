@@ -504,6 +504,13 @@ struct RootView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: bookmarks.lastError)
         }
+        // 배너는 '보이는' 안내라 VoiceOver 사용자에겐 이 PR 이 아무것도 고치지 못한다 —
+        // 화면에 뷰가 나타나는 것만으로는 낭독되지 않고, 3.5초 뒤 사라져 스와이프로
+        // 찾아갈 시간도 없다. 실패를 직접 읽어준다.
+        .onChange(of: bookmarks.lastError) { _, msg in
+            guard let msg else { return }
+            AccessibilityNotification.Announcement(msg).post()
+        }
         // 피드 글쓰기 — 고양이(좌)와 글쓰기 FAB(우)를 **분리**(Android 패턴: cat-left + FAB BottomEnd).
         // 둘 다 탭바 '위(앞)' 레이어. 피드 루트에서만, 컴포저 활성 시 숨김.
         // (오프셋·위치는 실기기 QA 조정 대상.)
