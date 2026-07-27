@@ -101,19 +101,47 @@ struct EditorialTabBar: View {
     /// long-press 이스터에그용 깜짝 자세 (cat_confused). 돌출 60*0.72≈43 ≤ clearance.
     private static let catEggPose = NavCatPose(asset: "cat_confused", height: 60, hBias: 0.30, ledgeFraction: 0.72)
 
-    /// 크로스페이드 레이어로 '항상' 트리에 올려둘 전체 고양이 에셋 — 왜 전부 올려두는지는
+    /// 자세 전환 연출 방식.
+    /// - `.glide` — 모든 레이어가 '현재 자세' 좌표를 공유해 함께 이동(Android 방식).
+    ///   단 이건 **레이아웃 애니메이션**이라 매 프레임 메인스레드에서 지오메트리를 다시 계산한다.
+    /// - `.crossfade` — 각 고양이가 **자기 자리에 고정**된 채 불투명도만 교차한다.
+    ///   레이아웃 애니메이션 0, 바뀌는 건 합성(opacity)뿐이다.
+    ///
+    /// 기본이 `.crossfade` 인 이유(기기 QA): 탭 전환은 목적지 화면 빌드/로드가 같은
+    /// 메인스레드를 점유하는 순간이다(FEED 는 appear 마다 피드+북마크 재조회). 스레드가
+    /// 100ms 막히면 레이아웃 애니메이션은 프레임이 통째로 날아가 "1프레임만 보이고 순간이동"
+    /// 하는 것처럼 보인다 — 실제 보고된 증상이 정확히 이것이다. 반면 불투명도는 렌더 서버가
+    /// 이어받을 수 있어 정체에 강하고, 프레임이 빠져도 '조금 급한 페이드'로 보일 뿐 깨지지 않는다.
+    /// **화면 로드 비용을 줄이면 `.glide` 로 되돌려도 된다 — 이 한 줄만 바꾸면 된다.**
+    private enum CatPoseTransition { case glide, crossfade }
+    private static let poseTransition: CatPoseTransition = .crossfade
+
+    /// 크로스페이드 레이어로 '항상' 트리에 올려둘 전체 고양이 **자세** — 왜 전부 올려두는지는
     /// navCat 주석 참조. catPose/catEggPose 에서 **자동 도출**한다: 하드코딩 목록을 두면
     /// 나중에 자세를 추가할 때 목록 갱신을 잊어 그 고양이가 영구히 안 보이는 사고가 난다.
-    private static let catAssets: [String] = {
-        var out: [String] = []
+    /// (에셋 문자열이 아니라 자세를 담는 이유: `.crossfade` 에선 각 레이어가 '자기 자세'의
+    ///  좌표·크기에 고정돼야 제자리 페이드가 된다.)
+    private static let catLayers: [NavCatPose] = {
+        var out: [NavCatPose] = []
         for tab in Tab.allCases {
-            let asset = EditorialTabBar.catPose(for: tab).asset
-            if !out.contains(asset) { out.append(asset) }
+            let pose = EditorialTabBar.catPose(for: tab)
+            if !out.contains(where: { $0.asset == pose.asset }) { out.append(pose) }
         }
-        let egg = EditorialTabBar.catEggPose.asset
-        if !out.contains(egg) { out.append(egg) }
+        let egg = EditorialTabBar.catEggPose
+        if !out.contains(where: { $0.asset == egg.asset }) { out.append(egg) }
         return out
     }()
+
+    /// 자세 → 좌표. 레이어별로 자기 자세를 넣으면 제자리, 현재 자세를 넣으면 함께 이동한다.
+    private static func centerX(for pose: NavCatPose, width: CGFloat) -> CGFloat {
+        let inset: CGFloat = 44
+        return width / 2 + pose.hBias * (width / 2 - inset)
+    }
+    /// 바 윗면(hairline)은 투명 여백 아래, 즉 y = catClearance 지점. ledge 선이 거기에
+    /// 오도록: 중심 y = catClearance + height*(0.5 - ledgeFraction).
+    private static func centerY(for pose: NavCatPose) -> CGFloat {
+        catClearance + pose.height * (0.5 - pose.ledgeFraction)
+    }
 
     // (idle 모션은 Android BottomNavBar 와 동일한 '호흡 only'(2.2s, 발끝 기준) —
     //  기존 flick 사이클은 Android 에 없어 제거. 기기 QA: 고양이 모션 크로스플랫폼 통일.)
@@ -365,12 +393,6 @@ struct EditorialTabBar: View {
         let pose = catEggActive ? Self.catEggPose : Self.catPose(for: selection)
         return GeometryReader { geo in
             let w = geo.size.width
-            // 바 윗면(hairline)은 투명 여백 아래, 즉 geo y = catClearance 지점.
-            // ledge 선이 거기에 오도록: 중심 y = catClearance + height*(0.5 - ledgeFraction).
-            let centerY = Self.catClearance + pose.height * (0.5 - pose.ledgeFraction)
-            // bias 를 좌우 위치로: 0=중앙, ±1=가장자리에서 inset 만큼 안쪽.
-            let inset: CGFloat = 44
-            let centerX = w / 2 + pose.hBias * (w / 2 - inset)
             // ⚠️ 전체 에셋을 '항상' 스택에 올려두고 보이는 것만 opacity 1 로 고른다.
             //
             // 왜: 예전엔 Image 에 .id(pose.asset) + .transition(.opacity) 를 걸어 자세가
@@ -387,11 +409,16 @@ struct EditorialTabBar: View {
             // 스프링을 함께 타고, 두 레이어의 불투명도 합이 항상 ~1 이라 '이동 중인 위치'에
             // 언제나 고양이가 보인다. 이게 그 '스르륵 나는' 느낌의 정체다.
             ZStack {
-                ForEach(Self.catAssets, id: \.self) { asset in
-                    catLayer(asset: asset, pose: pose)
+                ForEach(Self.catLayers, id: \.asset) { layer in
+                    // 좌표의 기준이 되는 자세: .glide 면 모든 레이어가 '현재 자세' 좌표를
+                    // 공유해 함께 날아가고, .crossfade 면 각자 '자기 자세' 좌표에 고정돼
+                    // 제자리에서 페이드한다(= 레이아웃 애니메이션 없음).
+                    let anchor = Self.poseTransition == .glide ? pose : layer
+                    catLayer(layer: layer, anchor: anchor, current: pose.asset)
                         // Android 주석과 동일한 이유로 위치는 **레이어별**로 잡는다: ZStack
                         // 에 걸면 박스가 '가장 넓은 자세' 기준으로 커져 좁은 고양이가 밀린다.
-                        .position(x: centerX, y: centerY)
+                        .position(x: Self.centerX(for: anchor, width: w),
+                                  y: Self.centerY(for: anchor))
                 }
             }
             // 호흡 구동 — .task(id:)라 showCat 토글로 사라졌다 돌아와도 다시 시작한다
@@ -405,10 +432,9 @@ struct EditorialTabBar: View {
             }
         }
         .allowsHitTesting(false)                                  // click-through
-        // Android BottomNavBar 미러 — 위치·크기는 '연속 보간'(catSpring: damping 0.72),
-        // 에셋은 catLayer 의 280ms 크로스페이드. pose(Equatable) 하나로 트리거해
-        // 모든 자세 전환이 동일한 글라이드+페이드로 움직인다(자세별 상이 거동 제거).
-        .animation(poseAnimation, value: pose)
+        // 위치·크기 스프링은 **.glide 일 때만** 건다. .crossfade 에선 각 레이어가 자기
+        // 좌표에 고정이라 애니메이션할 지오메트리 자체가 없다(= 메인스레드 부담 0).
+        .animation(Self.poseTransition == .glide ? poseAnimation : nil, value: pose)
     }
 
     /// 고양이 한 레이어 — Android Crossfade 내부의 Image 미러. 전체 에셋이 각각 한 레이어로
@@ -419,14 +445,18 @@ struct EditorialTabBar: View {
     /// navCat 의 스프링을 타게 한다. 순서를 바꾸면 크기까지 트윈이 가로채 글라이드가 죽는다.
     /// idle 호흡은 공유 위상(breathIn, 2.2s, 발끝 기준 1.0↔1.03)을 읽는다.
     /// **Reduce Motion 시 페이드·호흡 모두 비활성**(즉시 교체·정지).
-    private func catLayer(asset: String, pose: NavCatPose) -> some View {
-        Image(asset)
+    private func catLayer(layer: NavCatPose, anchor: NavCatPose, current: String) -> some View {
+        Image(layer.asset)
             .resizable()
             .scaledToFit()
-            .opacity(asset == pose.asset ? 1 : 0)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: pose.asset)
-            .frame(height: pose.height)
-            .scaleEffect(breathIn ? 1.03 : 1.0, anchor: .bottom)   // 호흡(발끝 기준)
+            .opacity(layer.asset == current ? 1 : 0)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: current)
+            .frame(height: anchor.height)
+            // 호흡(발끝 기준)은 **보이는 레이어만** 애니메이션한다. 예전엔 5개 레이어가
+            // 각자 repeatForever 스케일을 돌려 항상 5개의 트랜스폼이 틱하고 있었다 —
+            // 탭 전환처럼 메인스레드가 빠듯한 순간에 그대로 경쟁 비용이 된다.
+            // 안 보이는 레이어는 값이 고정(1.0)이라 애니메이션 자체가 생기지 않는다.
+            .scaleEffect(layer.asset == current && breathIn ? 1.03 : 1.0, anchor: .bottom)
     }
 }
 
