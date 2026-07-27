@@ -63,7 +63,7 @@ struct NoticeView: View {
             Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal, 8)
-        .frame(height: 56)
+        .frame(height: SheetMetrics.headerHeightStacked)
         .overlay(alignment: .bottom) { Hairline() }
     }
 

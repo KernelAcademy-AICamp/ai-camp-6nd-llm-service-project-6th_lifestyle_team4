@@ -87,7 +87,7 @@ struct MyFeedView: View {
             Color.clear.frame(width: 40, height: 40)
         }
         .padding(.horizontal, 12)
-        .frame(height: 56)
+        .frame(height: SheetMetrics.headerHeight)
         .overlay(alignment: .bottom) { Hairline() }
     }
 

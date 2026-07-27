@@ -107,7 +107,7 @@ struct ArchiveView: View {
             Spacer()
         }
         .padding(.horizontal, 8)
-        .frame(height: 56)
+        .frame(height: SheetMetrics.headerHeight)
         .overlay(alignment: .bottom) { Hairline() }
     }
 

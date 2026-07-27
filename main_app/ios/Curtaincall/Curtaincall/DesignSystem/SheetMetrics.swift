@@ -7,8 +7,13 @@ import CoreGraphics
 enum SheetMetrics {
     /// 그래버 ↔ 첫 콘텐츠(커스텀 헤더/제목) 상단 여백 — 제목이 그래버에 붙지 않게.
     static let grabberTop: CGFloat = 12
-    /// 시트 커스텀 헤더 바 높이(제목 + 닫기 버튼 줄).
+    /// 시트 커스텀 헤더 바 높이(제목 + 닫기 버튼 줄) — **제목 1줄** 기준.
     static let headerHeight: CGFloat = 56
+    /// 제목 **+ 서브라인**이 쌓인 헤더 바 높이. 1줄용 56 에 서브라인까지 넣으면 위아래
+    /// 여백이 ~8pt 밖에 안 남아 눌려 보인다(기기 QA: 공지사항 헤더 "너무 squished").
+    /// 20pt 세리프 제목 + 2 + 11pt 서브라인 ≈ 42pt 콘텐츠 → 72 면 위아래 ~15pt 로
+    /// 숨통이 트이고 8pt 스케일도 지킨다.
+    static let headerHeightStacked: CGFloat = 72
     /// 제목 ↔ 본문.
     static let titleToBody: CGFloat = 12
     /// 본문 ↔ 주요 버튼(액션).
