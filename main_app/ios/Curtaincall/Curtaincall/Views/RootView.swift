@@ -477,6 +477,33 @@ struct RootView: View {
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
+        // 북마크 쓰기 실패 안내 — 화면마다 배치하지 않고 **루트에 한 번만** 둔다.
+        // 호출부가 홈·카드 상세·컨텍스트 메뉴 3곳이라 각 화면에 배너를 심으면 레이아웃
+        // 수술이 3번 필요하고 한 곳은 빠뜨리기 쉽다(실제로 컨텍스트 메뉴는 체크리스트에도
+        // 빠져 있었다). 스토어가 발행하는 문구를 여기서 한 번 그린다. 안내일 뿐이라
+        // click-through(allowsHitTesting=false) — 아래 콘텐츠 탭을 가리지 않는다.
+        .overlay(alignment: .bottom) {
+            ZStack {
+                if let msg = bookmarks.lastError {
+                    Text(msg)
+                        .font(.bodySans(13))
+                        .foregroundStyle(.espresso)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule().fill(Color.paper)
+                                .overlay(Capsule().stroke(Color.latte, lineWidth: 0.5))
+                        )
+                        .padding(.horizontal, 24)
+                        // 필 윗면에서 파생 — 탭바·고양이를 가리지 않는 높이.
+                        .padding(.bottom, EditorialTabBar.pillTopInset + 12)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: bookmarks.lastError)
+        }
         // 피드 글쓰기 — 고양이(좌)와 글쓰기 FAB(우)를 **분리**(Android 패턴: cat-left + FAB BottomEnd).
         // 둘 다 탭바 '위(앞)' 레이어. 피드 루트에서만, 컴포저 활성 시 숨김.
         // (오프셋·위치는 실기기 QA 조정 대상.)
