@@ -59,6 +59,19 @@ struct EditorialTabBar: View {
         reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.72)
     }
 
+    /// 탭바 고양이 ↔ 피드 고양이 **핸드오프** 스펙 — 두 레이어(EditorialTabBar.navCat 과
+    /// RootView.FeedWriteCat)가 같은 커브를 써야 교대가 한 동작으로 읽힌다. 자세 이동
+    /// 스프링(poseAnimation)과 달리 '교대'라 짧은 이즈를 쓴다.
+    static let catHandoffAnimation: Animation = .easeInOut(duration: 0.26)
+
+    /// 핸드오프 트랜지션. `dx` 가 음수면 왼쪽에서 들어와 왼쪽으로 빠진다(navCat),
+    /// 양수면 오른쪽에서 들어와 오른쪽으로 빠진다(FeedWriteCat). 둘의 부호를 반대로 둬야
+    /// '한 마리가 왼쪽으로 건너갔다'는 방향감이 생긴다.
+    /// Reduce Motion 에선 이동을 빼고 **크로스페이드만** 남긴다(페이드는 모션이 아니다).
+    static func catHandoff(reduceMotion: Bool, dx: CGFloat) -> AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .offset(x: dx))
+    }
+
     /// 가장 크게 솟는 고양이 자세의 돌출량(pt). 바 위에 이만큼 '투명 여백'을 둬서
     /// safeAreaInset 이 스크롤 콘텐츠를 그만큼 위로 밀어 — 고양이가 읽을 내용을 가리지 않는다.
     /// (각 자세 height*ledgeFraction ≤ 이 값이 되도록 catPose 수치를 잡는다.)
@@ -162,7 +175,20 @@ struct EditorialTabBar: View {
         // 만들어 고양이가 '독립적으로' 움직인다(한 번 시도했다 롤백). 고양이 고정은
         // 바 자체의 프레임 안정으로 해결한다 — RootView 의 overlay(bottom) + 탐욕
         // 프레임 + keyboard-ignore 호스팅 참조. 바가 안 움직이면 고양이도 공짜로 고정.
-        .overlay { if showCat { navCat } }
+        // FEED 진입/이탈만은 '같은 고양이의 이동'이 아니다 — FEED 고양이는 PR #76 결정에
+        // 따라 RootView 의 FeedWriteCat(별도 온-톱 레이어, 화면 좌측 끝)이 담당하므로
+        // 여기서는 showCat 이 false 가 되어 navCat 이 트리에서 통째로 빠진다. 즉 보간할
+        // 대상이 없어 위 스프링이 개입할 수 없고, 아무 처치도 없으면 툭 사라졌다 툭
+        // 나타난다(기기 QA: "DAILY→FEED, MY→FEED 는 글라이드가 없다").
+        // → 두 레이어에 **방향이 맞물리는** 슬라이드+페이드를 걸어 '왼쪽으로 넘겨주는'
+        // 핸드오프로 읽히게 한다. navCat 은 왼쪽으로 빠지고(왼쪽에서 들어오고),
+        // FeedWriteCat 은 오른쪽에서 들어온다(오른쪽으로 빠진다) — RootView 참조.
+        .overlay {
+            ZStack {
+                if showCat { navCat.transition(Self.catHandoff(reduceMotion: reduceMotion, dx: -40)) }
+            }
+            .animation(reduceMotion ? nil : Self.catHandoffAnimation, value: showCat)
+        }
         // 고양이 long-press 이스터에그 캐처 — '투명 여백'(바 위쪽)에만 둔다. 그 영역엔
         // 탭 버튼이 없으므로 탭 히트테스트를 가리지 않는다(탭은 그 아래 64pt 바에 있음).
         .overlay(alignment: .top) { if showCat { catLongPressCatcher } }

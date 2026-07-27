@@ -39,6 +39,8 @@ struct RootView: View {
     @EnvironmentObject private var attendance: AttendanceStore
     @EnvironmentObject private var moderation: ModerationStore
     @Environment(\.scenePhase) private var scenePhase
+    /// 피드 고양이 핸드오프에서 이동을 뺄지 판단 (EditorialTabBar.catHandoff 와 공유).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var selectedTab: Tab = .daily
 
@@ -479,13 +481,22 @@ struct RootView: View {
         // 둘 다 탭바 '위(앞)' 레이어. 피드 루트에서만, 컴포저 활성 시 숨김.
         // (오프셋·위치는 실기기 QA 조정 대상.)
         .overlay(alignment: .bottomLeading) {
-            if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
-                FeedWriteCat()
-                    .padding(.leading, 8)
-                    // 필 윗면(pillTopInset)에서 파생 — 고양이 발이 필 윗면에 10pt 걸쳐
-                    // 앉는다. 기기별(홈 버튼/인디케이터) 마진 차이 자동 추종.
-                    .padding(.bottom, EditorialTabBar.pillTopInset - 10)
+            // 탭바 고양이와의 핸드오프 — EditorialTabBar 의 navCat overlay 주석 참조.
+            // navCat 이 왼쪽으로 빠질 때 이 고양이가 오른쪽에서 들어와, 서로 다른 두
+            // 컴포넌트의 교대가 '한 마리가 왼쪽으로 건너간' 것처럼 읽힌다. 조건을 Bool 로
+            // 뽑아 애니메이션 트리거로 쓴다(탭 전환뿐 아니라 컴포저·상세 진입에도 동작).
+            let showFeedCat = selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive
+            ZStack {
+                if showFeedCat {
+                    FeedWriteCat()
+                        .padding(.leading, 8)
+                        // 필 윗면(pillTopInset)에서 파생 — 고양이 발이 필 윗면에 10pt 걸쳐
+                        // 앉는다. 기기별(홈 버튼/인디케이터) 마진 차이 자동 추종.
+                        .padding(.bottom, EditorialTabBar.pillTopInset - 10)
+                        .transition(EditorialTabBar.catHandoff(reduceMotion: reduceMotion, dx: 40))
+                }
             }
+            .animation(reduceMotion ? nil : EditorialTabBar.catHandoffAnimation, value: showFeedCat)
         }
         .overlay(alignment: .bottomTrailing) {
             if selectedTab == .feed && feedPath.isEmpty && !feedDetailPresented && !composerActive {
