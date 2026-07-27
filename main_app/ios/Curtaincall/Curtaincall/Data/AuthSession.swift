@@ -50,6 +50,11 @@ final class AuthSession: ObservableObject {
         case idle
         case bootstrapping
         case ready
+        /// 일시적 네트워크 실패로 서버 확인은 못 했지만, 마지막으로 성공한 **회원 신원은
+        /// 그대로 유지**하고 있는 상태. `.failed` 와 반드시 구분해야 한다 — `.failed` 는
+        /// '신원을 확정하지 못했다', `.offline` 은 '신원은 아는데 지금 서버와 대화할 수
+        /// 없다'는 뜻이라 화면이 취할 행동(재시도 안내 vs 로그인 유도)이 정반대다.
+        case offline
         case failed(String)
     }
 
@@ -57,6 +62,96 @@ final class AuthSession: ObservableObject {
     @Published var bootstrapStatus: BootstrapStatus = .idle
 
     private var auth: AuthClient { Supa.shared.client.auth }
+
+    // MARK: - 마지막 성공 신원 캐시 (오프라인 복구용)
+
+    /// 마지막으로 **성공한** 회원 부트스트랩 결과. 오프라인 콜드 스타트에서 회원 신원을
+    /// 잃지 않기 위한 기기 로컬 캐시다 — 서버로 나가지 않고, 원래 서버에서 받아온 값의
+    /// 사본일 뿐이라 새로 수집하는 정보는 없다.
+    private struct CachedIdentity: Codable {
+        /// **어느 Supabase 인증 유저의 신원인지.** 이게 없으면 캐시는 '기기의 마지막 회원'
+        /// 이라는 뜻밖에 안 돼서, A 가 남긴 캐시가 B 의 실패한 부트스트랩에 복원될 수 있다
+        /// (계정 간 상태 누출 — #194 에서 잡은 것과 같은 부류). 복원 전에 현재
+        /// `auth.currentUser` 와 대조한다.
+        var authUserId: String
+        var userId: Int
+        var isAnonymous: Bool
+        var nickname: String
+        var loginId: String
+        var gender: String
+        var ageGroup: String
+        var yarnBalance: Int
+        // ⚠️ 서버 선호도(pref_*)는 **일부러 캐시하지 않는다.** `hasServerPrefs` 가 true 면
+        // RootView 가 `prefs.syncFromServer(...)` 로 로컬을 덮어쓰는데, 오래된 스냅샷으로
+        // 그렇게 하면 그 뒤에 사용자가 고른 최신 로컬 취향이 되돌아간다(오즈 픽 재계산까지
+        // 딸려온다). 선호도는 **서버에서 갓 읽었을 때만** 신뢰할 수 있는 값이다.
+    }
+
+    private static let cachedIdentityKey = "ds.lastIdentity"
+
+    private func saveCachedIdentity() {
+        guard let userId, let authUserId = auth.currentUser?.id.uuidString else { return }
+        let snapshot = CachedIdentity(
+            authUserId: authUserId,
+            userId: userId, isAnonymous: isAnonymous, nickname: nickname, loginId: loginId,
+            gender: gender, ageGroup: ageGroup, yarnBalance: yarnBalance
+        )
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: Self.cachedIdentityKey)
+    }
+
+    /// 현재 인증 유저의 것일 때만 돌려준다 — 다른 유저(또는 유저 없음)의 캐시는 없는 셈 친다.
+    private func loadCachedIdentity() -> CachedIdentity? {
+        guard let data = UserDefaults.standard.data(forKey: Self.cachedIdentityKey),
+              let cached = try? JSONDecoder().decode(CachedIdentity.self, from: data),
+              let current = auth.currentUser?.id.uuidString,
+              cached.authUserId == current
+        else { return nil }
+        return cached
+    }
+
+    private func clearCachedIdentity() {
+        UserDefaults.standard.removeObject(forKey: Self.cachedIdentityKey)
+    }
+
+    private func apply(_ cached: CachedIdentity) {
+        userId = cached.userId
+        isAnonymous = cached.isAnonymous
+        nickname = cached.nickname
+        loginId = cached.loginId
+        gender = cached.gender
+        ageGroup = cached.ageGroup
+        yarnBalance = cached.yarnBalance
+        // 서버 선호도는 확인하지 못했다 — false 로 둬야 RootView 가 오래된 값으로
+        // `syncFromServer` 를 돌려 최신 로컬 선택을 덮어쓰는 일이 없다. 로컬 PrefsStore 가
+        // 오프라인 동안의 권위 있는 사본이다.
+        prefGenres = []
+        prefThemes = []
+        prefAny = false
+        hasServerPrefs = false
+    }
+
+    /// 끊긴 네트워크처럼 **일시적**인 실패인가(= 재시도하면 될 일인가), 아니면 세션이 실제로
+    /// 무효라서 신원을 버려야 하는 실패인가. 이 구분이 H-24 의 핵심이다 — 예전엔 모든 실패가
+    /// 똑같이 '게스트'로 귀결돼 오프라인 시작이 조용한 로그아웃이 됐다.
+    /// SDK 가 URLError 를 감싸 던지는 경우가 있어 underlying 도 따라 내려간다(깊이 제한).
+    static func isTransientNetworkError(_ error: Error, depth: Int = 0) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .timedOut,
+                 .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
+                 .dataNotAllowed, .internationalRoamingOff, .secureConnectionFailed,
+                 .resourceUnavailable:
+                return true
+            default:
+                return false
+            }
+        }
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain { return true }
+        guard depth < 3, let underlying = ns.userInfo[NSUnderlyingErrorKey] as? Error else { return false }
+        return isTransientNetworkError(underlying, depth: depth + 1)
+    }
 
     func start() async {
         await bootstrap()
@@ -77,7 +172,19 @@ final class AuthSession: ObservableObject {
             // whose refresh token is still valid), then anon-bootstrap only if
             // there's genuinely no session left.
             if let session = auth.currentSession, session.isExpired {
-                _ = try? await auth.refreshSession()
+                do {
+                    _ = try await auth.refreshSession()
+                } catch {
+                    // ⚠️ 리프레시 실패 = 로그아웃이 아니다(체크리스트 H-24 요건).
+                    // 네트워크 문제면 저장된 세션은 그대로 남아 아래 흐름이 이어지고, 서버
+                    // 확인에 실패하면 catch 에서 캐시 신원으로 복구한다. 토큰이 **실제로**
+                    // 무효/폐기된 경우에만 SDK 가 세션을 지우고, 그때는 currentUser 가 nil 이
+                    // 되어 아래 게스트 경로로 간다 — 그 구분을 SDK 에 맡기고 여기선 삼키지만
+                    // 로그는 원인을 나눠 남긴다.
+                    AppLog.error(Self.isTransientNetworkError(error)
+                                 ? "session refresh (transient — 신원 유지)"
+                                 : "session refresh (invalid — 세션 폐기 가능)", error)
+                }
             }
             // 익명 자동 로그인 폐지: 세션이 없으면 비로그인 게스트로 둔다(읽기 전용 둘러보기).
             // 예전엔 여기서 signInAnonymously() 로 매일 유령 익명 유저를 양산했다(분석/users 오염).
@@ -97,6 +204,10 @@ final class AuthSession: ObservableObject {
                 prefAny = false
                 hasServerPrefs = false
                 errorMessage = nil
+                // 세션 자체가 없다 = SDK 가 '진짜로' 로그아웃 상태라고 판정한 것(폐기된 토큰
+                // 포함). 오프라인이어도 저장된 세션이 있으면 여기 오지 않으므로, 이 지점은
+                // 캐시된 회원 신원을 버려도 되는 유일한 지점이다.
+                clearCachedIdentity()
                 bootstrapStatus = .ready
                 ready = true
                 return
@@ -158,10 +269,23 @@ final class AuthSession: ObservableObject {
                 }
             }
             errorMessage = nil
+            saveCachedIdentity()   // 이 시점의 신원이 '마지막으로 성공한' 신원이다
             bootstrapStatus = .ready
         } catch {
-            errorMessage = error.localizedDescription
-            bootstrapStatus = .failed(error.localizedDescription)
+            AppLog.error("bootstrap", error)
+            if Self.isTransientNetworkError(error), let cached = loadCachedIdentity() {
+                // 오프라인/일시적 실패 — 회원 신원을 **버리지 않는다.** 예전엔 여기서
+                // userId=nil, isAnonymous=true 인 초기값이 그대로 남아 화면이 게스트로
+                // 그려졌고(= 조용한 로그아웃), 심지어 `.failed` 를 그리는 화면이 하나도
+                // 없어 사용자에겐 그냥 '로그아웃됨'으로 보였다(외부 QA H-24).
+                apply(cached)
+                errorMessage = nil
+                bootstrapStatus = .offline
+            } else {
+                // 신원을 확정하지 못했다(캐시도 없음). 원시 오류는 로그로만.
+                errorMessage = "연결에 실패했어요. 잠시 후 다시 시도해주세요."
+                bootstrapStatus = .failed("연결에 실패했어요. 잠시 후 다시 시도해주세요.")
+            }
         }
         // Maintain existing semantics where `ready` means the bootstrap attempt has finished.
         ready = true
@@ -272,6 +396,9 @@ final class AuthSession: ObservableObject {
             authMessage = "로그아웃에 실패했어요. 잠시 후 다시 시도해주세요."
             return false
         }
+        // 의도적 로그아웃 — 캐시된 회원 신원은 여기서 버린다. 남겨두면 다음 부트스트랩이
+        // 네트워크 실패 시 방금 로그아웃한 회원을 되살린다.
+        clearCachedIdentity()
         await bootstrap()
         // 부트스트랩이 실패하면(오프라인 등) 게스트 세션이 성립하지 않은 것 — 이때도 정리하지
         // 않는다(비파괴 우선). 서버 소유 데이터는 그대로라 재시도로 회복된다.
@@ -310,6 +437,11 @@ final class AuthSession: ObservableObject {
         // ⚠️ 이후 단계(로컬 세션 정리·게스트 부트스트랩)가 실패해도 false 를 돌려주면 안 된다.
         // 호출부에게 false 는 '로컬 정리하지 마라'는 뜻이라, 존재하지도 않는 계정의 취향·
         // 최근 본 카드·오즈 픽이 기기에 그대로 남는 A-84 를 그대로 재현한다.
+        //
+        // 캐시된 회원 신원도 **반드시 여기서** 버린다. 안 버리면 오프라인 탈퇴에서
+        // `bootstrap()` 이 네트워크 실패 → 캐시 복구 경로를 타면서 방금 삭제한 계정을
+        // 화면에 되살린다.
+        clearCachedIdentity()
         try? await auth.signOut()
         await bootstrap()
         if case .ready = bootstrapStatus, isAnonymous {
