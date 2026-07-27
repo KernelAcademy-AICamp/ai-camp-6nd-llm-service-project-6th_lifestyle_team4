@@ -298,11 +298,17 @@ struct HomeView: View {
         // 쳤는데, `allCards` 가 이미 차 있으면 그 fetch 자체를 건너뛴다. 그래서 비행기
         // 모드로 당겨서 새로고침해도 메모리 풀에서 카드를 새로 뽑고 '갱신됨' 토스트까지
         // 띄웠다 — 오래된 내용을 방금 받아온 것처럼 보여준 셈이다(외부 QA H-27).
+        //
+        // ⚠️ 순서가 요건이다: **서버 확인이 끝나기 전에는 아무 상태도 커밋하지 않는다.**
+        // 처음 고칠 때는 실패 '보고'만 바로잡고 카드 교체는 그대로 뒀는데, 그러면 오프라인
+        // 새로고침이 여전히 카드를 바꿔놓고 나서 실패를 알렸다 — 사용자 입장에선 실패했다면서
+        // 화면은 바뀐 셈이다(리뷰 지적). 후보 선정 → 서버 확인 → **그때만** 커밋.
         var reachedServer = true
         do {
             if allCards.isEmpty {
                 allCards = try await CardCache.shared.cards()   // 세션 공유(무료 티어 부하↓)
             }
+            // 1) 후보만 고른다 — 여기까지는 화면에 아무 영향이 없다.
             let pick: Card?
             if deterministic {
                 pick = Recommend.pickToday(
@@ -320,17 +326,30 @@ struct HomeView: View {
                     prefs: prefs.userPrefs
                 )
             }
-            if let pick { prefs.rememberShown(pick.cardId) }
-            todayCard = pick
-            coach.tourCard = pick   // 코치 투어 openDetail 대상(실제 오늘 카드)
+            // 2) 서버 확인 겸 카운트 수집. 커밋 후 화면에 나타날 수 있는 카드 전부를 미리
+            //    묻는다 — 현재 오늘 카드는 커밋 뒤 '지난 기록'으로 내려가므로 함께 포함한다.
+            let probe = ([pick, todayCard].compactMap { $0 } + recent)
+            if let counts = await fetchCounts(for: probe) {
+                // 3) 서버에 닿았을 때만 커밋한다.
+                if let pick { prefs.rememberShown(pick.cardId) }
+                todayCard = pick
+                coach.tourCard = pick   // 코치 투어 openDetail 대상(실제 오늘 카드)
 
-            todayShowOriginal = false  // 새 카드는 항상 한국어부터 (PWA와 동일)
-            recent = buildRecent()
-            reachedServer = await refreshBookmarkCounts(for: [pick].compactMap { $0 } + recent)
+                todayShowOriginal = false  // 새 카드는 항상 한국어부터 (PWA와 동일)
+                recent = buildRecent()
+                bookmarkCounts = counts
+            } else {
+                reachedServer = false   // 화면은 이전 상태 그대로 유지
+            }
         } catch {
             reachedServer = false
         }
         fetchFailed = !reachedServer
+        // 익명 3회 제한은 '새 명대사를 받았을 때'의 대가다. 실패해서 카드가 그대로면
+        // 소모분을 돌려준다 — 안 그러면 비행기 모드에서 당기기만 해도 한도가 닳는다(리뷰 지적).
+        // 회원은 게이트가 애초에 소모하지 않으므로(`passAnonRefreshGate` 즉시 true) 익명일
+        // 때만 되돌린다 — 회원에게 refund 를 돌리면 로그인 전에 쌓인 익명 카운트가 깎인다.
+        if !deterministic, !reachedServer, session.isAnonymous { AnonRefreshLimit.refund() }
         // 새로고침(랜덤) 완료 시 갱신됨/갱신 실패 토스트 — 버튼·당김 둘 다 여기로 모인다
         // (초기/시드 로드는 deterministic=true 라 토스트 없음). PWA toast('갱신됨') 미러.
         if !deterministic {
@@ -402,23 +421,22 @@ struct HomeView: View {
         }
     }
 
-    /// 반환값 = **서버에 실제로 닿았는지.** 카드 풀이 이미 메모리에 있으면 `reload` 의
-    /// fetch 는 통째로 건너뛰므로, 이 호출이 그 새로고침의 유일한 네트워크 왕복이 된다.
-    /// 성공/실패를 삼키지 않고 돌려줘야 '오프라인인데 갱신됨' 오보를 막을 수 있다(H-27).
-    @discardableResult
-    private func refreshBookmarkCounts(for cards: [Card]) async -> Bool {
+    /// 카운트를 **읽어서 돌려주기만** 한다(상태 미변경). nil = 서버에 닿지 못함.
+    ///
+    /// 상태를 바꾸지 않는 게 요점이다 — `reload` 는 이 결과로 '커밋할지'를 정하므로,
+    /// 여기서 미리 `bookmarkCounts` 를 갱신해버리면 실패한 새로고침이 화면 일부만 바꾸는
+    /// 어중간한 상태가 된다. 카드 풀이 이미 메모리에 있으면 이 호출이 그 새로고침의
+    /// **유일한 네트워크 왕복**이라, 도달 여부의 판정 지점이기도 하다(H-27).
+    private func fetchCounts(for cards: [Card]) async -> [Int: Int]? {
         let ids = Array(Set(cards.map(\.cardId)))
-        guard !ids.isEmpty else {
-            bookmarkCounts = [:]
-            return true   // 부를 대상이 없다 = 네트워크 실패가 아니다
-        }
-        do {
-            bookmarkCounts = try await Supa.shared.fetchBookmarkCounts(cardIds: ids)
-            return true
-        } catch {
-            // 숫자 자체는 장식이라 읽기를 막지 않는다 — 다만 실패했다는 '사실'은 알린다.
-            return false
-        }
+        guard !ids.isEmpty else { return [:] }   // 부를 대상이 없다 = 네트워크 실패가 아니다
+        return try? await Supa.shared.fetchBookmarkCounts(cardIds: ids)
+    }
+
+    /// 숫자만 조용히 갱신(북마크 토글 직후·상세 복귀). 실패하면 이전 숫자를 그대로 둔다 —
+    /// 여기서의 실패는 장식 갱신 실패라 읽기를 막지 않는다.
+    private func refreshBookmarkCounts(for cards: [Card]) async {
+        if let counts = await fetchCounts(for: cards) { bookmarkCounts = counts }
     }
 
 
