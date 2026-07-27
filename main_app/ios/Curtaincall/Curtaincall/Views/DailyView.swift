@@ -108,7 +108,16 @@ struct DailyView: View {
             guard !allCards.isEmpty else { return }
             recomputeOz()
         }
-        // 취향(테마/장르)이 바뀌면(예: 게스트 CTA로 설정) Oz 픽을 다시 고른다.
+        // 취향 **값**이 바뀌면 오즈 픽을 다시 고른다 — 프로필 편집에서 장르/주제를 바꾸고
+        // 돌아왔을 때 라벨만 갱신되고 카드는 그대로였던 문제(외부 QA D-17). `prefSelected`
+        // 는 편집 시 true→true 라 onChange 가 울리지 않아 신호가 될 수 없다.
+        .onChange(of: prefs.prefsRevision) { _, _ in
+            guard !allCards.isEmpty else { return }
+            ozCard = nil          // 이전 픽을 먼저 버려 새 취향의 결과만 남게 한다
+            recomputeOz()
+        }
+        // 온보딩 진입/이탈(게스트 CTA → 취향 설정)은 값이 아니라 '설정 완료' 여부라 별도 신호로
+        // 남긴다. 값까지 바뀐 경우 위 리비전과 둘 다 울리지만 재계산은 메모리 연산이라 무해하다.
         .onChange(of: prefs.prefSelected) { _, _ in
             guard !allCards.isEmpty else { return }
             recomputeOz()
