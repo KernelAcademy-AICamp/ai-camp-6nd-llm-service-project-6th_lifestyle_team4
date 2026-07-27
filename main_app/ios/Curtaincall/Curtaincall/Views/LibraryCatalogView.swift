@@ -81,9 +81,15 @@ struct LibraryCatalogView: View {
                         }
                     }
                     // 콘텐츠 끝 여백 — RootView 의 safeAreaInset 은 TabView '페이지 안'까지
-                    // 전파되지 않아(UIKit 페이징 컨테이너) 각 탭이 직접 보상한다. 40 이면
-                    // 스크롤 끝 콘텐츠가 글래스 필 뒤에 멈춘다(기기 QA) — Feed 와 동일 104.
-                    Spacer().frame(height: 104)
+                    // 전파되지 않아(UIKit 페이징 컨테이너) 각 탭이 직접 보상한다.
+                    // ⚠️ 페이지 바가 떠 있으면 104(필 보상)로는 모자란다 — 바를 고양이 머리
+                    // 위로 올린 뒤(Z-5)로는 더더욱. 마지막 줄이 바의 불투명 배경 뒤에 갇히지
+                    // 않게 바 윗면 + 12 에서 파생한다(리뷰 P1). 바가 없으면(1페이지·검색
+                    // 결과 없음) 기존 104. 값이 바 지오메트리와 어긋나지 않도록 아래
+                    // pageBarBottomInset/pageBarHeight 상수를 공유한다.
+                    Spacer().frame(height: showsPageBar
+                        ? Self.pageBarBottomInset + Self.pageBarHeight + 12
+                        : 104)
                 }
                 .padding(.horizontal, 20)
                 .background(
@@ -97,9 +103,9 @@ struct LibraryCatalogView: View {
             // LIBRARY 고양이(cat_struck, 돌출 ≈77)가 바의 오른쪽 화살표를 통째로 가렸다
             // (외부 QA Z-5; SE 실측 — 화살표는 click-through 라 눌리긴 하지만 보이지 않음).
             // 이제 고양이는 바 '아래' 칸(필 위 여백)에 들어앉고 바는 그 머리 위에 얹힌다.
-            if !model.books.isEmpty, !filteredBooks.isEmpty, pageCount > 1 {
+            if showsPageBar {
                 pinnedPageBar
-                    .padding(.bottom, EditorialTabBar.pillTopInset + EditorialTabBar.libraryCatProtrusion + 8)
+                    .padding(.bottom, Self.pageBarBottomInset)
             }
         }
         .background(Color.paper)
@@ -167,6 +173,21 @@ struct LibraryCatalogView: View {
         filterMemo.value = result
         return result
     }
+
+    /// 페이지 바 표시 조건 — 바 자체와 그리드 끝 여백이 **같은 판단**을 쓰도록 한 곳에.
+    /// (조건이 갈라지면 '바는 있는데 여백은 104' 류의 갇힘이 재발한다 — 리뷰 P1이 그 사례.)
+    private var showsPageBar: Bool {
+        !model.books.isEmpty && !filteredBooks.isEmpty && pageCount > 1
+    }
+
+    /// 바 '바닥'의 화면 하단 오프셋 — 필 윗면 + 고양이 돌출 + 8 (Z-5).
+    static var pageBarBottomInset: CGFloat {
+        EditorialTabBar.pillTopInset + EditorialTabBar.libraryCatProtrusion + 8
+    }
+
+    /// 바의 실제 세로 크기: Hairline 0.5 + 세로 패딩 12×2 + 칩/화살표 프레임 44.
+    /// pinnedPageBar 구성이 바뀌면 이 값도 같이 바꿀 것.
+    static let pageBarHeight: CGFloat = 68.5
 
     private var pageCount: Int {
         max(1, (filteredBooks.count + Self.pageSize - 1) / Self.pageSize)
