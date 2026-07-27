@@ -50,6 +50,10 @@ struct EditorialTabBar: View {
     @State private var catEggActive = false
     /// long-press 햅틱 트리거(증가 시 soft impact).
     @State private var catEggCount = 0
+    /// 호흡(breath) **공유 위상** — 모든 고양이 레이어가 같은 값을 읽는다. 레이어마다
+    /// 타임라인(phaseAnimator)을 두면 크로스페이드 도중 두 고양이의 호흡 위상이 어긋나
+    /// 크기가 튀어 보인다(Android 도 breathScale 하나를 두 이미지가 함께 읽는다).
+    @State private var breathIn = false
 
     private var poseAnimation: Animation? {
         reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.72)
@@ -83,6 +87,20 @@ struct EditorialTabBar: View {
 
     /// long-press 이스터에그용 깜짝 자세 (cat_confused). 돌출 60*0.72≈43 ≤ clearance.
     private static let catEggPose = NavCatPose(asset: "cat_confused", height: 60, hBias: 0.30, ledgeFraction: 0.72)
+
+    /// 크로스페이드 레이어로 '항상' 트리에 올려둘 전체 고양이 에셋 — 왜 전부 올려두는지는
+    /// navCat 주석 참조. catPose/catEggPose 에서 **자동 도출**한다: 하드코딩 목록을 두면
+    /// 나중에 자세를 추가할 때 목록 갱신을 잊어 그 고양이가 영구히 안 보이는 사고가 난다.
+    private static let catAssets: [String] = {
+        var out: [String] = []
+        for tab in Tab.allCases {
+            let asset = EditorialTabBar.catPose(for: tab).asset
+            if !out.contains(asset) { out.append(asset) }
+        }
+        let egg = EditorialTabBar.catEggPose.asset
+        if !out.contains(egg) { out.append(egg) }
+        return out
+    }()
 
     // (idle 모션은 Android BottomNavBar 와 동일한 '호흡 only'(2.2s, 발끝 기준) —
     //  기존 flick 사이클은 Android 에 없어 제거. 기기 QA: 고양이 모션 크로스플랫폼 통일.)
@@ -160,7 +178,7 @@ struct EditorialTabBar: View {
     /// 캐처는 바 위 투명 여백에만 있어 탭/메달리온 히트테스트를 사실상 건드리지 않는다.
     private var catLongPressCatcher: some View {
         GeometryReader { geo in
-            let pose = catPose(for: selection)
+            let pose = Self.catPose(for: selection)
             let inset: CGFloat = 44
             let centerX = geo.size.width / 2 + pose.hBias * (geo.size.width / 2 - inset)
             Color.clear
@@ -299,7 +317,7 @@ struct EditorialTabBar: View {
 
     /// 선택된 탭에 따른 고양이 자세 — Android/PWA 미러.
     ///   feed=cat_pen · archive(Library)=cat_struck · daily/settings=cat_empty(코너) · 그 외=cat_today(중앙 약간 우측)
-    private func catPose(for tab: Tab) -> NavCatPose {
+    private static func catPose(for tab: Tab) -> NavCatPose {
         // 각 자세의 돌출량 = height * ledgeFraction ≤ catClearance(56pt) 이 되도록 잡는다
         // (그래야 고양이가 위 투명 여백 안에 머물고 콘텐츠를 가리지 않는다).
         switch tab {
@@ -318,7 +336,7 @@ struct EditorialTabBar: View {
 
     private var navCat: some View {
         // long-press 이스터에그 중엔 깜짝 자세, 아니면 탭별 자세.
-        let pose = catEggActive ? Self.catEggPose : catPose(for: selection)
+        let pose = catEggActive ? Self.catEggPose : Self.catPose(for: selection)
         return GeometryReader { geo in
             let w = geo.size.width
             // 바 윗면(hairline)은 투명 여백 아래, 즉 geo y = catClearance 지점.
@@ -327,41 +345,62 @@ struct EditorialTabBar: View {
             // bias 를 좌우 위치로: 0=중앙, ±1=가장자리에서 inset 만큼 안쪽.
             let inset: CGFloat = 44
             let centerX = w / 2 + pose.hBias * (w / 2 - inset)
-            idleCat(pose: pose)
-                .position(x: centerX, y: centerY)
+            // ⚠️ 전체 에셋을 '항상' 스택에 올려두고 보이는 것만 opacity 1 로 고른다.
+            //
+            // 왜: 예전엔 Image 에 .id(pose.asset) + .transition(.opacity) 를 걸어 자세가
+            // 바뀔 때 view identity 를 교체했다. SwiftUI 는 이를 insert/remove 로 처리하고,
+            // **remove 되는 레이어는 레이아웃에서 빠져 컨테이너의 이동 애니메이션을 따라가지
+            // 못한다.** 결과: 나가는 고양이는 옛 자리에 그대로 멈춘 채 페이드아웃하고, 들어오는
+            // 고양이는 '거의 투명한 상태로' 새 자리까지 날아간다 → 사용자에겐 "사라졌다가 다시
+            // 나타난다"로 보였다(기기 QA 지적: Android 는 나는데 iOS 는 안 난다).
+            //
+            // Android 는 animateFloatAsState(bias)/animateDpAsState(height·protrusion) 를
+            // Crossfade **내부**에서 읽어, 나가는 이미지와 들어오는 이미지가 같은 좌표를
+            // 공유하며 함께 날아간다(BottomNavBar.kt: biasAnim/protrusionAnim + tween 280).
+            // identity 를 고정하면 같은 구조가 된다 — 나가는 레이어도 살아 있으므로 위치
+            // 스프링을 함께 타고, 두 레이어의 불투명도 합이 항상 ~1 이라 '이동 중인 위치'에
+            // 언제나 고양이가 보인다. 이게 그 '스르륵 나는' 느낌의 정체다.
+            ZStack {
+                ForEach(Self.catAssets, id: \.self) { asset in
+                    catLayer(asset: asset, pose: pose)
+                        // Android 주석과 동일한 이유로 위치는 **레이어별**로 잡는다: ZStack
+                        // 에 걸면 박스가 '가장 넓은 자세' 기준으로 커져 좁은 고양이가 밀린다.
+                        .position(x: centerX, y: centerY)
+                }
+            }
+            // 호흡 구동 — .task(id:)라 showCat 토글로 사라졌다 돌아와도 다시 시작한다
+            // (onAppear + repeatForever 는 재등장 시 정지된 채 남는 함정이 있다).
+            .task(id: reduceMotion) {
+                guard !reduceMotion else { return }
+                breathIn = false
+                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                    breathIn = true
+                }
+            }
         }
         .allowsHitTesting(false)                                  // click-through
         // Android BottomNavBar 미러 — 위치·크기는 '연속 보간'(catSpring: damping 0.72),
-        // 에셋은 아래 idleCat 의 280ms 크로스페이드. pose(Equatable) 하나로 트리거해
+        // 에셋은 catLayer 의 280ms 크로스페이드. pose(Equatable) 하나로 트리거해
         // 모든 자세 전환이 동일한 글라이드+페이드로 움직인다(자세별 상이 거동 제거).
         .animation(poseAnimation, value: pose)
     }
 
-    /// 고양이 이미지 — Android Crossfade(tween 280) 미러: **컨테이너 identity 는 유지**
-    /// (위치·높이는 navCat 의 스프링으로 글라이드)하고, 이미지 원본만 .id 교체로
-    /// 280ms 크로스페이드한다. idle 은 Android 와 동일한 '호흡 only'(2.2s, 발끝 기준
-    /// 1.0↔1.03). **Reduce Motion 시 페이드·호흡 모두 비활성**(즉시 교체·정지).
-    @ViewBuilder
-    private func idleCat(pose: NavCatPose) -> some View {
-        let crossfading = ZStack {
-            Image(pose.asset)
-                .resizable()
-                .scaledToFit()
-                .id(pose.asset)
-                .transition(reduceMotion ? .identity : .opacity)
-        }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: pose.asset)
-        .frame(height: pose.height)
-
-        if reduceMotion {
-            crossfading
-        } else {
-            crossfading.phaseAnimator([false, true]) { view, inhale in
-                view.scaleEffect(inhale ? 1.03 : 1.0, anchor: .bottom)   // 호흡(발끝 기준)
-            } animation: { _ in
-                .easeInOut(duration: 2.2)
-            }
-        }
+    /// 고양이 한 레이어 — Android Crossfade 내부의 Image 미러. 전체 에셋이 각각 한 레이어로
+    /// 상주하고(navCat 주석 참조), 현재 자세만 불투명하다.
+    ///
+    /// 모디파이어 순서가 핵심이다: `.animation(…, value: pose.asset)` 을 `.frame(height:)`
+    /// **아래(=안쪽)** 에 둬서 280ms 트윈이 '페이드만' 담당하게 하고, 크기·위치는 그대로
+    /// navCat 의 스프링을 타게 한다. 순서를 바꾸면 크기까지 트윈이 가로채 글라이드가 죽는다.
+    /// idle 호흡은 공유 위상(breathIn, 2.2s, 발끝 기준 1.0↔1.03)을 읽는다.
+    /// **Reduce Motion 시 페이드·호흡 모두 비활성**(즉시 교체·정지).
+    private func catLayer(asset: String, pose: NavCatPose) -> some View {
+        Image(asset)
+            .resizable()
+            .scaledToFit()
+            .opacity(asset == pose.asset ? 1 : 0)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: pose.asset)
+            .frame(height: pose.height)
+            .scaleEffect(breathIn ? 1.03 : 1.0, anchor: .bottom)   // 호흡(발끝 기준)
     }
 }
 
