@@ -18,6 +18,10 @@ cd "$(dirname "$0")/.."
 
 SCHEME="Curtaincall"
 DEST="platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5"
+# --warnings 전용 DerivedData. 메인 체크아웃의 warm 캐시(기본 경로)를 절대 건드리지 않기
+# 위해 분리한다(AGENTS.md "never clean" 은 그 warm 캐시를 지키라는 뜻 — 별도 경로를
+# clean 하는 건 그 규칙과 충돌하지 않는다). CC_CLEAN_DD 로 덮어쓸 수 있다.
+CLEAN_DD="${CC_CLEAN_DD:-/tmp/curtaincall-clean-verify}"
 LOG="$(mktemp -t curtaincall-build)"
 trap 'rm -f "$LOG"' EXIT
 
@@ -26,8 +30,14 @@ MODE="${1:-incremental}"
 case "$MODE" in
   --warnings)
     echo "클린 빌드(별도 DerivedData) — 경고 전수 집계…"
-    xcodebuild build -scheme "$SCHEME" -destination "$DEST" \
-      -derivedDataPath /tmp/curtaincall-clean-verify > "$LOG" 2>&1 || true
+    # ⚠️ `clean` 이 반드시 붙어야 한다(Codex 리뷰 지적). 같은 derivedDataPath 를 재사용하는데
+    # `build` 만 돌리면 **두 번째 실행부터 증분**이 되어, 이 옵션이 막으려던 바로 그 함정
+    # (손대지 않은 파일이 재컴파일되지 않아 그 파일의 경고가 사라지고 "경고 0" 오보)에
+    # 스스로 빠진다. clean 이 빌드 산출물을 지워 전 소스 재컴파일 → 경고 전수 재출력.
+    # (매번 mktemp 새 경로를 쓰는 대안도 있지만 SPM 체크아웃까지 매번 새로 받아 훨씬 느리다.
+    #  같은 경로 + clean 이면 패키지 캐시는 재사용하면서 소스 경고는 전수 확보된다.)
+    xcodebuild clean build -scheme "$SCHEME" -destination "$DEST" \
+      -derivedDataPath "$CLEAN_DD" > "$LOG" 2>&1 || true
     ;;
   *)
     xcodebuild build -scheme "$SCHEME" -destination "$DEST" > "$LOG" 2>&1 || true
