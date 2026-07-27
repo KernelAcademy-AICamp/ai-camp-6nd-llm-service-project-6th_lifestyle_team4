@@ -493,7 +493,7 @@ struct RootView: View {
                         // 필 윗면(pillTopInset)에서 파생 — 고양이 발이 필 윗면에 10pt 걸쳐
                         // 앉는다. 기기별(홈 버튼/인디케이터) 마진 차이 자동 추종.
                         .padding(.bottom, EditorialTabBar.pillTopInset - 10)
-                        .transition(EditorialTabBar.catHandoff(reduceMotion: reduceMotion, dx: 40))
+                        .transition(EditorialTabBar.catHandoff(reduceMotion: reduceMotion))
                 }
             }
             .animation(reduceMotion ? nil : EditorialTabBar.catHandoffAnimation, value: showFeedCat)
