@@ -30,6 +30,18 @@ enum AnonRefreshLimit {
         }
     }
 
+    /// 오늘 횟수 -1 (0 미만으로 내려가지 않음). 게이트는 새로고침을 **시도하기 전에**
+    /// 소모하므로, 시도가 실패해 카드가 그대로면 되돌려줘야 한다 — 안 그러면 비행기
+    /// 모드에서 당기기만 해도 하루 3회 한도가 닳는다(리뷰 지적).
+    static func refund() {
+        let current = count()
+        guard current > 0 else { return }
+        let next = State(date: todayStr(), count: current - 1)
+        if let data = try? JSONEncoder().encode(next) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
     private struct State: Codable {
         let date: String
         let count: Int
