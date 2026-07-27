@@ -584,6 +584,13 @@ struct OpenedBookView: View {
         GeometryReader { geo in
             let w = min(geo.size.width - 48, 440)
             let h = geo.size.height * 0.82
+            // SE(667pt)에서는 0.82 페이지의 '중앙' 배치가 필 윗면을 넘어, 마지막 인용 행이
+            // 탭바 뒤에 갇히고 도서관 고양이가 페이지 모서리를 깔고 앉는다(외부 QA D-29
+            // 부속, SE 실측). 넘치는 만큼만 위로 든다 — 안 넘치는 큰 화면은 lift 0 으로
+            // 픽셀 하나 안 움직인다.
+            let pageBottom = (geo.size.height + h) / 2
+            let allowedBottom = geo.size.height - (EditorialTabBar.pillTopInset + 8)
+            let lift = max(0, pageBottom - allowedBottom)
             ZStack {
                 Color.black.opacity(opened ? 0.55 : 0)
                     .ignoresSafeArea(edges: .top)
@@ -629,6 +636,7 @@ struct OpenedBookView: View {
                 .shadow(color: .black.opacity(0.4), radius: 28, x: 0, y: 16)
                 .scaleEffect(opened ? 1 : 0.9)
                 .opacity(opened ? 1 : 0)
+                .offset(y: -lift)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -831,8 +839,19 @@ private struct BookPage: View {
                             onOpen(card)
                         } label: {
                             VStack(alignment: .leading, spacing: 12) {
-                                if let date = row.createdDate {
-                                    Text(Self.dateText(date)).labelCaps(size: 12)
+                                // 날짜(있으면)와 "#cardId" 일련번호를 **본문 흐름 안** 첫 줄로.
+                                // 예전엔 일련번호가 topTrailing 오버레이(공간 예약 없음)라 인용
+                                // 첫 줄과 같은 세로 대역을 공유했다 — 첫 줄이 길게 감기는 카드
+                                // 에서만 충돌하는 복불복(외부 QA D-29). 흐름 안에 두면 어떤
+                                // 폭·어떤 문장에서도 겹칠 수 없다.
+                                HStack(alignment: .firstTextBaseline) {
+                                    if let date = row.createdDate {
+                                        Text(Self.dateText(date)).labelCaps(size: 12)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Text("#\(card.cardId)")
+                                        .font(.bodySans(9))
+                                        .foregroundStyle(.sand)
                                 }
                                 Text("\"\(card.quote)\"")
                                     .font(.titleSerif(18))
@@ -854,14 +873,6 @@ private struct BookPage: View {
                                 Rectangle().fill(Color.sand).frame(width: 3)
                             }
                             .overlay(Rectangle().stroke(Color.latte, lineWidth: 0.5))
-                            // "#cardId" serial, top-right.
-                            .overlay(alignment: .topTrailing) {
-                                Text("#\(card.cardId)")
-                                    .font(.bodySans(9))
-                                    .foregroundStyle(.sand)
-                                    .padding(.top, 10)
-                                    .padding(.trailing, 12)
-                            }
                         }
                         .buttonStyle(.plain)
                         .cardContextMenu(card)

@@ -365,6 +365,16 @@ struct EditorialTabBar: View {
 
     // MARK: - Decorative nav cat
 
+    /// LIBRARY(cat_struck) 자세가 필 윗면 위로 솟는 실제 높이(90 × 0.86 ≈ 77pt).
+    /// 이 자세는 아래 '돌출 ≤ catClearance(56)' 규칙의 **유일한 예외**(Android
+    /// CatHeightLibrary=90 parity)라, 필 위층에 앉는 다른 요소(도서관 페이지 바)가 이 값
+    /// 위로 피해야 한다 — 안 그러면 바의 오른쪽 화살표가 고양이 뒤에 숨는다(외부 QA Z-5,
+    /// SE 실측: 화살표는 눌리지만 보이지 않았다). 하드코딩 대신 자세에서 파생해 드리프트를 막는다.
+    static var libraryCatProtrusion: CGFloat {
+        let pose = catPose(for: .archive)
+        return pose.height * pose.ledgeFraction
+    }
+
     /// 선택된 탭에 따른 고양이 자세 — Android/PWA 미러.
     ///   feed=cat_pen · archive(Library)=cat_struck · daily/settings=cat_empty(코너) · 그 외=cat_today(중앙 약간 우측)
     private static func catPose(for tab: Tab) -> NavCatPose {

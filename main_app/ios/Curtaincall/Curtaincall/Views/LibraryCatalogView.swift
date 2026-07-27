@@ -93,12 +93,13 @@ struct LibraryCatalogView: View {
                 )
             }
             // 페이지 바 — 스크롤과 함께 사라지지 않게 하단 고정. 결과 없음/1페이지면 숨김.
-            // ⚠️ RootView 의 safeAreaInset 은 TabView 페이지에 전파되지 않으므로(위 참조)
-            // 필 윗면(pillTopInset) + 28pt 로 띄운다 — 내부 세로 패딩 12 와 합쳐 실타래·
-            // 필과 40pt 간격(Android PageBar bottom=40 미러; 기기 QA: 붙어 보임 보정).
+            // ⚠️ 높이는 **고양이 머리 위**에서 파생한다. 예전 +28 은 필만 계산한 값이라
+            // LIBRARY 고양이(cat_struck, 돌출 ≈77)가 바의 오른쪽 화살표를 통째로 가렸다
+            // (외부 QA Z-5; SE 실측 — 화살표는 click-through 라 눌리긴 하지만 보이지 않음).
+            // 이제 고양이는 바 '아래' 칸(필 위 여백)에 들어앉고 바는 그 머리 위에 얹힌다.
             if !model.books.isEmpty, !filteredBooks.isEmpty, pageCount > 1 {
                 pinnedPageBar
-                    .padding(.bottom, EditorialTabBar.pillTopInset + 28)
+                    .padding(.bottom, EditorialTabBar.pillTopInset + EditorialTabBar.libraryCatProtrusion + 8)
             }
         }
         .background(Color.paper)

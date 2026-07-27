@@ -274,7 +274,13 @@ struct CardDetailView: View {
                     // '책 읽는 고양이'는 더 이상 스크롤 본문 맨 아래에 두지 않는다(스크롤
                     // 끝까지 가야만 보였고, 키보드에 독립적으로 끌려 위로 떠버림). 하단 도킹
                     // 컴포저 위에 데코 오버레이로 걸터앉힌다 — dockedBottomBar / commentBarCat 참조.
-                    Spacer().frame(height: 24)
+                    //
+                    // 끝 여백 — 회원은 도킹 컴포저(safeAreaInset)가 스크롤 바닥을 이미 밀어
+                    // 올리지만, **익명은 인셋이 전혀 없어**(dockedBottomBar isActive=false)
+                    // 빈 댓글 안내가 필 뒤에 영구히 갇혔다(SE 실측, P1-8 수락 기준 위반).
+                    Spacer().frame(height: session.isAnonymous
+                        ? EditorialTabBar.pillTopInset + 24
+                        : 24)
                 }
                 .padding(.horizontal, 20)
                 // Tap an empty area to dismiss the keyboard. simultaneousGesture
