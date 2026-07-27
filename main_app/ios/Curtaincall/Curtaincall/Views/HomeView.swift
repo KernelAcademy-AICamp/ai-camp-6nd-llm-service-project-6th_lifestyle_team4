@@ -329,18 +329,25 @@ struct HomeView: View {
             // 2) 서버 확인 겸 카운트 수집. 커밋 후 화면에 나타날 수 있는 카드 전부를 미리
             //    묻는다 — 현재 오늘 카드는 커밋 뒤 '지난 기록'으로 내려가므로 함께 포함한다.
             let probe = ([pick, todayCard].compactMap { $0 } + recent)
-            if let counts = await fetchCounts(for: probe) {
-                // 3) 서버에 닿았을 때만 커밋한다.
+            let counts = await fetchCounts(for: probe)
+            reachedServer = counts != nil
+            // 3) 커밋 여부.
+            //    · 카운트를 받았으면 당연히 커밋.
+            //    · 못 받았어도 **지킬 화면이 없으면**(아직 오늘 카드가 없다) 커밋한다.
+            //      커밋 보류는 '실패한 새로고침이 멀쩡한 화면을 바꿔놓는 것'을 막으려는
+            //      장치인데, 보여줄 카드가 애초에 없으면 막을 대상도 없다. 여기서 무조건
+            //      보류하면 카운트 조회 한 번 실패했다고 카드 자체를 못 보여주게 된다
+            //      (숫자는 장식인데 본문을 잃는 셈 — 첫 로드 회귀).
+            if counts != nil || todayCard == nil {
                 if let pick { prefs.rememberShown(pick.cardId) }
                 todayCard = pick
                 coach.tourCard = pick   // 코치 투어 openDetail 대상(실제 오늘 카드)
 
                 todayShowOriginal = false  // 새 카드는 항상 한국어부터 (PWA와 동일)
                 recent = buildRecent()
-                bookmarkCounts = counts
-            } else {
-                reachedServer = false   // 화면은 이전 상태 그대로 유지
+                bookmarkCounts = counts ?? [:]
             }
+            // 커밋을 보류한 경우 화면은 이전 상태 그대로 — reachedServer=false 로 배너가 뜬다.
         } catch {
             reachedServer = false
         }
