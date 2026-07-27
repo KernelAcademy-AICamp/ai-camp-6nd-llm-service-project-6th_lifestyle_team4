@@ -155,7 +155,7 @@ struct MyPageView: View {
                         Button {
                             Task {
                                 await session.signOut()
-                                prefs.clearOnLogout()   // 이전 사용자 취향이 다음(익명) 세션에 남지 않게 초기화
+                                prefs.clearUserScopedState()   // 이전 사용자의 로컬 상태가 다음(익명) 세션에 남지 않게 초기화
                             }
                         } label: {
                             Text("로그아웃")
@@ -268,7 +268,11 @@ struct MyPageView: View {
         .alert("회원 탈퇴", isPresented: $showDeleteConfirm) {
             Button("취소", role: .cancel) {}
             Button("탈퇴하기", role: .destructive) {
-                Task { await session.deleteAccount() }
+                // 탈퇴 '성공' 시에도 로그아웃과 동일하게 로컬 사용자 상태를 비운다. 이게
+                // 빠져 있어서 삭제된 계정의 취향·최근 본 카드·오즈 픽·공지 읽음 표시가
+                // 새로 부트스트랩된 게스트 세션에 그대로 남았다(외부 QA A-84).
+                // 실패 시에는 로그인 상태를 그대로 유지해야 하므로 지우지 않는다.
+                Task { if await session.deleteAccount() { prefs.clearUserScopedState() } }
             }
         } message: {
             Text("계정과 모든 데이터(북마크·댓글·하트·피드)가 영구 삭제되며 되돌릴 수 없습니다.")
