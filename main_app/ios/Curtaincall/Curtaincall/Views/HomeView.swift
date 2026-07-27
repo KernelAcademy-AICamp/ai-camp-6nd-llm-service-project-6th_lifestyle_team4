@@ -62,6 +62,25 @@ struct HomeView: View {
                         .padding(20)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
+                    } else if fetchFailed {
+                        // 캐시가 하나도 없는 채로 실패한 경우(오프라인 콜드 스타트). 예전엔
+                        // 이 자리가 통째로 비어 '지난 기록'만 덩그러니 남아 고장난 화면처럼
+                        // 보였다 — 무엇이 없는지, 무엇을 하면 되는지 명시한다(H-27).
+                        VStack(spacing: 12) {
+                            Text("오늘의 명대사를 불러오지 못했어요.")
+                                .font(.bodySans(14))
+                                .foregroundStyle(.walnut)
+                                .multilineTextAlignment(.center)
+                            Button { Task { await reload(deterministic: true) } } label: {
+                                Text("다시 시도").editorialButton(style: .filled)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                        .padding(.horizontal, 20)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.paper))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.latte, lineWidth: 0.5))
                     }
 
                     Spacer().frame(height: 56)
@@ -116,6 +135,12 @@ struct HomeView: View {
                 requestLogin()   // 카드 상세 댓글 게이트 → 인증 모달 직접 호출
             }
             .cardHeroDestination($0.cardId, in: heroNS, enabled: !reduceMotion)
+            // 상세에서 북마크를 걸고 돌아오면 홈의 숫자가 그대로였다(외부 QA H-33).
+            // 카드를 다시 고르거나 로딩 상태로 되돌리지 않고 **숫자만** 다시 읽는다 —
+            // 같은 오늘 카드가 유지돼야 한다는 게 이 항목의 요건이다.
+            .onDisappear {
+                Task { await refreshBookmarkCounts(for: [todayCard].compactMap { $0 } + recent) }
+            }
         }
         // 공유 시트 — 완료 시에만 카운트 +1 (취소는 무시), PWA bumpShareCount 미러.
         .sheet(item: $shareCard) { card in
@@ -269,11 +294,15 @@ struct HomeView: View {
     private func reload(deterministic: Bool) async {
         isLoading = true
         defer { isLoading = false }
+        // 이번 새로고침이 **실제로 서버에 닿았는지**. 예전엔 fetch 가 throw 할 때만 실패로
+        // 쳤는데, `allCards` 가 이미 차 있으면 그 fetch 자체를 건너뛴다. 그래서 비행기
+        // 모드로 당겨서 새로고침해도 메모리 풀에서 카드를 새로 뽑고 '갱신됨' 토스트까지
+        // 띄웠다 — 오래된 내용을 방금 받아온 것처럼 보여준 셈이다(외부 QA H-27).
+        var reachedServer = true
         do {
             if allCards.isEmpty {
                 allCards = try await CardCache.shared.cards()   // 세션 공유(무료 티어 부하↓)
             }
-            fetchFailed = false
             let pick: Card?
             if deterministic {
                 pick = Recommend.pickToday(
@@ -297,10 +326,11 @@ struct HomeView: View {
 
             todayShowOriginal = false  // 새 카드는 항상 한국어부터 (PWA와 동일)
             recent = buildRecent()
-            await refreshBookmarkCounts(for: [pick].compactMap { $0 } + recent)
+            reachedServer = await refreshBookmarkCounts(for: [pick].compactMap { $0 } + recent)
         } catch {
-            fetchFailed = true
+            reachedServer = false
         }
+        fetchFailed = !reachedServer
         // 새로고침(랜덤) 완료 시 갱신됨/갱신 실패 토스트 — 버튼·당김 둘 다 여기로 모인다
         // (초기/시드 로드는 deterministic=true 라 토스트 없음). PWA toast('갱신됨') 미러.
         if !deterministic {
@@ -372,16 +402,22 @@ struct HomeView: View {
         }
     }
 
-    private func refreshBookmarkCounts(for cards: [Card]) async {
+    /// 반환값 = **서버에 실제로 닿았는지.** 카드 풀이 이미 메모리에 있으면 `reload` 의
+    /// fetch 는 통째로 건너뛰므로, 이 호출이 그 새로고침의 유일한 네트워크 왕복이 된다.
+    /// 성공/실패를 삼키지 않고 돌려줘야 '오프라인인데 갱신됨' 오보를 막을 수 있다(H-27).
+    @discardableResult
+    private func refreshBookmarkCounts(for cards: [Card]) async -> Bool {
         let ids = Array(Set(cards.map(\.cardId)))
         guard !ids.isEmpty else {
             bookmarkCounts = [:]
-            return
+            return true   // 부를 대상이 없다 = 네트워크 실패가 아니다
         }
         do {
             bookmarkCounts = try await Supa.shared.fetchBookmarkCounts(cardIds: ids)
+            return true
         } catch {
-            // Keep counts cosmetic; failures should not block reading.
+            // 숫자 자체는 장식이라 읽기를 막지 않는다 — 다만 실패했다는 '사실'은 알린다.
+            return false
         }
     }
 
