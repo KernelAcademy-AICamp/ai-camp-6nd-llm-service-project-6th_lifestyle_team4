@@ -20,6 +20,8 @@ struct MyPageView: View {
 
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
+    /// 탈퇴 **실패** 안내(알림용). nil 이면 알림 없음.
+    @State private var deleteFailure: String?
     @State private var showAttendance = false
     @State private var latestNoticeId: Int?
 
@@ -274,10 +276,26 @@ struct MyPageView: View {
                 // 빠져 있어서 삭제된 계정의 취향·최근 본 카드·오즈 픽·공지 읽음 표시가
                 // 새로 부트스트랩된 게스트 세션에 그대로 남았다(외부 QA A-84).
                 // 실패 시에는 로그인 상태를 그대로 유지해야 하므로 지우지 않는다.
-                Task { if await session.deleteAccount() { await finishIdentityChange() } }
+                Task {
+                    if await session.deleteAccount() {
+                        await finishIdentityChange()
+                    } else {
+                        // 실패 문구는 `authMessage` 자리(이 화면 **맨 위**)에 뜨는데 탈퇴 버튼은
+                        // 페이지 맨 아래라, 그대로 두면 사용자 화면 밖에서 안내가 사라진다.
+                        // 파괴적 동작의 실패는 반드시 보여야 해서 같은 문구를 알림으로도 띄운다.
+                        deleteFailure = session.authMessage
+                    }
+                }
             }
         } message: {
             Text("계정과 모든 데이터(북마크·댓글·하트·피드)가 영구 삭제되며 되돌릴 수 없습니다.")
+        }
+        .alert("탈퇴하지 못했어요",
+               isPresented: Binding(get: { deleteFailure != nil },
+                                    set: { if !$0 { deleteFailure = nil } })) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(deleteFailure ?? "")
         }
     }
 
