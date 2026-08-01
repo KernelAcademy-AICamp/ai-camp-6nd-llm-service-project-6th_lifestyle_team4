@@ -12,6 +12,7 @@ struct DailyView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @EnvironmentObject private var network: NetworkMonitor
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var heroNS
@@ -101,6 +102,13 @@ struct DailyView: View {
         .onChange(of: prefs.identityResetToken) { _, _ in
             ozCard = nil
             recomputeOz()
+        }
+        // 연결 회복 → 실패로 멈춘 화면의 자기 복구(HomeView 와 동일 패턴 — #200 후속).
+        // FEED 는 탭 진입마다 reload 라 자연 회복되지만, 이 화면은 hasLoaded 래치가 있어
+        // 신호 없이는 '불러오기 실패' 배너에 영원히 멈춘다. 실패 상태일 때만.
+        .onChange(of: network.reconnectToken) { _, _ in
+            guard fetchFailed else { return }
+            Task { await load(force: true) }
         }
         // Bookmarks load separately, so recompute the (taste-matched) Oz pick once
         // they arrive — chooseOzPick re-promotes a cached non-personalized pick.

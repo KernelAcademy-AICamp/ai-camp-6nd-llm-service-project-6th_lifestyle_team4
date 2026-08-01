@@ -8,6 +8,7 @@ struct HomeView: View {
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var coach: CoachController
+    @EnvironmentObject private var network: NetworkMonitor
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Namespace private var heroNS
@@ -153,6 +154,15 @@ struct HomeView: View {
         .task { await bookmarks.load(userId: session.userId) }
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
+        }
+        // 연결 회복 → 실패로 멈춘 화면의 자기 복구(H-24 의 화면 계층 몫, #200 후속).
+        // RootView 는 세션·회원 데이터만 되살린다 — 오늘 카드는 이 화면의 hasLoaded
+        // 래치 뒤라 신호를 직접 받아야 한다. **실패 상태일 때만** 돈다: 멀쩡한 화면의
+        // 카드를 바꿔치기하지 않는다(H-27 비파괴 원칙). deterministic 재시도라 익명
+        // 쿼터와도 무관하다(수동 '다시 시도' 버튼과 같은 경로).
+        .onChange(of: network.reconnectToken) { _, _ in
+            guard fetchFailed else { return }
+            Task { await reload(deterministic: true) }
         }
         // 신원 초기화 — PrefsStore 가 로컬을 비운 '뒤' 신호가 온다. UserDefaults 만 지우면
         // 이미 그려진 이전 사용자의 오늘 카드·최근 목록이 게스트에게 그대로 보였다(P1).
