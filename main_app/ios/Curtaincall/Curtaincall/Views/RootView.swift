@@ -527,9 +527,17 @@ struct RootView: View {
         }
         .onChange(of: settingsPath.count) { _, count in
             // 서가에서 빠져나온 순간(스택 비었을 때)에만 출발 탭으로 되돌린다.
-            guard count == 0, let back = bookshelfReturnTab else { return }
+            // `selectedTab == .settings` 확인 필수 — 사용자가 이미 다른 탭으로 옮겨간 뒤
+            // 뒤늦게 스택이 비는 경우까지 낚아채면 안 된다(리뷰 P1).
+            guard count == 0, selectedTab == .settings, let back = bookshelfReturnTab else { return }
             bookshelfReturnTab = nil
             selectedTab = back
+        }
+        // 사용자가 **직접** 탭을 옮기면 자동 복귀 의도는 사라진 것으로 본다(리뷰 P1).
+        // 프로그래밍적 전환에는 무해하다: 복귀는 토큰을 **먼저 비우고** 탭을 바꾸고,
+        // 서가 진입은 .settings 로 가므로 아래 조건(≠ .settings)에 걸리지 않는다.
+        .onChange(of: selectedTab) { _, tab in
+            if tab != .settings { bookshelfReturnTab = nil }
         }
         .environment(\.requestNotice) { showNoticeSheet = true }
         .environment(\.requestYarnInfo) { showYarnInfo = true }
@@ -720,6 +728,9 @@ struct RootView: View {
             feedPath = NavigationPath()
             feedReselect += 1  // scroll Feed to top + refresh
         case .settings:
+            // MY 재탭은 'MY 루트로 가겠다'는 명시적 의사 — 서가에서 나오더라도 출발 탭으로
+            // 튕기면 안 된다(리뷰 P1). 스택을 비우기 **전에** 복귀 의도를 버린다.
+            bookshelfReturnTab = nil
             // MY 하위 페이지는 모두 값 기반(MyRoute)이라 스택을 비우면 루트로 돌아온다.
             settingsPath = NavigationPath()
         }
