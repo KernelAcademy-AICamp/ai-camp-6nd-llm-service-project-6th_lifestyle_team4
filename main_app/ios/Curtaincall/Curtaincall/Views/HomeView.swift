@@ -161,8 +161,21 @@ struct HomeView: View {
         // 카드를 바꿔치기하지 않는다(H-27 비파괴 원칙). deterministic 재시도라 익명
         // 쿼터와도 무관하다(수동 '다시 시도' 버튼과 같은 경로).
         .onChange(of: network.reconnectToken) { _, _ in
-            guard fetchFailed else { return }
-            Task { await reload(deterministic: true) }
+            Task {
+                // ⚠️ **진행 중인 로드가 끝난 뒤에** 판단한다. 지금 당장 fetchFailed 를 보면
+                // 오프라인 콜드 스타트에서 신호가 통째로 버려진다 — `.task` 의 첫 요청이 아직
+                // 도는 중이라 fetchFailed 는 아직 false 이고, 그 요청은 곧 실패하는데 다음
+                // 토큰은 오지 않아 실패 화면에 영구히 갇힌다(리뷰 P1). #200 에서 부트스트랩에
+                // 대해 고친 것과 같은 타이밍 문제라 같은 방식으로 맞춘다.
+                //
+                // 토큰이 연달아 와도 안전하다: MainActor 직렬 실행이라 먼저 깬 Task 가
+                // reload 첫 줄에서 isLoading=true 를 세운 뒤에야 다른 Task 가 돌고, 그때는
+                // 다시 대기로 들어간다. 그 사이 복구에 성공했으면 아래 가드가 걸러낸다.
+                while isLoading { try? await Task.sleep(nanoseconds: 200_000_000) }
+                // 비파괴 가드는 그대로 — 멀쩡히 그려진 화면의 카드는 바꾸지 않는다.
+                guard fetchFailed else { return }
+                await reload(deterministic: true)
+            }
         }
         // 신원 초기화 — PrefsStore 가 로컬을 비운 '뒤' 신호가 온다. UserDefaults 만 지우면
         // 이미 그려진 이전 사용자의 오늘 카드·최근 목록이 게스트에게 그대로 보였다(P1).
