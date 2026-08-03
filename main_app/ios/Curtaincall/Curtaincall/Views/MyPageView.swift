@@ -570,7 +570,10 @@ struct SignInSheet: View {
                     FieldBox(placeholder: "아이디", text: $loginId)
                     FieldBox(placeholder: "비밀번호", text: $loginPassword, isSecure: true)
                     // 로그인/가입 버튼은 하단 고정 행으로 이동(키보드가 떠도 보이게). 모드 토글만 여기.
-                    Button { signUpMode.toggle() } label: {
+                    Button {
+                        session.authMessage = nil   // 모드를 바꾸면 이전 모드의 오류는 무의미
+                        signUpMode.toggle()
+                    } label: {
                         // 회원가입(또는 로그인) 단어를 강조 — 안내 문구는 톤다운, 액션 단어는 accent + 밑줄.
                         (
                             Text(signUpMode ? "이미 계정이 있나요? " : "계정이 없으신가요? ")
@@ -660,6 +663,22 @@ struct SignInSheet: View {
                 }
                 .padding(20)
             }
+            // 인증 실패 안내 — **이 팝업 안에서** 보여준다.
+            // 예전엔 `session.authMessage` 가 오직 MyPageView 본문(84행)에서만 그려졌는데,
+            // 이 팝업은 RootView 레벨 오버레이라 그 문구가 **팝업 뒤에 가려** 보이지 않았다.
+            // 짧은 비밀번호로 가입을 시도하면 폼이 아무 반응도 안 하는 것처럼 보이고, 팝업을
+            // 닫아야 비로소 이유를 알 수 있었다(기기 QA) — 미관이 아니라 기능 결함.
+            // 하단 고정 행 바로 위라 키보드가 떠 있어도 버튼과 함께 보인다.
+            if let msg = session.authMessage {
+                Text(msg)
+                    .font(.bodySans(12))
+                    .foregroundStyle(.cta)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 4)
+                    .transition(.opacity)
+                    .accessibilityAddTraits(.isStaticText)
+            }
             // 고정 하단 버튼 — ScrollView 밖이라 키보드가 떠도 항상 보인다(스크린샷대로 취소|로그인).
             HStack(spacing: 10) {
                 Button { dismissPopup() } label: { Text("취소") }
@@ -677,6 +696,7 @@ struct SignInSheet: View {
         }
         // 중앙 팝업(폼 모드) — 카드 배경/모서리는 PopupDialog 담당. 시트 그래버·detents 제거.
         // Android SignInDialog: 인증 성공(익명 해제)되면 자동으로 닫힌다.
+        .animation(.easeInOut(duration: 0.2), value: session.authMessage)
         .onChange(of: session.isAnonymous) { _, anon in
             if !anon { dismissPopup() }
         }
