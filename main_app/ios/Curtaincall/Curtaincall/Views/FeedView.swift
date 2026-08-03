@@ -93,7 +93,11 @@ struct FeedView: View {
                         } else {
                             feedList
                         }
-                        Spacer().frame(height: 104)
+                        // 끝 여백 — 필(64+마진)만이 아니라 **글쓰기 고양이 머리**까지 지나야
+                        // 마지막 글의 작성자 줄·본문이 가려지지 않는다(외부 QA A-55; SE 실측:
+                        // "걸리버 여행기/조너선 스위프트"가 고양이 몸통에 두 줄 다 잘렸다).
+                        // 92(고양이 키) − 10(발이 필에 걸친 만큼) + 12(숨통) = +94.
+                        Spacer().frame(height: EditorialTabBar.pillTopInset + 94)
                     }
                     .padding(.horizontal, 20)
                 }
@@ -432,7 +436,9 @@ struct FeedView: View {
             category = .today
             composeCard = nil
         } catch {
-            composeError = "등록 실패: \(error.localizedDescription)"
+            // 원문 금지 — Supabase/URLSession 문구는 영문이라 한국어 UI 에 그대로 튄다(A-85).
+            AppLog.error("feed post (feed)", error)
+            composeError = "감상평을 등록하지 못했어요. 잠시 후 다시 시도해주세요."
         }
     }
 }

@@ -81,9 +81,15 @@ struct LibraryCatalogView: View {
                         }
                     }
                     // 콘텐츠 끝 여백 — RootView 의 safeAreaInset 은 TabView '페이지 안'까지
-                    // 전파되지 않아(UIKit 페이징 컨테이너) 각 탭이 직접 보상한다. 40 이면
-                    // 스크롤 끝 콘텐츠가 글래스 필 뒤에 멈춘다(기기 QA) — Feed 와 동일 104.
-                    Spacer().frame(height: 104)
+                    // 전파되지 않아(UIKit 페이징 컨테이너) 각 탭이 직접 보상한다.
+                    // ⚠️ 페이지 바가 떠 있으면 104(필 보상)로는 모자란다 — 바를 고양이 머리
+                    // 위로 올린 뒤(Z-5)로는 더더욱. 마지막 줄이 바의 불투명 배경 뒤에 갇히지
+                    // 않게 바 윗면 + 12 에서 파생한다(리뷰 P1). 바가 없으면(1페이지·검색
+                    // 결과 없음) 기존 104. 값이 바 지오메트리와 어긋나지 않도록 아래
+                    // pageBarBottomInset/pageBarHeight 상수를 공유한다.
+                    Spacer().frame(height: showsPageBar
+                        ? Self.pageBarBottomInset + Self.pageBarHeight + 12
+                        : 104)
                 }
                 .padding(.horizontal, 20)
                 .background(
@@ -93,12 +99,13 @@ struct LibraryCatalogView: View {
                 )
             }
             // 페이지 바 — 스크롤과 함께 사라지지 않게 하단 고정. 결과 없음/1페이지면 숨김.
-            // ⚠️ RootView 의 safeAreaInset 은 TabView 페이지에 전파되지 않으므로(위 참조)
-            // 필 윗면(pillTopInset) + 28pt 로 띄운다 — 내부 세로 패딩 12 와 합쳐 실타래·
-            // 필과 40pt 간격(Android PageBar bottom=40 미러; 기기 QA: 붙어 보임 보정).
-            if !model.books.isEmpty, !filteredBooks.isEmpty, pageCount > 1 {
+            // ⚠️ 높이는 **고양이 머리 위**에서 파생한다. 예전 +28 은 필만 계산한 값이라
+            // LIBRARY 고양이(cat_struck, 돌출 ≈77)가 바의 오른쪽 화살표를 통째로 가렸다
+            // (외부 QA Z-5; SE 실측 — 화살표는 click-through 라 눌리긴 하지만 보이지 않음).
+            // 이제 고양이는 바 '아래' 칸(필 위 여백)에 들어앉고 바는 그 머리 위에 얹힌다.
+            if showsPageBar {
                 pinnedPageBar
-                    .padding(.bottom, EditorialTabBar.pillTopInset + 28)
+                    .padding(.bottom, Self.pageBarBottomInset)
             }
         }
         .background(Color.paper)
@@ -166,6 +173,23 @@ struct LibraryCatalogView: View {
         filterMemo.value = result
         return result
     }
+
+    /// 페이지 바 표시 조건 — 바 자체와 그리드 끝 여백이 **같은 판단**을 쓰도록 한 곳에.
+    /// (조건이 갈라지면 '바는 있는데 여백은 104' 류의 갇힘이 재발한다 — 리뷰 P1이 그 사례.)
+    private var showsPageBar: Bool {
+        !model.books.isEmpty && !filteredBooks.isEmpty && pageCount > 1
+    }
+
+    /// 바 '바닥'의 화면 하단 오프셋 — 필 윗면 바로 위.
+    /// ⚠️ 예전엔 고양이 돌출(77pt)만큼 통째로 **올려서** 피했는데, 그건 가로 충돌을 세로
+    /// 이동으로 푼 것이라 하단 234pt 가 통째로 예약되고 SE 에선 책이 한 줄만 보였다(기기 QA).
+    /// 이제 고양이를 화면 끝(hBias 1.0)으로 보내 **가로로** 분리하므로 바는 낮게 둔다.
+    static var pageBarBottomInset: CGFloat { EditorialTabBar.pillTopInset + 12 }
+
+    /// 바의 실제 세로 크기: Hairline 0.5 + 세로 패딩 6×2 + 칩/화살표 프레임 44.
+    /// 세로 패딩을 12→6 으로 줄였다(히트 영역 44pt 는 HIG 최소라 유지).
+    /// pinnedPageBar 구성이 바뀌면 이 값도 같이 바꿀 것.
+    static let pageBarHeight: CGFloat = 56.5
 
     private var pageCount: Int {
         max(1, (filteredBooks.count + Self.pageSize - 1) / Self.pageSize)
@@ -295,7 +319,7 @@ struct LibraryCatalogView: View {
             Hairline()
             pageBar
                 .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .padding(.vertical, 6)
         }
         .background(Color.paper)
     }
@@ -421,32 +445,6 @@ struct LibraryCatalogView: View {
 
 /// PWA 빈/검색결과 상태 — 아이콘(sand) + 헤드라인(serif/espresso) + 서브라인(walnut),
 /// 가운데 정렬. 카탈로그·북마크 서가 공용.
-struct EmptyStateView: View {
-    let icon: String
-    let iconSize: CGFloat
-    let headline: String
-    let subline: String
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Image(systemName: icon)
-                .font(.system(size: iconSize, weight: .regular))
-                .foregroundStyle(.sand)
-            Spacer().frame(height: 16)
-            Text(headline)
-                .font(.headlineSerif(18))
-                .foregroundStyle(.espresso)
-            Spacer().frame(height: 8)
-            Text(subline)
-                .font(.bodySans(14))
-                .foregroundStyle(.walnut)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
-    }
-}
-
 /// 카탈로그 데이터: `cards`(+nested works) 한 번 받아 작품 단위로 묶는다.
 /// Android `LibraryViewModel`/`CardRepository.fetchAllCards` 미러.
 @MainActor

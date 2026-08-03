@@ -38,6 +38,7 @@ struct RootView: View {
     @EnvironmentObject private var yarn: YarnStore
     @EnvironmentObject private var attendance: AttendanceStore
     @EnvironmentObject private var moderation: ModerationStore
+    @EnvironmentObject private var network: NetworkMonitor
     @Environment(\.scenePhase) private var scenePhase
     /// 피드 고양이 핸드오프에서 이동을 뺄지 판단 (EditorialTabBar.catHandoff 와 공유).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -50,6 +51,8 @@ struct RootView: View {
     @State private var shakeHaptic = 0
     @State private var lastShakeAt: Date?
     @State private var showAttendance = false
+    /// 마스트헤드 북마크로 MY 하위 서가에 들어올 때의 출발 탭 — 서가를 빠져나오면 복귀시킨다.
+    @State private var bookshelfReturnTab: Tab?
     // 로그인 유도(requestLogin) → MY 탭 이동 대신 루트에서 인증 모달(SignInSheet)을 직접 띄운다.
     // 사용자가 '로그인'을 눌렀으니 그 자리에서 로그인 UI 를 보여준다(MY 스크롤 헌트 제거).
     @State private var showLoginModal = false
@@ -89,12 +92,31 @@ struct RootView: View {
         ZStack {
         Group {
             if session.ready {
-                tabs
+                // 오프라인 안내를 **TabView 위에 VStack 으로 얹는다**(오버레이/인셋 아님).
+                // ⚠️ 처음엔 `.safeAreaInset(edge: .top)` 이었는데, TabView 는 UIKit 페이징
+                // 컨테이너라 safeAreaInset 이 **페이지 안으로 전파되지 않는다** — 그래서 스트립이
+                // 각 탭의 마스트헤드(`Daily Script` 워드마크)를 그대로 덮었다(기기 QA).
+                // 같은 제약이 하단에도 있어 각 탭이 104pt 스페이서로 수동 보상 중이다.
+                // in-flow VStack 이면 TabView 자체가 밀려나므로 **모든 탭 + MY 까지** 안전하고,
+                // 인셋 전파에 의존하지 않는다.
+                VStack(spacing: 0) {
+                    if let notice = offlineNotice {
+                        offlineStrip(notice)
+                    }
+                    tabs
+                }
             } else {
                 // 런치 스크린(크림 + 워드마크)에서 그대로 이어지는 로딩 뷰 — 같은 크림 배경,
                 // 같은 워드마크(중앙)에 은은한 펄스 + '불러오는 중…'. 흰 화면 없이 크림 연속.
                 LaunchLoadingView()
             }
+        }
+        // 화면별 실패 배너가 이 스트립과 같은 말을 두 번 하지 않도록 상태를 내려보낸다.
+        .environment(\.appOfflineNoticeActive, offlineNotice != nil)
+        // 연결이 돌아오면 스스로 회복한다 — 사용자가 재실행하거나 다시 로그인할 필요가
+        // 없어야 한다는 게 H-24 의 수락 조건이다.
+        .onChange(of: network.reconnectToken) { _, _ in
+            Task { await retryAfterReconnect() }
         }
         // 폼 팝업(로그인) 표시 중엔 탭 UI(탭바·고양이·본문)가 키보드를 따라 떠오르지 않게 잠근다.
         // 로그인 팝업은 body 레벨 오버레이라 그 뒤에서 따로 키보드를 회피한다. 피드 댓글
@@ -186,6 +208,8 @@ struct RootView: View {
         // requestLogin 을 부르는 모든 유도(북마크 프롬프트·새로고침 제한·피드 익명)가
         // 이 한 곳을 띄운다(모달 분기 없음). 인증 성공 시 SignInSheet 가 자동으로 닫힌다.
         .popup(isPresented: $showLoginModal, fitContent: false) { SignInSheet() }   // 폼 모드(키보드 회피)
+        // 로그인 팝업이 떠 있는지 — MY 본문이 같은 `authMessage` 를 중복으로 그리지 않도록.
+        .environment(\.loginPopupActive, showLoginModal)
         // 폼 팝업(로그인)이 떠 있는 동안 탭 UI 를 키보드로부터 잠그기 위한 신호 수신.
         .onPreferenceChange(FormPopupActiveKey.self) { formPopupActive = $0 }
         // 마스트헤드 공지 종 → 공지 시트(Android notif 시트 패턴).
@@ -347,6 +371,82 @@ struct RootView: View {
         }
     }
 
+    // MARK: - 오프라인 안내 · 자동 재시도
+
+    /// 지금 띄울 안내 문구(없으면 nil). `.offline` 과 `.failed` 를 **나눠 말한다** —
+    /// 전자는 신원을 알고 있어 '기다리면 복구', 후자는 신원을 확정하지 못해 '확인 필요'다.
+    private var offlineNotice: String? {
+        switch session.bootstrapStatus {
+        case .offline:
+            return "오프라인 상태예요. 연결되면 자동으로 복구됩니다."
+        case .failed:
+            return "연결에 실패했어요. 연결을 확인해주세요."
+        default:
+            return network.isOnline ? nil : "오프라인 상태예요. 연결되면 자동으로 복구됩니다."
+        }
+    }
+
+    private func offlineStrip(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Text(message)
+                .font(.bodySans(12))
+                .foregroundStyle(.espresso)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button { Task { await retryAfterReconnect(force: true) } } label: {
+                Text("다시 시도").labelCaps(color: .espresso)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(Color.latte)
+    }
+
+    /// 연결 회복(또는 수동 재시도) 시 세션과 회원 데이터를 되살린다.
+    ///
+    /// `force` 가 아니면 **복구가 필요한 상태에서만** 돈다 — 이미 `.ready` 인데 다시
+    /// 부트스트랩하면 멀쩡한 세션을 헛되이 왕복시킨다.
+    ///
+    /// 화면별 콘텐츠(오늘 카드·피드 등) 재적재는 여기서 하지 않는다. 각 화면이 자기
+    /// `hasLoaded` 래치를 들고 있어 신호를 따로 받아야 하는데, HomeView 는 지금 다른
+    /// PR(#199)이 잡고 있어 파일을 겹치지 않으려고 후속으로 미뤘다.
+    private func retryAfterReconnect(force: Bool = false) async {
+        // ① 시작 부트스트랩이 아직 도는 중이면 **끝날 때까지 기다린다**(리뷰 지적). 그냥
+        //    돌아가면 재연결 신호가 버려진다: 오프라인 콜드 스타트 중 연결이 돌아온 경우
+        //    진행 중이던 부트스트랩은 이미 실패한 요청을 물고 있어 .offline 으로 끝나고,
+        //    신호는 소비돼 버려 수동 재시도 전까지 오프라인에 갇힌다. `bootstrap()` 자체도
+        //    `bootstrapInProgress` 가드로 조용히 no-op 하므로 대기는 필수다. 기다린 뒤
+        //    상태를 보면 두 경우 모두 옳게 처리된다 — 그 부트스트랩이 살아났으면(.ready)
+        //    아래 가드가 재왕복을 막고, 실패했으면(.offline/.failed) 재시도가 이어진다.
+        while session.bootstrapInProgress {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        if !force {
+            switch session.bootstrapStatus {
+            case .offline, .failed: break
+            default: return
+            }
+        }
+        await session.bootstrap()
+        // 재시도도 실패했으면 여기서 멈춘다 — 배너는 그대로 남고, 다음 재연결 신호나
+        // 수동 '다시 시도'가 또 온다. 실패한 세션 위에 데이터를 다시 얹지 않는다.
+        guard case .ready = session.bootstrapStatus else { return }
+        // ② 회원 데이터 **전부** 재동기화(리뷰 지적: 북마크만 다시 읽었었다). 오프라인
+        //    복구는 `userId` 가 '같은 값'으로 확정되는 경로라 `.onChange(of: session.userId)`
+        //    에 걸어둔 재적재 훅(북마크·차단 목록·실타래 잔액·서버 취향)이 하나도 울리지
+        //    않는다 — 캐시 신원으로 그린 화면이 그대로 남는다. 그 훅이 하는 일을 여기서
+        //    명시적으로 반복한다(RootView 의 onChange(of: userId) 블록과 짝 — 하나를
+        //    바꾸면 다른 쪽도 맞출 것).
+        await bookmarks.load(userId: session.userId)
+        await moderation.refresh(userId: session.userId)
+        yarn.sync(serverBalance: session.yarnBalance)
+        if session.hasServerPrefs {
+            prefs.syncFromServer(genres: session.prefGenres, themes: session.prefThemes, any: session.prefAny)
+        }
+    }
+
     private var tabs: some View {
         // ⚠️ 네이티브 탭바 숨김은 '페이지 안'에도 걸어야 한다 — iOS 26 의 새 플로팅
         // Liquid Glass 탭바는 TabView 레벨의 .toolbar(.hidden) 만으로는 완전히 숨지
@@ -415,8 +515,31 @@ struct RootView: View {
         // 마스트헤드 트레일링 액션 — 북마크(→ MY 하위 서가, MyRoute.bookshelf) · 공지 종(→ 공지 시트).
         // 미읽음 점은 hasUnreadNotice 를 주입(마스트헤드는 RootView 상태에 직접 접근 못 함).
         .environment(\.requestBookmarks) {
+            // 익명은 다른 모든 북마크 진입점(홈 카드·카드 상세·컨텍스트 메뉴)과 **같은 규칙**으로
+            // 로그인 유도. 예전엔 여기만 예외적으로 빈 서가를 보여줬다(기기 QA).
+            guard !session.isAnonymous else {
+                showLoginModal = true
+                return
+            }
+            // 출발 탭을 기억했다가 서가에서 나올 때 되돌린다 — 예전엔 뒤로가기가 MY 루트로
+            // 떨어져, TODAY 에서 눌렀는데 남의 탭에 갇히는 느낌이었다(기기 QA).
+            bookshelfReturnTab = selectedTab == .settings ? nil : selectedTab
             selectedTab = .settings
             settingsPath.append(MyRoute.bookshelf)
+        }
+        .onChange(of: settingsPath.count) { _, count in
+            // 서가에서 빠져나온 순간(스택 비었을 때)에만 출발 탭으로 되돌린다.
+            // `selectedTab == .settings` 확인 필수 — 사용자가 이미 다른 탭으로 옮겨간 뒤
+            // 뒤늦게 스택이 비는 경우까지 낚아채면 안 된다(리뷰 P1).
+            guard count == 0, selectedTab == .settings, let back = bookshelfReturnTab else { return }
+            bookshelfReturnTab = nil
+            selectedTab = back
+        }
+        // 사용자가 **직접** 탭을 옮기면 자동 복귀 의도는 사라진 것으로 본다(리뷰 P1).
+        // 프로그래밍적 전환에는 무해하다: 복귀는 토큰을 **먼저 비우고** 탭을 바꾸고,
+        // 서가 진입은 .settings 로 가므로 아래 조건(≠ .settings)에 걸리지 않는다.
+        .onChange(of: selectedTab) { _, tab in
+            if tab != .settings { bookshelfReturnTab = nil }
         }
         .environment(\.requestNotice) { showNoticeSheet = true }
         .environment(\.requestYarnInfo) { showYarnInfo = true }
@@ -476,6 +599,40 @@ struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
+        }
+        // 북마크 쓰기 실패 안내 — 화면마다 배치하지 않고 **루트에 한 번만** 둔다.
+        // 호출부가 홈·카드 상세·컨텍스트 메뉴 3곳이라 각 화면에 배너를 심으면 레이아웃
+        // 수술이 3번 필요하고 한 곳은 빠뜨리기 쉽다(실제로 컨텍스트 메뉴는 체크리스트에도
+        // 빠져 있었다). 스토어가 발행하는 문구를 여기서 한 번 그린다. 안내일 뿐이라
+        // click-through(allowsHitTesting=false) — 아래 콘텐츠 탭을 가리지 않는다.
+        .overlay(alignment: .bottom) {
+            ZStack {
+                if let msg = bookmarks.lastError {
+                    Text(msg)
+                        .font(.bodySans(13))
+                        .foregroundStyle(.espresso)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule().fill(Color.paper)
+                                .overlay(Capsule().stroke(Color.latte, lineWidth: 0.5))
+                        )
+                        .padding(.horizontal, 24)
+                        // 필 윗면에서 파생 — 탭바·고양이를 가리지 않는 높이.
+                        .padding(.bottom, EditorialTabBar.pillTopInset + 12)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: bookmarks.lastError)
+        }
+        // 배너는 '보이는' 안내라 VoiceOver 사용자에겐 이 PR 이 아무것도 고치지 못한다 —
+        // 화면에 뷰가 나타나는 것만으로는 낭독되지 않고, 3.5초 뒤 사라져 스와이프로
+        // 찾아갈 시간도 없다. 실패를 직접 읽어준다.
+        .onChange(of: bookmarks.lastError) { _, msg in
+            guard let msg else { return }
+            AccessibilityNotification.Announcement(msg).post()
         }
         // 피드 글쓰기 — 고양이(좌)와 글쓰기 FAB(우)를 **분리**(Android 패턴: cat-left + FAB BottomEnd).
         // 둘 다 탭바 '위(앞)' 레이어. 피드 루트에서만, 컴포저 활성 시 숨김.
@@ -573,6 +730,9 @@ struct RootView: View {
             feedPath = NavigationPath()
             feedReselect += 1  // scroll Feed to top + refresh
         case .settings:
+            // MY 재탭은 'MY 루트로 가겠다'는 명시적 의사 — 서가에서 나오더라도 출발 탭으로
+            // 튕기면 안 된다(리뷰 P1). 스택을 비우기 **전에** 복귀 의도를 버린다.
+            bookshelfReturnTab = nil
             // MY 하위 페이지는 모두 값 기반(MyRoute)이라 스택을 비우면 루트로 돌아온다.
             settingsPath = NavigationPath()
         }
@@ -617,5 +777,32 @@ private struct LaunchLoadingView: View {
                 pulse = true
             }
         }
+    }
+}
+
+
+// MARK: - 전역 오프라인 안내 표시 여부
+
+/// RootView 의 오프라인 스트립이 떠 있는지. 화면별 실패 배너(`FetchErrorBanner`)가
+/// 같은 말을 겹쳐 하지 않도록 참조한다(기기 QA: 두 배너가 동시에 떠 중복 노이즈).
+private struct AppOfflineNoticeActiveKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+/// 로그인/가입 팝업이 표시 중인지. `authMessage` 는 공용 채널이라 팝업과 MY 본문이 **동시에**
+/// 같은 문구를 그린다 — 팝업 뒤로 같은 경고가 비쳐 중복으로 보였다(기기 QA).
+private struct LoginPopupActiveKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var appOfflineNoticeActive: Bool {
+        get { self[AppOfflineNoticeActiveKey.self] }
+        set { self[AppOfflineNoticeActiveKey.self] = newValue }
+    }
+
+    var loginPopupActive: Bool {
+        get { self[LoginPopupActiveKey.self] }
+        set { self[LoginPopupActiveKey.self] = newValue }
     }
 }

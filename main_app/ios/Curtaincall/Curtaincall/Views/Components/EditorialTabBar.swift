@@ -365,6 +365,16 @@ struct EditorialTabBar: View {
 
     // MARK: - Decorative nav cat
 
+    /// LIBRARY(cat_struck) 자세가 필 윗면 위로 솟는 실제 높이(90 × 0.86 ≈ 77pt).
+    /// 이 자세는 아래 '돌출 ≤ catClearance(56)' 규칙의 **유일한 예외**(Android
+    /// CatHeightLibrary=90 parity)라, 필 위층에 앉는 다른 요소(도서관 페이지 바)가 이 값
+    /// 위로 피해야 한다 — 안 그러면 바의 오른쪽 화살표가 고양이 뒤에 숨는다(외부 QA Z-5,
+    /// SE 실측: 화살표는 눌리지만 보이지 않았다). 하드코딩 대신 자세에서 파생해 드리프트를 막는다.
+    static var libraryCatProtrusion: CGFloat {
+        let pose = catPose(for: .archive)
+        return pose.height * pose.ledgeFraction
+    }
+
     /// 선택된 탭에 따른 고양이 자세 — Android/PWA 미러.
     ///   feed=cat_pen · archive(Library)=cat_struck · daily/settings=cat_empty(코너) · 그 외=cat_today(중앙 약간 우측)
     private static func catPose(for tab: Tab) -> NavCatPose {
@@ -376,7 +386,13 @@ struct EditorialTabBar: View {
         case .archive:
             // hBias 0.74 — LIBRARY↔MY 중간에서 MY 쪽으로 기울던 것 한 눈금 좌측(기기
             // QA 라운드4; 0.60 과이동 → 0.77 소폭 우편향 → 0.74).
-            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.74, ledgeFraction: 0.86) // Android CatHeightLibrary=90
+            // hBias 1.0 — 페이지 바 내용이 **가운데 정렬**(Spacer 없는 HStack, 총 240pt)이라
+            // 오른쪽 화살표는 화면 끝이 아니라 x≈272~316 에 있다. 0.74 일 때 고양이(폭 54.5pt,
+            // 306×505 비율)가 x≈282~337 로 그 화살표를 정통으로 덮었다(외부 QA Z-5).
+            // 끝으로 밀면 x≈322~376 이 되어 겹침 0 — 화면 끝까지 16.7pt 여유가 남는다.
+            // height 90→78: SE(375pt)에선 1.0 에서도 3.8pt 모자라서 폭을 함께 줄인다.
+            // 부수 효과로 돌출 90×0.86=77 → 67 이 되어 catClearance(56) 불변식에도 가까워진다.
+            return NavCatPose(asset: "cat_struck", height: 78, hBias: 1.0, ledgeFraction: 0.86)
         case .daily, .settings:
             return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)  // 돌출 ≈ 24
         case .home:
@@ -494,12 +510,20 @@ private extension View {
                     // '하얗게' 떠 보이던 문제(기기 QA) 워밍. 라떼(웜 베이지)가
                     // 글래스 밝힘을 상쇄해 페이지 크림과 한 톤으로 가라앉는다.
                     NotchedPillShape().fill(Color.latte.opacity(0.30))
-                    Color.clear.glassEffect(.clear, in: NotchedPillShape())
+                    // ⚠️ `.clear` 가 아니라 `.regular` 다. `.clear` 는 **완전 투명** 변형이라
+                    // 뒤 콘텐츠가 그대로 비친다 — 어두운 배경(북마크 서가의 책장 이미지,
+                    // TODAY 의 검은 카드) 위에서 탭 라벨·아이콘이 묻혀 읽히지 않았다(기기 QA).
+                    // `.regular` 는 뒤 밝기에 따라 틴트를 조절해 대비를 유지하는 변형이라
+                    // 바로 이 상황을 위한 것이다. 크림 배경에서 '하얗게 뜨는' 문제는 위
+                    // 라떼 언더레이가 계속 잡아준다.
+                    Color.clear.glassEffect(.regular, in: NotchedPillShape())
                 }
             }
         } else {
             self
-                .background(.ultraThinMaterial, in: NotchedPillShape())
+                // iOS 18-25 폴백도 같은 이유로 ultraThin → regular. ultraThin 은 뒤가
+                // 어두우면 라벨이 묻힌다(위 26+ 주석 참조).
+                .background(.regularMaterial, in: NotchedPillShape())
                 .overlay(NotchedPillShape().stroke(Color.latte.opacity(0.85), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
         }

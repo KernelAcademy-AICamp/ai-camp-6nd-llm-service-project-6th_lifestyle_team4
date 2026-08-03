@@ -16,10 +16,13 @@ struct MyPageView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
     @Environment(\.requestLogin) private var requestLogin   // 로그인 → 루트의 단일 로그인 팝업(키보드 회피·탭바 고정)
-    @Environment(\.requestYarnInfo) private var requestYarnInfo   // 실타래 펠릿 탭 → 설명 팝업
+    @Environment(\.requestYarnInfo) private var requestYarnInfo
+    @Environment(\.loginPopupActive) private var loginPopupActive   // 실타래 펠릿 탭 → 설명 팝업
 
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
+    /// 탈퇴 **실패** 안내(알림용). nil 이면 알림 없음.
+    @State private var deleteFailure: String?
     @State private var showAttendance = false
     @State private var latestNoticeId: Int?
 
@@ -79,7 +82,13 @@ struct MyPageView: View {
 
                     // 로그인 안내 메시지("로그인 됐어요" 등) — 정체성 블록을 끊지 않도록
                     // 블록 '끝'으로 내렸다(기기 QA). 일시적 상태 피드백이라 작게.
-                    if let msg = session.authMessage {
+                    //
+                    // 로그인 팝업이 떠 있는 동안엔 그리지 않는다. `authMessage` 는 공용 채널이라
+                    // 팝업(QA-10 에서 추가)과 여기가 **같은 문구를 동시에** 그려, 짧은 비밀번호
+                    // 경고가 팝업 안과 그 뒤에 두 번 보였다(기기 QA). 팝업이 떠 있을 땐 그쪽이
+                    // 문맥의 주인이므로 본문은 양보한다 — 팝업이 닫히면 다시 이 자리에서 보인다
+                    // (프로필 저장·닉네임 변경·탈퇴 결과 등은 원래대로 여기서 표시).
+                    if let msg = session.authMessage, !loginPopupActive {
                         Spacer().frame(height: 12)
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
@@ -154,8 +163,10 @@ struct MyPageView: View {
                         Spacer().frame(height: 40)
                         Button {
                             Task {
-                                await session.signOut()
-                                prefs.clearOnLogout()   // 이전 사용자 취향이 다음(익명) 세션에 남지 않게 초기화
+                                // 게스트 전환에 **성공했을 때만** 로컬 정리. 실패 시엔 회원 상태와
+                                // 취향·최근 본 카드·오즈 픽·공지 읽음을 그대로 보존한다(Codex 리뷰 P2).
+                                // 탈퇴 경로와 동일한 규칙 — 성공 반환값이 정리의 유일한 조건이다.
+                                if await session.signOut() { await finishIdentityChange() }
                             }
                         } label: {
                             Text("로그아웃")
@@ -198,6 +209,18 @@ struct MyPageView: View {
                 .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
             }
             .scrollDismissesKeyboard(.interactively)
+            // 신원이 바뀌면(로그아웃·탈퇴) 스크롤을 맨 위로 되돌린다 — 뷰 자체를 새로 만든다.
+            //
+            // 탈퇴/로그아웃 버튼은 이 페이지 **맨 아래**에 있는데, 성공 후 화면은 게스트용으로
+            // 다시 그려지면서도 **스크롤 위치는 바닥에 그대로** 남아, 방금 계정을 지운 사용자가
+            // '로그인 · 회원가입' 블록(맨 위)을 못 본다(기기 QA).
+            //
+            // ⚠️ 처음엔 `ScrollViewReader` + `scrollTo(topID)` 로 했는데 **동작하지 않았다**
+            // (기기 재확인). 토큰이 오는 그 순간 회원 레이아웃이 게스트 레이아웃으로 통째로
+            // 교체되면서 콘텐츠 높이가 크게 바뀌고, 그 와중에 스크롤 명령이 묻힌다.
+            // `.id()` 로 ScrollView 를 **새로 만들면** 위치가 0 에서 시작하는 게 보장된다 —
+            // 타이밍에 의존하지 않는다. 콘텐츠의 @State 는 MyPageView 소유라 보존된다.
+            .id(prefs.identityResetToken)
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
@@ -268,11 +291,50 @@ struct MyPageView: View {
         .alert("회원 탈퇴", isPresented: $showDeleteConfirm) {
             Button("취소", role: .cancel) {}
             Button("탈퇴하기", role: .destructive) {
-                Task { await session.deleteAccount() }
+                // 탈퇴 '성공' 시에도 로그아웃과 동일하게 로컬 사용자 상태를 비운다. 이게
+                // 빠져 있어서 삭제된 계정의 취향·최근 본 카드·오즈 픽·공지 읽음 표시가
+                // 새로 부트스트랩된 게스트 세션에 그대로 남았다(외부 QA A-84).
+                // 실패 시에는 로그인 상태를 그대로 유지해야 하므로 지우지 않는다.
+                Task {
+                    if await session.deleteAccount() {
+                        await finishIdentityChange()
+                    } else {
+                        // 실패 문구는 `authMessage` 자리(이 화면 **맨 위**)에 뜨는데 탈퇴 버튼은
+                        // 페이지 맨 아래라, 그대로 두면 사용자 화면 밖에서 안내가 사라진다.
+                        // 파괴적 동작의 실패는 반드시 보여야 해서 같은 문구를 알림으로도 띄운다.
+                        deleteFailure = session.authMessage
+                    }
+                }
             }
         } message: {
             Text("계정과 모든 데이터(북마크·댓글·하트·피드)가 영구 삭제되며 되돌릴 수 없습니다.")
         }
+        .alert("탈퇴하지 못했어요",
+               isPresented: Binding(get: { deleteFailure != nil },
+                                    set: { if !$0 { deleteFailure = nil } })) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(deleteFailure ?? "")
+        }
+    }
+
+    /// 로그아웃·탈퇴 성공 후 공통 마무리 — **순서가 전부다.**
+    ///
+    /// 1) 북마크를 먼저 새 신원 기준으로 비우고 다시 읽는다. 이게 없으면 2)의 초기화 신호를
+    ///    받은 TODAY/DAILY 가 **아직 메모리에 남은 이전 회원의 북마크**로 카드를 고른다:
+    ///    `Recommend.pickToday(bookmarkCards:)` 와 DailyView 의 `taste`(북마크 키워드 집합)가
+    ///    모두 BookmarkStore 를 직접 읽기 때문이다. 특히 TODAY 는 고른 뒤 `hasLoaded` 가 true 로
+    ///    굳어, 잘못 고른 카드가 앱 재실행 전까지 **영구히** 남는다(Codex 리뷰 P1 잔존분).
+    ///    `load(userId: nil)` 은 가드 경로라 네트워크 없이 즉시 비우고, 이어지는 로드가 실패해도
+    ///    '마지막 상태 유지'가 곧 **비어 있는 상태**라 이전 회원 데이터로 되돌아가지 않는다.
+    /// 2) 그 다음에야 로컬 상태를 비우고 identityResetToken 을 emit 한다.
+    ///
+    /// 로그아웃과 탈퇴가 같은 함수를 쓰는 이유: 두 경로의 사후 처리가 어긋나면 한쪽에서만
+    /// 데이터가 새는 이번 같은 버그가 다시 난다.
+    private func finishIdentityChange() async {
+        await bookmarks.load(userId: nil)               // 이전 신원 북마크 즉시 비움
+        await bookmarks.load(userId: session.userId)    // 새(게스트) 신원으로 재적재
+        prefs.clearUserScopedState()                    // 정리 → identityResetToken emit
     }
 
     private func dismissKeyboard() {
@@ -527,7 +589,10 @@ struct SignInSheet: View {
                     FieldBox(placeholder: "아이디", text: $loginId)
                     FieldBox(placeholder: "비밀번호", text: $loginPassword, isSecure: true)
                     // 로그인/가입 버튼은 하단 고정 행으로 이동(키보드가 떠도 보이게). 모드 토글만 여기.
-                    Button { signUpMode.toggle() } label: {
+                    Button {
+                        session.authFormError = nil   // 모드를 바꾸면 이전 모드의 오류는 무의미
+                        signUpMode.toggle()
+                    } label: {
                         // 회원가입(또는 로그인) 단어를 강조 — 안내 문구는 톤다운, 액션 단어는 accent + 밑줄.
                         (
                             Text(signUpMode ? "이미 계정이 있나요? " : "계정이 없으신가요? ")
@@ -617,6 +682,22 @@ struct SignInSheet: View {
                 }
                 .padding(20)
             }
+            // 인증 실패 안내 — **이 팝업 안에서** 보여준다.
+            // 예전엔 `session.authMessage` 가 오직 MyPageView 본문(84행)에서만 그려졌는데,
+            // 이 팝업은 RootView 레벨 오버레이라 그 문구가 **팝업 뒤에 가려** 보이지 않았다.
+            // 짧은 비밀번호로 가입을 시도하면 폼이 아무 반응도 안 하는 것처럼 보이고, 팝업을
+            // 닫아야 비로소 이유를 알 수 있었다(기기 QA) — 미관이 아니라 기능 결함.
+            // 하단 고정 행 바로 위라 키보드가 떠 있어도 버튼과 함께 보인다.
+            if let msg = session.authFormError {
+                Text(msg)
+                    .font(.bodySans(12))
+                    .foregroundStyle(.cta)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 4)
+                    .transition(.opacity)
+                    .accessibilityAddTraits(.isStaticText)
+            }
             // 고정 하단 버튼 — ScrollView 밖이라 키보드가 떠도 항상 보인다(스크린샷대로 취소|로그인).
             HStack(spacing: 10) {
                 Button { dismissPopup() } label: { Text("취소") }
@@ -634,9 +715,24 @@ struct SignInSheet: View {
         }
         // 중앙 팝업(폼 모드) — 카드 배경/모서리는 PopupDialog 담당. 시트 그래버·detents 제거.
         // Android SignInDialog: 인증 성공(익명 해제)되면 자동으로 닫힌다.
+        .animation(.easeInOut(duration: 0.2), value: session.authFormError)
+        // 팝업을 열 때 이전 문구를 비운다.
+        //
+        // `authMessage` 는 인증 전용이 아니라 **공용 상태 채널**이다 — 로그인 실패뿐 아니라
+        // "계정이 삭제됐어요" · "프로필이 저장됐어요" · "이름이 변경됐어요" · "로그아웃에
+        // 실패했어요" 등 17곳이 같은 프로퍼티에 쓴다. QA-10 에서 이 문구를 팝업 **안에서**
+        // 그리게 바꾸면서, 앞선 동작이 남긴 메시지가 로그인 오류인 것처럼 보일 수 있게 됐다
+        // (리뷰 P2). 특히 탈퇴 직후 → 로그인 팝업 열기 경로가 그대로 재현된다.
+        //
+        // 근본적으로는 인증 전용 오류 상태를 따로 두는 게 맞지만, 그건 `AuthSession` 의
+        // 반환 규약까지 바꾸는 일이라 이 PR 범위 밖이다. 표시 시작 시점에 비우는 것으로
+        // 오염 경로를 끊는다(백로그: 인증 전용 상태 분리).
+        .onAppear { session.authFormError = nil }
         .onChange(of: session.isAnonymous) { _, anon in
             if !anon { dismissPopup() }
         }
+        // 폼이 사라지면 폼 오류도 사라진다 — 취소·스크림 탭으로 닫아도 남지 않는다(리뷰 P2).
+        .onDisappear { session.authFormError = nil }
     }
 
     // 시트 커스텀 헤더 — 출석체크 시트와 동일한 크롬 표준(제목 좌 + 닫기 우, 56pt, 하단
@@ -778,10 +874,34 @@ struct ProfileEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     FieldBox(placeholder: "표시할 이름", text: $nickname)
+                    // 예전엔 `Text(...).labelCaps()` + `.plain` 이라, 바로 위아래의 **섹션 라벨**
+                    // (`성별 · 선택` · `나이대 · 선택` · `좋아하는 장르`)과 서체·크기·색이 완전히
+                    // 같아 누를 수 있다는 신호가 0 이었다(기기 QA: "클릭 가능한 줄 몰랐다").
+                    // 테두리 + 새로고침 심볼로 탭 타깃임을 드러낸다.
+                    //
+                    // ⚠️ `EditorialButtonStyle(.outlined)` 을 그대로 쓰지 않은 이유: 그 스타일은
+                    // `maxWidth: .infinity` + `height 52` 로 **전폭·대형**이라 보조 동작인데도
+                    // 저장 버튼과 비중이 같아 보이고, 가뜩이나 큰 프로필 팝업(QA-7)을 52pt 더
+                    // 키운다. 같은 시각 언어(테두리 8R · walnut 1pt · labelCaps)를 쓰되 크기만
+                    // 보조 수준으로 낮춘 컴팩트 형태.
                     Button { nickname = AuthSession.randomCuteNickname() } label: {
-                        Text("랜덤 이름 생성").labelCaps()
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("랜덤 이름 생성").labelCaps(color: .espresso)
+                        }
+                        .foregroundStyle(.espresso)
+                        .padding(.horizontal, 14)
+                        // 테두리 박스는 시각 크기 36, **히트 영역만 44**(HIG 최소 — 리뷰 P2).
+                        // 페이지 바 칩과 같은 방식(시각 28 / 히트 44) — 보조 버튼이 시각적으로
+                        // 커져 저장 버튼과 비중이 같아지는 것을 피하면서 접근성 최소치를 만족.
+                        .frame(height: 36)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.walnut, lineWidth: 1))
+                        .frame(height: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("랜덤 이름 생성")
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("성별 · 선택").labelCaps()

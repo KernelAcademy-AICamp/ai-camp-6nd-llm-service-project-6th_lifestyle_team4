@@ -12,6 +12,8 @@ struct DailyView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @EnvironmentObject private var network: NetworkMonitor
+    @Environment(\.appOfflineNoticeActive) private var appOfflineNoticeActive
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var heroNS
@@ -20,6 +22,9 @@ struct DailyView: View {
     @State private var trendingCounts: [Int: Int] = [:]
     @State private var ozCard: Card?
     @State private var hasLoaded = false
+    /// 로드 진행 중 여부. 화면에 스피너를 그리려는 게 아니라, **재연결 재시도가 진행 중인
+    /// 로드를 기다렸다가 판단**하기 위해 필요하다(리뷰 P1 — Home 의 isLoading 대응물).
+    @State private var isLoading = false
     @State private var fetchFailed = false
     /// 새 책 룰렛에서 탭한 작품 — OpenedBookView(책 펼침) 오버레이로 표시.
     @State private var openedWork: DiscoveryWork?
@@ -27,7 +32,8 @@ struct DailyView: View {
     var body: some View {
         VStack(spacing: 0) {
             AppMasthead()
-            if fetchFailed {
+            // 전역 오프라인 스트립이 이미 같은 사실을 말하고 있으면 화면별 배너는 숨긴다.
+            if fetchFailed && !appOfflineNoticeActive {
                 FetchErrorBanner { Task { await load(force: true) } }
             }
             ScrollView {
@@ -96,13 +102,48 @@ struct DailyView: View {
         .onChange(of: session.userId) { _, newValue in
             Task { await bookmarks.load(userId: newValue) }
         }
+        // 신원 초기화 — 이전 사용자의 오즈 추천을 즉시 버리고 다시 계산한다. 신호가 '정리 후'에
+        // 오므로 recomputeOz 는 이미 비워진 취향·오즈 캐시를 읽어 게스트 기준으로 뽑는다(P1).
+        .onChange(of: prefs.identityResetToken) { _, _ in
+            ozCard = nil
+            recomputeOz()
+        }
+        // 연결 회복 → 실패로 멈춘 화면의 자기 복구(HomeView 와 동일 패턴 — #200 후속).
+        // FEED 는 탭 진입마다 reload 라 자연 회복되지만, 이 화면은 hasLoaded 래치가 있어
+        // 신호 없이는 '불러오기 실패' 배너에 영원히 멈춘다. 실패 상태일 때만.
+        .onChange(of: network.reconnectToken) { _, _ in
+            Task {
+                // ⚠️ **진행 중인 로드가 끝난 뒤에** 판단한다. 지금 당장 fetchFailed 를 보면
+                // 오프라인 콜드 스타트에서 신호가 통째로 버려진다 — `.task` 의 첫 요청이 아직
+                // 도는 중이라 fetchFailed 는 아직 false 이고, 그 요청은 곧 실패하는데 다음
+                // 토큰은 오지 않아 실패 화면에 영구히 갇힌다(리뷰 P1). #200 에서 부트스트랩에
+                // 대해 고친 것과 같은 타이밍 문제라 같은 방식으로 맞춘다.
+                //
+                // 토큰이 연달아 와도 안전하다: MainActor 직렬 실행이라 먼저 깬 Task 가
+                // reload 첫 줄에서 isLoading=true 를 세운 뒤에야 다른 Task 가 돌고, 그때는
+                // 다시 대기로 들어간다. 그 사이 복구에 성공했으면 아래 가드가 걸러낸다.
+                while isLoading { try? await Task.sleep(nanoseconds: 200_000_000) }
+                // 비파괴 가드는 그대로 — 멀쩡히 그려진 화면은 건드리지 않는다.
+                guard fetchFailed else { return }
+                await load(force: true)
+            }
+        }
         // Bookmarks load separately, so recompute the (taste-matched) Oz pick once
         // they arrive — chooseOzPick re-promotes a cached non-personalized pick.
         .onChange(of: bookmarks.bookmarks.map(\.cardId)) { _, _ in
             guard !allCards.isEmpty else { return }
             recomputeOz()
         }
-        // 취향(테마/장르)이 바뀌면(예: 게스트 CTA로 설정) Oz 픽을 다시 고른다.
+        // 취향 **값**이 바뀌면 오즈 픽을 다시 고른다 — 프로필 편집에서 장르/주제를 바꾸고
+        // 돌아왔을 때 라벨만 갱신되고 카드는 그대로였던 문제(외부 QA D-17). `prefSelected`
+        // 는 편집 시 true→true 라 onChange 가 울리지 않아 신호가 될 수 없다.
+        .onChange(of: prefs.prefsRevision) { _, _ in
+            guard !allCards.isEmpty else { return }
+            ozCard = nil          // 이전 픽을 먼저 버려 새 취향의 결과만 남게 한다
+            recomputeOz()
+        }
+        // 온보딩 진입/이탈(게스트 CTA → 취향 설정)은 값이 아니라 '설정 완료' 여부라 별도 신호로
+        // 남긴다. 값까지 바뀐 경우 위 리비전과 둘 다 울리지만 재계산은 메모리 연산이라 무해하다.
         .onChange(of: prefs.prefSelected) { _, _ in
             guard !allCards.isEmpty else { return }
             recomputeOz()
@@ -154,6 +195,8 @@ struct DailyView: View {
 
     private func load(force: Bool = false) async {
         if hasLoaded && !force { return }
+        isLoading = true
+        defer { isLoading = false }
         do {
             if allCards.isEmpty {
                 allCards = try await CardCache.shared.cards()   // 세션 공유(무료 티어 부하↓)

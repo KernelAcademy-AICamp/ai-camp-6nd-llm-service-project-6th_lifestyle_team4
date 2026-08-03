@@ -91,6 +91,10 @@ struct CommentsCopy {
     )
 }
 
+/// ⚠️ 사용자에게 보이는 문구에 `error.localizedDescription` 을 절대 넣지 않는다 —
+/// Supabase/URLSession 원문은 영문 시스템 메시지("The Internet connection appears to be
+/// offline")라 한국어 UI 에 그대로 튀어나온다(외부 QA A-85 가 탈퇴 경로에서 지적한 것과
+/// 같은 결함). 원인은 `AppLog` 로 남기고 화면엔 고정 한국어 문구만 쓴다.
 @MainActor
 final class CommentsModel: ObservableObject {
     @Published var comments: [Comment] = []
@@ -118,7 +122,8 @@ final class CommentsModel: ObservableObject {
             likes = map
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            AppLog.error("comments load", error)
+            errorMessage = "댓글을 불러오지 못했어요. 잠시 후 다시 시도해주세요."
         }
     }
 
@@ -138,7 +143,8 @@ final class CommentsModel: ObservableObject {
             }
             replyingTo = nil
         } catch {
-            errorMessage = "댓글 작성 실패: \(error.localizedDescription)"
+            AppLog.error("comment submit", error)
+            errorMessage = "댓글을 등록하지 못했어요. 잠시 후 다시 시도해주세요."
         }
         submitting = false
     }
@@ -153,7 +159,8 @@ final class CommentsModel: ObservableObject {
             try await backend.setLike(commentId, userId, !wasLiked)
         } catch {
             likes[commentId] = original
-            errorMessage = "반응 처리 실패: \(error.localizedDescription)"
+            AppLog.error("comment like", error)
+            errorMessage = "반응을 저장하지 못했어요. 잠시 후 다시 시도해주세요."
         }
     }
 
@@ -164,7 +171,8 @@ final class CommentsModel: ObservableObject {
             if replyingTo?.commentId == commentId { replyingTo = nil }
             if editingCommentId == commentId { editingCommentId = nil }
         } catch {
-            errorMessage = "삭제 실패: \(error.localizedDescription)"
+            AppLog.error("comment delete", error)
+            errorMessage = "댓글을 삭제하지 못했어요. 잠시 후 다시 시도해주세요."
         }
     }
 
@@ -179,7 +187,8 @@ final class CommentsModel: ObservableObject {
             }
             editingCommentId = nil
         } catch {
-            errorMessage = "수정 실패: \(error.localizedDescription)"
+            AppLog.error("comment update", error)
+            errorMessage = "댓글을 수정하지 못했어요. 잠시 후 다시 시도해주세요."
         }
         submitting = false
     }

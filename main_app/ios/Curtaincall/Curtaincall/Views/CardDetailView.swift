@@ -274,7 +274,13 @@ struct CardDetailView: View {
                     // '책 읽는 고양이'는 더 이상 스크롤 본문 맨 아래에 두지 않는다(스크롤
                     // 끝까지 가야만 보였고, 키보드에 독립적으로 끌려 위로 떠버림). 하단 도킹
                     // 컴포저 위에 데코 오버레이로 걸터앉힌다 — dockedBottomBar / commentBarCat 참조.
-                    Spacer().frame(height: 24)
+                    //
+                    // 끝 여백 — 회원은 도킹 컴포저(safeAreaInset)가 스크롤 바닥을 이미 밀어
+                    // 올리지만, **익명은 인셋이 전혀 없어**(dockedBottomBar isActive=false)
+                    // 빈 댓글 안내가 필 뒤에 영구히 갇혔다(SE 실측, P1-8 수락 기준 위반).
+                    Spacer().frame(height: session.isAnonymous
+                        ? EditorialTabBar.pillTopInset + 24
+                        : 24)
                 }
                 .padding(.horizontal, 20)
                 // Tap an empty area to dismiss the keyboard. simultaneousGesture
@@ -441,6 +447,14 @@ struct CardDetailView: View {
                     .transition(.opacity)
             }
         }
+            // 회원이 되면 이 프롬프트의 **존재 이유가 사라진다** — 스스로 닫는다.
+            // 예전엔 사용자가 직접 닫을 때만 꺼져서, 익명 새로고침 한도 모달을 띄운 채 MY 로
+            // 가서 로그인하고 돌아오면 **회원인데도 '계정이 필요합니다' 모달이 그대로** 떠
+            // 있었다(기기 QA). 탭 전환으로는 화면이 파괴되지 않아 @State 가 유지되기 때문.
+            // `SignInSheet` 가 인증 성공 시 스스로 닫는 것과 같은 규칙.
+        .onChange(of: session.isAnonymous) { _, anon in
+            if !anon { showAccountPrompt = false }
+        }
         .sheet(isPresented: $showHighlightSheet) {
             HighlightComposeSheet(
                 selectedText: highlightSelection,
@@ -482,7 +496,9 @@ struct CardDetailView: View {
             requestFeed()   // 작성 후 피드로 이동 (Android)
         } catch {
             feedSubmitting = false
-            feedComposeError = "등록 실패: \(error.localizedDescription)"
+            // 원문 금지 — 위 FeedView 와 같은 이유(A-85).
+            AppLog.error("feed post (detail)", error)
+            feedComposeError = "감상평을 등록하지 못했어요. 잠시 후 다시 시도해주세요."
         }
     }
 

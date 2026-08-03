@@ -61,9 +61,32 @@ struct ArchiveView: View {
                     } else {
                         shelves
                     }
-                    Spacer().frame(height: 40)
+                    // 끝 여백 — 탭바 필은 RootView 레벨 오버레이라 이 페이지 위에 그려진다.
+                    // 40 만으로는 마지막 서가 행이 필 뒤로 들어간다(고양이를 얹으면 더 심해진다).
+                    // 필 윗면 + 40 으로 필과 고양이(돌출 24) 모두를 넘긴다.
+                    Spacer().frame(height: EditorialTabBar.pillTopInset + 40)
                 }
                 .padding(.horizontal, 20)
+            }
+        }
+        // 북마크 서가의 고양이 — iOS 전용 차별화(Android 서가엔 없다).
+        //
+        // 탭바 고양이는 하위 페이지가 push 되면 숨는다(RootView `activeStackAtRoot`, 의도된
+        // 동작). 그래서 서가에서는 페이지가 직접 같은 고양이를 얹는다 — MY/DAILY 와 같은
+        // `cat_empty`(엎드린 자세)로 통일해 다른 화면에서 넘어와도 같은 고양이로 읽힌다.
+        //
+        // 위치는 탭바 고양이의 규칙을 그대로 따른다: 자세의 ledgeFraction 0.46 이라 높이 52 중
+        // 24pt 만 필 윗면 위로 드러나고 나머지는 필 뒤로 들어간다 → bottom = pillTopInset − 28.
+        // 장식이므로 click-through(외부 QA A-55 규칙).
+        .overlay(alignment: .bottomTrailing) {
+            if asSubPage {
+                Image("cat_empty")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 52)
+                    .padding(.bottom, EditorialTabBar.pillTopInset - 28)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
         .background(Color.paper)
@@ -584,6 +607,13 @@ struct OpenedBookView: View {
         GeometryReader { geo in
             let w = min(geo.size.width - 48, 440)
             let h = geo.size.height * 0.82
+            // SE(667pt)에서는 0.82 페이지의 '중앙' 배치가 필 윗면을 넘어, 마지막 인용 행이
+            // 탭바 뒤에 갇히고 도서관 고양이가 페이지 모서리를 깔고 앉는다(외부 QA D-29
+            // 부속, SE 실측). 넘치는 만큼만 위로 든다 — 안 넘치는 큰 화면은 lift 0 으로
+            // 픽셀 하나 안 움직인다.
+            let pageBottom = (geo.size.height + h) / 2
+            let allowedBottom = geo.size.height - (EditorialTabBar.pillTopInset + 8)
+            let lift = max(0, pageBottom - allowedBottom)
             ZStack {
                 Color.black.opacity(opened ? 0.55 : 0)
                     .ignoresSafeArea(edges: .top)
@@ -629,6 +659,7 @@ struct OpenedBookView: View {
                 .shadow(color: .black.opacity(0.4), radius: 28, x: 0, y: 16)
                 .scaleEffect(opened ? 1 : 0.9)
                 .opacity(opened ? 1 : 0)
+                .offset(y: -lift)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -831,8 +862,19 @@ private struct BookPage: View {
                             onOpen(card)
                         } label: {
                             VStack(alignment: .leading, spacing: 12) {
-                                if let date = row.createdDate {
-                                    Text(Self.dateText(date)).labelCaps(size: 12)
+                                // 날짜(있으면)와 "#cardId" 일련번호를 **본문 흐름 안** 첫 줄로.
+                                // 예전엔 일련번호가 topTrailing 오버레이(공간 예약 없음)라 인용
+                                // 첫 줄과 같은 세로 대역을 공유했다 — 첫 줄이 길게 감기는 카드
+                                // 에서만 충돌하는 복불복(외부 QA D-29). 흐름 안에 두면 어떤
+                                // 폭·어떤 문장에서도 겹칠 수 없다.
+                                HStack(alignment: .firstTextBaseline) {
+                                    if let date = row.createdDate {
+                                        Text(Self.dateText(date)).labelCaps(size: 12)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Text("#\(card.cardId)")
+                                        .font(.bodySans(9))
+                                        .foregroundStyle(.sand)
                                 }
                                 Text("\"\(card.quote)\"")
                                     .font(.titleSerif(18))
@@ -854,14 +896,6 @@ private struct BookPage: View {
                                 Rectangle().fill(Color.sand).frame(width: 3)
                             }
                             .overlay(Rectangle().stroke(Color.latte, lineWidth: 0.5))
-                            // "#cardId" serial, top-right.
-                            .overlay(alignment: .topTrailing) {
-                                Text("#\(card.cardId)")
-                                    .font(.bodySans(9))
-                                    .foregroundStyle(.sand)
-                                    .padding(.top, 10)
-                                    .padding(.trailing, 12)
-                            }
                         }
                         .buttonStyle(.plain)
                         .cardContextMenu(card)
