@@ -12,6 +12,7 @@ struct DailyView: View {
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
+    @EnvironmentObject private var network: NetworkMonitor
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var heroNS
@@ -20,6 +21,9 @@ struct DailyView: View {
     @State private var trendingCounts: [Int: Int] = [:]
     @State private var ozCard: Card?
     @State private var hasLoaded = false
+    /// 로드 진행 중 여부. 화면에 스피너를 그리려는 게 아니라, **재연결 재시도가 진행 중인
+    /// 로드를 기다렸다가 판단**하기 위해 필요하다(리뷰 P1 — Home 의 isLoading 대응물).
+    @State private var isLoading = false
     @State private var fetchFailed = false
     /// 새 책 룰렛에서 탭한 작품 — OpenedBookView(책 펼침) 오버레이로 표시.
     @State private var openedWork: DiscoveryWork?
@@ -102,6 +106,26 @@ struct DailyView: View {
             ozCard = nil
             recomputeOz()
         }
+        // 연결 회복 → 실패로 멈춘 화면의 자기 복구(HomeView 와 동일 패턴 — #200 후속).
+        // FEED 는 탭 진입마다 reload 라 자연 회복되지만, 이 화면은 hasLoaded 래치가 있어
+        // 신호 없이는 '불러오기 실패' 배너에 영원히 멈춘다. 실패 상태일 때만.
+        .onChange(of: network.reconnectToken) { _, _ in
+            Task {
+                // ⚠️ **진행 중인 로드가 끝난 뒤에** 판단한다. 지금 당장 fetchFailed 를 보면
+                // 오프라인 콜드 스타트에서 신호가 통째로 버려진다 — `.task` 의 첫 요청이 아직
+                // 도는 중이라 fetchFailed 는 아직 false 이고, 그 요청은 곧 실패하는데 다음
+                // 토큰은 오지 않아 실패 화면에 영구히 갇힌다(리뷰 P1). #200 에서 부트스트랩에
+                // 대해 고친 것과 같은 타이밍 문제라 같은 방식으로 맞춘다.
+                //
+                // 토큰이 연달아 와도 안전하다: MainActor 직렬 실행이라 먼저 깬 Task 가
+                // reload 첫 줄에서 isLoading=true 를 세운 뒤에야 다른 Task 가 돌고, 그때는
+                // 다시 대기로 들어간다. 그 사이 복구에 성공했으면 아래 가드가 걸러낸다.
+                while isLoading { try? await Task.sleep(nanoseconds: 200_000_000) }
+                // 비파괴 가드는 그대로 — 멀쩡히 그려진 화면은 건드리지 않는다.
+                guard fetchFailed else { return }
+                await load(force: true)
+            }
+        }
         // Bookmarks load separately, so recompute the (taste-matched) Oz pick once
         // they arrive — chooseOzPick re-promotes a cached non-personalized pick.
         .onChange(of: bookmarks.bookmarks.map(\.cardId)) { _, _ in
@@ -169,6 +193,8 @@ struct DailyView: View {
 
     private func load(force: Bool = false) async {
         if hasLoaded && !force { return }
+        isLoading = true
+        defer { isLoading = false }
         do {
             if allCards.isEmpty {
                 allCards = try await CardCache.shared.cards()   // 세션 공유(무료 티어 부하↓)
