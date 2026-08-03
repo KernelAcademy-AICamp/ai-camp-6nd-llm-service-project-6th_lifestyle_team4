@@ -488,7 +488,9 @@ struct CardDetailView: View {
             requestFeed()   // 작성 후 피드로 이동 (Android)
         } catch {
             feedSubmitting = false
-            feedComposeError = "등록 실패: \(error.localizedDescription)"
+            // 원문 금지 — 위 FeedView 와 같은 이유(A-85).
+            AppLog.error("feed post (detail)", error)
+            feedComposeError = "감상평을 등록하지 못했어요. 잠시 후 다시 시도해주세요."
         }
     }
 

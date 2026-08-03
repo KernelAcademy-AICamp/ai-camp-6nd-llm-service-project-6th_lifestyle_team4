@@ -436,7 +436,9 @@ struct FeedView: View {
             category = .today
             composeCard = nil
         } catch {
-            composeError = "등록 실패: \(error.localizedDescription)"
+            // 원문 금지 — Supabase/URLSession 문구는 영문이라 한국어 UI 에 그대로 튄다(A-85).
+            AppLog.error("feed post (feed)", error)
+            composeError = "감상평을 등록하지 못했어요. 잠시 후 다시 시도해주세요."
         }
     }
 }
