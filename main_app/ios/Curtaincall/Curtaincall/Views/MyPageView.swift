@@ -16,7 +16,8 @@ struct MyPageView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
     @Environment(\.requestLogin) private var requestLogin   // 로그인 → 루트의 단일 로그인 팝업(키보드 회피·탭바 고정)
-    @Environment(\.requestYarnInfo) private var requestYarnInfo   // 실타래 펠릿 탭 → 설명 팝업
+    @Environment(\.requestYarnInfo) private var requestYarnInfo
+    @Environment(\.loginPopupActive) private var loginPopupActive   // 실타래 펠릿 탭 → 설명 팝업
 
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
@@ -25,9 +26,6 @@ struct MyPageView: View {
     @State private var showAttendance = false
     @State private var latestNoticeId: Int?
 
-    /// 스크롤 최상단 앵커 — 신원 전환 후 뷰 위치를 되돌릴 때 대상.
-    private static let topID = "mypage-top"
-
     /// Unread-notice dot for the 공지 row — same signal as RootView's MY-tab dot.
     private var hasUnreadNotice: Bool { (latestNoticeId ?? 0) > prefs.noticeLastSeenId }
 
@@ -35,12 +33,10 @@ struct MyPageView: View {
         VStack(spacing: 0) {
             // MY 본문 yarnPill이 잔액 표면을 담당하므로 상단 중복 칩은 숨긴다.
             AppMasthead(showsYarnChip: false)
-            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     // 상단 여백 16→28 — 닉네임이 매스트헤드에 눌려 답답하다는 기기 QA.
                     Spacer().frame(height: 28)
-                        .id(Self.topID)
 
                     // 정체성 블록(로그인) — 닉네임 → 아이디 → 실타래 로 한 덩어리(기기 QA
                     // 재구성). 태그라인 제거, 구분선은 이 블록이 아니라 '공지' 위로 이동.
@@ -86,7 +82,13 @@ struct MyPageView: View {
 
                     // 로그인 안내 메시지("로그인 됐어요" 등) — 정체성 블록을 끊지 않도록
                     // 블록 '끝'으로 내렸다(기기 QA). 일시적 상태 피드백이라 작게.
-                    if let msg = session.authMessage {
+                    //
+                    // 로그인 팝업이 떠 있는 동안엔 그리지 않는다. `authMessage` 는 공용 채널이라
+                    // 팝업(QA-10 에서 추가)과 여기가 **같은 문구를 동시에** 그려, 짧은 비밀번호
+                    // 경고가 팝업 안과 그 뒤에 두 번 보였다(기기 QA). 팝업이 떠 있을 땐 그쪽이
+                    // 문맥의 주인이므로 본문은 양보한다 — 팝업이 닫히면 다시 이 자리에서 보인다
+                    // (프로필 저장·닉네임 변경·탈퇴 결과 등은 원래대로 여기서 표시).
+                    if let msg = session.authMessage, !loginPopupActive {
                         Spacer().frame(height: 12)
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
@@ -207,20 +209,18 @@ struct MyPageView: View {
                 .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
             }
             .scrollDismissesKeyboard(.interactively)
-            // 신원이 바뀌면(로그아웃·탈퇴) 스크롤을 맨 위로 되돌린다.
+            // 신원이 바뀌면(로그아웃·탈퇴) 스크롤을 맨 위로 되돌린다 — 뷰 자체를 새로 만든다.
             //
             // 탈퇴/로그아웃 버튼은 이 페이지 **맨 아래**에 있는데, 성공 후 화면은 게스트용으로
-            // 다시 그려지면서도 **스크롤 위치는 바닥에 그대로** 남는다. 그래서 방금 계정을
-            // 지운 사용자가 정작 '로그인 · 회원가입' 블록(맨 위)을 못 보고 빈 화면 아래쪽만
-            // 보게 된다(기기 QA). 신원 전환은 화면의 의미가 통째로 바뀌는 순간이라 뷰 상태도
-            // 초기 위치로 되돌리는 게 맞다.
+            // 다시 그려지면서도 **스크롤 위치는 바닥에 그대로** 남아, 방금 계정을 지운 사용자가
+            // '로그인 · 회원가입' 블록(맨 위)을 못 본다(기기 QA).
             //
-            // `identityResetToken` 은 #194 가 로그아웃·탈퇴 성공 후에만 올리는 신호라
-            // 이 목적에 정확히 맞는다(별도 플래그 불필요).
-            .onChange(of: prefs.identityResetToken) { _, _ in
-                withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(Self.topID, anchor: .top) }
-            }
-            }
+            // ⚠️ 처음엔 `ScrollViewReader` + `scrollTo(topID)` 로 했는데 **동작하지 않았다**
+            // (기기 재확인). 토큰이 오는 그 순간 회원 레이아웃이 게스트 레이아웃으로 통째로
+            // 교체되면서 콘텐츠 높이가 크게 바뀌고, 그 와중에 스크롤 명령이 묻힌다.
+            // `.id()` 로 ScrollView 를 **새로 만들면** 위치가 0 에서 시작하는 게 보장된다 —
+            // 타이밍에 의존하지 않는다. 콘텐츠의 @State 는 MyPageView 소유라 보존된다.
+            .id(prefs.identityResetToken)
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
@@ -590,7 +590,7 @@ struct SignInSheet: View {
                     FieldBox(placeholder: "비밀번호", text: $loginPassword, isSecure: true)
                     // 로그인/가입 버튼은 하단 고정 행으로 이동(키보드가 떠도 보이게). 모드 토글만 여기.
                     Button {
-                        session.authMessage = nil   // 모드를 바꾸면 이전 모드의 오류는 무의미
+                        session.authFormError = nil   // 모드를 바꾸면 이전 모드의 오류는 무의미
                         signUpMode.toggle()
                     } label: {
                         // 회원가입(또는 로그인) 단어를 강조 — 안내 문구는 톤다운, 액션 단어는 accent + 밑줄.
@@ -688,7 +688,7 @@ struct SignInSheet: View {
             // 짧은 비밀번호로 가입을 시도하면 폼이 아무 반응도 안 하는 것처럼 보이고, 팝업을
             // 닫아야 비로소 이유를 알 수 있었다(기기 QA) — 미관이 아니라 기능 결함.
             // 하단 고정 행 바로 위라 키보드가 떠 있어도 버튼과 함께 보인다.
-            if let msg = session.authMessage {
+            if let msg = session.authFormError {
                 Text(msg)
                     .font(.bodySans(12))
                     .foregroundStyle(.cta)
@@ -715,7 +715,7 @@ struct SignInSheet: View {
         }
         // 중앙 팝업(폼 모드) — 카드 배경/모서리는 PopupDialog 담당. 시트 그래버·detents 제거.
         // Android SignInDialog: 인증 성공(익명 해제)되면 자동으로 닫힌다.
-        .animation(.easeInOut(duration: 0.2), value: session.authMessage)
+        .animation(.easeInOut(duration: 0.2), value: session.authFormError)
         // 팝업을 열 때 이전 문구를 비운다.
         //
         // `authMessage` 는 인증 전용이 아니라 **공용 상태 채널**이다 — 로그인 실패뿐 아니라
@@ -727,10 +727,12 @@ struct SignInSheet: View {
         // 근본적으로는 인증 전용 오류 상태를 따로 두는 게 맞지만, 그건 `AuthSession` 의
         // 반환 규약까지 바꾸는 일이라 이 PR 범위 밖이다. 표시 시작 시점에 비우는 것으로
         // 오염 경로를 끊는다(백로그: 인증 전용 상태 분리).
-        .onAppear { session.authMessage = nil }
+        .onAppear { session.authFormError = nil }
         .onChange(of: session.isAnonymous) { _, anon in
             if !anon { dismissPopup() }
         }
+        // 폼이 사라지면 폼 오류도 사라진다 — 취소·스크림 탭으로 닫아도 남지 않는다(리뷰 P2).
+        .onDisappear { session.authFormError = nil }
     }
 
     // 시트 커스텀 헤더 — 출석체크 시트와 동일한 크롬 표준(제목 좌 + 닫기 우, 56pt, 하단

@@ -208,6 +208,8 @@ struct RootView: View {
         // requestLogin 을 부르는 모든 유도(북마크 프롬프트·새로고침 제한·피드 익명)가
         // 이 한 곳을 띄운다(모달 분기 없음). 인증 성공 시 SignInSheet 가 자동으로 닫힌다.
         .popup(isPresented: $showLoginModal, fitContent: false) { SignInSheet() }   // 폼 모드(키보드 회피)
+        // 로그인 팝업이 떠 있는지 — MY 본문이 같은 `authMessage` 를 중복으로 그리지 않도록.
+        .environment(\.loginPopupActive, showLoginModal)
         // 폼 팝업(로그인)이 떠 있는 동안 탭 UI 를 키보드로부터 잠그기 위한 신호 수신.
         .onPreferenceChange(FormPopupActiveKey.self) { formPopupActive = $0 }
         // 마스트헤드 공지 종 → 공지 시트(Android notif 시트 패턴).
@@ -787,9 +789,20 @@ private struct AppOfflineNoticeActiveKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+/// 로그인/가입 팝업이 표시 중인지. `authMessage` 는 공용 채널이라 팝업과 MY 본문이 **동시에**
+/// 같은 문구를 그린다 — 팝업 뒤로 같은 경고가 비쳐 중복으로 보였다(기기 QA).
+private struct LoginPopupActiveKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     var appOfflineNoticeActive: Bool {
         get { self[AppOfflineNoticeActiveKey.self] }
         set { self[AppOfflineNoticeActiveKey.self] = newValue }
+    }
+
+    var loginPopupActive: Bool {
+        get { self[LoginPopupActiveKey.self] }
+        set { self[LoginPopupActiveKey.self] = newValue }
     }
 }
