@@ -386,7 +386,13 @@ struct EditorialTabBar: View {
         case .archive:
             // hBias 0.74 — LIBRARY↔MY 중간에서 MY 쪽으로 기울던 것 한 눈금 좌측(기기
             // QA 라운드4; 0.60 과이동 → 0.77 소폭 우편향 → 0.74).
-            return NavCatPose(asset: "cat_struck", height: 90, hBias: 0.74, ledgeFraction: 0.86) // Android CatHeightLibrary=90
+            // hBias 1.0 — 페이지 바 내용이 **가운데 정렬**(Spacer 없는 HStack, 총 240pt)이라
+            // 오른쪽 화살표는 화면 끝이 아니라 x≈272~316 에 있다. 0.74 일 때 고양이(폭 54.5pt,
+            // 306×505 비율)가 x≈282~337 로 그 화살표를 정통으로 덮었다(외부 QA Z-5).
+            // 끝으로 밀면 x≈322~376 이 되어 겹침 0 — 화면 끝까지 16.7pt 여유가 남는다.
+            // height 90→78: SE(375pt)에선 1.0 에서도 3.8pt 모자라서 폭을 함께 줄인다.
+            // 부수 효과로 돌출 90×0.86=77 → 67 이 되어 catClearance(56) 불변식에도 가까워진다.
+            return NavCatPose(asset: "cat_struck", height: 78, hBias: 1.0, ledgeFraction: 0.86)
         case .daily, .settings:
             return NavCatPose(asset: "cat_empty", height: 52, hBias: 0.92, ledgeFraction: 0.46)  // 돌출 ≈ 24
         case .home:

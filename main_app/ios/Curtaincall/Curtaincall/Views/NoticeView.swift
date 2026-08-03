@@ -9,6 +9,8 @@ struct NoticeView: View {
     @State private var notices: [Notice] = []
     @State private var isLoading = false
     @State private var loadError: String?
+    /// 실패 원인에 맞는 심볼(연결 끊김 vs 그 외) — EmptyStateView.icon(for:) 판정 결과.
+    @State private var loadErrorIcon = "exclamationmark.triangle"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,8 +20,15 @@ struct NoticeView: View {
                     Spacer().frame(height: 4)
                     if isLoading && notices.isEmpty {
                         centeredNote("불러오는 중⋯")
-                    } else if let loadError, notices.isEmpty {
-                        centeredNote(loadError, error: true)
+                    } else if loadError != nil, notices.isEmpty {
+                        // 한 줄 텍스트에서 공용 EmptyStateView 로 — 무슨 일이 났는지 눈에 들어오고,
+                        // **재시도 수단이 생긴다**(예전엔 시트를 닫았다 다시 열어야 했다).
+                        EmptyStateView(
+                            icon: loadErrorIcon,
+                            headline: "공지를 불러오지 못했어요",
+                            subline: "연결을 확인하고 다시 시도해주세요.",
+                            onRetry: { Task { await load() } }
+                        )
                     } else if notices.isEmpty {
                         noticeEmpty
                     } else {
@@ -110,6 +119,7 @@ struct NoticeView: View {
             // 한국어 UI 에 영문이 튄다(외부 QA A-85 와 같은 결함).
             AppLog.error("notices load", error)
             notices = []
+            loadErrorIcon = EmptyStateView.icon(for: error)
             loadError = "공지를 불러오지 못했어요. 잠시 후 다시 시도해주세요."
         }
     }

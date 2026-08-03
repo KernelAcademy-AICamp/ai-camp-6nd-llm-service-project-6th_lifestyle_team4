@@ -180,14 +180,16 @@ struct LibraryCatalogView: View {
         !model.books.isEmpty && !filteredBooks.isEmpty && pageCount > 1
     }
 
-    /// 바 '바닥'의 화면 하단 오프셋 — 필 윗면 + 고양이 돌출 + 8 (Z-5).
-    static var pageBarBottomInset: CGFloat {
-        EditorialTabBar.pillTopInset + EditorialTabBar.libraryCatProtrusion + 8
-    }
+    /// 바 '바닥'의 화면 하단 오프셋 — 필 윗면 바로 위.
+    /// ⚠️ 예전엔 고양이 돌출(77pt)만큼 통째로 **올려서** 피했는데, 그건 가로 충돌을 세로
+    /// 이동으로 푼 것이라 하단 234pt 가 통째로 예약되고 SE 에선 책이 한 줄만 보였다(기기 QA).
+    /// 이제 고양이를 화면 끝(hBias 1.0)으로 보내 **가로로** 분리하므로 바는 낮게 둔다.
+    static var pageBarBottomInset: CGFloat { EditorialTabBar.pillTopInset + 12 }
 
-    /// 바의 실제 세로 크기: Hairline 0.5 + 세로 패딩 12×2 + 칩/화살표 프레임 44.
+    /// 바의 실제 세로 크기: Hairline 0.5 + 세로 패딩 6×2 + 칩/화살표 프레임 44.
+    /// 세로 패딩을 12→6 으로 줄였다(히트 영역 44pt 는 HIG 최소라 유지).
     /// pinnedPageBar 구성이 바뀌면 이 값도 같이 바꿀 것.
-    static let pageBarHeight: CGFloat = 68.5
+    static let pageBarHeight: CGFloat = 56.5
 
     private var pageCount: Int {
         max(1, (filteredBooks.count + Self.pageSize - 1) / Self.pageSize)
@@ -317,7 +319,7 @@ struct LibraryCatalogView: View {
             Hairline()
             pageBar
                 .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .padding(.vertical, 6)
         }
         .background(Color.paper)
     }
@@ -443,32 +445,6 @@ struct LibraryCatalogView: View {
 
 /// PWA 빈/검색결과 상태 — 아이콘(sand) + 헤드라인(serif/espresso) + 서브라인(walnut),
 /// 가운데 정렬. 카탈로그·북마크 서가 공용.
-struct EmptyStateView: View {
-    let icon: String
-    let iconSize: CGFloat
-    let headline: String
-    let subline: String
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Image(systemName: icon)
-                .font(.system(size: iconSize, weight: .regular))
-                .foregroundStyle(.sand)
-            Spacer().frame(height: 16)
-            Text(headline)
-                .font(.headlineSerif(18))
-                .foregroundStyle(.espresso)
-            Spacer().frame(height: 8)
-            Text(subline)
-                .font(.bodySans(14))
-                .foregroundStyle(.walnut)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
-    }
-}
-
 /// 카탈로그 데이터: `cards`(+nested works) 한 번 받아 작품 단위로 묶는다.
 /// Android `LibraryViewModel`/`CardRepository.fetchAllCards` 미러.
 @MainActor
