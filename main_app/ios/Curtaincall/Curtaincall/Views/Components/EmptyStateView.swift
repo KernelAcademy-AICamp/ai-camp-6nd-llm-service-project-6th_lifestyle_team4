@@ -37,11 +37,15 @@ struct EmptyStateView: View {
             if let onRetry {
                 Spacer().frame(height: 20)
                 Button(action: onRetry) {
+                    // 테두리 박스는 시각 크기 40, **히트 영역만 44**(HIG 최소 — 리뷰 P2).
+                    // 페이지 바 칩이 쓰는 것과 같은 방식(시각 28 / 히트 44)으로, 보조 버튼이
+                    // 시각적으로 커지지 않으면서 접근성 최소 타깃을 만족한다.
                     Text(retryTitle).labelCaps(color: .espresso)
                         .padding(.horizontal, 18)
                         .frame(height: 40)
-                        .contentShape(Rectangle())
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.walnut, lineWidth: 1))
+                        .frame(height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
