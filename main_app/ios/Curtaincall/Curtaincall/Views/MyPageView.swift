@@ -16,7 +16,8 @@ struct MyPageView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var yarn: YarnStore
     @Environment(\.requestLogin) private var requestLogin   // 로그인 → 루트의 단일 로그인 팝업(키보드 회피·탭바 고정)
-    @Environment(\.requestYarnInfo) private var requestYarnInfo   // 실타래 펠릿 탭 → 설명 팝업
+    @Environment(\.requestYarnInfo) private var requestYarnInfo
+    @Environment(\.loginPopupActive) private var loginPopupActive   // 실타래 펠릿 탭 → 설명 팝업
 
     @State private var showNicknameSheet = false
     @State private var showDeleteConfirm = false
@@ -86,7 +87,13 @@ struct MyPageView: View {
 
                     // 로그인 안내 메시지("로그인 됐어요" 등) — 정체성 블록을 끊지 않도록
                     // 블록 '끝'으로 내렸다(기기 QA). 일시적 상태 피드백이라 작게.
-                    if let msg = session.authMessage {
+                    //
+                    // 로그인 팝업이 떠 있는 동안엔 그리지 않는다. `authMessage` 는 공용 채널이라
+                    // 팝업(QA-10 에서 추가)과 여기가 **같은 문구를 동시에** 그려, 짧은 비밀번호
+                    // 경고가 팝업 안과 그 뒤에 두 번 보였다(기기 QA). 팝업이 떠 있을 땐 그쪽이
+                    // 문맥의 주인이므로 본문은 양보한다 — 팝업이 닫히면 다시 이 자리에서 보인다
+                    // (프로필 저장·닉네임 변경·탈퇴 결과 등은 원래대로 여기서 표시).
+                    if let msg = session.authMessage, !loginPopupActive {
                         Spacer().frame(height: 12)
                         Text(msg).font(.bodySans(12)).foregroundStyle(.cta)
                     }
