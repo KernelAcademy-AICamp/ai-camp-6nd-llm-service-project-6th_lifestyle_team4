@@ -25,6 +25,9 @@ struct MyPageView: View {
     @State private var showAttendance = false
     @State private var latestNoticeId: Int?
 
+    /// 스크롤 최상단 앵커 — 신원 전환 후 뷰 위치를 되돌릴 때 대상.
+    private static let topID = "mypage-top"
+
     /// Unread-notice dot for the 공지 row — same signal as RootView's MY-tab dot.
     private var hasUnreadNotice: Bool { (latestNoticeId ?? 0) > prefs.noticeLastSeenId }
 
@@ -32,10 +35,12 @@ struct MyPageView: View {
         VStack(spacing: 0) {
             // MY 본문 yarnPill이 잔액 표면을 담당하므로 상단 중복 칩은 숨긴다.
             AppMasthead(showsYarnChip: false)
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     // 상단 여백 16→28 — 닉네임이 매스트헤드에 눌려 답답하다는 기기 QA.
                     Spacer().frame(height: 28)
+                        .id(Self.topID)
 
                     // 정체성 블록(로그인) — 닉네임 → 아이디 → 실타래 로 한 덩어리(기기 QA
                     // 재구성). 태그라인 제거, 구분선은 이 블록이 아니라 '공지' 위로 이동.
@@ -202,6 +207,20 @@ struct MyPageView: View {
                 .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
             }
             .scrollDismissesKeyboard(.interactively)
+            // 신원이 바뀌면(로그아웃·탈퇴) 스크롤을 맨 위로 되돌린다.
+            //
+            // 탈퇴/로그아웃 버튼은 이 페이지 **맨 아래**에 있는데, 성공 후 화면은 게스트용으로
+            // 다시 그려지면서도 **스크롤 위치는 바닥에 그대로** 남는다. 그래서 방금 계정을
+            // 지운 사용자가 정작 '로그인 · 회원가입' 블록(맨 위)을 못 보고 빈 화면 아래쪽만
+            // 보게 된다(기기 QA). 신원 전환은 화면의 의미가 통째로 바뀌는 순간이라 뷰 상태도
+            // 초기 위치로 되돌리는 게 맞다.
+            //
+            // `identityResetToken` 은 #194 가 로그아웃·탈퇴 성공 후에만 올리는 신호라
+            // 이 목적에 정확히 맞는다(별도 플래그 불필요).
+            .onChange(of: prefs.identityResetToken) { _, _ in
+                withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(Self.topID, anchor: .top) }
+            }
+            }
         }
         .background(Color.paper)
         .toolbar(.hidden, for: .navigationBar)
