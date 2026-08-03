@@ -13,6 +13,7 @@ struct DailyView: View {
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var network: NetworkMonitor
+    @Environment(\.appOfflineNoticeActive) private var appOfflineNoticeActive
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var heroNS
@@ -31,7 +32,8 @@ struct DailyView: View {
     var body: some View {
         VStack(spacing: 0) {
             AppMasthead()
-            if fetchFailed {
+            // 전역 오프라인 스트립이 이미 같은 사실을 말하고 있으면 화면별 배너는 숨긴다.
+            if fetchFailed && !appOfflineNoticeActive {
                 FetchErrorBanner { Task { await load(force: true) } }
             }
             ScrollView {

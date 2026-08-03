@@ -9,6 +9,7 @@ struct HomeView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var coach: CoachController
     @EnvironmentObject private var network: NetworkMonitor
+    @Environment(\.appOfflineNoticeActive) private var appOfflineNoticeActive
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Namespace private var heroNS
@@ -35,7 +36,8 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             AppMasthead()
-            if fetchFailed {
+            // 전역 오프라인 스트립이 이미 같은 사실을 말하고 있으면 화면별 배너는 숨긴다.
+            if fetchFailed && !appOfflineNoticeActive {
                 FetchErrorBanner { Task { await reload(deterministic: true) } }
             }
             ScrollView {
