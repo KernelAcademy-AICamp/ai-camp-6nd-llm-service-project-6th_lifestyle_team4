@@ -63,6 +63,46 @@ final class AuthSession: ObservableObject {
 
     private var auth: AuthClient { Supa.shared.client.auth }
 
+    // MARK: - 재설치 감지
+
+    private static let installMarkerKey = "ds.installMarker"
+
+    /// **앱을 지워도 Keychain 의 Supabase 세션은 남는다.** iOS 는 Keychain 을 앱 컨테이너
+    /// 밖에 보관하고, supabase-swift 의 기본 저장소가 `KeychainLocalStorage` 다. 그래서
+    /// 삭제 후 재설치해도 이전 계정으로 되살아나고, 서버 취향이 `syncFromServer` 로 들어오며
+    /// `prefSelected` 까지 true 가 돼 **온보딩·코치 투어가 아예 안 뜬다**. 외부 QA 가
+    /// "새 사용자 테스트인데 첫 실행이 깨끗하지 않다"고 본 원인이고(H-34), P0-1 수락 5번
+    /// ("삭제/재설치 시 진짜 깨끗한 상태에서 시작")이 지금까지 충족 불가였던 이유다.
+    /// 기기를 팔거나 빌려줄 때 '앱 삭제 = 로그아웃'이 아니라는 문제이기도 하다.
+    ///
+    /// 컨테이너가 **완전히 비어 있는데** Keychain 세션만 남아 있으면 그건 재설치다 → 로컬
+    /// 세션을 버린다.
+    ///
+    /// ⚠️ 마커 유무만으로 판단하면 안 된다. 이 코드가 없던 버전에서 올라오는 **기존
+    /// 사용자**도 마커가 없어서, 업데이트 한 번에 전원 로그아웃되는 대형 회귀가 된다.
+    /// 그래서 '앱 데이터가 하나도 없을 때'만 재설치로 친다 — 기존 설치는 마커만 심고 지나간다.
+    ///
+    /// 서버는 건드리지 않는다(`scope: .local`) — 다른 기기 세션은 살아 있어야 하고, 네트워크
+    /// 없이도 동작해야 한다. supabase-swift 는 로컬 저장소를 먼저 비우고 서버 호출을 하므로
+    /// 오프라인이라 호출이 실패해도 Keychain 은 이미 정리된다.
+    private func discardSessionIfFreshInstall() async {
+        let d = UserDefaults.standard
+        guard !d.bool(forKey: Self.installMarkerKey) else { return }
+
+        // 기존 앱 데이터 흔적 — 하나라도 있으면 '재설치'가 아니라 '업데이트'다.
+        // (`ds.*` 는 이 앱의 UserDefaults 네임스페이스, `coachTourSeen` 은 @AppStorage 라
+        //  접두사가 없어 따로 확인한다.)
+        let hasAppData = d.dictionaryRepresentation().keys.contains {
+            $0.hasPrefix("ds.") || $0 == "coachTourSeen"
+        }
+        d.set(true, forKey: Self.installMarkerKey)
+        guard !hasAppData else { return }
+
+        guard auth.currentSession != nil else { return }
+        AppLog.debug("fresh install detected — discarding surviving keychain session")
+        try? await auth.signOut(scope: .local)
+    }
+
     // MARK: - 마지막 성공 신원 캐시 (오프라인 복구용)
 
     /// 마지막으로 **성공한** 회원 부트스트랩 결과. 오프라인 콜드 스타트에서 회원 신원을
@@ -164,6 +204,8 @@ final class AuthSession: ObservableObject {
         bootstrapInProgress = true
         bootstrapStatus = .bootstrapping
         defer { bootstrapInProgress = false }
+
+        await discardSessionIfFreshInstall()
 
         do {
             // With emitLocalSessionAsInitialSession the SDK surfaces the stored
