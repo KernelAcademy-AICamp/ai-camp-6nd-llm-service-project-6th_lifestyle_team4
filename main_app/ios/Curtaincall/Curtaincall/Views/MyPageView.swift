@@ -878,9 +878,13 @@ struct ProfileEditor: View {
                         }
                         .foregroundStyle(.espresso)
                         .padding(.horizontal, 14)
+                        // 테두리 박스는 시각 크기 36, **히트 영역만 44**(HIG 최소 — 리뷰 P2).
+                        // 페이지 바 칩과 같은 방식(시각 28 / 히트 44) — 보조 버튼이 시각적으로
+                        // 커져 저장 버튼과 비중이 같아지는 것을 피하면서 접근성 최소치를 만족.
                         .frame(height: 36)
-                        .contentShape(Rectangle())
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.walnut, lineWidth: 1))
+                        .frame(height: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("랜덤 이름 생성")
