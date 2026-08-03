@@ -36,7 +36,21 @@ final class AuthSession: ObservableObject {
     @Published var errorMessage: String?
 
     @Published var authInProgress = false
+    /// MY 화면 본문에 뜨는 **범용** 상태 문구 — 프로필 저장 · 닉네임 변경 · 로그아웃/탈퇴
+    /// 결과 · 로그인 성공 등. 여러 화면이 읽는 공용 채널이다.
     @Published var authMessage: String?
+
+    /// 로그인/가입 **폼 자체의 실패** 문구 — `SignInSheet` 전용.
+    ///
+    /// `authMessage` 와 나눈 이유: 하나로 쓰다가 같은 배치에서 **네 번** 터졌다.
+    /// ① 팝업 뒤에 가려 안 보임 → ② 이전 동작의 메시지가 stale 하게 표시 → ③ 팝업과 MY
+    /// 본문에 중복 표시 → ④ 팝업을 수동으로 닫으면 실패 문구가 MY 본문에 되살아남.
+    /// 전부 "쓰는 곳 17개 · 읽는 곳 여럿 · 소유자 없음" 이라는 같은 뿌리였다. 표시 주체가
+    /// 분명한 별도 채널을 두면 이 부류가 구조적으로 불가능해진다.
+    ///
+    /// ⚠️ 로그인 **성공** 문구("로그인 됐어요")는 `authMessage` 로 남긴다 — 성공 시 팝업이
+    /// 스스로 닫히므로 그 문구의 표시 주체는 MY 본문이다.
+    @Published var authFormError: String?
 
     /// 소셜 첫 가입 직후 1회 성별·나이 입력 프롬프트를 띄울지.
     @Published var needsProfileSetup = false
@@ -343,11 +357,12 @@ final class AuthSession: ObservableObject {
 
     func signIn(id: String, password: String, signUp: Bool) async {
         guard !authInProgress else { return }
-        guard let email = Self.idToEmail(id) else { authMessage = "아이디를 입력해주세요."; return }
-        guard !password.isEmpty else { authMessage = "비밀번호를 입력해주세요."; return }
+        guard let email = Self.idToEmail(id) else { authFormError = "아이디를 입력해주세요."; return }
+        guard !password.isEmpty else { authFormError = "비밀번호를 입력해주세요."; return }
 
         authInProgress = true
         authMessage = nil
+        authFormError = nil
         let prevUserId = userId
         let enteredId = id.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
@@ -363,7 +378,7 @@ final class AuthSession: ObservableObject {
         } catch {
             // 실제 오류는 기록 + 친화 메시지(원시 시스템 문자열 그대로 노출 X).
             AppLog.error("password sign-in", error)
-            authMessage = Self.friendlyAuthError(error.localizedDescription)
+            authFormError = Self.friendlyAuthError(error.localizedDescription)
         }
         authInProgress = false
     }
@@ -376,6 +391,7 @@ final class AuthSession: ObservableObject {
         guard !authInProgress else { return }
         authInProgress = true
         authMessage = nil
+        authFormError = nil
         let prevUserId = userId
         let supaProvider: Provider = (provider == .google) ? .google : .kakao
         do {
@@ -395,7 +411,7 @@ final class AuthSession: ObservableObject {
                 AppLog.debug("OAuth sign-in canceled by user")
             } else {
                 AppLog.error("OAuth sign-in", error)
-                authMessage = Self.friendlyAuthError(error.localizedDescription)
+                authFormError = Self.friendlyAuthError(error.localizedDescription)
             }
         }
         authInProgress = false
@@ -414,6 +430,7 @@ final class AuthSession: ObservableObject {
         guard !authInProgress else { return }
         authInProgress = true
         authMessage = nil
+        authFormError = nil
         let prevUserId = userId
         do {
             _ = try await auth.signInWithIdToken(
@@ -428,7 +445,7 @@ final class AuthSession: ObservableObject {
                 AppLog.debug("Apple sign-in canceled by user")
             } else {
                 AppLog.error("Apple sign-in", error)
-                authMessage = Self.friendlyAuthError(error.localizedDescription)
+                authFormError = Self.friendlyAuthError(error.localizedDescription)
             }
         }
         authInProgress = false
@@ -470,6 +487,7 @@ final class AuthSession: ObservableObject {
         guard !authInProgress, !isAnonymous else { return false }
         authInProgress = true
         authMessage = nil
+        authFormError = nil
         defer { authInProgress = false }
 
         // 1단계 — 서버 삭제. 여기서 실패하면 계정은 **그대로 살아 있다**. 회원 상태도

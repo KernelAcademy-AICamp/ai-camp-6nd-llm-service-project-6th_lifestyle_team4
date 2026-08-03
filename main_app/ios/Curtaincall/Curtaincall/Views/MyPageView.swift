@@ -590,7 +590,7 @@ struct SignInSheet: View {
                     FieldBox(placeholder: "비밀번호", text: $loginPassword, isSecure: true)
                     // 로그인/가입 버튼은 하단 고정 행으로 이동(키보드가 떠도 보이게). 모드 토글만 여기.
                     Button {
-                        session.authMessage = nil   // 모드를 바꾸면 이전 모드의 오류는 무의미
+                        session.authFormError = nil   // 모드를 바꾸면 이전 모드의 오류는 무의미
                         signUpMode.toggle()
                     } label: {
                         // 회원가입(또는 로그인) 단어를 강조 — 안내 문구는 톤다운, 액션 단어는 accent + 밑줄.
@@ -688,7 +688,7 @@ struct SignInSheet: View {
             // 짧은 비밀번호로 가입을 시도하면 폼이 아무 반응도 안 하는 것처럼 보이고, 팝업을
             // 닫아야 비로소 이유를 알 수 있었다(기기 QA) — 미관이 아니라 기능 결함.
             // 하단 고정 행 바로 위라 키보드가 떠 있어도 버튼과 함께 보인다.
-            if let msg = session.authMessage {
+            if let msg = session.authFormError {
                 Text(msg)
                     .font(.bodySans(12))
                     .foregroundStyle(.cta)
@@ -715,7 +715,7 @@ struct SignInSheet: View {
         }
         // 중앙 팝업(폼 모드) — 카드 배경/모서리는 PopupDialog 담당. 시트 그래버·detents 제거.
         // Android SignInDialog: 인증 성공(익명 해제)되면 자동으로 닫힌다.
-        .animation(.easeInOut(duration: 0.2), value: session.authMessage)
+        .animation(.easeInOut(duration: 0.2), value: session.authFormError)
         // 팝업을 열 때 이전 문구를 비운다.
         //
         // `authMessage` 는 인증 전용이 아니라 **공용 상태 채널**이다 — 로그인 실패뿐 아니라
@@ -727,10 +727,12 @@ struct SignInSheet: View {
         // 근본적으로는 인증 전용 오류 상태를 따로 두는 게 맞지만, 그건 `AuthSession` 의
         // 반환 규약까지 바꾸는 일이라 이 PR 범위 밖이다. 표시 시작 시점에 비우는 것으로
         // 오염 경로를 끊는다(백로그: 인증 전용 상태 분리).
-        .onAppear { session.authMessage = nil }
+        .onAppear { session.authFormError = nil }
         .onChange(of: session.isAnonymous) { _, anon in
             if !anon { dismissPopup() }
         }
+        // 폼이 사라지면 폼 오류도 사라진다 — 취소·스크림 탭으로 닫아도 남지 않는다(리뷰 P2).
+        .onDisappear { session.authFormError = nil }
     }
 
     // 시트 커스텀 헤더 — 출석체크 시트와 동일한 크롬 표준(제목 좌 + 닫기 우, 56pt, 하단
