@@ -61,9 +61,32 @@ struct ArchiveView: View {
                     } else {
                         shelves
                     }
-                    Spacer().frame(height: 40)
+                    // 끝 여백 — 탭바 필은 RootView 레벨 오버레이라 이 페이지 위에 그려진다.
+                    // 40 만으로는 마지막 서가 행이 필 뒤로 들어간다(고양이를 얹으면 더 심해진다).
+                    // 필 윗면 + 40 으로 필과 고양이(돌출 24) 모두를 넘긴다.
+                    Spacer().frame(height: EditorialTabBar.pillTopInset + 40)
                 }
                 .padding(.horizontal, 20)
+            }
+        }
+        // 북마크 서가의 고양이 — iOS 전용 차별화(Android 서가엔 없다).
+        //
+        // 탭바 고양이는 하위 페이지가 push 되면 숨는다(RootView `activeStackAtRoot`, 의도된
+        // 동작). 그래서 서가에서는 페이지가 직접 같은 고양이를 얹는다 — MY/DAILY 와 같은
+        // `cat_empty`(엎드린 자세)로 통일해 다른 화면에서 넘어와도 같은 고양이로 읽힌다.
+        //
+        // 위치는 탭바 고양이의 규칙을 그대로 따른다: 자세의 ledgeFraction 0.46 이라 높이 52 중
+        // 24pt 만 필 윗면 위로 드러나고 나머지는 필 뒤로 들어간다 → bottom = pillTopInset − 28.
+        // 장식이므로 click-through(외부 QA A-55 규칙).
+        .overlay(alignment: .bottomTrailing) {
+            if asSubPage {
+                Image("cat_empty")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 52)
+                    .padding(.bottom, EditorialTabBar.pillTopInset - 28)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
         .background(Color.paper)
