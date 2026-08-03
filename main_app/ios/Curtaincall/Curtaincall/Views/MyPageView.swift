@@ -821,10 +821,30 @@ struct ProfileEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     FieldBox(placeholder: "표시할 이름", text: $nickname)
+                    // 예전엔 `Text(...).labelCaps()` + `.plain` 이라, 바로 위아래의 **섹션 라벨**
+                    // (`성별 · 선택` · `나이대 · 선택` · `좋아하는 장르`)과 서체·크기·색이 완전히
+                    // 같아 누를 수 있다는 신호가 0 이었다(기기 QA: "클릭 가능한 줄 몰랐다").
+                    // 테두리 + 새로고침 심볼로 탭 타깃임을 드러낸다.
+                    //
+                    // ⚠️ `EditorialButtonStyle(.outlined)` 을 그대로 쓰지 않은 이유: 그 스타일은
+                    // `maxWidth: .infinity` + `height 52` 로 **전폭·대형**이라 보조 동작인데도
+                    // 저장 버튼과 비중이 같아 보이고, 가뜩이나 큰 프로필 팝업(QA-7)을 52pt 더
+                    // 키운다. 같은 시각 언어(테두리 8R · walnut 1pt · labelCaps)를 쓰되 크기만
+                    // 보조 수준으로 낮춘 컴팩트 형태.
                     Button { nickname = AuthSession.randomCuteNickname() } label: {
-                        Text("랜덤 이름 생성").labelCaps()
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("랜덤 이름 생성").labelCaps(color: .espresso)
+                        }
+                        .foregroundStyle(.espresso)
+                        .padding(.horizontal, 14)
+                        .frame(height: 36)
+                        .contentShape(Rectangle())
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.walnut, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("랜덤 이름 생성")
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("성별 · 선택").labelCaps()
