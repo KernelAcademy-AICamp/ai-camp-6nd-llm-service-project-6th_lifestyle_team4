@@ -9,6 +9,7 @@ struct HomeView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @EnvironmentObject private var coach: CoachController
     @EnvironmentObject private var network: NetworkMonitor
+    @Environment(\.appOfflineNoticeActive) private var appOfflineNoticeActive
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.requestLogin) private var requestLogin   // 로그인 유도 → 루트 인증 모달 직접 호출
     @Namespace private var heroNS
@@ -35,7 +36,8 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             AppMasthead()
-            if fetchFailed {
+            // 전역 오프라인 스트립이 이미 같은 사실을 말하고 있으면 화면별 배너는 숨긴다.
+            if fetchFailed && !appOfflineNoticeActive {
                 FetchErrorBanner { Task { await reload(deterministic: true) } }
             }
             ScrollView {
@@ -149,6 +151,14 @@ struct HomeView: View {
                 if completed { bumpShare(card) }
             }
         }
+            // 회원이 되면 이 프롬프트의 **존재 이유가 사라진다** — 스스로 닫는다.
+            // 예전엔 사용자가 직접 닫을 때만 꺼져서, 익명 새로고침 한도 모달을 띄운 채 MY 로
+            // 가서 로그인하고 돌아오면 **회원인데도 '계정이 필요합니다' 모달이 그대로** 떠
+            // 있었다(기기 QA). 탭 전환으로는 화면이 파괴되지 않아 @State 가 유지되기 때문.
+            // `SignInSheet` 가 인증 성공 시 스스로 닫는 것과 같은 규칙.
+            .onChange(of: session.isAnonymous) { _, anon in
+                if !anon { showAccountPrompt = false }
+            }
         .task { await loadOnce() }
         .sensoryFeedback(.impact(flexibility: .soft), trigger: bookmarkHaptic)
         .task { await bookmarks.load(userId: session.userId) }

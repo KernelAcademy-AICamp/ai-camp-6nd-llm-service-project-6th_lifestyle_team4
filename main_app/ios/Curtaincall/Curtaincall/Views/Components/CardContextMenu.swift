@@ -48,6 +48,14 @@ private struct CardContextMenuModifier: ViewModifier {
             }
             // 비회원 북마크 시도 → 기존 회원 전용 프롬프트. 셀 bounds 에 갇히지 않도록
             // 전체화면으로 띄우고(투명 배경) 프롬프트 자체의 딤을 쓴다.
+            // 회원이 되면 이 프롬프트의 **존재 이유가 사라진다** — 스스로 닫는다.
+            // 예전엔 사용자가 직접 닫을 때만 꺼져서, 익명 새로고침 한도 모달을 띄운 채 MY 로
+            // 가서 로그인하고 돌아오면 **회원인데도 '계정이 필요합니다' 모달이 그대로** 떠
+            // 있었다(기기 QA). 탭 전환으로는 화면이 파괴되지 않아 @State 가 유지되기 때문.
+            // `SignInSheet` 가 인증 성공 시 스스로 닫는 것과 같은 규칙.
+            .onChange(of: session.isAnonymous) { _, anon in
+                if !anon { showAccountPrompt = false }
+            }
             .fullScreenCover(isPresented: $showAccountPrompt) {
                 AccountRequiredPrompt {
                     showAccountPrompt = false

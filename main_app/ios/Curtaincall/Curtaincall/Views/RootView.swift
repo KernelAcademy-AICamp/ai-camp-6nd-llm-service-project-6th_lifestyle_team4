@@ -51,6 +51,8 @@ struct RootView: View {
     @State private var shakeHaptic = 0
     @State private var lastShakeAt: Date?
     @State private var showAttendance = false
+    /// 마스트헤드 북마크로 MY 하위 서가에 들어올 때의 출발 탭 — 서가를 빠져나오면 복귀시킨다.
+    @State private var bookshelfReturnTab: Tab?
     // 로그인 유도(requestLogin) → MY 탭 이동 대신 루트에서 인증 모달(SignInSheet)을 직접 띄운다.
     // 사용자가 '로그인'을 눌렀으니 그 자리에서 로그인 UI 를 보여준다(MY 스크롤 헌트 제거).
     @State private var showLoginModal = false
@@ -90,21 +92,27 @@ struct RootView: View {
         ZStack {
         Group {
             if session.ready {
-                tabs
+                // 오프라인 안내를 **TabView 위에 VStack 으로 얹는다**(오버레이/인셋 아님).
+                // ⚠️ 처음엔 `.safeAreaInset(edge: .top)` 이었는데, TabView 는 UIKit 페이징
+                // 컨테이너라 safeAreaInset 이 **페이지 안으로 전파되지 않는다** — 그래서 스트립이
+                // 각 탭의 마스트헤드(`Daily Script` 워드마크)를 그대로 덮었다(기기 QA).
+                // 같은 제약이 하단에도 있어 각 탭이 104pt 스페이서로 수동 보상 중이다.
+                // in-flow VStack 이면 TabView 자체가 밀려나므로 **모든 탭 + MY 까지** 안전하고,
+                // 인셋 전파에 의존하지 않는다.
+                VStack(spacing: 0) {
+                    if let notice = offlineNotice {
+                        offlineStrip(notice)
+                    }
+                    tabs
+                }
             } else {
                 // 런치 스크린(크림 + 워드마크)에서 그대로 이어지는 로딩 뷰 — 같은 크림 배경,
                 // 같은 워드마크(중앙)에 은은한 펄스 + '불러오는 중…'. 흰 화면 없이 크림 연속.
                 LaunchLoadingView()
             }
         }
-        // 오프라인/연결 실패 안내 — 화면 **맨 위** 슬림 스트립. 오버레이가 아니라
-        // safeAreaInset 이라 콘텐츠를 덮지 않고 밀어내며, 하단 북마크 실패 배너와도
-        // 자리가 겹치지 않는다. (상단이라 키보드 인셋 함정과도 무관하다.)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if let notice = offlineNotice {
-                offlineStrip(notice)
-            }
-        }
+        // 화면별 실패 배너가 이 스트립과 같은 말을 두 번 하지 않도록 상태를 내려보낸다.
+        .environment(\.appOfflineNoticeActive, offlineNotice != nil)
         // 연결이 돌아오면 스스로 회복한다 — 사용자가 재실행하거나 다시 로그인할 필요가
         // 없어야 한다는 게 H-24 의 수락 조건이다.
         .onChange(of: network.reconnectToken) { _, _ in
@@ -505,8 +513,31 @@ struct RootView: View {
         // 마스트헤드 트레일링 액션 — 북마크(→ MY 하위 서가, MyRoute.bookshelf) · 공지 종(→ 공지 시트).
         // 미읽음 점은 hasUnreadNotice 를 주입(마스트헤드는 RootView 상태에 직접 접근 못 함).
         .environment(\.requestBookmarks) {
+            // 익명은 다른 모든 북마크 진입점(홈 카드·카드 상세·컨텍스트 메뉴)과 **같은 규칙**으로
+            // 로그인 유도. 예전엔 여기만 예외적으로 빈 서가를 보여줬다(기기 QA).
+            guard !session.isAnonymous else {
+                showLoginModal = true
+                return
+            }
+            // 출발 탭을 기억했다가 서가에서 나올 때 되돌린다 — 예전엔 뒤로가기가 MY 루트로
+            // 떨어져, TODAY 에서 눌렀는데 남의 탭에 갇히는 느낌이었다(기기 QA).
+            bookshelfReturnTab = selectedTab == .settings ? nil : selectedTab
             selectedTab = .settings
             settingsPath.append(MyRoute.bookshelf)
+        }
+        .onChange(of: settingsPath.count) { _, count in
+            // 서가에서 빠져나온 순간(스택 비었을 때)에만 출발 탭으로 되돌린다.
+            // `selectedTab == .settings` 확인 필수 — 사용자가 이미 다른 탭으로 옮겨간 뒤
+            // 뒤늦게 스택이 비는 경우까지 낚아채면 안 된다(리뷰 P1).
+            guard count == 0, selectedTab == .settings, let back = bookshelfReturnTab else { return }
+            bookshelfReturnTab = nil
+            selectedTab = back
+        }
+        // 사용자가 **직접** 탭을 옮기면 자동 복귀 의도는 사라진 것으로 본다(리뷰 P1).
+        // 프로그래밍적 전환에는 무해하다: 복귀는 토큰을 **먼저 비우고** 탭을 바꾸고,
+        // 서가 진입은 .settings 로 가므로 아래 조건(≠ .settings)에 걸리지 않는다.
+        .onChange(of: selectedTab) { _, tab in
+            if tab != .settings { bookshelfReturnTab = nil }
         }
         .environment(\.requestNotice) { showNoticeSheet = true }
         .environment(\.requestYarnInfo) { showYarnInfo = true }
@@ -697,6 +728,9 @@ struct RootView: View {
             feedPath = NavigationPath()
             feedReselect += 1  // scroll Feed to top + refresh
         case .settings:
+            // MY 재탭은 'MY 루트로 가겠다'는 명시적 의사 — 서가에서 나오더라도 출발 탭으로
+            // 튕기면 안 된다(리뷰 P1). 스택을 비우기 **전에** 복귀 의도를 버린다.
+            bookshelfReturnTab = nil
             // MY 하위 페이지는 모두 값 기반(MyRoute)이라 스택을 비우면 루트로 돌아온다.
             settingsPath = NavigationPath()
         }
@@ -741,5 +775,21 @@ private struct LaunchLoadingView: View {
                 pulse = true
             }
         }
+    }
+}
+
+
+// MARK: - 전역 오프라인 안내 표시 여부
+
+/// RootView 의 오프라인 스트립이 떠 있는지. 화면별 실패 배너(`FetchErrorBanner`)가
+/// 같은 말을 겹쳐 하지 않도록 참조한다(기기 QA: 두 배너가 동시에 떠 중복 노이즈).
+private struct AppOfflineNoticeActiveKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var appOfflineNoticeActive: Bool {
+        get { self[AppOfflineNoticeActiveKey.self] }
+        set { self[AppOfflineNoticeActiveKey.self] = newValue }
     }
 }
