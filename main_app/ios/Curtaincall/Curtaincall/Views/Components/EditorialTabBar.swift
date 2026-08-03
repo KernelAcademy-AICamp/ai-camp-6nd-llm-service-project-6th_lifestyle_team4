@@ -510,12 +510,20 @@ private extension View {
                     // '하얗게' 떠 보이던 문제(기기 QA) 워밍. 라떼(웜 베이지)가
                     // 글래스 밝힘을 상쇄해 페이지 크림과 한 톤으로 가라앉는다.
                     NotchedPillShape().fill(Color.latte.opacity(0.30))
-                    Color.clear.glassEffect(.clear, in: NotchedPillShape())
+                    // ⚠️ `.clear` 가 아니라 `.regular` 다. `.clear` 는 **완전 투명** 변형이라
+                    // 뒤 콘텐츠가 그대로 비친다 — 어두운 배경(북마크 서가의 책장 이미지,
+                    // TODAY 의 검은 카드) 위에서 탭 라벨·아이콘이 묻혀 읽히지 않았다(기기 QA).
+                    // `.regular` 는 뒤 밝기에 따라 틴트를 조절해 대비를 유지하는 변형이라
+                    // 바로 이 상황을 위한 것이다. 크림 배경에서 '하얗게 뜨는' 문제는 위
+                    // 라떼 언더레이가 계속 잡아준다.
+                    Color.clear.glassEffect(.regular, in: NotchedPillShape())
                 }
             }
         } else {
             self
-                .background(.ultraThinMaterial, in: NotchedPillShape())
+                // iOS 18-25 폴백도 같은 이유로 ultraThin → regular. ultraThin 은 뒤가
+                // 어두우면 라벨이 묻힌다(위 26+ 주석 참조).
+                .background(.regularMaterial, in: NotchedPillShape())
                 .overlay(NotchedPillShape().stroke(Color.latte.opacity(0.85), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
         }
