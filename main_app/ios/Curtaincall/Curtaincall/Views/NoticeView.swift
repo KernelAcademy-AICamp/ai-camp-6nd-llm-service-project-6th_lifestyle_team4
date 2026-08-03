@@ -105,9 +105,12 @@ struct NoticeView: View {
             notices = try await Supa.shared.fetchNotices()
             prefs.markNoticesSeen(notices.map(\.noticeId).max() ?? 0)
         } catch {
-            // Android: state.error = e.message ?: "불러오기 실패" — 조용히 삼키지 않고 노출.
+            // 조용히 삼키지 않고 노출하되, **원문은 쓰지 않는다.** Android 는 e.message 를
+            // 그대로 쓰지만 iOS 의 localizedDescription 은 영문 시스템 문구라 그대로 노출하면
+            // 한국어 UI 에 영문이 튄다(외부 QA A-85 와 같은 결함).
+            AppLog.error("notices load", error)
             notices = []
-            loadError = error.localizedDescription.isEmpty ? "불러오기 실패" : error.localizedDescription
+            loadError = "공지를 불러오지 못했어요. 잠시 후 다시 시도해주세요."
         }
     }
 }
