@@ -716,6 +716,18 @@ struct SignInSheet: View {
         // 중앙 팝업(폼 모드) — 카드 배경/모서리는 PopupDialog 담당. 시트 그래버·detents 제거.
         // Android SignInDialog: 인증 성공(익명 해제)되면 자동으로 닫힌다.
         .animation(.easeInOut(duration: 0.2), value: session.authMessage)
+        // 팝업을 열 때 이전 문구를 비운다.
+        //
+        // `authMessage` 는 인증 전용이 아니라 **공용 상태 채널**이다 — 로그인 실패뿐 아니라
+        // "계정이 삭제됐어요" · "프로필이 저장됐어요" · "이름이 변경됐어요" · "로그아웃에
+        // 실패했어요" 등 17곳이 같은 프로퍼티에 쓴다. QA-10 에서 이 문구를 팝업 **안에서**
+        // 그리게 바꾸면서, 앞선 동작이 남긴 메시지가 로그인 오류인 것처럼 보일 수 있게 됐다
+        // (리뷰 P2). 특히 탈퇴 직후 → 로그인 팝업 열기 경로가 그대로 재현된다.
+        //
+        // 근본적으로는 인증 전용 오류 상태를 따로 두는 게 맞지만, 그건 `AuthSession` 의
+        // 반환 규약까지 바꾸는 일이라 이 PR 범위 밖이다. 표시 시작 시점에 비우는 것으로
+        // 오염 경로를 끊는다(백로그: 인증 전용 상태 분리).
+        .onAppear { session.authMessage = nil }
         .onChange(of: session.isAnonymous) { _, anon in
             if !anon { dismissPopup() }
         }
