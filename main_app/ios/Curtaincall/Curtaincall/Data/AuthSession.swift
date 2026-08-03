@@ -263,7 +263,15 @@ final class AuthSession: ObservableObject {
                         } catch {
                             // Upgrade succeeded; a merge failure is non-fatal but must not
                             // be invisible. Surface it without failing the whole bootstrap.
-                            migrationWarning = error.localizedDescription
+                            // ⚠️ 원문 금지 — 이 값은 사용자에게 보여줄 용도라 영문 시스템
+                            // 문구가 들어가면 안 된다(A-85 와 같은 결함).
+                            //
+                            // ⚠️ 다만 **현재 이 프로퍼티를 그리는 화면이 하나도 없다.** 위
+                            // 주석의 "must not be invisible" 의도가 아직 미완이라는 뜻이다
+                            // (bootstrapStatus 가 #200 전까지 그랬던 것과 같은 상태).
+                            // 노출 위치는 별도 판단이 필요해 이 PR 에서는 문구만 안전하게 둔다.
+                            AppLog.error("bookmark migration", error)
+                            migrationWarning = "이전 북마크를 옮기지 못했어요. 잠시 후 다시 로그인해보세요."
                         }
                     }
                 }
