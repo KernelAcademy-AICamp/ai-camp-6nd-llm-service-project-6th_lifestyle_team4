@@ -126,32 +126,46 @@ For the full per-role type scale (sizes, weights, leading, Dynamic Type behavior
   - **The message** — `Views/Components/EmptyStateView.swift`. An SF Symbol (`sand`, default 48) +
     `headlineSerif(18)` headline + `bodySans(14)` `walnut` subline, with an **optional retry action**
     (visual height 40, hit target 44 per HIG). Same structure as Apple's `ContentUnavailableView`, so
-    reusing it *is* the platform convention — never hand-roll a one-line `Text` for an empty or failed
-    state (that gap made a notice-load failure invisible and unretryable in device QA). Pick the icon
-    by cause: `wifi.slash` for connectivity, `exclamationmark.triangle` otherwise.
+    reusing it *is* the platform convention — don't hand-roll a one-line `Text` where one of the two
+    shared treatments fits (that gap made a notice-load failure invisible and unretryable in device
+    QA). Pick the icon by cause: `wifi.slash` for connectivity, `exclamationmark.triangle` otherwise.
   - **The decoration** — brand cat imagery (`cat_empty`, …), a brand carve-out (below). This is *not*
     the empty-state message. It is a bottom-anchored ornament, always `allowsHitTesting(false)` and
     `accessibilityHidden(true)`, added when a pushed sub-page hides the tab-bar cat and the screen
     would otherwise lose it. `ArchiveView` shows both at once: `EmptyStateView(icon: "bookmark", …)`
     carries the message, and a separate `Image("cat_empty")` overlay carries the cat.
-  - **So:** every empty or failed state gets an `EmptyStateView`. The cat is added on top when the
-    screen has lost its tab-bar cat — never as a substitute for the message.
+  - **So:** an empty or failed state that *replaces* the content uses `EmptyStateView`; a refresh that
+    failed **over content that is still on screen** uses `FetchErrorBanner` (next bullet) instead —
+    replacing a populated screen with a centered empty state would throw away readable content. The cat
+    is added on top when the screen has lost its tab-bar cat, never as a substitute for either.
 - **Fetch failure (screen-level strip)** — `Views/Components/FetchErrorBanner.swift`. Full-width
   `latte` bar, `bodySans(13)` `espresso` message + outlined 다시 시도 button, padding h20 / v12. This
   is the *banner* form; `EmptyStateView` is the *centered* form — use the banner when content already
   exists and failed to refresh, the empty state when there is nothing to show.
-- **Masthead** — `Views/Components/AppMasthead.swift`. The single 64pt `paper` bar + hairline shared by
-  Home / Library / Feed / Notice / My, so the wordmark never shifts when you change tabs: leading
-  `BrandWordmark` ("Daily Script" + `cta` period, `headlineSerif(22)`, tracking 0.4), then the 실타래
-  chip (on by default, suppressible via `showsYarnChip`), then — only when `RootView` injects
-  `\.mastheadShowsActions` — the bookmark and notice-bell actions. MY leaves those actions off by
-  design. Don't add a second masthead or a per-screen title bar.
+- **Masthead** — `Views/Components/AppMasthead.swift`. The single 64pt `paper` bar + hairline that keeps
+  the wordmark from shifting between tabs: leading `BrandWordmark` ("Daily Script" + `cta` period,
+  `headlineSerif(22)`, tracking 0.4), then the 실타래 chip (on by default, suppressible via
+  `showsYarnChip`), then — only when `RootView` injects `\.mastheadShowsActions` — the bookmark and
+  notice-bell actions.
+  **Call sites are exactly five:** `DailyView`, `HomeView`, `FeedView`, `LibraryCatalogView`, and
+  `ArchiveView` (the bookshelf). Note what is *not* there: **`MyPageView` has no masthead**, and
+  **`NoticeView` has none either** — it is a sheet with its own `SheetMetrics` header. (The doc comment
+  inside `AppMasthead.swift` still claims "every tab (Home/Library/Feed/Notice/My)"; that comment is
+  stale — trust this list.)
+  **This is not a ban on top bars.** Pushed and sheet-presented screens correctly build their own header
+  from the §1 `SheetMetrics` tokens — see that section's consumer list. The rule is narrower: don't add a
+  *second* masthead, and don't re-roll a header that `SheetMetrics` already standardises.
 - **Toast (transient feedback)** — the app-wide treatment is an **`espresso` capsule with `paper`
   text**, `bodySans(13)` centered, padding h16 / v10, `.transition(.opacity)`, auto-dismissing. The
-  bottom offset varies by context and there are **three live values** — `130` on a tab root
-  (`HomeView`, `FeedView`), `100` on `CardDetailView`, and `40` on a pushed detail with no tab bar
-  (`HighlightDetailView`, `FeedView`'s pushed post). Derive new ones from §7 rather than adding a
-  fourth literal. There is **no shared component yet** — the treatment is currently duplicated per screen, and
+  **anchor and offset both vary by context**, so check before copying one:
+  - bottom `130` — tab root with the pill below it (`HomeView`, `FeedView`)
+  - bottom `100` — `CardDetailView` (its composer occupies the bottom edge)
+  - bottom `40` — pushed detail with no tab bar (`HighlightDetailView`, `FeedView`'s pushed post)
+  - **top, no offset** — `CommentsSection`'s moderation toast is `.overlay(alignment: .top)`, because
+    the bottom of that screen belongs to the comment composer. A bottom toast there would land on the
+    keyboard or the composer, so this one is anchored the other way on purpose.
+
+  Derive new bottom offsets from §7 rather than adding another literal. There is **no shared component yet** — the treatment is currently duplicated per screen, and
   one copy has already drifted (the bookmark-failure banner renders as a `paper` capsule with
   `espresso` text, i.e. the failure notice is *fainter* than the success toast). Match the espresso
   treatment above for anything new; consolidating the duplicates is open work.
@@ -244,7 +258,7 @@ there is no narrower max-width clamp. `SelectableScriptText` itself adds **zero*
   inside a `RoundedRectangle(cornerRadius: 4)` with a `latte` 0.5pt stroke, padding v16 / h18.
   (Note the **radius 4** here — an annotation box; it intentionally differs from the editorial-8 chrome radius.)
 - **작품의 의의** (optional, below the script): `bodySans 16` `espresso`, **center**, `bookLeading(16)`.
-- **Vertical rhythm** (top→down, in pt): topSpacer 40 · metadata · 28 · [lang-toggle row: Hairline / pad 14 /
+- **Vertical rhythm** (top→down, in pt): topSpacer 40 · **titleBlock** · 16 · metadata · 28 · [lang-toggle row: Hairline / pad 14 /
   Hairline · 24] · [SCENE · 24] · **script** · [significance: 32 · Hairline · 24 · label · 12 · body] · 48 ·
   Hairline · 32 · CTA(filled) · 10 · CTA(outlined) · 16 · edition label · 40 · Hairline · 28 · comments · cat.
 - **Quote → attribution gap:** there is no separate attribution under the script here. The **top bar carries
@@ -272,7 +286,7 @@ A fixed typeset card rendered to an image via `ImageRenderer` (Messages / IG-sto
 
 ### Readability rationale (the north-star reasoning)
 
-- **In-app:** the monospaced face + 8pt line spacing + 0.28 kern read as a *manuscript / script page*, and
+- **In-app:** the monospaced face + 12pt line spacing + 0.28 kern read as a *manuscript / script page*, and
   speaker-line bolding makes dialogue scannable; the 20pt column keeps a comfortable measure on iPhone, and
   honoring `text_align` (poem center / prose left) respects each literary form. The fixed 14pt preserves that
   deliberate grid — at the cost of Dynamic Type scaling (the `TODO` in §5).
