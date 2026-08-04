@@ -365,15 +365,11 @@ struct EditorialTabBar: View {
 
     // MARK: - Decorative nav cat
 
-    /// LIBRARY(cat_struck) 자세가 필 윗면 위로 솟는 실제 높이(78 × 0.86 ≈ 67pt).
-    /// 이 자세는 아래 '돌출 ≤ catClearance(56)' 규칙의 **유일한 예외**라, 필 위층에 앉는
-    /// 다른 요소(도서관 페이지 바)가 이 값 위로 피해야 한다 — 안 그러면 바의 오른쪽 화살표가
-    /// 고양이 뒤에 숨는다(외부 QA Z-5, SE 실측: 화살표는 눌리지만 보이지 않았다).
-    /// 하드코딩 대신 자세에서 파생해 드리프트를 막는다.
-    ///
-    /// ⚠️ 높이는 QA-4 에서 **90 → 78** 로 줄었다(SE 폭 확보가 목적, 돌출 77→67 은 부수 효과).
-    /// 그래서 Android `CatHeightLibrary=90` 과는 **의도적으로 어긋난 상태**다 — 예전 주석이
-    /// 이 예외를 'Android parity' 로 설명했지만 더는 그 이유가 아니다. 되돌리지 말 것.
+    /// LIBRARY(cat_struck) 자세가 필 윗면 위로 솟는 실제 높이(90 × 0.86 ≈ 77pt).
+    /// 이 자세는 아래 '돌출 ≤ catClearance(56)' 규칙의 **유일한 예외**(Android
+    /// CatHeightLibrary=90 parity)라, 필 위층에 앉는 다른 요소(도서관 페이지 바)가 이 값
+    /// 위로 피해야 한다 — 안 그러면 바의 오른쪽 화살표가 고양이 뒤에 숨는다(외부 QA Z-5,
+    /// SE 실측: 화살표는 눌리지만 보이지 않았다). 하드코딩 대신 자세에서 파생해 드리프트를 막는다.
     static var libraryCatProtrusion: CGFloat {
         let pose = catPose(for: .archive)
         return pose.height * pose.ledgeFraction
