@@ -185,6 +185,11 @@ struct RootView: View {
                 prefs.syncFromServer(genres: session.prefGenres, themes: session.prefThemes, any: session.prefAny)
             }
         }
+        // 실타래 잔액이 움직이면 신원 캐시도 같이 굽는다 — 오프라인 재실행 때 **보상 이전**
+        // 잔액이 되살아나던 문제(QA-9). 출석 핸들러 한 곳만 고치지 않고 `YarnStore.balance`
+        // 자체를 관찰하는 이유는, 잔액을 바꾸는 경로가 출석 말고도 첫 조회 보상·차감·지급으로
+        // 여럿이고 전부 스토어 내부에서 일어나기 때문이다. 출처와 무관하게 여기 한 곳이 받는다.
+        .onChange(of: yarn.balance) { _, newValue in session.noteYarnBalance(newValue) }
         .task { await moderation.refresh(userId: session.userId) }   // 앱 진입 시 차단 목록
         // 출석체크 — 회원의 그날 첫 진입 1회 모달 + 첫 출석이면 실타래 +100. 온보딩 이후에 띄운다.
         .task { checkAttendance() }

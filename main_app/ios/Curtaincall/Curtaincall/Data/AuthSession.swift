@@ -154,6 +154,25 @@ final class AuthSession: ObservableObject {
         UserDefaults.standard.set(data, forKey: Self.cachedIdentityKey)
     }
 
+    /// 서버가 확인해 준 최신 실타래 잔액을 신원에 반영하고 **캐시까지 다시 굽는다.**
+    ///
+    /// 왜 필요한가: `yarnBalance` 는 부트스트랩에서 한 번 읽히고, 그 값이 그대로
+    /// `saveCachedIdentity()` 에 실린다. 그런데 실행 중 잔액을 바꾸는 경로(출석 보상 ·
+    /// 첫 조회 보상 · 차감 · 지급)는 전부 `YarnStore.balance` 만 갱신하고 이 값은 건드리지
+    /// 않았다. `YarnStore.balance` 는 메모리 전용이라 다음 실행에 0 으로 시작하므로,
+    /// `로그인 → 보상 수령 → (성공적 부트스트랩 없이) 오프라인 → 재실행` 이면 캐시에
+    /// 남아 있던 **보상 이전 잔액**이 복원돼 사용자에겐 실타래가 사라진 것으로 보인다.
+    /// 서버 데이터는 멀쩡하고 온라인 복귀 시 정정되지만, 오프라인 동안은 정확히 이런
+    /// 종류의 값이 맞아야 한다(QA-9).
+    ///
+    /// 잔액이 실제로 달라졌을 때만 다시 쓴다 — 신원 전환 직후의 재시드(`yarn.sync`)처럼
+    /// 같은 값이 되돌아오는 경로에서 UserDefaults 쓰기를 반복하지 않기 위해서다.
+    func noteYarnBalance(_ balance: Int) {
+        guard yarnBalance != balance else { return }
+        yarnBalance = balance
+        saveCachedIdentity()
+    }
+
     /// 현재 인증 유저의 것일 때만 돌려준다 — 다른 유저(또는 유저 없음)의 캐시는 없는 셈 친다.
     private func loadCachedIdentity() -> CachedIdentity? {
         guard let data = UserDefaults.standard.data(forKey: Self.cachedIdentityKey),
