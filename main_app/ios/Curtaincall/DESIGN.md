@@ -115,29 +115,37 @@ For the full per-role type scale (sizes, weights, leading, Dynamic Type behavior
   is a *separate*, intentionally skeuomorphic opened-book cover — see §4 brand carve-outs.)
 - **Corner radii** — standard editorial chrome (buttons, modals, cards) = **8**; book covers = **3–4**.
   Stay on these; don't introduce new radii without sign-off.
-- **Empty states** — use the brand cat imagery (`cat_empty`, `cat_confused`, …), a brand carve-out
-  (below), not a plain text placeholder.
-- **Empty / failure state (in-content)** — `Views/Components/EmptyStateView.swift`. Icon (`sand`,
-  default 48) + `headlineSerif(18)` headline + `bodySans(14)` `walnut` subline, with an **optional
-  retry action** (visual height 40, hit target 44 per HIG). Same structure as Apple's
-  `ContentUnavailableView`, so reusing it *is* the platform convention — don't hand-roll a one-line
-  `Text` for a failure (that gap is what made a notice-load failure invisible and unretryable in
-  device QA). Pick the icon by cause: `wifi.slash` for connectivity, `exclamationmark.triangle`
-  otherwise.
+- **Empty / failure states — two different things that co-exist on the same screen.** They are not
+  alternatives, and picking one *instead of* the other is the mistake:
+  - **The message** — `Views/Components/EmptyStateView.swift`. An SF Symbol (`sand`, default 48) +
+    `headlineSerif(18)` headline + `bodySans(14)` `walnut` subline, with an **optional retry action**
+    (visual height 40, hit target 44 per HIG). Same structure as Apple's `ContentUnavailableView`, so
+    reusing it *is* the platform convention — never hand-roll a one-line `Text` for an empty or failed
+    state (that gap made a notice-load failure invisible and unretryable in device QA). Pick the icon
+    by cause: `wifi.slash` for connectivity, `exclamationmark.triangle` otherwise.
+  - **The decoration** — brand cat imagery (`cat_empty`, …), a brand carve-out (below). This is *not*
+    the empty-state message. It is a bottom-anchored ornament, always `allowsHitTesting(false)` and
+    `accessibilityHidden(true)`, added when a pushed sub-page hides the tab-bar cat and the screen
+    would otherwise lose it. `ArchiveView` shows both at once: `EmptyStateView(icon: "bookmark", …)`
+    carries the message, and a separate `Image("cat_empty")` overlay carries the cat.
+  - **So:** every empty or failed state gets an `EmptyStateView`. The cat is added on top when the
+    screen has lost its tab-bar cat — never as a substitute for the message.
 - **Fetch failure (screen-level strip)** — `Views/Components/FetchErrorBanner.swift`. Full-width
   `latte` bar, `bodySans(13)` `espresso` message + outlined 다시 시도 button, padding h20 / v12. This
   is the *banner* form; `EmptyStateView` is the *centered* form — use the banner when content already
   exists and failed to refresh, the empty state when there is nothing to show.
-- **Masthead** — `Views/Components/AppMasthead.swift`. The single 64pt `paper` bar + hairline used by
-  **every** tab so the wordmark never shifts on tab change: leading `BrandWordmark` ("Daily Script" +
-  `cta` period, `headlineSerif(22)`, tracking 0.4), trailing 실타래 chip and — when
-  `\.mastheadShowsActions` is injected — bookmark and notice-bell actions. Trailing actions are
-  injected per-tab through the environment by `RootView`; don't add a second masthead or a per-screen
-  title bar.
+- **Masthead** — `Views/Components/AppMasthead.swift`. The single 64pt `paper` bar + hairline shared by
+  Home / Library / Feed / Notice / My, so the wordmark never shifts when you change tabs: leading
+  `BrandWordmark` ("Daily Script" + `cta` period, `headlineSerif(22)`, tracking 0.4), then the 실타래
+  chip (on by default, suppressible via `showsYarnChip`), then — only when `RootView` injects
+  `\.mastheadShowsActions` — the bookmark and notice-bell actions. MY leaves those actions off by
+  design. Don't add a second masthead or a per-screen title bar.
 - **Toast (transient feedback)** — the app-wide treatment is an **`espresso` capsule with `paper`
   text**, `bodySans(13)` centered, padding h16 / v10, `.transition(.opacity)`, auto-dismissing. The
-  bottom offset varies legitimately by context (130 on a tab screen, 40 on a pushed detail with no tab
-  bar). There is **no shared component yet** — the treatment is currently duplicated per screen, and
+  bottom offset varies by context and there are **three live values** — `130` on a tab root
+  (`HomeView`, `FeedView`), `100` on `CardDetailView`, and `40` on a pushed detail with no tab bar
+  (`HighlightDetailView`, `FeedView`'s pushed post). Derive new ones from §7 rather than adding a
+  fourth literal. There is **no shared component yet** — the treatment is currently duplicated per screen, and
   one copy has already drifted (the bookmark-failure banner renders as a `paper` capsule with
   `espresso` text, i.e. the failure notice is *fainter* than the success toast). Match the espresso
   treatment above for anything new; consolidating the duplicates is open work.
@@ -151,11 +159,21 @@ Skeuomorphic / character elements that intentionally break the editorial-minimal
 - **Cat** — per-pose mascot art (`cat_today`, `cat_empty`, `cat_struck`, `cat_pen`, `cat_confused`,
   `cat_idle`, `cat_library`, `cat_computer`, `cat_shelf_few`, `cat_shelf_many`, `library-cat-2`).
 - **Yarn / 실타래** — reward currency graphics (`yarn_balance`).
-- **Oz House room**, and the **skeuomorphic Archive** opened-book / leather treatment.
+- **Oz House room**.
+- **Skeuomorphic Archive** opened-book / leather treatment — ⚠️ **status unresolved, see below.**
 
 The policy for these — *parity with Android/PWA wins for brand character, minimalism is the default for
 net-new non-parity UI* — lives in `AGENTS.md` → "Cross-platform brand/visual parity (carve-out)" and is
 **not duplicated here**. Read that section before touching brand-character UI.
+
+> ⚠️ **Unresolved conflict — do not treat either side as settled.** `AGENTS.md` owns this policy and
+> names exactly three protected elements: the bottom-nav cat, the yarn / 실타래 graphics, and the Oz
+> House room. The **Archive is not among them**, and `AGENTS.md` goes further in its Don'ts — *"No
+> skeuomorphic texture soup — the wood/leather Archive is the cautionary example; reconcile toward
+> refined editorial."* So this file has been listing as *protected* the very thing the owning document
+> holds up as the thing to reconcile away. Until that is decided, treat the Archive treatment as
+> **frozen**: don't extend it, and don't strip it either. Raise it rather than resolving it in a
+> drive-by change.
 
 ## 5. Typography scale (per-role)
 
@@ -171,10 +189,10 @@ Sources: `Typography.swift`; `CardDetailView.swift`; `QuoteCardView.swift`.
 ```
 role                          font (family)              size   weight    line-height / leading      tracking    align         dynamic type
 — in-app reading surface —
-script / 명대사 body          SF mono (system)           14     reg¹      lineSpacing 8 (≈22pt)      kern 0.28   text_align²   FIXED 14 (UITextView, not scaled)
+script / 명대사 body          SF mono (system)           14     reg¹      lineSpacing 12 (≈26pt)     kern 0.28   text_align²   FIXED 14 (UITextView, not scaled)
 SCENE description             Pretendard-Regular         16     reg       bookLeading → +9.6 (×0.6)  —           leading       scales
 작품의 의의 (significance)     Pretendard-Regular         16     reg       bookLeading → +9.6 (×0.6)  —           center        scales
-detail work title            NanumMyeongjo (serif)       20     reg       default                    —           center(1 ln)  scales
+detail work title            NanumMyeongjo (serif)       24     reg       default                    —           center(wraps) scales
 eyebrow / section label       Pretendard-Medium          11     med       default                    2.2 (×0.2)  uppercase     scales
 meta / count line             Pretendard-Regular         12     reg       default                    —           center        scales
 button text (Editorial)       Pretendard-Medium          11     med       default                    2.2 (×0.2)  uppercase     scales
@@ -212,9 +230,9 @@ there is no narrower max-width clamp. `SelectableScriptText` itself adds **zero*
 (`textContainerInset = .zero`, `lineFragmentPadding = 0`) so the script sits flush to that 20pt column edge.
 
 - **Background / container:** `paper`; no corner radius (full-bleed scroll, not a panel).
-- **Quote / script body:** SF monospaced **14**, `lineSpacing 8`, `kern 0.28`, `espresso` ink; speaker lines
+- **Quote / script body:** SF monospaced **14**, `lineSpacing 12`, `kern 0.28`, `espresso` ink; speaker lines
   bold (§5 note ¹). **Semantic line-break chunks** (의미 묶음 줄바꿈 from the extraction prompt) arrive as
-  `\n`-separated lines and each renders as its own paragraph — **inter-chunk spacing = the 8pt `lineSpacing`**
+  `\n`-separated lines and each renders as its own paragraph — **inter-chunk spacing = the 12pt `lineSpacing`**
   (no extra blank line). Alignment follows `text_align` (§5 note ²: poem center, prose left).
 - **SCENE block** (optional, above the script): `bodySans 16` `walnut`, `bookLeading(16)`, leading-aligned,
   inside a `RoundedRectangle(cornerRadius: 4)` with a `latte` 0.5pt stroke, padding v16 / h18.
@@ -223,9 +241,11 @@ there is no narrower max-width clamp. `SelectableScriptText` itself adds **zero*
 - **Vertical rhythm** (top→down, in pt): topSpacer 40 · metadata · 28 · [lang-toggle row: Hairline / pad 14 /
   Hairline · 24] · [SCENE · 24] · **script** · [significance: 32 · Hairline · 24 · label · 12 · body] · 48 ·
   Hairline · 32 · CTA(filled) · 10 · CTA(outlined) · 16 · edition label · 40 · Hairline · 28 · comments · cat.
-- **Quote → attribution gap:** there is no separate attribution under the script here; the work title/author
-  live in the **top bar** (serif 20 title + `labelCaps` eyebrow/subtitle) and in the centered **metadata block**
-  at the top (`format · AUTHOR` eyebrows, then `year · 👁 · 🔖 · 💬` meta at `bodySans 12` walnut).
+- **Quote → attribution gap:** there is no separate attribution under the script here. The **top bar carries
+  only the `DAILY SCRIPT` eyebrow** (`labelCaps`) — the work title moved *out* of it and into the body as
+  `detailTitleBlock` (serif **24** title + `labelCaps` subtitle, centered), precisely so a long title can wrap
+  instead of being clamped to one line in the bar. Below it sits the centered **metadata block**
+  (`format · AUTHOR` eyebrows, then `year · 👁 · 🔖 · 💬` meta at `bodySans 12` walnut).
 - **Long-quote handling:** the whole view **scrolls**; the script self-sizes to its full wrapped height
   (`SelectableScriptText.sizeThatFits` returns the wrapped height for the proposed width) — **no truncation,
   no auto-shrink**. A "scroll-to-top" FAB appears past 80% scroll.
@@ -329,9 +349,13 @@ undocumented thing in the codebase, so it is written down here rather than left 
 around a `TabView`. `TabView` is a UIKit paging container, and that has two consequences that surprise
 almost every layout change:
 
-1. **`safeAreaInset` does not propagate into a `TabView` page.** An inset applied at the root is
-   invisible to the views inside each tab. So each page compensates *manually* — and that manual
+1. **A `safeAreaInset` applied at the *root* does not propagate into a `TabView` page.** The inset is
+   invisible to the views inside each tab, so each page compensates *manually* — and that manual
    compensation is the bug surface.
+   **This is not a ban on `safeAreaInset`.** An inset applied *inside* a page works exactly as
+   documented — `DockedBottomBar` uses `safeAreaInset(edge: .bottom)` within a page to host the
+   comment composer, and it correctly pushes that page's scroll content and rides the keyboard. The
+   constraint is directional: root → page doesn't cross. Page-local is fine.
 2. **Root overlays always draw above page content.** A view inside a page cannot render above the tab
    bar or the cat, no matter its `zIndex`, because it is in a lower container.
 
