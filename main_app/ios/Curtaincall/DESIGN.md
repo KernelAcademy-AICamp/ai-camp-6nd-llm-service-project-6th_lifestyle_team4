@@ -14,8 +14,10 @@ with the brand-character (cat / yarn / skeuomorphic) exceptions.**
 
 Layout, spacing, and component structure lead on iOS — we do **not** chase pixel parity with
 Android/PWA. The single exception is brand character (the bottom-nav cat, yarn / 실타래 graphics,
-Oz House room, the skeuomorphic Archive book), where parity *does* win. That carve-out is owned by
-`AGENTS.md` — see [Brand carve-outs](#4-brand-carve-outs) below; it is not restated here.
+Oz House room), where parity *does* win. That carve-out is owned by `AGENTS.md` — see
+[Brand carve-outs](#4-brand-carve-outs) below; it is not restated here.
+(The **skeuomorphic Archive** book was listed here too; its status is disputed between the two
+documents and is flagged as unresolved in §4 — don't rely on it either way.)
 
 ## 1. Spacing tokens
 
