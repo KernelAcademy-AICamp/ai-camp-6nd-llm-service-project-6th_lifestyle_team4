@@ -36,8 +36,9 @@ A PR is **batch-eligible** only if ALL of these hold:
 1. **Collect.** Gather the ready, batch-eligible gated PRs. Confirm pairwise no shared files
    (`git diff --name-only` per branch; the sets must not intersect). Drop any that collide into the next
    batch.
-2. **Stack.** Create a throwaway QA branch off the current version branch:
-   `git checkout release/1.1-b7 && git pull && git checkout -b qa/device-batch-N`
+2. **Stack.** Create a throwaway QA branch off the current version branch (resolve its name per
+   `AGENTS.md` → "Branch model"; never hardcode it):
+   `git checkout <version-branch> && git pull && git checkout -b qa/device-batch-N`
    Merge each eligible feature branch into it. If any merge conflicts, that PR is not clean-ownership →
    pull it from the batch.
 3. **Build once.** `BUILD SUCCEEDED` on `qa/device-batch-N`. One archive, one install to the iPhone.
