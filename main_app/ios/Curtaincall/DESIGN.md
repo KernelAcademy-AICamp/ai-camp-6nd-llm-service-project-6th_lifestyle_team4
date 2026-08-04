@@ -117,6 +117,32 @@ For the full per-role type scale (sizes, weights, leading, Dynamic Type behavior
   Stay on these; don't introduce new radii without sign-off.
 - **Empty states** — use the brand cat imagery (`cat_empty`, `cat_confused`, …), a brand carve-out
   (below), not a plain text placeholder.
+- **Empty / failure state (in-content)** — `Views/Components/EmptyStateView.swift`. Icon (`sand`,
+  default 48) + `headlineSerif(18)` headline + `bodySans(14)` `walnut` subline, with an **optional
+  retry action** (visual height 40, hit target 44 per HIG). Same structure as Apple's
+  `ContentUnavailableView`, so reusing it *is* the platform convention — don't hand-roll a one-line
+  `Text` for a failure (that gap is what made a notice-load failure invisible and unretryable in
+  device QA). Pick the icon by cause: `wifi.slash` for connectivity, `exclamationmark.triangle`
+  otherwise.
+- **Fetch failure (screen-level strip)** — `Views/Components/FetchErrorBanner.swift`. Full-width
+  `latte` bar, `bodySans(13)` `espresso` message + outlined 다시 시도 button, padding h20 / v12. This
+  is the *banner* form; `EmptyStateView` is the *centered* form — use the banner when content already
+  exists and failed to refresh, the empty state when there is nothing to show.
+- **Masthead** — `Views/Components/AppMasthead.swift`. The single 64pt `paper` bar + hairline used by
+  **every** tab so the wordmark never shifts on tab change: leading `BrandWordmark` ("Daily Script" +
+  `cta` period, `headlineSerif(22)`, tracking 0.4), trailing 실타래 chip and — when
+  `\.mastheadShowsActions` is injected — bookmark and notice-bell actions. Trailing actions are
+  injected per-tab through the environment by `RootView`; don't add a second masthead or a per-screen
+  title bar.
+- **Toast (transient feedback)** — the app-wide treatment is an **`espresso` capsule with `paper`
+  text**, `bodySans(13)` centered, padding h16 / v10, `.transition(.opacity)`, auto-dismissing. The
+  bottom offset varies legitimately by context (130 on a tab screen, 40 on a pushed detail with no tab
+  bar). There is **no shared component yet** — the treatment is currently duplicated per screen, and
+  one copy has already drifted (the bookmark-failure banner renders as a `paper` capsule with
+  `espresso` text, i.e. the failure notice is *fainter* than the success toast). Match the espresso
+  treatment above for anything new; consolidating the duplicates is open work.
+- **Bottom-anchored anything** — see §7 for the `pillTopInset` contract and §8 for why a view inside a
+  tab cannot draw above the tab bar. Read both before positioning against the bottom edge.
 
 ### Brand carve-outs
 
@@ -236,6 +262,103 @@ per-screen values.**
 > token-level iOS↔Android reading-size comparison is wanted later. iOS is the readability north star regardless.
 
 ---
+
+## 7. Bottom chrome geometry — the pill / cat / page-bar contract
+
+Source: `Curtaincall/Views/Components/EditorialTabBar.swift`.
+
+**Rule: everything that sits above the tab bar derives from `EditorialTabBar.pillTopInset`. Never
+hardcode a bottom offset.** This token exists precisely because magic numbers (60 / 78 / 70) drifted
+out of sync every time the pill margin or a device class changed.
+
+### The derivation chain
+
+```
+hasHomeIndicator = UIScreen.main.bounds.height > 700
+barBottomMargin  = hasHomeIndicator ? 4 : 10        // pill float above the safe-area bottom
+pillTopInset     = barBottomMargin + 64             // safe-area bottom → pill TOP face
+                 = 68 (indicator devices) · 74 (SE-class, 667pt)
+catClearance     = 56                               // transparent gutter above the bar
+```
+
+> ⚠️ `hasHomeIndicator` uses a screen-height heuristic **on purpose**. Do not "fix" it to read
+> `UIApplication` / `keyWindow`: static initialization during `body` evaluation triggers window
+> layout → re-entry into the same `body` → `dispatch_once` re-entrancy trap (SIGTRAP, instant
+> crash). Caught in a 26.5 simulator self-check. Among iOS-18-capable iPhones, only SE 2/3
+> (667pt) lack an indicator, so `> 700` is exact.
+
+### The cat clearance invariant
+
+Each pose's **protrusion** = `height × ledgeFraction`, and it must stay `≤ catClearance (56)` so the
+cat lives inside the transparent gutter and never covers readable content. Horizontal placement is
+`centerX = width/2 + hBias × (width/2 − 44)`; vertical is `centerY = catClearance + height × (0.5 − ledgeFraction)`.
+
+```
+tab            asset           height  hBias  ledgeFraction  protrusion
+DAILY · MY     cat_empty         52     0.92      0.46          23.9  ✅
+TODAY          cat_today         60     0.30      0.72          43.2  ✅
+(long-press)   cat_confused      60     0.30      0.72          43.2  ✅
+FEED           cat_pen           64     0.92      0.86          55.0  ✅
+LIBRARY        cat_struck        78     1.00      0.86          67.1  ⚠️ exception
+```
+
+`cat_struck` is the **one documented violation** — it is taller than the invariant allows, and that
+is deliberate (brand-character parity, see §4 carve-outs). It was `height 90 / hBias 0.74`
+(protrusion 77.4) until device QA found it covering the Library page bar's right arrow; moving it to
+the screen edge and trimming the height brought it to 67 — closer to the invariant, still outside it.
+**If you add or resize a pose, compute the protrusion first.**
+
+### Consumers (the register — keep it whole)
+
+```
+RootView              feed cat  pillTopInset − 10   · write FAB  + 8  · bookmark banner  + 12
+ArchiveView           end pad   pillTopInset + 40   · cat        − 28 · drag bound  height − (+8)
+FeedView              end pad   pillTopInset + 94   (92 cat height − 10 foot overlap + 12 breathing)
+LibraryCatalogView    pageBarBottomInset = pillTopInset + 12
+CardDetailView        pillTopInset + 24 · + 8 · + 72   (composer-docked vs not)
+CoachTour             pillTopInset + 2
+PopupDialog           pillTopInset + 12
+```
+
+## 8. The TabView overlay constraint (read before touching any full-screen layout)
+
+**Three device-QA findings in one cycle traced to this single constraint.** It is the most expensive
+undocumented thing in the codebase, so it is written down here rather than left in scattered comments.
+
+**The model:** `RootView` hosts the tab bar, the cat, and the offline strip as **root-level overlays**
+around a `TabView`. `TabView` is a UIKit paging container, and that has two consequences that surprise
+almost every layout change:
+
+1. **`safeAreaInset` does not propagate into a `TabView` page.** An inset applied at the root is
+   invisible to the views inside each tab. So each page compensates *manually* — and that manual
+   compensation is the bug surface.
+2. **Root overlays always draw above page content.** A view inside a page cannot render above the tab
+   bar or the cat, no matter its `zIndex`, because it is in a lower container.
+
+The tab bar itself is an `.overlay`, **not** a `.safeAreaInset` — deliberately. `.safeAreaInset(.bottom)`
+computes placement in the outer context, which made the whole bar ride up with the keyboard (a device-QA
+recurrence). Don't convert it back.
+
+**What this has already cost, so it isn't re-learned a fourth time:**
+
+- *Top edge* — the offline strip was first attached as `.safeAreaInset(edge: .top)` and simply covered
+  the `Daily Script` wordmark on every tab, because the inset never reached inside the pages. It is now
+  an in-flow `VStack` row **above** the `TabView`, which pushes the whole pager down and therefore
+  cannot overlap.
+- *Bottom edge* — content runs under the pill unless each page reserves space itself (§7's register).
+- *Z-order* — a popup presented from inside a page (profile edit, hosted on `MyPageView`) is drawn
+  **below** the tab bar and cat, so its buttons get clipped. Small dialogs belong at root level, which is
+  also what the §4 pop-up rule asks for.
+
+**The rule:** when a new screen needs bottom space, derive it from `pillTopInset` (§7). When something
+must appear *above* the tab bar or cat, host it in `RootView`, not in the page. Per-screen hand-tuning is
+what produced this list.
+
+> **Known drift — do not copy it.** `DailyView`, `HomeView`, and `MyPageView` reserve their bottom space
+> with a bare `Spacer().frame(height: 104)`, and `LibraryCatalogView` falls back to the same literal when
+> no page bar is showing. `104` is not derived from `pillTopInset` and is exactly the magic-number class
+> this token was introduced to eliminate. Flagged, not yet reconciled — under investigation; new code
+> should derive.
 
 ## Cross-platform brand check
 
