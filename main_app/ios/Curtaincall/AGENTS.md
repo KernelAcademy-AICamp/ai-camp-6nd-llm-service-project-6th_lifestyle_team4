@@ -49,17 +49,33 @@ Don'ts:
 
 ## Build & verify (local toolchain; author/reviewer split)
 - Scheme: **Curtaincall** (app). Widget is a separate target.
-- **Xcode version is pinned** — see [`.xcode-version`](./.xcode-version) (currently `26.5`). Build with the same major so Xcode doesn't re-serialize `project.pbxproj` differently.
+- **Xcode version is pinned** — see [`.xcode-version`](./.xcode-version) (read the file; don't trust a version quoted in prose). Build with the same major so Xcode doesn't re-serialize `project.pbxproj` differently.
 - **`project.pbxproj` hygiene:** the project uses Xcode **synchronized folder groups**, so new/removed `.swift` files need **no** pbxproj edit. Stage iOS files **explicitly** (`git add <files>`, never `git add .`) so incidental churn can't ride into a feature commit. If `git status` shows *only* pbxproj `TARGETED_DEVICE_FAMILY` quote churn, it's Xcode reformatting — discard it (`git restore`), don't commit it. Commit the pbxproj **only** for deliberate project-structure/build-setting changes.
 - **CCC (author)** works in the main checkout: verify with an **incremental** `xcodebuild build` (never `clean` — it discards warm DerivedData and slows the next iteration). Use SwiftUI Previews for quick visual iteration. Do NOT run the simulator or capture screenshots — that is the reviewer's step. Commit + open PR.
-- **Codex (reviewer)** works in a SEPARATE git worktree off the **current integration branch** (presently `git worktree add ../curtaincall-review origin/release/1.1-b7` — PRs target the integration branch, not `main`; confirm the live name rather than hardcoding it) so its clean builds never wipe CCC's warm cache or collide on branches: clean build from that integration branch, install/launch via `xcrun simctl`, screenshot, review the diff + screenshot via `gh`.
+- **Codex (reviewer)** works in a SEPARATE git worktree off the **current integration branch** (`git worktree add ../curtaincall-review origin/$(…the branch you resolved per "Branch model" below…)`) so its clean builds never wipe CCC's warm cache or collide on branches: clean build from that integration branch, install/launch via `xcrun simctl`, screenshot, review the diff + screenshot via `gh`.
 - **Judge visual work on a real device, not just the simulator.**
 
 ## Branch model (two-level: version branch → feature branches)
 Enforced by the repo's `.githooks/pre-commit` hook — **enable once per clone**: `git config core.hooksPath .githooks`. The hook **refuses any commit made directly on `main` or a `release/*` branch** (see `.githooks/README.md`).
 
 - **`main`** — shared trunk. All teams (iOS / web / PWA / Android) merge here. **We do NOT commit iOS work directly to `main`.**
-- **Version / integration branch** — the **current version branch** (presently `release/1.1-b7`; the name **rotates per build cycle** — confirm the live one, don't pin it). A whole cycle's iOS work collects here.
+- **Version / integration branch** — `release/<version>`, where a whole cycle's iOS work collects. The name **rotates per build cycle**, so this doc deliberately does not name one. **Resolve it, never assume it:**
+
+  ```sh
+  git fetch --prune && git branch -r --no-merged main --list 'origin/release/*'
+  ```
+
+  **`--no-merged main` is the whole trick.** Finished cycles are never deleted from the remote, so a
+  plain `--list 'origin/release/*'` returns *every cycle the project has ever run* — at time of writing
+  that's four, and picking one from that list is a coin flip. A cycle is finished exactly when it has
+  been merged into `main` and tagged, so the **unmerged** ones are the live ones.
+
+  - **Exactly one** → that's the live cycle. Branch off it, PR into it.
+  - **More than one** → ask; don't guess which cycle is live.
+  - **None** → **no cycle is open.** The last release merged to `main` and was tagged, and the next one
+    hasn't started. Do **not** invent the next `release/*` to have something to branch from — opening a
+    cycle is the owner's call, not the author's. In this window, docs/admin changes PR **directly into
+    `main`** (they are self-review tier and touch no app code); app work waits for the cycle to open.
 - **Feature branches** — base off the **current version branch** (not `main`); set the **PR base to that same version branch**. One task = one feature branch + PR.
 - **NEVER commit directly to `main` or a `release/*` branch** — now hard-blocked by the pre-commit hook (override only with `--no-verify`, discouraged).
 
@@ -82,7 +98,7 @@ Enforced by the repo's `.githooks/pre-commit` hook — **enable once per clone**
 ## Commit / PR conventions
 Per-brief boilerplate, captured here so briefs needn't restate it.
 - **Language:** English conventional-commit prefix (`feat` / `fix` / `chore` / `docs` / …); **Korean** summary + body.
-- **Base branch:** branch off the **current B7 integration branch** (presently `release/1.1-b7`) and set the **PR base to that same integration branch — NEVER `main`**. The integration-branch name changes per build cycle; confirm the current one rather than hardcoding it.
+- **Base branch:** resolve the live integration branch (see **Branch model**), branch off it, and set the **PR base to that same branch — NEVER `main`** while a cycle is open. The one exception is the no-open-cycle window described there: with no `release/*` on the remote, docs/admin PRs go to `main`.
 - **Pre-commit guard:** the `.githooks/pre-commit` hook hard-blocks commits on `main` / `release/*` (enable once per clone: `git config core.hooksPath .githooks`). Habit: `git checkout <feature-branch>` **immediately before** `git add` / `git commit` — don't assume HEAD is unchanged since you branched. See **Branch model**.
 - **Review tier:**
   - *Self-review eligible* — trivial docs, dead-code deletions, version bumps, project-setting one-liners.
