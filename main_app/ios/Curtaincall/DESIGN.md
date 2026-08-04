@@ -147,11 +147,12 @@ For the full per-role type scale (sizes, weights, leading, Dynamic Type behavior
   `headlineSerif(22)`, tracking 0.4), then the 실타래 chip (on by default, suppressible via
   `showsYarnChip`), then — only when `RootView` injects `\.mastheadShowsActions` — the bookmark and
   notice-bell actions.
-  **Call sites are exactly five:** `DailyView`, `HomeView`, `FeedView`, `LibraryCatalogView`, and
-  `ArchiveView` (the bookshelf). Note what is *not* there: **`MyPageView` has no masthead**, and
-  **`NoticeView` has none either** — it is a sheet with its own `SheetMetrics` header. (The doc comment
-  inside `AppMasthead.swift` still claims "every tab (Home/Library/Feed/Notice/My)"; that comment is
-  stale — trust this list.)
+  **Call sites are exactly six:** `DailyView`, `HomeView`, `FeedView`, `LibraryCatalogView`,
+  `ArchiveView` (the bookshelf), and `MyPageView` — the last as `AppMasthead(showsYarnChip: false)`,
+  which is the one place the chip is suppressed (MY shows the balance in its own body instead).
+  **`NoticeView` is not among them** — it is a sheet and builds its own `SheetMetrics` header.
+  (The doc comment inside `AppMasthead.swift` claims "every tab (Home/Library/Feed/Notice/My)": it is
+  wrong about Notice and omits Daily / Library-catalog / Archive. Trust this list.)
   **This is not a ban on top bars.** Pushed and sheet-presented screens correctly build their own header
   from the §1 `SheetMetrics` tokens — see that section's consumer list. The rule is narrower: don't add a
   *second* masthead, and don't re-roll a header that `SheetMetrics` already standardises.
@@ -159,7 +160,8 @@ For the full per-role type scale (sizes, weights, leading, Dynamic Type behavior
   text**, `bodySans(13)` centered, padding h16 / v10, `.transition(.opacity)`, auto-dismissing. The
   **anchor and offset both vary by context**, so check before copying one:
   - bottom `130` — tab root with the pill below it (`HomeView`, `FeedView`)
-  - bottom `100` — `CardDetailView` (its composer occupies the bottom edge)
+  - bottom `100` — `CardDetailView`, and note it is also the one that **departs from the h16 / v10
+    capsule padding above**: it uses **h18 / v12**. Match its neighbours, not this, for new toasts.
   - bottom `40` — pushed detail with no tab bar (`HighlightDetailView`, `FeedView`'s pushed post)
   - **top, no offset** — `CommentsSection`'s moderation toast is `.overlay(alignment: .top)`, because
     the bottom of that screen belongs to the comment composer. A bottom toast there would land on the
@@ -343,7 +345,8 @@ LIBRARY        cat_struck        78     1.00      0.86          67.1  ⚠️ exc
 ```
 
 `cat_struck` is the **one documented violation** — it is taller than the invariant allows, and that
-is deliberate (brand-character parity, see §4 carve-outs). It was `height 90 / hBias 0.74`
+is deliberate (brand character, see §4 carve-outs — *not* parity; iOS already runs 78 against Android's
+`CatHeightLibrary=90`). It was `height 90 / hBias 0.74`
 (protrusion 77.4) until device QA found it covering the Library page bar's right arrow; moving it to
 the screen edge and trimming the height brought it to 67 — closer to the invariant, still outside it.
 **If you add or resize a pose, compute the protrusion first.**
