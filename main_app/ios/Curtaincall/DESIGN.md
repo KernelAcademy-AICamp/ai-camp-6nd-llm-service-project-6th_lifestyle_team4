@@ -13,11 +13,15 @@ See also [`AGENTS.md`](./AGENTS.md) (architecture, hard constraints, the brand c
 with the brand-character (cat / yarn / skeuomorphic) exceptions.**
 
 Layout, spacing, and component structure lead on iOS — we do **not** chase pixel parity with
-Android/PWA. The single exception is brand character (the bottom-nav cat, yarn / 실타래 graphics,
-Oz House room), where parity *does* win. That carve-out is owned by `AGENTS.md` — see
-[Brand carve-outs](#4-brand-carve-outs) below; it is not restated here.
-(The **skeuomorphic Archive** book was listed here too; its status is disputed between the two
-documents and is flagged as unresolved in §4 — don't rely on it either way.)
+Android/PWA. The exceptions are the **brand-character elements** (the bottom-nav cat, yarn / 실타래
+graphics, Oz House room, and the skeuomorphic Archive book) — see
+[Brand carve-outs](#4-brand-carve-outs) below.
+
+**These are kept because they are the product's identity on iOS — not because another client has
+them.** Parity is no longer the reason (decision 2026-08-05): iOS is its own north star, so a
+carve-out survives on its own merit as brand character. Where a carve-out happens to match Android /
+PWA that is a consequence, not the justification, and Android/PWA changing does not oblige iOS to
+follow.
 
 ## 1. Spacing tokens
 
@@ -162,20 +166,20 @@ Skeuomorphic / character elements that intentionally break the editorial-minimal
   `cat_idle`, `cat_library`, `cat_computer`, `cat_shelf_few`, `cat_shelf_many`, `library-cat-2`).
 - **Yarn / 실타래** — reward currency graphics (`yarn_balance`).
 - **Oz House room**.
-- **Skeuomorphic Archive** opened-book / leather treatment — ⚠️ **status unresolved, see below.**
+- **Skeuomorphic Archive** — the `ArchiveView` opened-book / leather treatment (`ArchiveView.BookCover`,
+  distinct from the shared `WorkCover`). **Protected. Keep it.**
 
-The policy for these — *parity with Android/PWA wins for brand character, minimalism is the default for
-net-new non-parity UI* — lives in `AGENTS.md` → "Cross-platform brand/visual parity (carve-out)" and is
-**not duplicated here**. Read that section before touching brand-character UI.
+Minimalism remains the default for all net-new, non-character UI; these four are the deliberate
+exceptions, kept for brand identity rather than for cross-platform parity (see North star).
 
-> ⚠️ **Unresolved conflict — do not treat either side as settled.** `AGENTS.md` owns this policy and
-> names exactly three protected elements: the bottom-nav cat, the yarn / 실타래 graphics, and the Oz
-> House room. The **Archive is not among them**, and `AGENTS.md` goes further in its Don'ts — *"No
-> skeuomorphic texture soup — the wood/leather Archive is the cautionary example; reconcile toward
-> refined editorial."* So this file has been listing as *protected* the very thing the owning document
-> holds up as the thing to reconcile away. Until that is decided, treat the Archive treatment as
-> **frozen**: don't extend it, and don't strip it either. Raise it rather than resolving it in a
-> drive-by change.
+> **Resolved 2026-08-05 — the Archive stays.** These two documents used to disagree: DESIGN.md listed
+> the Archive as a protected carve-out while `AGENTS.md` named *"the wood/leather Archive"* as its
+> cautionary example of skeuomorphic texture soup, to be *"reconcile[d] toward refined editorial."*
+> That is settled in favour of keeping it, and `AGENTS.md` has been amended to match — the Don't now
+> targets **new** skeuomorphic decoration, not the Archive.
+>
+> Practical effect: don't strip the leather treatment as "cleanup," and don't cite it as precedent for
+> adding texture elsewhere. It is an exception, not a direction.
 
 ## 5. Typography scale (per-role)
 
